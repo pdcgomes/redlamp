@@ -208,6 +208,11 @@ final class RetouchStage: @unchecked Sendable {
     private(set) var fillsComputed = 0
     private var mapsMade: UInt64 = 0
 
+    /// The retouched copies kept, for tests.
+    var retouchedSessions: [ImageSession] {
+        lock.withLock { entries.map(\.retouched) }
+    }
+
     /// Moves whenever a retouched photo's own maps are set, by a still or in the background:
     /// interactive frames read them from then on.
     var mapsGeneration: UInt64 {

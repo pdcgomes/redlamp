@@ -587,6 +587,53 @@ struct EngineMemoryTests {
         #expect(Self.differing(read(), fresh.texels) == 0)
     }
 
+    // MARK: - Closed photos
+
+    static let closed = EngineSmokeTests.fixtures.first { $0.lastPathComponent == "_DSC0009.ARW" }
+    static let next = EngineSmokeTests.fixtures.first { $0.lastPathComponent == "DSC_0750.NEF" }
+
+    /// A retouched, masked photo seen at Fit and 1:1, then another photo opened and rendered: once
+    /// the session cache lets go of the first, nothing keeps it or its retouched copy.
+    @Test(.enabled(if: EngineSmokeTests.canRender && closed != nil && next != nil))
+    func `closed photos are freed`() async throws {
+        let engine = try RedlampEngine()
+        let closed = try #require(Self.closed)
+        weak var photo: ImageSession?
+        weak var retouched: ImageSession?
+        do {
+            let info = try await engine.open(closed)
+            var recipe = try ProcessStabilityTests.retouchEdit(process: EditRecipe.currentProcessVersion)
+            recipe.spots.append(RetouchSpot(
+                mode: .remove, center: ImagePoint(x: 0.7, y: 0.3), source: ImagePoint(x: 0.7, y: 0.3), radius: 0.03,
+            ))
+            try await Self.frame(engine, recipe)
+            _ = try await ProcessStabilityTests.measure(engine, info: info, recipe: recipe)
+            photo = engine.currentSession()
+            retouched = engine.retouch.retouchedSessions.last
+        }
+        #expect(photo != nil && retouched != nil)
+        _ = try await engine.open(#require(Self.next))
+        try await Self.frame(engine, EditRecipe())
+        engine.sessions.invalidate(closed)
+        // A retouched copy's maps are made in the background after its frame.
+        for _ in 0 ..< 150 where photo != nil || retouched != nil {
+            engine.renderQueue.sync {}
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        withKnownIssue("MEM-03: the engine's caches keep closed photos") {
+            #expect(photo == nil)
+            #expect(retouched == nil)
+        }
+    }
+
+    /// The photo open now, fitted in a canvas.
+    static func frame(_ engine: RedlampEngine, _ recipe: EditRecipe) async throws {
+        var frames = engine.frames().makeAsyncIterator()
+        engine.render(RenderRequest(recipe: recipe, targetSize: PixelSize(width: 1600, height: 1000), generation: 1))
+        let frame = try #require(await frames.next())
+        try #require(frame.generation == 1)
+    }
+
     // MARK: - Reclaimed textures
 
     /// The system may empty the stage's textures between renders; it then renders them again.
