@@ -159,6 +159,8 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
 
     /// Sends a frame for each render from then on, as the engine does.
     var sendsFrames = false
+    /// The frames it has sent.
+    private(set) var framesSent = 0
     private let rendered = AsyncStream.makeStream(of: RenderedFrame.self)
 
     func render(_ request: RenderRequest) {
@@ -168,6 +170,7 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
             kIOSurfaceBytesPerElement: 8, kIOSurfacePixelFormat: 0x5247_6841,
         ]
         guard sendsFrames, let surface = IOSurfaceCreate(properties as CFDictionary) else { return }
+        framesSent += 1
         rendered.continuation.yield(RenderedFrame(
             surface: surface, size: request.targetSize, histogram: .empty,
             generation: request.generation, renderDuration: .zero,
