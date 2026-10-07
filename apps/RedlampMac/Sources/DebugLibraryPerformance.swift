@@ -498,6 +498,8 @@
             monitor.start()
             sampler?.start()
             var onScreen: [Double] = []
+            // Of those, until the library had listed what the key found, before the views followed.
+            var listing: [Double] = []
             var keys = 0
             var missed = 0
             let began = CFAbsoluteTimeGetCurrent()
@@ -513,6 +515,7 @@
                     keys += 1
                     if let after = try? LibraryQuery(parsing: typed, asYouType: true), after != before {
                         if await listed(typed, since: started) {
+                            listing.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
                             window.displayIfNeeded()
                             CATransaction.flush()
                             onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
@@ -547,9 +550,10 @@
             model.showModule(.develop)
             let report = String(
                 format: "Typing the fixture's %d queries in the filter bar: %d keys, %d changing the photos found, "
-                    + "on screen p50 %.2f ms, p95 %.2f ms, max %.2f ms; %d not listed within a second",
+                    + "on screen p50 %.2f ms, p95 %.2f ms, max %.2f ms (listed p50 %.2f ms, p95 %.2f ms); "
+                    + "%d not listed within a second",
                 FixtureQuery.corpus.count, keys, onScreen.count, percentile(onScreen, 0.5), percentile(onScreen, 0.95),
-                onScreen.max() ?? 0, missed,
+                onScreen.max() ?? 0, percentile(listing, 0.5), percentile(listing, 0.95), missed,
             )
             return (
                 monitor.summary(seconds: elapsed), onScreen,
