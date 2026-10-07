@@ -3,7 +3,6 @@ title: Redlamp's architecture, in six pictures
 summary: How Redlamp is put together, in six pixel-art animations: its layers and modules, the path from a raw file to the screen, a single frame, where your edits are saved and the models that run on your Mac.
 date: 2026-10-07
 pixelArt: true
-draft: true
 ---
 
 Redlamp is a free, open-source raw photo editor for the Mac that works like Lightroom. I've written about [how I manage the AI agents that build it](/blog/how-i-run-a-big-feature) and [how I release it](/blog/how-i-release-redlamp). This post is about the app itself.
