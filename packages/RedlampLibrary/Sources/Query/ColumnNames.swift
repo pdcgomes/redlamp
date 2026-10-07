@@ -47,7 +47,8 @@ struct NameCodes: Sendable {
         code > 0 && code < names.count ? names[code] : nil
     }
 
-    /// The codes whose names hold `part`, ignoring case, as `QueryText.contains` finds it.
+    /// The codes whose names hold `part`, ignoring case, accents and width, as `QueryText.contains`
+    /// finds it.
     func codes(containing part: String) -> [UInt32] {
         let needle = FoldedText(part)
         var found: [UInt32] = []
@@ -64,7 +65,8 @@ struct NameCodes: Sendable {
         return found
     }
 
-    /// The codes whose names are `name`, ignoring case, as `QueryText.isSame` compares them.
+    /// The codes whose names are `name`, ignoring case, accents and width, as `QueryText.isSame`
+    /// compares them.
     func codes(named name: String) -> [UInt32] {
         let wanted = QueryText.asciiLowercased(name)
         var found: [UInt32] = []
@@ -181,7 +183,8 @@ struct PlaceCodes: Sendable {
         )
     }
 
-    /// The places whose `part`, or any part when it's nil, holds `text`, ignoring case.
+    /// The places whose `part`, or any part when it's nil, holds `text`, ignoring case, accents and
+    /// width.
     func places(where part: Part?, contains text: String) -> [UInt32] {
         let kinds = part.map { [$0] } ?? Part.allCases
         var tables: [(Part, ContiguousArray<UInt64>)] = []

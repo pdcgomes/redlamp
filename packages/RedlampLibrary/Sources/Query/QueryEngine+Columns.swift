@@ -463,7 +463,7 @@ extension QueryVocabulary {
     }
 
     private static func fold(_ text: String) -> String {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+        QueryText.folded(text)
     }
 
     /// Keyword completion over the library's keywords, made the first time it's asked for.

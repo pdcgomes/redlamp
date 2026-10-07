@@ -3,13 +3,15 @@ import Foundation
 /// How the query language finds keywords (LIB-21). `kw:` takes a keyword's path or a part of one: its
 /// levels (`Portugal/Lisbon`, decoded as paths are) are a run of a keyword's levels, so a keyword
 /// finds the keywords inside it; and a value with a slash in it also names a keyword whose name holds
-/// it (`kw:"AC/DC"`). Case doesn't count. A synonym stands for its keyword: `kw:Lisboa` finds what the
-/// keyword it belongs to finds, and free text finds the keywords whose synonyms hold it. The column
-/// engine and the SQL it's checked against answer through these same functions.
+/// it (`kw:"AC/DC"`). Case, accents and width don't count, as in the rest of the language (DEC-45):
+/// `kw:"sao paulo"` finds São Paulo. A synonym stands for its keyword: `kw:Lisboa` finds what the
+/// keyword it belongs to finds, and free text finds the keywords whose synonyms hold it, as folders'
+/// paths hold it (`FoldedText`). The column engine and the SQL it's checked against answer through
+/// these same functions.
 enum KeywordQuery {
-    /// A keyword's name as terms compare it: case aside.
+    /// A keyword's name as terms compare it: case, accents and width aside.
     static func key(_ name: some StringProtocol) -> String {
-        name.utf8.allSatisfy { $0 < 0x80 } ? name.lowercased() : name.folding(options: .caseInsensitive, locale: nil)
+        name.utf8.allSatisfy { $0 < 0x80 } ? name.lowercased() : QueryText.folded(name)
     }
 
     /// Whether `kw:value` finds the keyword at `path`, synonyms aside.
@@ -39,16 +41,15 @@ enum KeywordQuery {
 struct KeywordSynonyms: Sendable, Hashable {
     private let owners: [String: [String]]
     /// Each synonym, folded, with its keyword's path.
-    private let all: [(synonym: String, owner: String)]
+    private let all: [(synonym: FoldedText, owner: String)]
 
     init(_ synonyms: [String: [String]]) {
         var owners: [String: [String]] = [:]
-        var all: [(String, String)] = []
+        var all: [(FoldedText, String)] = []
         for (path, names) in synonyms.sorted(by: { $0.key < $1.key }) {
             for name in names {
-                let key = KeywordQuery.key(name)
-                owners[key, default: []].append(path)
-                all.append((key, path))
+                owners[KeywordQuery.key(name), default: []].append(path)
+                all.append((FoldedText(name), path))
             }
         }
         self.owners = owners.mapValues { Array(Set($0)).sorted() }
@@ -68,9 +69,8 @@ struct KeywordSynonyms: Sendable, Hashable {
     /// The paths of the keywords with a synonym holding `text`.
     func owners(containing text: String) -> [String] {
         guard !all.isEmpty else { return [] }
-        let key = KeywordQuery.key(text)
-        guard !key.isEmpty else { return [] }
-        return Array(Set(all.filter { $0.synonym.contains(key) }.map(\.owner))).sorted()
+        let part = FoldedText(text)
+        return Array(Set(all.filter { $0.synonym.contains(part) }.map(\.owner))).sorted()
     }
 
     static func == (lhs: KeywordSynonyms, rhs: KeywordSynonyms) -> Bool {

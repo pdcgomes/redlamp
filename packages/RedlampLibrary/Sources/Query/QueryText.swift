@@ -1,7 +1,8 @@
 import Foundation
 
-/// How the query language matches text. The column engine and the SQL it compiles to call the same
-/// functions (`QuerySQL` registers them with SQLite), so both answer alike.
+/// How the query language matches text: ignoring case, accents and width, as completion does
+/// (DEC-45). The column engine and the SQL it compiles to call the same functions (`QuerySQL`
+/// registers them with SQLite), so both answer alike.
 enum QueryText {
     /// Whether the trigram index can search for `text`: three characters or more, as SQLite counts
     /// them (Unicode scalars).
@@ -9,7 +10,12 @@ enum QueryText {
         text.unicodeScalars.count >= 3
     }
 
-    /// `part` anywhere in `text`, ignoring case as Foundation does, byte by byte (`FoldedText`).
+    /// `text` with its case, accents and width folded, as completion compares names.
+    static func folded(_ text: some StringProtocol) -> String {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+    }
+
+    /// `part` anywhere in `text`, ignoring case, accents and width, byte by byte (`FoldedText`).
     static func contains(_ text: String, _ part: String) -> Bool {
         guard let needle = asciiLowercased(part), let haystack = asciiLowercased(text) else {
             return FoldedText(text).contains(FoldedText(part))
@@ -38,11 +44,11 @@ enum QueryText {
         }
     }
 
-    /// Whether `text` is `name`, ignoring case: byte by byte when both are ASCII, and as Foundation
-    /// compares them otherwise.
+    /// Whether `text` is `name`, ignoring case, accents and width: byte by byte, folded
+    /// (`FoldedText`) unless both are ASCII.
     static func isSame(_ text: String, _ name: String) -> Bool {
         guard let left = asciiLowercased(text), let right = asciiLowercased(name) else {
-            return text.caseInsensitiveCompare(name) == .orderedSame
+            return FoldedText(text).bytes == FoldedText(name).bytes
         }
         return left == right
     }
@@ -54,10 +60,11 @@ enum QueryText {
     }
 }
 
-/// Text folded once to search for or search in byte by byte, as Foundation finds text ignoring case
-/// (`range(of:options: .caseInsensitive)`): each character case folded and decomposed, so composed
-/// and decomposed accents match, with where each character starts, so a match never starts or ends
-/// inside one (an `e` isn't found in an `é`). ASCII is only lowercased.
+/// Text folded once to search for or search in byte by byte, ignoring case, accents and width:
+/// each character folded as completion folds names (`QueryText.folded`, so `sao` finds São) and
+/// then decomposed, so the composed and decomposed forms of what folding keeps (ガ, 한) match,
+/// with where each character starts, so a match never starts or ends inside one (an `s` isn't found
+/// in a `ß`, folded to `ss`, nor 👍 in 👍🏽). ASCII is only lowercased.
 struct FoldedText: Sendable, Hashable {
     let bytes: ContiguousArray<UInt8>
     /// Whether a character starts at each byte, and a last true for the end; nil when every byte is
@@ -79,8 +86,7 @@ struct FoldedText: Sendable, Hashable {
             if let ascii = character.asciiValue, character.utf8.count == 1 {
                 bytes.append((0x41 ... 0x5A).contains(ascii) ? ascii | 0x20 : ascii)
             } else {
-                bytes.append(contentsOf: String(character).folding(options: .caseInsensitive, locale: nil)
-                    .decomposedStringWithCanonicalMapping.utf8)
+                bytes.append(contentsOf: QueryText.folded(String(character)).decomposedStringWithCanonicalMapping.utf8)
             }
             if bytes.count > count {
                 starts.append(true)
@@ -139,8 +145,7 @@ enum FinderOrder {
     /// Appends `name`'s key to `key`: a run of digits as a marker, the count of its digits after
     /// leading zeros and then those digits, or a single zero for a run of zeros.
     static func appendKey(of name: String, to key: inout ContiguousArray<UInt8>) {
-        let folded = name.utf8.allSatisfy { $0 < 0x80 } ? name
-            : name.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+        let folded = name.utf8.allSatisfy { $0 < 0x80 } ? name : QueryText.folded(name)
         // Where the run of digits being read keeps its count, -1 outside a run.
         var countAt = -1
         var digits = 0

@@ -145,7 +145,7 @@ public struct KeywordCompletion: Sendable {
 
     /// `text` as completion compares it: case, accents and width aside.
     static func fold(_ text: some StringProtocol) -> String {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+        QueryText.folded(text)
     }
 
     /// Where each word of `folded` after its first begins.

@@ -17,7 +17,7 @@ public indirect enum LibraryQuery: Sendable, Hashable {
     /// Every photo: the empty query.
     case all
     /// Free text: in a photo's name, folder, keywords, title, caption, camera, lens, creator or
-    /// location, ignoring case.
+    /// location, ignoring case, accents and width (DEC-45).
     case text(String)
     case filter(Filter)
     case not(LibraryQuery)
@@ -43,8 +43,9 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case rating
         /// `pick`, `reject` or `none`.
         case flag
-        /// A colour, a custom label's name, ignoring case, or `none`: neither. A name one of the label
-        /// sets gives a colour (`XMPLabelNames`, Bridge's Approved for green) also finds that colour.
+        /// A colour, a custom label's name, ignoring case, accents and width, or `none`: neither. A
+        /// name one of the label sets gives a colour (`XMPLabelNames`, Bridge's Approved for green)
+        /// also finds that colour.
         case label
         /// `yes` or `no`: in the quick collection.
         case marked

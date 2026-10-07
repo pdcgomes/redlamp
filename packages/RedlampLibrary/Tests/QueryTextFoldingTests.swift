@@ -2,19 +2,23 @@ import Foundation
 import Testing
 @testable import RedlampLibrary
 
-/// Text matched byte by byte once folded (LIB-06): what it finds is what Foundation finds ignoring
-/// case, in the column engine and the SQL it compiles to alike, and typing over thousands of
-/// folders with accents in their names stays within a keystroke's budget.
+/// Text matched byte by byte once folded (LIB-06, DEC-45): what it finds is what Foundation finds
+/// ignoring case, accents and width, in whole characters, in the column engine and the SQL it
+/// compiles to alike, and typing over thousands of folders with accents in their names stays within
+/// a keystroke's budget.
 struct QueryTextFoldingTests {
     static let texts = [
         "Café", "Cafe\u{301}", "CAFÉ", "cafe", "Été à Montréal 2014", "E\u{301}te\u{301} a\u{300} Montre\u{301}al",
+        "São Paulo", "SAO PAULO", "Zürich", "Zu\u{308}rich", "zurich", "Hội An", "hoi an", "Ακρόπολη", "ακροπολη",
         "Straße", "STRASSE", "strasse", "ß", "ss", "s", "Maße", "MASSE",
         "İstanbul", "istanbul", "ISTANBUL", "ıstanbul", "Diyarbakır", "DİYARBAKIR", "i", "I", "ı", "İ", "i\u{307}",
         "ΟΔΟΣ", "οδος", "οδοσ", "Σίσυφος", "ΣΊΣΥΦΟΣ", "ς", "σ", "Σ",
         "旅行/日本 2019", "東京-0001.JPG", "日本", "東京", "京",
+        "ガイド", "カ\u{3099}イト\u{3099}", "カイト", "ｶﾀｶﾅ", "カタカナ", "한국", "\u{1112}\u{1161}\u{11AB}\u{1100}\u{116E}\u{11A8}",
+        "ＦＵＬＬ ＷＩＤＴＨ", "Full Width", "ＩＭＧ＿００１", "img_001",
         "👍", "👍🏽", "Party 🎉 2020", "🎉", "👨‍👩‍👧", "👩", "🇵🇹 Lisboa", "🇵", "🇹",
         "Ærøskøbing", "ÆRØ", "ærø", "ﬁle", "FILE", "Ǆ", "ǆ", "ǅ", "Å", "A\u{30A}", "Å",
-        "naïve", "NAI\u{308}VE", "e", "\u{301}", "é", "É", "e\u{301}",
+        "naïve", "NAI\u{308}VE", "e", "é", "É", "e\u{301}",
     ]
 
     /// The texts, the fixture's folders, and parts of each: its first and last characters, a run
@@ -40,24 +44,72 @@ struct QueryTextFoldingTests {
         LibraryFixture(spec: .init(photos: 20000)).folders.map { "/Volumes/Photos/" + $0.path }
     }
 
-    /// Whether Foundation finds `needle` in `haystack` ignoring case. A needle with a letter whose case
-    /// folding is longer (ß as ss, ﬁ as fi) is looked for folded: Foundation compares only the first
-    /// letter of the longer form, finding ß in "sx" and in "istanbul".
+    static let ignoring: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]
+
+    /// Whether Foundation finds `needle` in `haystack` ignoring case, accents and width, starting and
+    /// ending where the haystack's characters do, both composed (Foundation drops a mark it keeps in
+    /// a composed ガ from a decomposed one). A needle with a letter whose folding is longer (ß as ss,
+    /// ﬁ as fi) is looked for folded: Foundation compares only the first letter of the longer form,
+    /// finding ß in "sx" and in "istanbul". Skin tones count, as Foundation's folding keeps them,
+    /// though its search drops them as it drops accents.
     static func foundationFinds(_ needle: String, in haystack: String) -> Bool {
         let expands = needle.contains { character in
-            character.unicodeScalars.count == 1
-                && String(character).folding(options: .caseInsensitive, locale: nil).count > 1
+            character.unicodeScalars.count == 1 && QueryText.folded(String(character)).count > 1
         }
-        let sought = expands ? needle.folding(options: .caseInsensitive, locale: nil) : needle
-        return haystack.range(of: sought, options: .caseInsensitive) != nil
+        let sought = (expands ? QueryText.folded(needle) : needle).precomposedStringWithCanonicalMapping
+        let text = haystack.precomposedStringWithCanonicalMapping
+        let toned = (sought + text).unicodeScalars.contains { (0x1F3FB ... 0x1F3FF).contains($0.value) }
+        let options = toned ? ignoring.subtracting(.diacriticInsensitive) : ignoring
+        var from = text.startIndex
+        while from < text.endIndex, let found = text.range(
+            of: sought,
+            options: options,
+            range: from ..< text.endIndex,
+        ) {
+            if found.lowerBound.samePosition(in: text) != nil, found.upperBound.samePosition(in: text) != nil {
+                return true
+            }
+            from = text.index(after: found.lowerBound)
+        }
+        return false
     }
 
     @Test func `a letter whose folding is longer is found only where all of it is`() {
         #expect(!Self.foundationFinds("ß", in: "sx") && Self.foundationFinds("ß", in: "Strasse"))
         #expect(!QueryText.contains("sx", "ß") && QueryText.contains("Strasse", "ß"))
+        #expect(!QueryText.contains("Straße", "stras") && QueryText.contains("Straße", "strass"))
     }
 
-    @Test func `text is found where Foundation finds it ignoring case`() {
+    @Test func `accents and width don't count, as completion folds them`() {
+        #expect(QueryText.contains("São Paulo", "sao") && QueryText.contains("Zürich", "ZURICH"))
+        #expect(QueryText.contains("Café", "cafe") && QueryText.contains("Cafe\u{301}", "café"))
+        #expect(QueryText.contains("cafe", "Café"), "an accent typed finds a name without it")
+        #expect(QueryText.contains("Ακρόπολη", "ακροπολη") && QueryText.contains("Hội An", "hoi"))
+        #expect(QueryText.contains("ＦＵＬＬ ＷＩＤＴＨ", "full w") && QueryText.contains("Full Width", "ＦＵＬＬ"))
+        #expect(QueryText.contains("ｶﾀｶﾅ", "カタカナ") && QueryText.contains("カタカナ", "ｶﾀｶﾅ"))
+        #expect(QueryText.isSame("Héro", "HERO") && QueryText.isSame("ＨＥＲＯ", "hero") && !QueryText.isSame(
+            "Hero",
+            "Her",
+        ))
+        for (text, typed) in [("São Paulo", "sao paulo"), ("Zürich", "zurich"), ("ＦＵＬＬ", "full"), ("Ärzte", "arzte")] {
+            #expect(QueryText.folded(text) == QueryText.folded(typed), "\(text) as completion folds it")
+        }
+    }
+
+    @Test func `a match never starts or ends inside a character`() {
+        #expect(!QueryText.contains("👍🏽", "👍") && QueryText.contains("Party 👍🏽", "👍🏽"))
+        #expect(!QueryText.contains("🇵🇹 Lisboa", "🇵") && QueryText.contains("🇵🇹 Lisboa", "🇵🇹"))
+        #expect(!QueryText.contains("ﬁle", "f") && QueryText.contains("ﬁle", "fi"))
+        #expect(!QueryText.contains("한국", "\u{1112}"), "a letter of a syllable")
+        #expect(!QueryText.contains("ガイド", "カ") && !QueryText.contains("カ\u{3099}イト\u{3099}", "カイト"))
+        #expect(QueryText.contains("ガイド", "カ\u{3099}イ") && QueryText.contains("カ\u{3099}イト\u{3099}", "ガイド"))
+        #expect(
+            QueryText.contains("Été", "e") && QueryText.contains("E\u{301}te\u{301}", "ete"),
+            "an accent folds away",
+        )
+    }
+
+    @Test func `text is found where Foundation finds it ignoring case, accents and width, in whole characters`() {
         let haystacks = Self.texts + Self.fixtureFolders()
         let needles = Self.needles(Self.texts + Self.fixtureFolders().prefix(40))
         var disagreements: [String] = []
@@ -123,7 +175,8 @@ struct QueryTextFoldingTests {
     }
 
     /// p95 of a keystroke's folder lookup, typing each of `queries` a character at a time over
-    /// `folders`, and the same with Foundation's matching as the lookup did before.
+    /// `folders`, and the same with Foundation's matching ignoring case, accents and width, as the
+    /// lookup once matched text beyond ASCII.
     static func keystrokes(
         over folders: [Int64: String],
         queries: [String],
@@ -131,7 +184,7 @@ struct QueryTextFoldingTests {
         let clock = ContinuousClock()
         let paths = Array(folders.values)
         var (folded, foundation): ([Duration], [Duration]) = ([], [])
-        for _ in 0 ..< 3 {
+        for round in 0 ..< 3 {
             let vocabulary = QueryVocabulary(QueryNames(folders: folders))
             for query in queries {
                 for length in 1 ... query.count {
@@ -140,9 +193,11 @@ struct QueryTextFoldingTests {
                     let ids = vocabulary.ids(in: .folders, matching: typed)
                     folded.append(clock.now - started)
                     started = clock.now
-                    let before = paths.count { $0.range(of: typed, options: .caseInsensitive) != nil }
+                    _ = paths.count { $0.range(of: typed, options: ignoring) != nil }
                     foundation.append(clock.now - started)
-                    #expect(ids.count == before, "\(typed)")
+                    if round == 0 {
+                        #expect(ids.count == paths.count { foundationFinds(typed, in: $0) }, "\(typed)")
+                    }
                 }
             }
         }
@@ -155,6 +210,7 @@ struct QueryTextFoldingTests {
     static let queries = [
         "montréal",
         "MONTRE\u{301}AL",
+        "montreal",
         "zurich",
         "zürich",
         "straße",
@@ -162,6 +218,8 @@ struct QueryTextFoldingTests {
         "été",
         "kraków 12",
         "hội",
+        "sao paulo",
+        "ＺＵＲＩＣＨ",
     ]
 
     @Test func `typing over folders with accents stays within a keystroke`() {
