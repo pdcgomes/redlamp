@@ -70,8 +70,8 @@ Each feature has a roadmap tag:
 - Sharpening: Amount, Radius, Detail, Masking, with an Alt-drag preview [P2]
 - Noise reduction, luminance: Amount, Detail, Contrast [P2, a best-in-class classical denoiser profiled per camera and ISO, working on raw data]
 - Noise reduction, color: Amount, Detail, Smoothness [P2]
-- Enhance, AI Denoise with Amount [P3, an on-device model working on raw data; non-destructive rather than baked into a new DNG. See the AI research brief]
-- Enhance, Raw Details (improved demosaic) [P3 or Later, as an ML demosaic, subject to research]
+- Enhance, AI Denoise with Amount [P3, an on-device model that demosaics and denoises raw data in one step; an edit rather than a new DNG, as Lightroom's has been since June 2025. See the AI research brief and the DN-11 study]
+- Enhance, Raw Details (improved demosaic) [proposed as the noise-free mode of the AI Denoise network (DEC-36, DN-11)]
 - Enhance, Super Resolution (2x upscale) [P4, on-device, faithful and not inventing detail]
 
 ## 8. Lens Corrections (Mobile: Optics)

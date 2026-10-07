@@ -197,6 +197,15 @@ The mapping table is versioned (`nrMappingVersion` in the recipe) so later tunin
 | Evaluation harness and blind study | 3 | 3 |
 | **AI subtotal** | **3** | **24–30** |
 
+### 2.7 Supplement (7 October 2026): Lightroom's raw Denoise and joint demosaicing
+
+A photographer's comment, that Lightroom's pre-demosaic noise reduction "increases real detail as if it were a higher resolution sensor", prompted a study with measurements ([DN-11 note](notes/DN-11-lightroom-raw-denoise.md)). What it changes here:
+
+- **Lightroom's Denoise has been a cached, versioned edit since June 2025**, not a new DNG, and has taken linear DNGs (ProRAW and others) since October 2024. Being non-destructive (§2.4) is now parity, not a differentiator, which settles A-denoise's risk 11. Adobe has published no measurement or architecture; the only independent slanted-edge test of its learned demosaic found sharpness unchanged and false colour removed.
+- **The demosaic is half of the gain.** On noise-free mosaics a learned demosaic beat Redlamp's by 4.5 dB on Bayer photos and 6 dB on X-Trans, where Redlamp's interpolation keeps half a clean edge's resolution; a learned raw denoiser beat Redlamp's best setting by 2 to 3 dB at high ISO on real noise. The study proposes making DN-07 a joint demosaic and denoise network for Bayer and X-Trans (DEC-36), trained on full-colour truth from binned CC0 raws and pixel-shift captures (DN-14), instead of the raw-to-raw design in §2.3.
+- **Classical steps close part of the gap in Phase 2:** the Markesteijn-class X-Trans demosaic (CAM-07), keeping below-black values until after noise reduction (DN-12, which removes a magenta cast in deep shadows at very high ISO), and a noise-scaled clean-up of the mosaic before demosaicing (DN-13, measured at 0.4 to 1.2 dB).
+- **FP16 on Apple's accelerators:** Adobe withdrew Neural Engine inference for Denoise from October 2024 to June 2026, and darktable pins its raw model to the CPU because activations overflow FP16. The Core ML prototype (Appendix A.1) should test raw models for this from the start.
+
 ---
 
 ## 3. G. Focus stacking

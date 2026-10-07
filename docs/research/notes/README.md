@@ -31,6 +31,7 @@ Later notes, each behind tracker rows or another findings document:
 | [TC-architecture-and-workflow.md](TC-architecture-and-workflow.md), [TC-capture-one-teardown.md](TC-capture-one-teardown.md), [TC-lightroom-and-other-tools.md](TC-lightroom-and-other-tools.md), [TC-routes-and-licences.md](TC-routes-and-licences.md) | Evidence for the [tethered capture findings](../tethering-findings.md) (5 October 2026) |
 | [CAM-12-nikon-high-efficiency.md](CAM-12-nikon-high-efficiency.md) | Nikon's High Efficiency NEFs: the format, how Redlamp handles them, and the routes to opening them (5 October 2026) |
 | [MSK-25-photoset.md](MSK-25-photoset.md) | The mask evaluation photoset: 115 CC0 photos for Sky, Subject, People and face parts, what they cover and what they lack (6 October 2026) |
+| [DN-11-lightroom-raw-denoise.md](DN-11-lightroom-raw-denoise.md) | Lightroom's raw Denoise and what is published about it, the research on demosaicing and joint demosaicing and denoising, and a measured comparison of Redlamp, a pre-demosaic prototype and open models (7 October 2026) |
 | [MSK-25-mask-review.md](MSK-25-mask-review.md) | Where Sky, Subject and People masks stand, from what Redlamp draws: the halo of an edit at an edge, the render-time edge, hair's glow, and the fixes ranked (6 October 2026) |
 | [UX-17-masks-panel-audit.md](UX-17-masks-panel-audit.md) | The Masks panel, fourteen tasks step by step against Lightroom Classic's published workflow: where Redlamp's way is longer or hidden, and the redesign's findings ranked (7 October 2026) |
 

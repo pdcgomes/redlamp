@@ -877,7 +877,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Upright: Auto, Level, Vertical and Full from the photo's own straight edges, found by Redlamp's line detector, and Guided from drawn guides. A correction is applied only when the edges agree on it, so a landscape or a still life is levelled at most, and Auto leaves strong perspective partly in place <!-- tracker: LNS-07 -->
 - [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people) <!-- tracker: MSK-05, MSK-08, MSK-16 -->
 - [x] Lightroom XMP preset import, setting by setting, with a report of what came across
-- [ ] **Best-in-class classical noise reduction** on raw data, profiled per camera and ISO <!-- tracker: DN-01, DN-05, DN-10 -->
+- [ ] **Best-in-class classical noise reduction** on raw data, profiled per camera and ISO, with the mosaic cleaned before demosaicing and deep shadows kept true <!-- tracker: DN-01, DN-05, DN-10, DN-12, DN-13 -->
 - [ ] Better X-Trans demosaicing (Markesteijn) <!-- tracker: CAM-07 -->
 - [x] **Camera bench:** test your own camera's raws against the camera's own JPEG on your Mac, and send only the measurements, which build the evidence on the cameras page <!-- tracker: CAM-14, CAM-15, CAM-16, CAM-17 -->
 - [ ] ICC input profiles <!-- tracker: TON-10 -->

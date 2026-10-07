@@ -44,6 +44,7 @@ source for the Core ML scripts).
 | `restoration/run_vt.py`, `restoration/vt_superres.swift` | Apple's VideoToolbox super-resolution scaler on the same items |
 | `restoration/run_s3diff.py` | S3Diff one-step diffusion upscaler (separate pinned environment, see its docstring) |
 | `restoration/shp01_calibrate.py` | SHP-01 noise-aware sharpening: the planned GPU algorithm in NumPy over the bake-off set, choosing the separator strength, Richardson–Lucy iterations and Detail blend (`build/proto-out/shp01/summary.md`, `docs/research/images/shp01-calibration.jpg`) |
+| `raw_denoise/` | DN-11: Redlamp's noise reduction through its real pipeline (a Swift harness), non-local means on the mosaic before demosaicing, and open raw models, scored on charts with exact truth, binned CC0 photos and RawNIND pairs; its own README has the setup and run order |
 | `thumbnails/libraw_thumbs.cpp`, `thumbnails/run.sh` | Filmstrip thumbnails: ImageIO's thumbnail of the raw file against LibRaw picking the smallest embedded JPEG preview of at least 192 px, per file and as throughput over distinct files on many threads. C++ against the vendored LibRaw, no Python |
 | `restoration/score.py` | PSNR, SSIM, LPIPS, DISTS, back-projection consistency, zero-shot CLIP-IQA; summary tables and the contact sheets in `docs/research/images/restoration-*.jpg` |
 
