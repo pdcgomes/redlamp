@@ -17,5 +17,7 @@ let package = Package(
     let packageSettings = PackageSettings(
         // MLX's C++ core holds the Metal device and its caches, so it's linked once, as a framework.
         productTypes: ["Cmlx": .framework, "MLX": .framework],
+        // Apple Silicon only, as the app's own targets are (redlampBaseSettings).
+        baseSettings: .settings(base: ["ARCHS": "arm64"]),
     )
 #endif
