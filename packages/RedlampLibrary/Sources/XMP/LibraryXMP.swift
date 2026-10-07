@@ -3,7 +3,7 @@ import Foundation
 import RedlampDocument
 import Synchronization
 
-/// Metadata shared with other apps (LIB-24, DEC-37): the `.redlamp` sidecar is the photo's record;
+/// Metadata shared with other apps (LIB-24, DEC-44): the `.redlamp` sidecar is the photo's record;
 /// other apps' ratings, flags, labels, keywords, titles and captions, in `.xmp` sidecars and in the
 /// photos' own XMP and IPTC, and the capture times their `.xmp` give other than the photos' own, as a
 /// shift, are read and their changes taken into it field by field (`XMPMerge`); standard `.xmp`

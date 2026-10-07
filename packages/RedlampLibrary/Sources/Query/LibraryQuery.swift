@@ -18,7 +18,7 @@ public indirect enum LibraryQuery: Sendable, Hashable {
     /// Every photo: the empty query.
     case all
     /// Free text: in a photo's name, folder, keywords, title, caption, camera, lens, creator or
-    /// location, ignoring case, accents and width (DEC-45).
+    /// location, ignoring case, accents and width (DEC-52).
     case text(String)
     case filter(Filter)
     case not(LibraryQuery)

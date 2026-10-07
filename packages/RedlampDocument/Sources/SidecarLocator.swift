@@ -1,6 +1,6 @@
 import Foundation
 
-/// Where photos' `.redlamp` sidecars are kept (DEC-36): beside each photo, `IMG_1234.ARW.redlamp`,
+/// Where photos' `.redlamp` sidecars are kept (DEC-43): beside each photo, `IMG_1234.ARW.redlamp`,
 /// or, for the folders that keep them in Redlamp on this Mac, in a folder on the Mac's own disk by
 /// the photo's volume and its path from the volume's root,
 /// `<folder>/<volume UUID>/DCIM/100CANON/IMG_1234.CR3.redlamp`, so they're found again wherever the

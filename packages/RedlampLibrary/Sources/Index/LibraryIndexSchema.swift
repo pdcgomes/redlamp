@@ -143,7 +143,7 @@ extension LibraryIndex {
     """
 
     /// The rest of the organising fields the sidecar holds (LIB-15, LIB-22, LIB-23, LIB-28), so the index
-    /// is rebuilt from the sidecars with nothing lost (DEC-35): IPTC Core's creator, copyright and
+    /// is rebuilt from the sidecars with nothing lost (DEC-42): IPTC Core's creator, copyright and
     /// location beside the title and caption, a custom label's name, the manual stack, which fields
     /// show other apps' values rather than the `.redlamp`'s, a signature of the photo's `.xmp` files,
     /// and collections found by path. Manual stacks the settings kept move to their columns.
@@ -191,7 +191,7 @@ extension LibraryIndex {
     CREATE INDEX photo_health_unread ON photo_health (photo) WHERE end_unread != 0;
     """
 
-    /// Text that ignores accents and width, as the small tables and completion do (DEC-45): the text
+    /// Text that ignores accents and width, as the small tables and completion do (DEC-52): the text
     /// index built again with the trigram tokenizer's `remove_diacritics 1`, and every photo's text
     /// written again from the view folded as the writer now folds it (`redlamp_text`), in one
     /// statement as version 2's was.

@@ -5,7 +5,7 @@ import RedlampEngineAPI
 import Testing
 @_spi(Harness) @testable import RedlampUI
 
-/// Library and Develop as modules of one window (LIB-13, DEC-42): keys, menu items and the picker switch
+/// Library and Develop as modules of one window (LIB-13, DEC-49): keys, menu items and the picker switch
 /// them; the source, the selection, the active photo and the filmstrip's place carry across; each module's
 /// views are built once; a switch opens, lists and decodes nothing.
 @MainActor

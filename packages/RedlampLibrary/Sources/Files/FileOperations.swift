@@ -2,7 +2,7 @@ import Foundation
 import RedlampDocument
 import Synchronization
 
-/// The library's file operations (LIB-26, DEC-38): renames, moves, new folders and moves to the
+/// The library's file operations (LIB-26, DEC-45): renames, moves, new folders and moves to the
 /// Trash, each a batch of steps (`FileBatch`) planned from the files as they are, checked, written to
 /// the journal in `LibraryPaths.root` and synced before anything moves, then run in order.
 ///

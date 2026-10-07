@@ -1,6 +1,6 @@
 # Library and catalog: findings
 
-What Redlamp's library should take from Lightroom Classic's Library module, the tools professionals cull and ingest with, the open-source managers and digital asset managers (DAMs), and the AI culling tools, and which complaints about them recur. Researched on 5 October 2026 for LIB-01. The track's decisions (DEC-35 to DEC-44) and work (LIB-01 to LIB-35) are in section 13 of the [research tracker](research-tracker.md#13-library-and-catalog), and its architecture is the [library design](../plans/2026-10-05-library-design.md).
+What Redlamp's library should take from Lightroom Classic's Library module, the tools professionals cull and ingest with, the open-source managers and digital asset managers (DAMs), and the AI culling tools, and which complaints about them recur. Researched on 5 October 2026 for LIB-01. The track's decisions (DEC-42 to DEC-51) and work (LIB-01 to LIB-35) are in section 13 of the [research tracker](research-tracker.md#13-library-and-catalog), and its architecture is the [library design](../plans/2026-10-05-library-design.md).
 
 The evidence is in four notes:
 
@@ -19,7 +19,7 @@ Each note keeps its sources and what it couldn't reach or confirm; this document
 
 - **Photographers rely on** culling at the speed of a key press, finding photos again, metadata other apps can read, their own folders, and safe ingest from cards ([section 2](#2-what-photographers-rely-on)).
 - **The complaints that recur are about architecture more than features.** Photos moved or renamed outside the app go missing (reported for 11 products), network volumes are slow or barred (9), the interface waits on the disk (8), a library can't be shared between computers (7), and everyday actions slow down as the library grows ([section 3](#3-recurring-complaints)).
-- **Redlamp's decisions remove the causes of several.** Metadata in each photo's sidecar (DEC-35) locks nothing in a database, the index on the Mac (LIB-05) keeps databases off network volumes, and the design's budgets, met from the index and the preview store (DEC-40), keep the interface off the photos' disks.
+- **Redlamp's decisions remove the causes of several.** Metadata in each photo's sidecar (DEC-42) locks nothing in a database, the index on the Mac (LIB-05) keeps databases off network volumes, and the design's budgets, met from the index and the preview store (DEC-47), keep the interface off the photos' disks.
 - **Some of what Redlamp needs, no product documents:** search as you type over a million photos, and renaming that combines regular expressions, sub-second time, file pairing, a full preview and undo. Only digiKam finds moved files unaided, and of the manuals reached only FastRawViewer's describes verified copies.
 - **AI culling has converged** on focus, open eyes, faces and near-duplicates, and only FilterPixel is known to run it in the cloud. It fails on small embedded previews, hidden faces, the wrong genre and analysis of whole catalogs. Apple's Vision groups a burst without ranking it; Foundation Models drafts queries but misreads dates.
 - **Tracker changes** ([section 7](#7-proposed-tracker-changes)): three new rows, LIB-31 split so exact duplicates ship in 1.0, wording for eighteen rows, and three recorded skips.
@@ -83,7 +83,7 @@ Complaints reported for Lightroom Classic alone rank after these, however large 
 | darktable, digiKam, IMatch, Photo Supreme, DxO | A database, with XMP copies | darktable's database overrides newer XMP; DxO keys photos by path |
 | Apple Photos | A library package, no sidecars | All but what's exported |
 
-Apart from the folder browsers, most keep a database as the record and treat sidecars as copies; ON1, with edits in `.on1` sidecars, and NeoFinder, writing XMP into files, are the exceptions. Lightroom Desktop's Local mode (2023), folders with edits in XMP and no catalog, is Adobe offering the model DEC-35 chose ([Classic §1](notes/LIB-lightroom-classic.md#1-catalog-and-storage), [DAMs §2](notes/LIB-dams-and-open-source.md#2-at-a-glance)).
+Apart from the folder browsers, most keep a database as the record and treat sidecars as copies; ON1, with edits in `.on1` sidecars, and NeoFinder, writing XMP into files, are the exceptions. Lightroom Desktop's Local mode (2023), folders with edits in XMP and no catalog, is Adobe offering the model DEC-42 chose ([Classic §1](notes/LIB-lightroom-classic.md#1-catalog-and-storage), [DAMs §2](notes/LIB-dams-and-open-source.md#2-at-a-glance)).
 
 ### 4.2 Culling speed
 
@@ -172,10 +172,10 @@ The culling tools judge focus, open eyes, faces and near-duplicates and differ i
 
 ## 6. Open decisions and design points this informs
 
-- **DEC-44, reading Lightroom Classic catalogs.** Capture One imports them and Peakto indexes them; Photo Mechanic can't, and asks Lightroom to write XMP first, which leaves collections, stacks and virtual copies behind. The evidence supports reading a copy; counsel's question stands ([pro tools §2](notes/LIB-pro-tools.md#2-capture-one), [DAMs §3.6](notes/LIB-dams-and-open-source.md#36-peakto-and-excire)).
+- **DEC-51, reading Lightroom Classic catalogs.** Capture One imports them and Peakto indexes them; Photo Mechanic can't, and asks Lightroom to write XMP first, which leaves collections, stacks and virtual copies behind. The evidence supports reading a copy; counsel's question stands ([pro tools §2](notes/LIB-pro-tools.md#2-capture-one), [DAMs §3.6](notes/LIB-dams-and-open-source.md#36-peakto-and-excire)).
 - **`.xmp` names for raw and JPEG pairs** (a design open point). Capture One shares one `name.xmp` between `name.NEF` and `name.jpg`, darktable writes `name.ext.xmp`, and Lightroom reads `name.xmp` for raws and ignores sidecars for JPEGs. Redlamp can read both forms, write a raw's fields to `name.xmp`, and never let one photo's write remove the other's fields.
 - **Collections in sidecars by path or by ID** (a design open point). The Lightroom Queen prefers keywords for lasting groupings because collections never reach the files, and Bridge's path-bound collections break when photos move. Both favour sidecars that describe themselves, as keywords by full path do: collections by path, renames rewriting sidecars through the journal.
-- **DEC-43 and the map.** Nothing in the notes argues against keeping coordinates in the index on the Mac. The Map module's 58 Classic titles are mostly bugs in its Google map, and nothing ranks the map above the core, so it can stay after 1.0; Apple's geocoding is online and rate-limited, so place names should be looked up on demand and cached.
+- **DEC-50 and the map.** Nothing in the notes argues against keeping coordinates in the index on the Mac. The Map module's 58 Classic titles are mostly bugs in its Google map, and nothing ranks the map above the core, so it can stay after 1.0; Apple's geocoding is online and rate-limited, so place names should be looked up on demand and cached.
 
 ## 7. Proposed tracker changes
 

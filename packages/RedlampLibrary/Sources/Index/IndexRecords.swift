@@ -39,7 +39,7 @@ public struct VolumeRecord: Sendable, Hashable {
 
 /// A folder added to the library, with everything under it.
 public struct RootRecord: Sendable, Hashable {
-    /// Where the root's sidecars are kept (DEC-36).
+    /// Where the root's sidecars are kept (DEC-43).
     public enum Sidecars: Int, Sendable, Hashable, CaseIterable {
         case besidePhotos = 0
         case onThisMac = 1

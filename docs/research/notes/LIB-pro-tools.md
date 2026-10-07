@@ -119,7 +119,7 @@ Capture One's help-centre pages refuse scripted requests, so their text was read
 | Do better | Follow Finder renames and moves by file identity, with a filter for missing and offline photos | All three catalogs lose them | LIB-08 |
 | Adopt | Never write beside photos just because a folder was viewed | Capture One does, and users object to touched `.cos` dates ([2023](https://support.captureone.com/hc/en-us/community/posts/11201621128861)) | LIB-11 |
 | Adopt | A raw-data clipping overlay and histogram in the loupe | FastRawViewer shows what JPEG previews hide, and Redlamp decodes raws anyway | none yet |
-| Adopt | Keep the index on macOS's own SQLite, rebuildable from sidecars | Photo Mechanic Plus fell with its third-party engine; Capture One upgrades one way | DEC-35, LIB-05 |
+| Adopt | Keep the index on macOS's own SQLite, rebuildable from sidecars | Photo Mechanic Plus fell with its third-party engine; Capture One upgrades one way | DEC-42, LIB-05 |
 | Skip | Real-time multi-user sessions in 1.0 | Capture One's is a LAN beta, and sidecars already let teams share files | none |
 
 ## 8. Sources

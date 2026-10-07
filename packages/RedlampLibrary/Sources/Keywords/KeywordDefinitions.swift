@@ -60,7 +60,7 @@ public struct KeywordOptions: Sendable, Hashable {
     }
 }
 
-/// What the library's keyword list holds that its photos can't carry (DEC-35): keywords with no
+/// What the library's keyword list holds that its photos can't carry (DEC-42): keywords with no
 /// photos yet, each keyword's synonyms, export options and kind, and the keyword sets, in
 /// `Keywords.json` in `LibraryPaths.definitions`. A rebuilt index loses none of it, and photos
 /// describe themselves without it: their sidecars hold their keywords' full paths.

@@ -3,7 +3,7 @@ import Foundation
 /// How the query language finds keywords (LIB-21). `kw:` takes a keyword's path or a part of one: its
 /// levels (`Portugal/Lisbon`, decoded as paths are) are a run of a keyword's levels, so a keyword
 /// finds the keywords inside it; and a value with a slash in it also names a keyword whose name holds
-/// it (`kw:"AC/DC"`). Case, accents and width don't count, as in the rest of the language (DEC-45):
+/// it (`kw:"AC/DC"`). Case, accents and width don't count, as in the rest of the language (DEC-52):
 /// `kw:"sao paulo"` finds São Paulo. A synonym stands for its keyword: `kw:Lisboa` finds what the
 /// keyword it belongs to finds, and free text finds the keywords whose synonyms hold it, as folders'
 /// paths hold it (`FoldedText`). The column engine and the SQL it's checked against answer through

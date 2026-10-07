@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import RedlampLibrary
 
-/// Version 7 of the index's schema (DEC-45): the text index built again with the trigram tokenizer's
+/// Version 7 of the index's schema (DEC-52): the text index built again with the trigram tokenizer's
 /// `remove_diacritics 1`, its text folded by the writer as the small tables fold names, so names,
 /// keywords, titles and captions are found without their accents or width.
 struct IndexTextMigrationTests {

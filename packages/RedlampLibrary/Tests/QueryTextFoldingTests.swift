@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import RedlampLibrary
 
-/// Text matched byte by byte once folded (LIB-06, DEC-45): what it finds is what Foundation finds
+/// Text matched byte by byte once folded (LIB-06, DEC-52): what it finds is what Foundation finds
 /// ignoring case, accents and width, in whole characters, in the column engine and the SQL it
 /// compiles to alike, and typing over thousands of folders with accents in their names stays within
 /// a keystroke's budget.

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The library's choices for other apps' metadata (DEC-37), in the index's settings: other apps'
+/// The library's choices for other apps' metadata (DEC-44), in the index's settings: other apps'
 /// XMP is always read; standard `.xmp` sidecars are written only once the user turns it on.
 public struct XMPSettings: Sendable, Hashable, Codable {
     /// Off by default.

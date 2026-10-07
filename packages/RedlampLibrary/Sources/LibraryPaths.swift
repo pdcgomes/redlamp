@@ -34,12 +34,12 @@ public struct LibraryPaths: Sendable, Hashable {
         root.appending(path: "Thumbnails", directoryHint: .isDirectory)
     }
 
-    /// Sidecars of the folders that keep them on this Mac (DEC-36).
+    /// Sidecars of the folders that keep them on this Mac (DEC-43).
     public var sidecars: URL {
         root.appending(path: "Sidecars", directoryHint: .isDirectory)
     }
 
-    /// The keyword list, collections, smart collections and presets, as readable files (DEC-35).
+    /// The keyword list, collections, smart collections and presets, as readable files (DEC-42).
     public var definitions: URL {
         root.appending(path: "Definitions", directoryHint: .isDirectory)
     }

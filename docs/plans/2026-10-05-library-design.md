@@ -1,16 +1,16 @@
 # Library and catalog: design
 
-The owner's brief (5 October 2026): a library and catalog with Lightroom Classic's Library module at its heart, built for professionals' libraries of hundreds of thousands to millions of photos, some on spinning disks and network volumes, where searching shows results as you type, every action is instant and a held arrow key flies through the photos. The decisions are in the tracker (DEC-35 to DEC-44) and the work in its section 13 (LIB-01 to LIB-35, issues #215 to #249).
+The owner's brief (5 October 2026): a library and catalog with Lightroom Classic's Library module at its heart, built for professionals' libraries of hundreds of thousands to millions of photos, some on spinning disks and network volumes, where searching shows results as you type, every action is instant and a held arrow key flies through the photos. The decisions are in the tracker (DEC-42 to DEC-51) and the work in its section 13 (LIB-01 to LIB-35, issues #215 to #249).
 
 This document is the architecture every library row builds on. Its budgets are proposals until the stress harness (LIB-03, LIB-04) measures them; the Results section records what it measures, as the folders design does.
 
 ## What users get
 
-- **Folders on disk stay the organisation.** Nothing is imported into a catalog that hides them. Each photo's ratings, flags, colour labels, marks, keywords, captions and collections are saved with the photo, in its `.redlamp` sidecar, so other Macs, the iPad and a lost index never lose them (DEC-35).
-- **Sidecars beside each photo, or in Redlamp on this Mac.** Each added folder chooses; Redlamp chooses this Mac on its own wherever it can't write (a read-only share, a locked card). Move Edits and Metadata… moves them between the two, and Redlamp reads both (DEC-36).
-- **Other apps' work comes across.** Ratings, labels, keywords and captions in a photo's XMP and IPTC, and in other apps' `.xmp` sidecars, are read; standard `.xmp` is written only when the user turns it on, keeping every field another app wrote (DEC-37).
-- **Library and Develop are modules of one window**, switched by a key or a click, with the selection, source, filter and filmstrip carried across (DEC-42).
-- **Every action three ways:** a key, the mouse and the command palette (DEC-41).
+- **Folders on disk stay the organisation.** Nothing is imported into a catalog that hides them. Each photo's ratings, flags, colour labels, marks, keywords, captions and collections are saved with the photo, in its `.redlamp` sidecar, so other Macs, the iPad and a lost index never lose them (DEC-42).
+- **Sidecars beside each photo, or in Redlamp on this Mac.** Each added folder chooses; Redlamp chooses this Mac on its own wherever it can't write (a read-only share, a locked card). Move Edits and Metadata… moves them between the two, and Redlamp reads both (DEC-43).
+- **Other apps' work comes across.** Ratings, labels, keywords and captions in a photo's XMP and IPTC, and in other apps' `.xmp` sidecars, are read; standard `.xmp` is written only when the user turns it on, keeping every field another app wrote (DEC-44).
+- **Library and Develop are modules of one window**, switched by a key or a click, with the selection, source, filter and filmstrip carried across (DEC-49).
+- **Every action three ways:** a key, the mouse and the command palette (DEC-48).
 
 ## Budgets
 
@@ -153,7 +153,7 @@ ALTER TABLE photos ADD COLUMN camera_offset INTEGER;
 CREATE TABLE photo_health (photo INTEGER PRIMARY KEY, size INTEGER NOT NULL, modified REAL NOT NULL,
   format INTEGER NOT NULL DEFAULT 0, damage INTEGER NOT NULL DEFAULT 0, missing INTEGER, reason TEXT,
   end_unread INTEGER NOT NULL DEFAULT 0, extension TEXT);
--- version 7 (DEC-45): the text index built again ignoring accents, its text folded by the writer
+-- version 7 (DEC-52): the text index built again ignoring accents, its text folded by the writer
 -- (`redlamp_text`: case, accents and width), since the tokenizer leaves Greek and Cyrillic accents,
 -- ß and ligatures as they are; typed text is folded the same way
 DROP TABLE photo_text;
@@ -185,7 +185,7 @@ About 36 bytes a photo, 36 MB for a million, plus 4 bytes a photo for each sort 
 
 ### The query language
 
-One grammar for the filter bar, the command palette, smart collections and `redlamp library search`. Words are free text; `field:value` and comparisons filter; `-` negates; `OR` and parentheses group; quotes keep spaces. Text ignores case, accents and width everywhere (DEC-45), so `sao` finds São Paulo; free text under three characters is matched against folders, cameras, lenses, creators, places and keyword synonyms, and only the text index, which needs three, leaves it out.
+One grammar for the filter bar, the command palette, smart collections and `redlamp library search`. Words are free text; `field:value` and comparisons filter; `-` negates; `OR` and parentheses group; quotes keep spaces. Text ignores case, accents and width everywhere (DEC-52), so `sao` finds São Paulo; free text under three characters is matched against folders, cameras, lenses, creators, places and keyword synonyms, and only the text index, which needs three, leaves it out.
 
 ```text
 query    := term (("AND")? term | "OR" term)*
@@ -223,11 +223,11 @@ text     := word | quoted                                  -- matches name, fold
 
 Sorting is separate from the query: captured (the default), name, rating, edited, the file's modification date, file size, imported, or a collection's own order, each either way.
 
-## Text, completion and a mapped column store (DEC-45, LIB-44, LIB-18, LIB-19)
+## Text, completion and a mapped column store (DEC-52, LIB-44, LIB-18, LIB-19)
 
 From the Cling study ([LIB-cling](../research/notes/LIB-cling.md)), whose changes the owner accepted on 7 October 2026: the first three are built, the last one planned.
 
-- **Text ignores accents and width everywhere (DEC-45, LIB-06), built.** Every match uses completion's fold (`QueryVocabulary.fold`: case, accents and width): `FoldedText` for folders, cameras, lenses, creators, copyrights, places and custom labels, `kw:`, `collection:` and synonyms, with the same functions registered with SQLite, and a match never starts or ends inside a character (ß, 👍🏽, ガ). The text index, schema version 7, is built with `tokenize='trigram remove_diacritics 1'`, and its writer (`redlamp_text`) folds case and accents as well as width, since the tokenizer leaves Greek and Cyrillic accents, ß and ligatures as they are; typed text is folded the same way, so São Paulo, Zürich and Café are found from `sao`, `zurich` and `cafe`. The migration rebuilds the index in one transaction when the index opens: 5.7 and 9.6 s on copies of lib-1m's index. Nothing can search while it runs; another process waits for the lock (a search started alongside waited 4.6 s, then ran), and a wait over 5 s fails with "database is locked".
+- **Text ignores accents and width everywhere (DEC-52, LIB-06), built.** Every match uses completion's fold (`QueryVocabulary.fold`: case, accents and width): `FoldedText` for folders, cameras, lenses, creators, copyrights, places and custom labels, `kw:`, `collection:` and synonyms, with the same functions registered with SQLite, and a match never starts or ends inside a character (ß, 👍🏽, ガ). The text index, schema version 7, is built with `tokenize='trigram remove_diacritics 1'`, and its writer (`redlamp_text`) folds case and accents as well as width, since the tokenizer leaves Greek and Cyrillic accents, ß and ligatures as they are; typed text is folded the same way, so São Paulo, Zürich and Café are found from `sao`, `zurich` and `cafe`. The migration rebuilds the index in one transaction when the index opens: 5.7 and 9.6 s on copies of lib-1m's index. Nothing can search while it runs; another process waits for the lock (a search started alongside waited 4.6 s, then ran), and a wait over 5 s fails with "database is locked".
 - **Short text (LIB-06), built.** Free text is always kept; the plan and the SQL leave out only the text index's match, so `ab` still finds a folder or a camera with ab in it. Search at a million photos took p95 5.3 ms with it, against 3.6 to 3.7 before and 16 allowed, one- and two-character text running up to five column passes; with their lookups in one pass (c9570aa), it's 3.7 to 3.9 ms.
 - **The column store mapped from a snapshot (LIB-44), built.** The store is saved beside the index as `Index.columns`, one page-aligned file: a 16 KB header (format, page size, schema version, a generation with a random token, and each section's checksum), then each column, the sort orders, `rowOfID` and the live rows on 16 KB boundaries as they're laid out in memory, then the small tables' names, 85 MB at a million photos. It's written to a temporary file, synced and renamed over the old one: after a build, once the store and the index have been quiet for 10 s (at most five minutes apart), and when `saveSnapshot()` is called; when only the generation moved, just the header is written again in place. Every transaction that changes the index bumps its generation, and a journal of what each one changed lets the store catch up before it saves; another process's write means nothing is saved. At launch the file is mapped copy-on-write when its generation and schema match the index's, so later changes copy only the pages they touch, and a cold file gets one read-ahead request. A file from another generation, schema, format or page size is deleted, a truncated or damaged one is moved to `Index.columns.damaged`, and the store is built from SQLite as before. Memory is measured as the budgets mean it, by `phys_footprint`.
 
@@ -302,7 +302,7 @@ When Develop saves an edit over a sidecar another writer changed since it was re
 ## Keywords (LIB-21)
 
 - **Each photo's keywords** are in its sidecar as full paths (above); the index's `keywords` and `photo_keywords` tables are built from them, so the keyword list, with how many photos have each keyword or one inside it, comes from the index.
-- **What photos can't carry** is in `Definitions/Keywords.json` in `LibraryPaths.root`: keywords no photo has yet, synonyms, the three export flags (include on export, export the keywords containing it, export synonyms), the category, private and person types, and keyword sets. Keys a newer build wrote are kept, and the index stays rebuildable (DEC-35).
+- **What photos can't carry** is in `Definitions/Keywords.json` in `LibraryPaths.root`: keywords no photo has yet, synonyms, the three export flags (include on export, export the keywords containing it, export synonyms), the category, private and person types, and keyword sets. Keys a newer build wrote are kept, and the index stays rebuildable (DEC-42).
 - **Changes** (add and remove on a selection; rename, move, merge, delete) are one batch each, journaled in `Keyword Changes/` and undoable, rewriting the sidecars of the photos they touch off the main thread.
 - **`kw:`** matches a keyword's path, any part of one, and its synonyms. **Completion** matches a prefix or any word of a keyword or its synonyms, best first.
 - **Lightroom Classic's keyword-list file** imports and exports with everything it holds: levels by tabs, synonyms in braces, keywords not exported in brackets.
@@ -312,7 +312,7 @@ When Develop saves an edit over a sidecar another writer changed since it was re
 
 - **Changes on many photos** (`LibraryMetadata`, `LibraryCollections`): ratings, flags, labels, custom labels and marks (the library half of culling, LIB-15), IPTC Core's fields, collections and manual stacks, one batch each through `SidecarStore.change`, off the main thread, journaled with keywords' changes (`BatchJournal`) and undoable. A batch remembers which of its fields showed other apps' values, so Undo shows them as theirs again.
 - **Presets** apply only the fields ticked, replacing, appending or prefixing, as Photo Mechanic's templates do, and are kept in `Definitions/`. **Code replacements** come from a tab-separated file of codes and texts, and `\code\` in a field is expanded.
-- **Collections** are in each photo's sidecar by path, as keywords are, and the index's `collections` and `collection_photos` come from them. A rename or move rewrites the sidecars of the photos in it. What photos can't carry (sets, empty collections, smart collections as saved queries in the query language, the target collection) is in `Definitions/Collections.json`, keeping keys a newer build wrote, so the index stays rebuildable (DEC-35).
+- **Collections** are in each photo's sidecar by path, as keywords are, and the index's `collections` and `collection_photos` come from them. A rename or move rewrites the sidecars of the photos in it. What photos can't carry (sets, empty collections, smart collections as saved queries in the query language, the target collection) is in `Definitions/Collections.json`, keeping keys a newer build wrote, so the index stays rebuildable (DEC-42).
 - **Capture times** (`CaptureTimeChange`): shifted by an amount, set on one photo with the rest shifted by as much, as Lightroom Classic's Edit Capture Time does, or given the camera's zone, each one batch with Undo; `captured` is the camera's time plus the shift.
 - **Naming's metadata tokens** (`{title}`, `{caption}`, `{creator}`, `{copyright}`, `{city}`, `{state}`, `{country}`, `{sublocation}`) read the merged fields.
 - **Exports** carry the photo's fields under the export's metadata setting (`ExportMetadataPolicy`). All writes the title, caption, creators, copyright, location, keywords, rating and label in IPTC and XMP, replacing the source's, with EXIF's Artist, Copyright and ImageDescription following them, since ImageIO reads those before IPTC; keywords follow each one's export flags and synonyms in `Keywords.json`, flat in IPTC and `dc:subject`, as paths in `lr:hierarchicalSubject`. All Except Location leaves out the location fields, as it leaves out GPS; None writes none. A shifted capture time is the export's DateTimeOriginal and OffsetTimeOriginal, IPTC's date and time and `photoshop:DateCreated`; DateTimeDigitized stays the camera's. Exports sit below the library, so the app finds the photo in the index, its folder and name in either of Unicode's forms, and passes its fields (`exportFields(ofPhoto:)`); without them an export is byte for byte what it was.
@@ -397,7 +397,7 @@ Soft frames (LIB-42) would propose a pick for each moment: the sharpest frame of
 
 ## Other apps' metadata (LIB-24)
 
-`LibraryXMP` reads what other apps wrote and, when the library's option is on (off by default), writes standard `.xmp` beside each photo, whatever the root's sidecar placement. The `.redlamp` sidecar stays the source of truth (DEC-37); originals are never written.
+`LibraryXMP` reads what other apps wrote and, when the library's option is on (off by default), writes standard `.xmp` beside each photo, whatever the root's sidecar placement. The `.redlamp` sidecar stays the source of truth (DEC-44); originals are never written.
 
 | Redlamp | Read | Written |
 | --- | --- | --- |
@@ -560,7 +560,7 @@ Measured by the harness as the rows land; nothing here is estimated. The first r
 What it changed:
 
 - **SQLite alone misses the search budget.** A count over two predicates takes 60 ms at a million photos, four times the 16 ms budget, so the column store is needed; building it from the hot-column scan takes about 0.4 s at launch, in the background.
-- **The text index covers name, keywords, title and caption.** Indexing all seven text columns ran inserts at 12,100 a second; these four, at 17,700. Folder paths, cameras and lenses are matched in their own small tables (thousands of rows, not millions) and become folder, camera and lens IDs for the column pass. Their names are folded once (case, accents and width since DEC-45, and both of Unicode's forms, since APFS keeps names as they were made) and the typed text once per keystroke, then matched by bytes: a keystroke over 5,604 accented folder names takes p95 0.38 to 0.78 ms, from 45 ms with Foundation's case-insensitive search, which also finds `ß` in `sx` (and `ﬁ` likewise), so it isn't what the language matches against.
+- **The text index covers name, keywords, title and caption.** Indexing all seven text columns ran inserts at 12,100 a second; these four, at 17,700. Folder paths, cameras and lenses are matched in their own small tables (thousands of rows, not millions) and become folder, camera and lens IDs for the column pass. Their names are folded once (case, accents and width since DEC-52, and both of Unicode's forms, since APFS keeps names as they were made) and the typed text once per keystroke, then matched by bytes: a keystroke over 5,604 accented folder names takes p95 0.38 to 0.78 ms, from 45 ms with Foundation's case-insensitive search, which also finds `ß` in `sx` (and `ﬁ` likewise), so it isn't what the language matches against.
 - **No index on the content key.** It alone took a C replica of the inserts from 104,000 to 20,000 rows a second. Lookups by content key (importing skips photos already in the library) load the keys into a set once instead.
 - **The text index is written by the writer, not by triggers.** FTS5 flushes its pending terms at every statement savepoint, which a trigger opens, halving insert speed.
 - **The integrity check runs in the background,** weekly: 4.3 s is too long for launch.

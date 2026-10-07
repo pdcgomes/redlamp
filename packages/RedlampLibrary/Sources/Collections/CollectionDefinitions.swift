@@ -50,7 +50,7 @@ public struct CollectionOptions: Sendable, Hashable {
     }
 }
 
-/// What the library's collection list holds that its photos can't carry (DEC-35): its sets, its
+/// What the library's collection list holds that its photos can't carry (DEC-42): its sets, its
 /// collections, those without photos included, its smart collections and their queries, and the target
 /// collection, in `Collections.json` in `LibraryPaths.definitions`. A photo's sidecar names the
 /// collections it's in, so a rebuilt index loses none of their photos and the photos describe

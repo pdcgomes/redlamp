@@ -2,7 +2,7 @@ import Foundation
 import RedlampDocument
 import Synchronization
 
-/// Which `SidecarStore` reads and writes each photo's sidecar (LIB-11, DEC-36): one through the
+/// Which `SidecarStore` reads and writes each photo's sidecar (LIB-11, DEC-43): one through the
 /// library's locator for a photo in a folder whose sidecars are kept on this Mac, or that has some
 /// there, and `SidecarStore()` for every other photo, which saves as it always has.
 ///

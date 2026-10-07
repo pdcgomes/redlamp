@@ -3,7 +3,7 @@ import RedlampDocument
 import Testing
 @testable import RedlampLibrary
 
-/// Text ignores accents and width everywhere (DEC-45): a name typed without its accents, or in
+/// Text ignores accents and width everywhere (DEC-52): a name typed without its accents, or in
 /// ordinary letters where the library has full-width ones, finds its photos, and the other way
 /// round, through the column store and the SQL alike.
 struct QueryAccentTests {

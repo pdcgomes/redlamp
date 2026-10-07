@@ -2,7 +2,7 @@ import Observation
 import RedlampLibrary
 import SwiftUI
 
-/// Settings › Library: the library's state, and the metadata it shares with other apps (LIB-24, DEC-37).
+/// Settings › Library: the library's state, and the metadata it shares with other apps (LIB-24, DEC-44).
 /// Other apps' ratings, labels, keywords and captions are always read; standard `.xmp` sidecars are
 /// written beside the photos only once it's turned on, with labels in the names the chosen app reads,
 /// and kept in the library's index, where `redlamp library xmp` reads them too. Turning writing on or

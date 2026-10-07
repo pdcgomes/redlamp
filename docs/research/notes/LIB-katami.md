@@ -4,7 +4,7 @@ Katami 1.1.0 (29 September 2026) is a raw photo browser for the Mac by Bespoke B
 
 ## Summary
 
-- **Katami is the library's storage model sold on its own:** folders read in place, cards the only thing copied, everything analysed on the Mac. It confirms DEC-35 rather than challenging it.
+- **Katami is the library's storage model sold on its own:** folders read in place, cards the only thing copied, everything analysed on the Mac. It confirms DEC-42 rather than challenging it.
 - **Most of what it shows is already on the track,** built or planned: exact duplicates (LIB-39), pairs and bursts (LIB-28), import from cards with verified copies (LIB-27), search as you type with counts (LIB-06, LIB-18, LIB-19), smart collections (LIB-23), Compare (LIB-16), XMP for other apps (LIB-24), and its AI parts after 1.0 (LIB-31 to LIB-35, OTH-02).
 - **What it does that the track doesn't plan** is mostly presentation and cheap measurement, not new machinery: findings shown as queues that appear only when there's a decision to make, each with its reason in words; bursts ranked by sharpness and missed focus found without a model; photos grouped into moments by time; a search that says which filter emptied it; named traits such as Long Exposure and Wide Open; focus peaking and the camera's AF point in the loupe; sensor dust followed from shoot to shoot.
 - **Its site doesn't mention the library's core:** keywords, IPTC fields, renaming, moving, rule-based smart collections, other apps' XMP read back, Lightroom catalogs, a command line or any figure for scale. Its import copies a card into Pictures, with no templates or backup copy described ([KT2]).
@@ -16,9 +16,9 @@ Verdicts: **Covered** (a row builds it), **Wording** (a row should say it), **Ga
 
 | # | Katami ([KT2] unless marked) | Rows | The library track today | Verdict |
 | --- | --- | --- | --- | --- |
-| 1 | Folders, drives, cards and network shares read in place; nothing imported but cards | DEC-35, LIB-07, LIB-08 | The same model; sidecars can also live on this Mac for volumes Redlamp can't write (LIB-11) | Covered |
+| 1 | Folders, drives, cards and network shares read in place; nothing imported but cards | DEC-42, LIB-07, LIB-08 | The same model; sidecars can also live on this Mac for volumes Redlamp can't write (LIB-11) | Covered |
 | 2 | Each source shows its state: online, offline (browsable as thumbnails, marked with its drive), moved, no access | LIB-08, LIB-09 | Offline photos browsed from the store; renames and moves found by file identity | Covered |
-| 3 | A returning drive syncs automatically, after asking, or only when opened | LIB-08 | Reconciled automatically, the folders on screen first | Leave: an option worth having only if reconciling costs the user something, which the budgets (DEC-40) rule out |
+| 3 | A returning drive syncs automatically, after asking, or only when opened | LIB-08 | Reconciled automatically, the folders on screen first | Leave: an option worth having only if reconciling costs the user something, which the budgets (DEC-47) rule out |
 | 4 | Sidebar entries that appear once they have something in them | LIB-23 | The Library panel's entries are named, not when they show | Wording, with Library Health ([section 3](#3-library-health)) |
 | 5 | Recently Trashed: 30 days in the app, Put Back restoring the photo and its file | LIB-26, LIB-39 | Trash through the journal, with Undo; once Undo is gone, nothing lists what Redlamp put in the Trash | Gap, small |
 | 6 | Hidden photos, locked behind Touch ID, and sensitive photos hidden automatically | — | — | Leave: a family-album feature, not a working photographer's |
@@ -26,7 +26,7 @@ Verdicts: **Covered** (a row builds it), **Wording** (a row should say it), **Ga
 | 8 | An album read as a whole: print size at 300 dpi, stacks, the days and bodies it spans, places, its palette, photos needing a second look, the space deleting it frees | LIB-23 | Not specified | Gap, small: a source's summary |
 | 9 | Exact duplicates, verified byte for byte before anything moves | LIB-39 | Built on library/catalog | Covered |
 | 10 | Raw and JPEG pairs as one photo, and one rule for pairs: keep both, the raw or the JPEG | LIB-27, LIB-28 | Pairs as one photo are built, and raw-only at import is designed; the JPEG halves of pairs already indexed can't be let go in one step | Gap, small |
-| 11 | Similar shots and bursts ranked by sharpness, the sharpest suggested ("about 25 % softer than frame 2") | LIB-28, LIB-31, OTH-02 | Bursts found from the index are built; ranking is only in OTH-02, after 1.0 (DEC-39) | Gap: a ranking that needs no model can come before OTH-02 |
+| 11 | Similar shots and bursts ranked by sharpness, the sharpest suggested ("about 25 % softer than frame 2") | LIB-28, LIB-31, OTH-02 | Bursts found from the index are built; ranking is only in OTH-02, after 1.0 (DEC-46) | Gap: a ranking that needs no model can come before OTH-02 |
 | 12 | Blurred: frames that missed focus, and which part of each resolved | FS-01, OTH-02 | FS-01 scores sharpness in a 6 × 4 grid of 256-pixel thumbnails; the AF point waits on FS-01's maker-note shim | Gap, with 11 |
 | 13 | Over and under exposed: blown highlights and crushed shadows | UX-05, LIB-38 | Sensor clipping in Develop; planned for the Library loupe | Wording: as filters, not as a queue ([section 3](#3-library-health)) |
 | 14 | Damaged files: empty, unreadable or half-copied | LIB-07, LIB-27 | Import verifies its copies; the indexer meets files it can't read, but nothing lists them | Gap, small |
@@ -48,7 +48,7 @@ Verdicts: **Covered** (a row builds it), **Wording** (a row should say it), **Ga
 | 30 | Twenty traits worked out for each photo: Black & White, Long Exposure, Wide Open, Blown Highlights, Crushed Shadows, Low Light, Photos with Text, Best Shots, Smiling, One Person, Two People, Groups, Telephoto, Ultra Wide, Panoramas, Live Photos, Screenshots, High Resolution, No Location | LIB-06, LIB-32, LIB-34 | Fields and comparisons in the grammar; no named traits | Gap, small: those from EXIF in 1.0, the rest with LIB-32 and LIB-34 |
 | 31 | Over a thousand kinds of object and scene, text in the frame, a caption for every photo from a downloaded model, all searchable | LIB-32, LIB-33 | After 1.0; image and text embeddings after a licence review | Covered (Later) |
 | 32 | People found and grouped on the Mac; named, merged, ignored, and "this isn't them" | LIB-34 | After 1.0 | Wording |
-| 33 | A map on Apple's MapKit; which photos have no location; Add Location written into the file, or an XMP sidecar where the file can't be rewritten safely | DEC-43, LIB-35 | After 1.0; writing into originals is a recorded skip (the study's recommendation 35) | Covered (Later), written to the sidecar |
+| 33 | A map on Apple's MapKit; which photos have no location; Add Location written into the file, or an XMP sidecar where the file can't be rewritten safely | DEC-50, LIB-35 | After 1.0; writing into originals is a recorded skip (the study's recommendation 35) | Covered (Later), written to the sidecar |
 | 34 | A list of everything that ever leaves the Mac, and when; place names looked up from Apple for every location in the background, each place once; a build test that fails if analytics are ever added ([KT2], [KT5]) | UX-10, LIB-35 | Report a Bug shows what's sent; the study advises looking places up on demand, since Apple's geocoding is rate-limited | Leave for the library; a note for the site |
 | 35 | Export presets, ⇧⌘E with no dialog, watermarks, Edit With | EDT-15, EDT-16 | Export with Previous is done; batch export, watermarks and Edit In are planned for Phase 4 | Covered |
 | 36 | When one way of reading a raw fails, another is tried; Foveon, GoPro GPR, Capture One EIP and QuickTake files open ([KT2], [KT4]) | CAM rows | — | Outside the library |
@@ -90,7 +90,7 @@ What Katami calls Library Health, scoped for Redlamp's library: checks that each
 
 - **Only when there's something to decide.** The Library panel (LIB-23) gains a Library Health group listing each check that has findings, with its count; a check with none isn't shown, and the group goes when all are empty. No dashboard and no score. Each check is a source like any other (LIB-10), so the grid, the loupe, Compare and the filter bar work on it.
 - **Proposals look like proposals.** A proposed keeper or drop is drawn apart from the user's own flags and never written as one; accepting it is a single batch through LIB-26, to the Trash only, which one Undo reverses.
-- **Keep Anyway** takes a finding away and can be taken back from a Kept Anyway list. Dismissals live in `Definitions/Health.json`, beside the keyword definitions in `LibraryPaths.root`: keyed by the photo's content key and the check, and for duplicates by the group's SHA-256, so a third copy reopens the group. Not in sidecars: a dismissal changes nothing about the photo, works on volumes Redlamp can't write, and survives an index rebuild as the keyword definitions do (DEC-35).
+- **Keep Anyway** takes a finding away and can be taken back from a Kept Anyway list. Dismissals live in `Definitions/Health.json`, beside the keyword definitions in `LibraryPaths.root`: keyed by the photo's content key and the check, and for duplicates by the group's SHA-256, so a third copy reopens the group. Not in sidecars: a dismissal changes nothing about the photo, works on volumes Redlamp can't write, and survives an index rebuild as the keyword definitions do (DEC-42).
 - **Check Library Health** recounts every check: the index-only ones at once, the ones that read pixels queued in the background lane.
 - **`redlamp library health`** lists the findings as `redlamp library duplicates` does, with JSON output (LIB-12).
 
@@ -102,7 +102,7 @@ What Katami calls Library Health, scoped for Redlamp's library: checks that each
 
 ## 4. Moments and sessions
 
-Katami's session is one shoot grouped into moments, a pick proposed for each, walked a frame at a time and finished into an album ([KT2]). For Redlamp it needn't be a new kind of thing: any source the library already has (a card being browsed for import, a folder, a collection, a search, a selection) shown in the grid grouped into moments, and walked in the loupe. No new module beside DEC-42's, and nothing new in sidecars.
+Katami's session is one shoot grouped into moments, a pick proposed for each, walked a frame at a time and finished into an album ([KT2]). For Redlamp it needn't be a new kind of thing: any source the library already has (a card being browsed for import, a folder, a collection, a search, a selection) shown in the grid grouped into moments, and walked in the loupe. No new module beside DEC-49's, and nothing new in sidecars.
 
 ### 4.1 Moments
 
@@ -127,7 +127,7 @@ Katami's session is one shoot grouped into moments, a pick proposed for each, wa
 
 ### 4.4 What's stored
 
-- **Decisions** are flags, ratings and labels in each photo's sidecar, as everywhere (DEC-35).
+- **Decisions** are flags, ratings and labels in each photo's sidecar, as everywhere (DEC-42).
 - **Moments, runs and proposals** are derived: computed for the list, proposals kept with the soft-frame results in the index, by content key, and none of it in sidecars.
 - **The grouping and its Tighter–Looser setting** are part of the source's view, which LIB-14 already remembers for each source; a session worth keeping is a collection or a smart collection with that view.
 - **A card** is LIB-27's browsing before copying, grouped into moments from the capture times its preview reads give; the choices made are written at the destination, as designed.

@@ -1,4 +1,4 @@
-/// The window's modules, as in Lightroom Classic (DEC-42): Library to browse the current source and choose
+/// The window's modules, as in Lightroom Classic (DEC-49): Library to browse the current source and choose
 /// photos, Develop to edit the active one. Each is built once and kept; a switch shows one and hides the other.
 public enum AppModule: String, CaseIterable, Identifiable, Sendable {
     case library, develop

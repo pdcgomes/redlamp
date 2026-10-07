@@ -1,7 +1,7 @@
 import Foundation
 
 /// How the query language matches text: ignoring case, accents and width, as completion does
-/// (DEC-45). The column engine and the SQL it compiles to call the same functions (`QuerySQL`
+/// (DEC-52). The column engine and the SQL it compiles to call the same functions (`QuerySQL`
 /// registers them with SQLite), so both answer alike.
 enum QueryText {
     /// Whether the trigram index can search for `text`: three characters or more as the index holds

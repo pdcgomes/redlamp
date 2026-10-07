@@ -39,7 +39,7 @@ public struct KeptAnyway: Sendable, Hashable {
     }
 }
 
-/// What Library Health keeps beside the index (DEC-35): the findings kept anyway, in `Health.json` in
+/// What Library Health keeps beside the index (DEC-42): the findings kept anyway, in `Health.json` in
 /// `LibraryPaths.definitions`, so an index rebuild loses none of them, and nothing is written in a
 /// photo's sidecar for them.
 ///

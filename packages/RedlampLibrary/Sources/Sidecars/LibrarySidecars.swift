@@ -3,7 +3,7 @@ import Foundation
 import RedlampDocument
 import Synchronization
 
-/// Where the library's roots keep their photos' `.redlamp` sidecars (LIB-11, DEC-36): beside the
+/// Where the library's roots keep their photos' `.redlamp` sidecars (LIB-11, DEC-43): beside the
 /// photos, as each root does unless it says otherwise, or in Redlamp on this Mac
 /// (`LibraryPaths.sidecars`), as its `sidecars` column says. A root Redlamp can't write beside is set
 /// to this Mac on its own, once, when it's first probed (`choosePlacements`); the user sets the rest

@@ -121,7 +121,7 @@ Ranked by the number of products for which we found the complaint.
 | 12 | digiKam's rename tokens and modifiers as the minimum template language, with Redlamp's preview and journal | Adopt | One syntax serves renaming, import and batch work [DK9] | LIB-25, LIB-26 |
 | 13 | Find duplicates in two tiers: hashes first, then Vision feature prints looked up through an index | Do better | All-pairs comparison took 20 hours for 4% of 286,583 photos [DK18], [IM2] | LIB-31 |
 | 14 | Keep AI suggestions apart until accepted, and show natural language as an editable query | Adopt | digiKam and IMatch do both locally [DK12], [DK15], [IM3] | LIB-32, LIB-33 |
-| 15 | A shared multi-user database | Skip | The index is per Mac and rebuildable, and sidecars travel with the photos [DK3], [EX4] | DEC-35 |
+| 15 | A shared multi-user database | Skip | The index is per Mac and rebuildable, and sidecars travel with the photos [DK3], [EX4] | DEC-42 |
 | 16 | Live two-way sync with other apps' catalogs, as in Peakto | Skip | Import from a copy instead: private formats need an update for each new release [PK1] | LIB-29, LIB-30 |
 
 ## 6. Sources

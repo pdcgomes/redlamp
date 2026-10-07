@@ -1,6 +1,6 @@
 import Foundation
 
-/// The Library and Develop modules of the one window (LIB-13, DEC-42). Both show the same source, selection
+/// The Library and Develop modules of the one window (LIB-13, DEC-49). Both show the same source, selection
 /// and active photo; switching shows one module's views and hides the other's, building and reading nothing,
 /// so it's on screen within a frame. Develop keeps the photo it has open while Library is shown; when Library
 /// made another photo active, Develop opens that one as it's shown, from its preview until its render lands.

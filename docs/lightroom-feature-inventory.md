@@ -212,7 +212,7 @@ Each feature has a roadmap tag:
 - Importing from the Photos library and Files [P1 for Files; P2 for Photos]
 
 ## 21. Library and Catalog
-Lightroom Classic's Library module as of Classic 15.6 (September 2026), from the [Lightroom Classic research note](research/notes/LIB-lightroom-classic.md), which has the sources. What Redlamp should adopt, do better or skip is in the [library findings](research/library-findings.md), and the track is planned in section 13 of the [research tracker](research/research-tracker.md#13-library-and-catalog). Here [P4] is the library that ships in 1.0, and [Later] its AI and the map, after 1.0 (DEC-39).
+Lightroom Classic's Library module as of Classic 15.6 (September 2026), from the [Lightroom Classic research note](research/notes/LIB-lightroom-classic.md), which has the sources. What Redlamp should adopt, do better or skip is in the [library findings](research/library-findings.md), and the track is planned in section 13 of the [research tracker](research/research-tracker.md#13-library-and-catalog). Here [P4] is the library that ships in 1.0, and [Later] its AI and the map, after 1.0 (DEC-46).
 
 **Catalog and storage**
 - One catalog database (`.lrcat`, SQLite) as the only complete record, with previews, smart previews and AI pixel data (`.lrcat-data`) stored beside it; the photos stay in folders [P4 as an index on the Mac, rebuilt from the photos and their sidecars; a catalog as the record is skipped (SKIP-17)]
@@ -276,9 +276,9 @@ Lightroom Classic's Library module as of Classic 15.6 (September 2026), from the
 - Requested by Classic users: importing raw files only, and erasing the card afterwards [P4, proposed in the findings]
 
 **XMP and other apps**
-- Automatically write changes into XMP (Catalog Settings › Metadata), which slows work on slow drives [P4, as `.xmp` sidecars written only when turned on (DEC-37)]
+- Automatically write changes into XMP (Catalog Settings › Metadata), which slows work on slow drives [P4, as `.xmp` sidecars written only when turned on (DEC-44)]
 - What XMP carries: Develop settings, ratings, label text and keywords, flags since 13.2, label colour since 15.0, large pixel edits in `.acr` sidecars for proprietary raws since 15.0, and face regions (verify) [P4 for reading]
-- XMP written inside DNG, JPEG and TIFF files [Skip; originals are never written (DEC-37)]
+- XMP written inside DNG, JPEG and TIFF files [Skip; originals are never written (DEC-44)]
 
 **Modules, panels and keys**
 - Module keys: `G`, `E`, `C`, `N` and `D`; `Cmd+Option+1` to `Cmd+Option+7` for the seven modules; `Cmd+Option+Up` back to the previous module [P4 for Library and Develop; the Map Later; Book, Slideshow, Print and Web Skip, as in section 19]
