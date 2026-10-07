@@ -161,6 +161,8 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
     var sendsFrames = false
     /// The frames it has sent.
     private(set) var framesSent = 0
+    /// The histogram each frame carries.
+    var histogram = Histogram.empty
     private let rendered = AsyncStream.makeStream(of: RenderedFrame.self)
 
     func render(_ request: RenderRequest) {
@@ -172,7 +174,7 @@ final class GatedEngine: EditingEngine, @unchecked Sendable {
         guard sendsFrames, let surface = IOSurfaceCreate(properties as CFDictionary) else { return }
         framesSent += 1
         rendered.continuation.yield(RenderedFrame(
-            surface: surface, size: request.targetSize, histogram: .empty,
+            surface: surface, size: request.targetSize, histogram: histogram,
             generation: request.generation, renderDuration: .zero,
         ))
     }
