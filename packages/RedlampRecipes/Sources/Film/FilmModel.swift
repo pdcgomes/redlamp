@@ -1,4 +1,5 @@
 import Foundation
+import RedlampColor
 import RedlampEngineAPI
 import simd
 
@@ -202,7 +203,7 @@ final class FilmModel {
         let ramp = stride(from: -12.0, through: 8.0, by: 0.1).map { stop in
             printed(SIMD3(repeating: 0.18 * pow(2, stop)))
         }
-        let luminance = ramp.map { simd_dot($0, SIMD3(0.2627, 0.6780, 0.0593)) }
+        let luminance = ramp.map { simd_dot($0, Luma.rec2020Double) }
         printTiming = (0 ..< 3).map { channel in
             var values = ramp.map { $0[channel] }
             for i in 1 ..< values.count {
@@ -380,7 +381,7 @@ final class FilmModel {
         var scanned = simd_max(scanMatrix * rawScan(negative), SIMD3(repeating: 0))
         let scanner = parameters.scanner
         if scanner != .neutral, !film.kind.isMonochrome {
-            let luma = max(simd_dot(scanned, SIMD3(0.2627, 0.6780, 0.0593)), 1e-9)
+            let luma = max(simd_dot(scanned, Luma.rec2020Double), 1e-9)
             scanned = simd_max(luma + scanner.saturation * (scanned - luma), SIMD3(repeating: 0))
             let ev = log2(luma / 0.18)
             let shadows = 1 - Self.smoothstep(-4, 0, ev)

@@ -1,4 +1,5 @@
 import Foundation
+import RedlampColor
 import RedlampEngineAPI
 
 /// The designs behind the bundled film-style Base Looks, one per camera-card slot.
@@ -91,7 +92,7 @@ public enum StarterPackLooks {
             d.shadowTint = [-0.003, -0.004]
         case .monochrome:
             d.contrast = 0.22
-            d.monochrome = .init(weights: [0.2627, 0.678, 0.0593])
+            d.monochrome = .init(weights: [Luma.rec2020Double.x, Luma.rec2020Double.y, Luma.rec2020Double.z])
         case .monochromeYellow:
             d.contrast = 0.26
             d.monochrome = .init(weights: [0.42, 0.55, 0.03])
@@ -104,7 +105,7 @@ public enum StarterPackLooks {
         case .sepia:
             d.contrast = 0.1
             d.fade = 0.02
-            d.monochrome = .init(weights: [0.2627, 0.678, 0.0593])
+            d.monochrome = .init(weights: [Luma.rec2020Double.x, Luma.rec2020Double.y, Luma.rec2020Double.z])
         }
         return d
     }
