@@ -17,26 +17,53 @@ public struct QueryResult: Sendable, Hashable {
     }
 }
 
-/// Searches the library (LIB-06). Queries run over the column store, built from the index in the
-/// background by `load`: text, keyword and collection terms are looked up in the index, folder,
-/// camera and lens terms in its small tables, then one pass over the columns finds the photos and
-/// one in the sort's order lists them. Until the store is ready, a query is compiled to SQL and the
-/// index answers it.
+/// Searches the library (LIB-06). Queries run over the column store, loaded by `load`: mapped from its
+/// snapshot beside the index when that reflects the index, or built from the index in the background
+/// (LIB-44). Text, keyword and collection terms are looked up in the index, folder, camera and lens
+/// terms in its small tables, then one pass over the columns finds the photos and one in the sort's
+/// order lists them. Until the store is ready, a query is compiled to SQL and the index answers it.
 ///
 /// A search cancels the one before it, and its facets; nothing runs on the caller's thread. What the
 /// index looked up for a term, and what a query found, is kept until the store changes, so typing a
 /// character at a time looks up only what changed.
+///
+/// The store's snapshot is saved again once the store and the index have been quiet for a while
+/// after they change (`Saving`), and when `saveSnapshot` is called, as the app does at quit; each is
+/// brought up to the index's generation first, through what this process's writes changed.
 public final class QueryEngine: Sendable {
     let source: any QuerySource
     private let timeZone: TimeZone
     private let now: @Sendable () -> Date
+    private let saving: Saving?
     private let state = Mutex(State())
+
+    /// When the store's snapshot is saved after a change: once the store and the index have been
+    /// quiet for `quiet`, or `longest` after the first change not saved, whichever comes first.
+    struct Saving: Sendable {
+        var quiet: Duration
+        var longest: Duration
+
+        static let standard = Saving(quiet: .seconds(10), longest: .seconds(300))
+    }
 
     private struct State {
         var store: ColumnStore?
         var vocabulary = QueryVocabulary()
         /// Changes with the store, so what was kept for another store isn't used.
         var generation = 0
+        /// The index generation the store and its names reflect, when that's known.
+        var reflects: IndexGeneration?
+        /// The generation of the snapshot beside the index this store was loaded from or saved as,
+        /// and whether the store has changed since.
+        var saved: IndexGeneration?
+        var changedSinceSaved = false
+        /// Whether the store was mapped from its snapshot, when it was loaded or last saved.
+        var mapped = false
+        /// When the store or the index first changed since the snapshot was saved, and last.
+        var unsavedSince: ContinuousClock.Instant?
+        var lastChange: ContinuousClock.Instant?
+        var saveTimer: Task<Void, Never>?
+        var observer: (journal: IndexJournal, id: UUID)?
         var plans: [PlanKey: QueryPlan] = [:]
         var rowSets: [QueryPlan.RowSet: RowBits] = [:]
         var matches: [QueryPlan: RowBits] = [:]
@@ -58,11 +85,29 @@ public final class QueryEngine: Sendable {
         var pairs: HealthPairs?
     }
 
-    /// What a change to the store does to the photos kept for the pairs check.
+    /// What a change to the store does to the photos kept for the pairs check: keeps them, drops
+    /// them, or updates those of the photos the change read again.
     private enum PairsChange {
         case keep
         case drop
-        case update([Int64])
+        case update
+    }
+
+    /// What a change makes.
+    private struct Changed: Sendable {
+        enum Kind {
+            /// Loaded, mapped from the snapshot or built from the index.
+            case mapped, built
+            case changed
+        }
+
+        var store: ColumnStore
+        var names: QueryNames
+        /// The photos it read again.
+        var photos: [Int64] = []
+        /// The index generation the store and names reflect, when that's known.
+        var generation: IndexGeneration?
+        var kind = Kind.changed
     }
 
     /// A column counted over a source's photos in a store.
@@ -87,13 +132,37 @@ public final class QueryEngine: Sendable {
     public convenience init(
         index: LibraryIndex, timeZone: TimeZone = .current, now: @escaping @Sendable () -> Date = Date.init,
     ) {
-        self.init(source: IndexQuerySource(index: index), timeZone: timeZone, now: now)
+        self.init(index: index, timeZone: timeZone, now: now, saving: .standard)
     }
 
-    init(source: any QuerySource, timeZone: TimeZone = .current, now: @escaping @Sendable () -> Date = Date.init) {
+    /// `saving` says when the store's snapshot is saved after changes; nil only when asked.
+    convenience init(
+        index: LibraryIndex, timeZone: TimeZone = .current, now: @escaping @Sendable () -> Date = Date.init,
+        saving: Saving?,
+    ) {
+        self.init(source: IndexQuerySource(index: index), timeZone: timeZone, now: now, saving: saving)
+        let id = index.journal.observe { [weak self] in
+            self?.indexChanged()
+        }
+        state.withLock { $0.observer = (index.journal, id) }
+    }
+
+    init(
+        source: any QuerySource, timeZone: TimeZone = .current, now: @escaping @Sendable () -> Date = Date.init,
+        saving: Saving? = .standard,
+    ) {
         self.source = source
         self.timeZone = timeZone
         self.now = now
+        self.saving = saving
+    }
+
+    deinit {
+        let (observer, timer) = state.withLock { ($0.observer, $0.saveTimer) }
+        if let observer {
+            observer.journal.removeObserver(observer.id)
+        }
+        timer?.cancel()
     }
 
     /// Whether the column store is built: until it is, searches go to SQLite.
@@ -106,18 +175,34 @@ public final class QueryEngine: Sendable {
         state.withLock { $0.store }
     }
 
-    /// Builds the column store from the index, with the small tables beside it.
+    /// Whether the store was mapped from its snapshot when it was loaded or last saved, rather than
+    /// built from the index and held in memory.
+    var isMapped: Bool {
+        state.withLock { $0.mapped }
+    }
+
+    /// The index generation the store reflects, when that's known.
+    var reflects: IndexGeneration? {
+        state.withLock { $0.reflects }
+    }
+
+    /// Loads the column store and the small tables beside it: mapped from the store's snapshot when
+    /// it reflects the index as it is now, built from the index otherwise.
     public func load() async throws {
         state.withLock { $0.postings = [:] }
-        try await change(pairs: .drop) { [source] _ in
-            async let names = source.names()
-            return try await (source.columnStore(), names)
+        try await change(pairs: .drop) { [source] _, _, _ in
+            let loaded = try await source.loadStore()
+            return Changed(
+                store: loaded.store, names: loaded.names, generation: loaded.generation,
+                kind: loaded.mapped ? .mapped : .built,
+            )
         }
     }
 
     /// Brings the column store up to date with photos `ids` as the index has them now: added,
     /// changed or removed. Call it once their writes are committed; until the store is loaded there's
-    /// nothing to do, since loading reads them.
+    /// nothing to do, since loading reads them. Anything else this process's writes changed since the
+    /// store was last brought up to the index is read again with them.
     public func update(photos ids: [Int64]) async throws {
         guard !ids.isEmpty else { return }
         state.withLock { state in
@@ -126,19 +211,131 @@ public final class QueryEngine: Sendable {
                 state.stalePostings[kind, default: []].formUnion(ids)
             }
         }
-        try await change(pairs: .update(ids)) { [source] store in
+        try await change(pairs: .update) { [source] store, names, generation in
             guard let store else { return nil }
-            async let names = source.names()
-            return try await (source.applying(ids, to: store), names)
+            let caught = try await source.catchingUp(
+                ids, in: store, names: names, since: generation, readingNames: false,
+            )
+            return Changed(
+                store: caught.store,
+                names: caught.names,
+                photos: caught.photos,
+                generation: caught.generation,
+            )
         }
     }
 
     /// Reads the small tables again: after folders are renamed or moved, or keywords or collections
     /// change without their photos.
     public func updateNames() async throws {
-        try await change { [source] store in
+        try await change(pairs: .update) { [source] store, names, generation in
             guard let store else { return nil }
-            return try await (store, source.names())
+            let caught = try await source.catchingUp([], in: store, names: names, since: generation, readingNames: true)
+            return Changed(
+                store: caught.store,
+                names: caught.names,
+                photos: caught.photos,
+                generation: caught.generation,
+            )
+        }
+    }
+
+    /// Saves the store's snapshot beside the index (LIB-44), brought up to the index's generation
+    /// first: what the app does at quit. Nothing is written when the snapshot there already reflects
+    /// the index, and only its header when the store hasn't changed since it was saved; afterwards
+    /// the store is mapped from what was written. Nothing is saved when the store reflects no
+    /// generation it can say: another process wrote to the index since it was loaded.
+    public func saveSnapshot() async throws {
+        state.withLock { state in
+            state.unsavedSince = nil
+            state.lastChange = nil
+        }
+        try await serially { [self, source] in
+            guard let (store, names, reflects) = state.withLock({ state in
+                state.store.map { ($0, state.vocabulary.names, state.reflects) }
+            }), let reflects
+            else { return }
+            let caught = try await source.catchingUp([], in: store, names: names, since: reflects, readingNames: false)
+            guard let generation = caught.generation else {
+                state.withLock { $0.reflects = nil }
+                return
+            }
+            if caught.photos.isEmpty, caught.names.hasSameTables(as: names) {
+                state.withLock { $0.reflects = generation }
+            } else {
+                try await install(
+                    Changed(store: caught.store, names: caught.names, photos: caught.photos, generation: generation),
+                    replacing: names, pairs: .update,
+                )
+            }
+            let (current, saved, unchanged, version) = state.withLock { state in
+                (state.store, state.saved, !state.changedSinceSaved, state.generation)
+            }
+            guard let current, generation != saved else { return }
+            let mapped = try await source.save(
+                current, names: caught.names, generation: generation, unchangedSince: unchanged ? saved : nil,
+            )
+            state.withLock { state in
+                state.saved = generation
+                state.changedSinceSaved = false
+                if let mapped, state.generation == version {
+                    state.store = mapped
+                    state.mapped = true
+                }
+            }
+        }
+    }
+
+    /// `saveSnapshot`, blocking: for the app's quit, from the main thread or a thread of its own,
+    /// never from a task.
+    public func saveSnapshotAndWait() {
+        let done = DispatchSemaphore(value: 0)
+        Task.detached(priority: .userInitiated) { [self] in
+            try? await saveSnapshot()
+            done.signal()
+        }
+        done.wait()
+    }
+
+    /// After a write to the index commits: its snapshot no longer reflects it.
+    private func indexChanged() {
+        guard state.withLock({ $0.store != nil && $0.reflects != nil }) else { return }
+        scheduleSave()
+    }
+
+    /// Saves the snapshot once the store and the index have been quiet for a while (`Saving`).
+    private func scheduleSave() {
+        guard let saving else { return }
+        state.withLock { state in
+            let now = ContinuousClock.now
+            state.lastChange = now
+            if state.unsavedSince == nil {
+                state.unsavedSince = now
+            }
+            guard state.saveTimer == nil else { return }
+            state.saveTimer = Task.detached(priority: .utility) { [weak self] in
+                while let wait = self?.untilSaving(saving) {
+                    if wait > .zero {
+                        try? await Task.sleep(for: wait)
+                    } else {
+                        try? await self?.saveSnapshot()
+                    }
+                }
+            }
+        }
+    }
+
+    /// How long until the snapshot is due, zero when it is; nil, ending the timer, when there's
+    /// nothing to save.
+    private func untilSaving(_ saving: Saving) -> Duration? {
+        state.withLock { state in
+            guard let since = state.unsavedSince, let last = state.lastChange else {
+                state.saveTimer = nil
+                return nil
+            }
+            let now = ContinuousClock.now
+            let due = min(last + saving.quiet, since + saving.longest)
+            return due <= now ? .zero : due - now
         }
     }
 
@@ -163,51 +360,85 @@ public final class QueryEngine: Sendable {
     /// Keeps `key`'s order in the store from now on, sorting it once, unless it's kept already.
     func prepareOrder(_ key: QuerySort.Key) async throws {
         guard state.withLock({ $0.store.map { !$0.keepsOrder(key) } ?? false }) else { return }
-        try await change { [self] store in
+        try await change { store, names, generation in
             guard var store, !store.keepsOrder(key) else { return nil }
             store.prepareOrder(key)
-            return (store, state.withLock { $0.vocabulary.names })
+            return Changed(store: store, names: names, generation: generation)
         }
     }
 
-    /// Runs `body` after the changes asked for before, and replaces the store and the names with
-    /// what it returns, and the photos kept for the pairs check as `pairs` says.
+    /// Runs `body` with the store, its names and the generation they reflect, after the changes asked
+    /// for before, and installs what it returns.
     private func change(
         pairs change: PairsChange = .keep,
-        _ body: @escaping @Sendable (ColumnStore?) async throws -> (ColumnStore, QueryNames)?,
+        _ body: @escaping @Sendable (ColumnStore?, QueryNames, IndexGeneration?) async throws -> Changed?,
     ) async throws {
-        try await serially { [self, source] in
-            guard let (store, names) = try await body(state.withLock { $0.store }) else { return }
-            let vocabulary = QueryVocabulary(names)
-            var pairs = state.withLock { $0.pairs.take() }
-            switch change {
-            case .keep:
-                break
-            case .drop:
-                pairs = nil
-            case let .update(ids):
-                if var kept = pairs.take() {
+        try await serially { [self] in
+            let (store, names, generation) = state.withLock { ($0.store, $0.vocabulary.names, $0.reflects) }
+            guard let changed = try await body(store, names, generation) else { return }
+            try await install(changed, replacing: names, pairs: change)
+        }
+    }
+
+    /// Replaces the store and the names with `changed`'s, and the photos kept for the pairs check as
+    /// `pairs` says, in the serial lane; `names` were the names before. Saves the snapshot later when
+    /// the store now reflects a generation it wasn't saved as.
+    private func install(_ changed: Changed, replacing names: QueryNames, pairs change: PairsChange) async throws {
+        let vocabulary = QueryVocabulary(changed.names)
+        var pairs = state.withLock { $0.pairs.take() }
+        switch change {
+        case .keep:
+            break
+        case .drop:
+            pairs = nil
+        case .update:
+            if var kept = pairs.take() {
+                if !changed.photos.isEmpty {
                     do {
-                        try await kept.update(ids, to: source.pairPhotos(of: ids))
+                        try await kept.update(changed.photos, to: source.pairPhotos(of: changed.photos))
                     } catch {
                         state.withLock { $0.pairs = kept }
                         throw error
                     }
-                    pairs = kept
+                }
+                pairs = kept
+            }
+        }
+        let due = state.withLock { [pairs] state -> Bool in
+            state.pairs = pairs
+            state.store = changed.store
+            state.vocabulary = vocabulary
+            state.generation += 1
+            state.plans.removeAll()
+            state.rowSets.removeAll()
+            state.matches.removeAll()
+            state.columnCounts.removeAll()
+            state.health.removeAll()
+            state.keptAnyway = nil
+            for kind in [PostingKind.keywords, .collections]
+                where !changed.photos.isEmpty
+                && (state.postings[kind] != nil || state.readingPostings[kind, default: 0] > 0) {
+                state.stalePostings[kind, default: []].formUnion(changed.photos)
+            }
+            state.reflects = changed.generation
+            switch changed.kind {
+            case .mapped:
+                state.saved = changed.generation
+                state.changedSinceSaved = false
+                state.mapped = true
+            case .built:
+                state.saved = nil
+                state.changedSinceSaved = true
+                state.mapped = false
+            case .changed:
+                if !changed.photos.isEmpty || !changed.names.hasSameTables(as: names) {
+                    state.changedSinceSaved = true
                 }
             }
-            state.withLock { [pairs] state in
-                state.pairs = pairs
-                state.store = store
-                state.vocabulary = vocabulary
-                state.generation += 1
-                state.plans.removeAll()
-                state.rowSets.removeAll()
-                state.matches.removeAll()
-                state.columnCounts.removeAll()
-                state.health.removeAll()
-                state.keptAnyway = nil
-            }
+            return changed.generation != nil && changed.generation != state.saved
+        }
+        if due {
+            scheduleSave()
         }
     }
 

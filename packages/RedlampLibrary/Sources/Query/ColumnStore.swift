@@ -3,8 +3,8 @@ import RedlampDocument
 
 /// The library's hot columns in memory (LIB-06): a column for each field the query language filters
 /// and sorts on, indexed by a dense row number, and the sort orders as permutations of the rows.
-/// It's built from the index's hot-column scan, in the background at launch, and changed as the
-/// writer commits (`apply`).
+/// It's built from the index's hot-column scan, in the background at launch, saved beside the index
+/// (`ColumnSnapshot`, LIB-44), and changed as the writer commits (`apply`).
 ///
 /// A value: copies share their columns until one of them changes, and then only the pages it writes
 /// are copied (`StoreColumn`), so a query reads a snapshot while changes go to another. A change
@@ -745,6 +745,73 @@ public struct ColumnStore: Sendable {
                 }
             }
         }
+    }
+}
+
+// MARK: - Its snapshot
+
+extension ColumnStore {
+    /// The tables its code columns stand for, as its snapshot saves them.
+    struct SavedCodes {
+        /// The creators', copyrights' and custom labels' names, then each part of the places'.
+        static let nameListCount = 3 + PlaceCodes.Part.allCases.count
+
+        var cameraIDs: ContiguousArray<Int64> = [0]
+        var lensIDs: ContiguousArray<Int64> = [0]
+        var nameLists: [[String]] = []
+        var placeParts: [UInt32] = []
+    }
+
+    var savedCodes: SavedCodes {
+        let places = placeNames.saved
+        return SavedCodes(
+            cameraIDs: cameraIDs, lensIDs: lensIDs,
+            nameLists: [Array(creatorNames.names), Array(copyrightNames.names), Array(customLabelNames.names)]
+                + places.parts,
+            placeParts: places.placeParts,
+        )
+    }
+
+    /// Calls `body` with each of its sections' bytes, in the snapshot's order.
+    func withSections(_ body: (ColumnSnapshot.Section, UnsafeRawBufferPointer) throws -> Void) throws {
+        func put(_ section: ColumnSnapshot.Section, _ column: StoreColumn<some FixedWidthInteger & Sendable>) throws {
+            try column.withUnsafeBufferPointer { try body(section, UnsafeRawBufferPointer($0)) }
+        }
+        try put(.ids, ids)
+        try put(.folders, folders)
+        try put(.captured, captured)
+        try put(.cameras, cameras)
+        try put(.lenses, lenses)
+        try put(.packed, packed)
+        try put(.iso, iso)
+        try put(.aperture, aperture)
+        try put(.focal, focal)
+        try put(.shutter, shutter)
+        try put(.kinds, kinds)
+        try put(.nameRanks, nameRanks)
+        try put(.editedAt, editedAt)
+        try put(.sizes, sizes)
+        try put(.modifiedAt, modifiedAt)
+        try put(.states, states)
+        try put(.creators, creators)
+        try put(.copyrights, copyrights)
+        try put(.customLabels, customLabels)
+        try put(.places, places)
+        try put(.megapixels, megapixels)
+        try put(.aspects, aspects)
+        try put(.orientations, orientations)
+        try put(.rowOfID, rowOfID)
+        try put(.byCaptured, byCaptured)
+        try put(.byName, byName)
+        try put(.byRating, byRating)
+        try put(.byEdited, byEdited)
+        if let byModified {
+            try put(.byModified, byModified)
+        }
+        if let bySize {
+            try put(.bySize, bySize)
+        }
+        try live.words.withUnsafeBufferPointer { try body(.live, UnsafeRawBufferPointer($0)) }
     }
 }
 

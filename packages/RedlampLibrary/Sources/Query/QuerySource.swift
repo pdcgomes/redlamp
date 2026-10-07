@@ -7,6 +7,21 @@ import Synchronization
 protocol QuerySource: Sendable {
     func columnStore() async throws -> ColumnStore
     func names() async throws -> QueryNames
+    /// The store and the small tables, ready to search, and the index generation they reflect.
+    func loadStore() async throws -> LoadedStore
+    /// `store` with photos `ids` as the index has them now, and with every photo changed since
+    /// `generation`, and the small tables read again when `readingNames` asks or they changed;
+    /// `names` are the ones it has.
+    func catchingUp(
+        _ ids: [Int64], in store: ColumnStore, names: QueryNames, since generation: IndexGeneration?,
+        readingNames: Bool,
+    ) async throws -> CaughtUp
+    /// Saves `store` and `names` as reflecting `generation`, or only says so of the snapshot saved
+    /// as `saved` when the store hasn't changed since; returns the store mapped from what it saved,
+    /// when it could map it.
+    func save(
+        _ store: ColumnStore, names: QueryNames, generation: IndexGeneration, unchangedSince saved: IndexGeneration?,
+    ) async throws -> ColumnStore?
     /// The photos matching an FTS5 query of `photo_text`.
     func photoIDs(matching match: String) async throws -> [Int64]
     func photoIDs(withKeywords keywords: [Int64]) async throws -> [Int64]
@@ -37,7 +52,45 @@ protocol QuerySource: Sendable {
     ) async throws -> ContiguousArray<Int64>
 }
 
+/// A store as it's loaded.
+struct LoadedStore: Sendable {
+    var store: ColumnStore
+    var names: QueryNames
+    /// The index generation they reflect; nil when that isn't known.
+    var generation: IndexGeneration?
+    /// Mapped from the snapshot beside the index, rather than built from it.
+    var mapped = false
+}
+
+/// A store brought up to the index as it is now.
+struct CaughtUp: Sendable {
+    var store: ColumnStore
+    var names: QueryNames
+    /// The photos read again.
+    var photos: [Int64]
+    /// The index generation the store and names reflect; nil when that isn't known.
+    var generation: IndexGeneration?
+}
+
 extension QuerySource {
+    func loadStore() async throws -> LoadedStore {
+        async let names = names()
+        return try await LoadedStore(store: columnStore(), names: names)
+    }
+
+    func catchingUp(
+        _ ids: [Int64], in store: ColumnStore, names _: QueryNames, since _: IndexGeneration?, readingNames _: Bool,
+    ) async throws -> CaughtUp {
+        async let names = names()
+        return try await CaughtUp(store: applying(ids, to: store), names: names, photos: ids)
+    }
+
+    func save(
+        _: ColumnStore, names _: QueryNames, generation _: IndexGeneration, unchangedSince _: IndexGeneration?,
+    ) async throws -> ColumnStore? {
+        nil
+    }
+
     func keywordSynonyms() async throws -> [String: [String]] {
         [:]
     }
@@ -96,6 +149,14 @@ struct QueryNames: Sendable, Hashable {
     var keywordSynonyms: [String: [String]] = [:]
     /// The smart collections' queries, by path, from the library's definitions (LIB-23).
     var smartCollections: [String: String] = [:]
+}
+
+extension QueryNames {
+    /// Whether `other` has the same small tables from the index, whatever the definitions hold.
+    func hasSameTables(as other: QueryNames) -> Bool {
+        folders == other.folders && cameras == other.cameras && lenses == other.lenses && keywords == other.keywords
+            && collections == other.collections
+    }
 }
 
 /// The small tables ready to match terms against, made again whenever they're read, keeping what
@@ -261,13 +322,84 @@ struct IndexQuerySource: QuerySource {
     }
 
     func names() async throws -> QueryNames {
-        var names = try await index.read { try $0.queryNames() }
+        try await withDefinitions(index.read { try $0.queryNames() })
+    }
+
+    /// `names` with the keywords' synonyms and the smart collections' queries from the library's
+    /// definitions, which aren't in the index.
+    private func withDefinitions(_ names: QueryNames) async throws -> QueryNames {
+        var names = names
         names.keywordSynonyms = try await keywordSynonyms()
         let collections = CollectionDefinitions.url(in: paths)
         names.smartCollections = try await LibraryIndex.offCaller {
             CollectionDefinitions.cached(at: collections).smartQueries
         }
         return names
+    }
+
+    /// Built from the index, with the generation it reflects (LIB-44): brought up to whatever this
+    /// process wrote while it was read.
+    func loadStore() async throws -> LoadedStore {
+        let generation = try await index.read { try $0.generation() }
+        let store = try await columnStore()
+        let (names, now) = try await index.read { try ($0.queryNames(), $0.generation()) }
+        let loaded = try await LoadedStore(store: store, names: withDefinitions(names), generation: generation)
+        guard now != generation else { return loaded }
+        let caught = try await catchingUp(
+            [], in: loaded.store, names: loaded.names, since: generation, readingNames: true,
+        )
+        return LoadedStore(store: caught.store, names: caught.names, generation: caught.generation)
+    }
+
+    /// Reads again, in one transaction with the generation, photos `ids` and every photo this
+    /// process's transactions changed since `generation` (`IndexJournal`), and the small tables when
+    /// they changed. When the transactions between aren't known (another process wrote, or there's
+    /// no generation to start from), it reads `ids` and the small tables, as before generations, and
+    /// the store reflects no generation.
+    func catchingUp(
+        _ ids: [Int64], in store: ColumnStore, names: QueryNames, since generation: IndexGeneration?,
+        readingNames: Bool,
+    ) async throws -> CaughtUp {
+        let journal = index.journal
+        var caught = try await index.read { reader -> CaughtUp in
+            let now = try reader.generation()
+            var photos = Set(ids)
+            var reading = readingNames
+            var reflects: IndexGeneration?
+            if let generation, let changes = journal.changes(after: generation, through: now) {
+                photos.formUnion(changes.photos)
+                reading = reading || changes.names
+                reflects = now
+            } else {
+                reading = true
+            }
+            let sorted = photos.sorted()
+            var store = store
+            if !sorted.isEmpty {
+                let rows = try reader.columnRows(ids: sorted)
+                let found = Set(rows.map(\.hot.id))
+                try store.apply(ColumnStore.Changes(upserted: rows, removed: sorted.filter { !found.contains($0) })) {
+                    try reader.photoName(id: $0)
+                }
+            }
+            let read = try reading ? reader.queryNames() : names
+            return CaughtUp(store: store, names: read, photos: sorted, generation: reflects)
+        }
+        caught.names = try await withDefinitions(caught.names)
+        return caught
+    }
+
+    func save(
+        _ store: ColumnStore, names: QueryNames, generation: IndexGeneration, unchangedSince saved: IndexGeneration?,
+    ) async throws -> ColumnStore? {
+        let url = ColumnSnapshot.url(forIndex: index.url)
+        return try await LibraryIndex.offCaller {
+            if let saved, ColumnSnapshot.restamp(at: url, from: saved, to: generation) {
+                return nil
+            }
+            try ColumnSnapshot.write(store, names: names, generation: generation, to: url)
+            return nil
+        }
     }
 
     func keywordSynonyms() async throws -> [String: [String]] {

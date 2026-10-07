@@ -67,4 +67,56 @@ struct IndexGenerationTests {
         restored.token = moved.token
         #expect(journal.changes(after: start, through: restored) == nil, "another history")
     }
+
+    @Test func `a store caught up through the journal answers as one built again, whatever the updates named`(
+    ) async throws {
+        let library = try await SnapshotLibrary.make(photos: 1500)
+        defer { library.remove() }
+        let engine = library.engine()
+        try await engine.load()
+        let ids = library.ids
+        let index = library.index
+        let rated = Array(ids[10 ..< 40])
+        try await index.write { try $0.setOrganising([.rating(4), .label(.blue)], forPhotos: rated) }
+        try await index.write { _ = try $0.addKeyword("Events/Festival", toPhotos: Array(ids[100 ..< 130])) }
+        try await index.write { _ = try $0.removeKeyword("sunset", fromPhotos: Array(ids[0 ..< 300])) }
+        try await index.write { try $0.deletePhotos(Array(ids[500 ..< 520])) }
+        let folder = try #require(try await index.read { reader in
+            try reader.photo(id: ids[0]).flatMap { photo in try reader.folder(id: photo.folder) }
+        })
+        let added = try await index.write { writer in
+            try writer.upsertPhotos((0 ..< 25).map { number in
+                PhotoRecord(
+                    folder: folder.id, name: "NEW_\(number).HEIC", captured: Date(timeIntervalSince1970: 1_600_000_000),
+                    rating: number % 5, creator: "Nova Pessoa",
+                )
+            })
+        }
+        try await index.write { try $0.moveFolder(folder.id, to: folder.path + " Moved", parent: folder.parent) }
+        try await index.write { try $0.setOrganising([.flag(.pick)], forPhotos: Array(ids[600 ..< 640])) }
+        try await engine.update(photos: rated + Array(ids[500 ..< 520]))
+        try await engine.saveSnapshot()
+        #expect(try await engine.reflects == (index.read { try $0.generation() }))
+
+        try FileManager.default.removeItem(at: ColumnSnapshot.url(forIndex: index.url))
+        let rebuilt = library.engine()
+        try await rebuilt.load()
+        #expect(!rebuilt.isMapped)
+        let queries = SnapshotLibrary.queries + [
+            "kw:Festival", "kw:sunset", "creator:Nova", "label:blue", "rating:4", "in:Moved", "flag:pick", "type:heic",
+        ]
+        for text in queries {
+            let query = try LibraryQuery(parsing: text)
+            for sort in [QuerySort(), QuerySort(.name), QuerySort(.rating, ascending: false)] {
+                let expected = try await rebuilt.results(query, sort: sort).last
+                let found = try await engine.results(query, sort: sort).last
+                #expect(found?.ids == expected?.ids && found?.count == expected?.count, "\(text), \(sort)")
+            }
+            for facet in [Facet.camera, .folder, .rating, .label, .creator, .day] {
+                let expected = try await SnapshotLibrary.facet(facet, of: query, in: rebuilt)
+                #expect(try await SnapshotLibrary.facet(facet, of: query, in: engine) == expected, "\(text), \(facet)")
+            }
+        }
+        #expect(try await rebuilt.ids("kw:Festival").count == 30 && added.count == 25)
+    }
 }

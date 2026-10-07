@@ -143,6 +143,11 @@ struct PlaceCodes: Sendable {
         var sublocation, city, state, country, countryCode: UInt32
     }
 
+    /// Each part's names and the places' parts, as the snapshot saves them.
+    var saved: (parts: [[String]], placeParts: [UInt32]) {
+        (parts.map { Array($0.names) }, Array(placeParts))
+    }
+
     /// Places, none included.
     var count: Int {
         placeParts.count / Part.allCases.count
