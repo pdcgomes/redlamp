@@ -202,6 +202,9 @@ public extension DecodedImage {
     /// connection, so neighbouring photos decode in parallel as they do in-process. It never
     /// decodes in the app: a service that can't start fails the photo rather than giving up the
     /// isolation. The CLI and tests decode with `InProcessDecoder`.
+    ///
+    /// Its calls wait for the service, which may be starting or stuck on a hostile file, so they
+    /// must never be made on the main thread; a Debug build stops on one.
     public final class DecodeServiceClient: ImageDecoding {
         public static let serviceName = "app.redlamp.mac.decoder"
 
@@ -225,11 +228,18 @@ public extension DecodedImage {
         }
 
         private func connect() -> NSXPCConnection {
+            Self.checkOffMain()
             let connection = endpoint.map { NSXPCConnection(listenerEndpoint: $0) }
                 ?? NSXPCConnection(serviceName: serviceName)
             connection.remoteObjectInterface = NSXPCInterface(with: DecodeServiceProtocol.self)
             connection.resume()
             return connection
+        }
+
+        static func checkOffMain() {
+            #if DEBUG
+                dispatchPrecondition(condition: .notOnQueue(.main))
+            #endif
         }
 
         public func decode(_ url: URL) throws -> DecodedImage {
@@ -292,6 +302,7 @@ public extension DecodedImage {
             _ urls: [URL], as _: T.Type,
             _ call: (any DecodeServiceProtocol, [Data], [String], @escaping @Sendable (Data?) -> Void) -> Void,
         ) -> [T?] {
+            Self.checkOffMain()
             guard !urls.isEmpty else { return [] }
             let connection = connect()
             defer { connection.invalidate() }

@@ -228,6 +228,38 @@ struct DecodeServiceTests {
             try DecodedImage(archive: image(layout: .mosaic(pattern)).archived())
         }
     }
+
+    /// A call that waits for the service on the main thread would hang the app on a file the
+    /// service is stuck on.
+    @Test(.enabled(if: !DecodeServiceTests.isSandboxed))
+    func `a Debug build stops on a call to the service from the main thread`() async {
+        await #expect(processExitsWith: .failure) {
+            await MainActor.run {
+                _ = DecodeServiceClient(serviceName: "app.redlamp.mac.missing")
+                    .captures(of: [URL(fileURLWithPath: "/nowhere/IMG_0001.ARW")], concurrently: false)
+            }
+        }
+        await #expect(processExitsWith: .failure) {
+            await MainActor.run {
+                _ = try? DecodeServiceClient(serviceName: "app.redlamp.mac.missing")
+                    .decode(URL(fileURLWithPath: "/dev/null"))
+            }
+        }
+        await #expect(processExitsWith: .success) {
+            _ = await Task.detached {
+                DecodeServiceClient(serviceName: "app.redlamp.mac.missing")
+                    .captures(of: [URL(fileURLWithPath: "/nowhere/IMG_0001.ARW")], concurrently: false)
+            }.value
+        }
+    }
+
+    /// Whether this process runs in a sandbox, where XCTest runs no exit tests (an agent's shell
+    /// in Cursor is one).
+    static let isSandboxed: Bool = {
+        typealias Check = @convention(c) (pid_t, UnsafePointer<CChar>?, Int32) -> Int32
+        guard let check = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "sandbox_check") else { return false }
+        return unsafeBitCast(check, to: Check.self)(getpid(), nil, 0) != 0
+    }()
 }
 
 /// The service replies synchronously; this holds what it sent.
