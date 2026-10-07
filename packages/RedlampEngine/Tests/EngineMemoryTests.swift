@@ -354,6 +354,64 @@ struct EngineMemoryTests {
         #expect(stage.allocated.count - before == 4)
     }
 
+    /// A Noise drag at Fit, a Before/After pan at 1:1 and an export's tiles write over the
+    /// textures the stage let go of: once each has made its first few, they allocate nothing.
+    @Test func `drags, a Before/After pan and still tiles recycle the stage's textures`() throws {
+        let session = try helpers.makeSession(.bayer, width: 6000, height: 4000, signal: Self.smooth)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        func allocations(_ ticks: Int, warm: Int, _ tick: (Int) throws -> Void) rethrows -> Int {
+            for index in 0 ..< warm {
+                try tick(index)
+            }
+            let before = stage.allocated.count
+            for index in warm ..< ticks {
+                try tick(index)
+            }
+            return stage.allocated.count - before
+        }
+        var dragged = Self.everyPass
+        let drag = try allocations(12, warm: 4) { index in
+            dragged[.noiseLuminance] = 40 + Double(index)
+            _ = try render(stage, session, dragged, outputSize: PixelSize(width: 2250, height: 1500))
+        }
+        var original = EditRecipe()
+        original[.sharpenAmount] = 40
+        original[.noiseColor] = 25
+        let pan = try allocations(24, warm: 8) { index in
+            let region = ImageRect(x: 0.05 + 0.02 * Double(index), y: 0.3, width: 2560.0 / 6000, height: 0.36)
+            let view = PixelSize(width: 2560, height: 1440)
+            _ = try render(stage, session, Self.everyPass, region: region, outputSize: view)
+            _ = try render(stage, session, original, region: region, outputSize: view)
+        }
+        let tile = 2048
+        let origins = stride(from: 0, to: 4000, by: tile).flatMap { y in
+            stride(from: 0, to: 6000, by: tile).map { SIMD2(x: $0, y: y) }
+        }
+        let tiles = try allocations(2 * origins.count, warm: origins.count) { index in
+            let origin = origins[index % origins.count]
+            let size = PixelSize(width: min(tile, 6000 - origin.x), height: min(tile, 4000 - origin.y))
+            let region = ImageRect(
+                x: Double(origin.x) / 6000, y: Double(origin.y) / 4000,
+                width: Double(size.width) / 6000, height: Double(size.height) / 4000,
+            )
+            let commands = try #require(helpers.queue.makeCommandBuffer())
+            _ = try #require(try stage.process(
+                Self.everyPass, session: session, region: region, outputSize: size, commands: commands, cache: false,
+            ))
+            commands.commit()
+            commands.waitUntilCompleted()
+        }
+        withKnownIssue("PIPE-04: the stage allocates on every miss") {
+            #expect(drag == 0, "a Noise drag made \(drag) textures")
+        }
+        withKnownIssue("PIPE-04: the stage allocates on every miss") {
+            #expect(pan == 0, "a Before/After pan made \(pan) textures")
+        }
+        withKnownIssue("PIPE-04: the stage allocates on every miss") {
+            #expect(tiles == 0, "a still's tiles made \(tiles) textures")
+        }
+    }
+
     /// The largest photos at 1:1, then a smaller photo: the scratch textures follow the photo
     /// open now.
     @Test func `a 60 MP frame stays within the scratch budget and a smaller photo shrinks it`() throws {
