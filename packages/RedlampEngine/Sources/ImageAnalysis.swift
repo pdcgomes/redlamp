@@ -41,33 +41,53 @@ enum ImageAnalysis {
         return model.whiteBalance(forCameraNeutral: SIMD3<Double>(average))
     }
 
-    /// Lightroom-style "Auto" for the Basic panel: exposure from the log-average
-    /// luminance, highlights/shadows/whites/blacks from the tails of the distribution.
+    /// Lightroom-style "Auto" for the Basic panel: exposure from the log-average luminance, held
+    /// back where Highlights couldn't keep the brightest tones from clipping, and
+    /// highlights/shadows/whites/blacks from the tails of the distribution.
     static func autoTone(session: ImageSession, recipe: EditRecipe) -> [ParameterID: Double] {
         let ratio = SIMD3<Float>(session.whiteBalanceRatio(for: recipe))
         let matrix = session.cameraToWorking
         let luma = Luma.rec2020
         let gain = Float(pow(2, session.baselineExposure))
 
-        var values: [Float] = []
-        values.reserveCapacity(session.analysis.pixels.count)
+        var luminances: [Float] = []
+        var peaks: [Float] = []
+        luminances.reserveCapacity(session.analysis.pixels.count)
+        peaks.reserveCapacity(session.analysis.pixels.count)
         for pixel in session.analysis.pixels {
             let scene = simd_max(matrix * (pixel * ratio), .zero) * gain
-            values.append(max(simd_dot(scene, luma), 1e-5))
+            luminances.append(max(simd_dot(scene, luma), 1e-5))
+            peaks.append(scene.max())
         }
-        guard !values.isEmpty else { return [:] }
-        values.sort()
+        return autoTone(luminances: luminances, peaks: peaks)
+    }
+
+    /// Auto's values for a photo whose pixels have these luminances and brightest channels, in
+    /// linear Rec. 2020 at Exposure 0.
+    static func autoTone(luminances: [Float], peaks: [Float]) -> [ParameterID: Double] {
+        guard !luminances.isEmpty, !peaks.isEmpty else { return [:] }
+        let values = luminances.sorted()
+        let peaks = peaks.sorted()
+        func percentile(_ sorted: [Float], _ p: Double) -> Double {
+            Double(sorted[min(sorted.count - 1, Int(Double(sorted.count) * p))])
+        }
 
         let logAverage = exp(values.reduce(0.0) { $0 + log(Double($1)) } / Double(values.count))
-        let exposure = min(max(log2(0.16 / logAverage) * 0.8, -3), 3)
+        let midtones = min(max(log2(0.16 / logAverage) * 0.8, -3), 3)
+        // A pixel clips by its brightest channel (a blue sky by its blue). Highlights brings the
+        // brightest 1% down to `held`, inside the tone curve's shoulder, by up to `reach` EV
+        // (-100 lowers the brightest regions by 1.25 EV: `toneControlsEV`). Past that the exposure
+        // gives way, by up to 1 EV, so lights in a dark scene don't keep it dark, and never below 0.
+        let held = 1.0
+        let reach = 1.0
+        let brightest = percentile(peaks, 0.99)
+        let exposure = min(midtones, max(log2(held / brightest) + reach, midtones - 1, 0))
         let scale = pow(2, exposure)
 
-        func percentile(_ p: Double) -> Double {
-            Double(values[min(values.count - 1, Int(Double(values.count) * p))]) * scale
-        }
-        let bright = percentile(0.99)
-        let dark = percentile(0.02)
-        let highlights = bright > 0.9 ? -min((bright - 0.9) * 60, 70) : 0
+        let pulled = min(max(log2(brightest * scale / held), 0), reach)
+        let bright = brightest * scale / pow(2, pulled)
+        let dark = percentile(values, 0.02) * scale
+        let highlights = -pulled / 1.25 * 100
         let shadows = dark < 0.01 ? min((0.01 - dark) * 3000, 45) : 0
         let whites = bright < 0.7 ? min((0.7 - bright) * 60, 30) : -min(max(bright - 1.2, 0) * 20, 20)
         let blacks = dark > 0.03 ? -min((dark - 0.03) * 400, 25) : 0
