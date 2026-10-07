@@ -71,7 +71,7 @@ struct FilmstripView: View {
                     .frame(height: FilmstripStripView.height)
             }
         }
-        .frame(height: 110)
+        .frame(height: PanelMetrics.filmstripHeight)
     }
 }
 
