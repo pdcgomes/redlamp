@@ -218,6 +218,30 @@ struct PhotoSelectionTests {
         #expect(model.recipe[.exposure] == 0, "Auto Tone may have read B meanwhile")
     }
 
+    @Test func `another writer's edit adopted while the next photo is read is kept on going back`() async throws {
+        let photos = try await openDecoded()
+        defer { photos.cleanup() }
+        let (model, a, b) = (photos.model, photos.a, photos.b)
+        await model.saves.wait(for: a)
+        var recipe = EditRecipe()
+        recipe[.contrast] = 40
+        try SidecarStore().save(Sidecar(recipe: recipe, metadata: PhotoMetadata(rating: 5)), for: a)
+        let base = SidecarStore().loadWithBase(for: a).base
+
+        try await startOpening(b, in: photos)
+        model.adopt(base, for: a)
+        #expect(model.recipe[.contrast] == 0, "not shown while B is being read")
+        model.select(a)
+        photos.reads.release()
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(model.info?.url == a && model.selection == a)
+        #expect(model.recipe[.contrast] == 40)
+        #expect(model.currentMetadata.rating == 5)
+        #expect(model.history.last?.name == "Edit from Another Mac")
+        await model.saves.wait(for: a)
+        #expect(SidecarStore().load(for: a)?.recipe[.contrast] == 40, "their edit stays as they left it")
+    }
+
     @Test func `snapshots and Clear History wait for the next photo's read`() async throws {
         let photos = try await openDecoded()
         defer { photos.cleanup() }
