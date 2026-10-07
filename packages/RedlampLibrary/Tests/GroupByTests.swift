@@ -29,7 +29,7 @@ struct GroupByTests {
                     let filtered = switch key {
                     case .ungrouped: false
                     case .orientation: true
-                    case .moment, .momentCamera: false
+                    case .momentCamera: !group.name.hasPrefix("No ") && !group.name.hasSuffix("No camera")
                     default: !group.name.hasPrefix("No ")
                     }
                     #expect((group.filter != nil) == filtered, "\(key) \(group.name)")
@@ -72,6 +72,15 @@ struct GroupByTests {
         #expect(grouping.groups(of: all, by: .orientation).map { $0.filter?.description } == [
             "orientation:landscape", "orientation:portrait", "orientation:square", "orientation:none",
         ])
+        #expect(grouping.groups(of: all, by: .moment).map { $0.filter?.description } == [
+            "date:2025-06-14T10:00:00..2025-06-14T10:00:05", "date:2025-06-14T23:59:59",
+            "date:2025-06-15T09:00:00..2025-06-15T09:00:04", "date:2025-06-16T18:00:00..2025-06-16T18:00:03", nil,
+        ])
+        let split = grouping.groups(of: all, by: .momentCamera)
+        #expect(split.map(\.name).first == "14 June 2025, 10:00 — Canon EOS R5")
+        #expect(split.first?.filter?.description
+            == #"date:2025-06-14T10:00:00 camera:"Canon EOS R5" -camera:"Canon EOS R50""#)
+        #expect(split[1].filter?.description == #"date:2025-06-14T10:00:05 camera:"Canon EOS R50""#)
     }
 
     @Test func `two cameras whose clocks disagree come apart by moment, then camera`() {
@@ -92,7 +101,12 @@ struct GroupByTests {
             .momentCamera(1, camera: "Nikon Z 6"), .momentCamera(2, camera: "Nikon Z 6"),
         ])
         #expect(split[2].name == "14 June 2025, 14:00 to 14:19 — Nikon Z 6")
-        #expect(split.allSatisfy { $0.filter == nil })
+        #expect(split.map { $0.filter?.description } == [
+            #"date:2025-06-14T13:20:00..2025-06-14T13:39:43 camera:"Fujifilm X-T5""#,
+            #"date:2025-06-14T14:20:00..2025-06-14T14:49:03 camera:"Fujifilm X-T5""#,
+            #"date:2025-06-14T14:00:00..2025-06-14T14:19:54 camera:"Nikon Z 6""#,
+            #"date:2025-06-14T15:00:00..2025-06-14T15:29:54 camera:"Nikon Z 6""#,
+        ])
 
         var agreeing = GroupLibrary()
         let a = agreeing.shoot(100, from: ceremony, camera: 1) { _ in 4 }

@@ -234,11 +234,14 @@ public extension LibraryQuery {
 }
 
 /// A date in the query language: a year, a month or a day of the capture time as the camera's
-/// clock showed it, or a span ending today.
+/// clock showed it, an hour, a minute or a second of a day (LIB-41), or a span ending today.
 public enum QueryDate: Sendable, Hashable {
     case year(Int)
     case month(Int, Int)
     case day(Int, Int, Int)
+    /// A time on a day, written after a `T`: `2025-06-14T14`, `2025-06-14T14:03`,
+    /// `2025-06-14T14:03:12`.
+    case time(Int, Int, Int, QueryTime)
     case today
     case yesterday
     /// The last `count` days, weeks, months or years, today included: `last:30d`.
@@ -250,6 +253,14 @@ public enum QueryDate: Sendable, Hashable {
         case months = "m"
         case years = "y"
     }
+}
+
+/// A time of day by the camera's clock, to the hour, the minute or the second, each spanning all of
+/// its hour, minute or second.
+public enum QueryTime: Sendable, Hashable {
+    case hour(Int)
+    case minute(Int, Int)
+    case second(Int, Int, Int)
 }
 
 /// Why a query couldn't be read: the characters at fault and what's wrong with them.

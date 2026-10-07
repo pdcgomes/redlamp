@@ -100,6 +100,7 @@ struct QueryParserTests {
                 Self.filter(.orientation, .equal, .orientation(.portrait), .orientation(.square)),
             ),
             ("orientation!=none", Self.filter(.orientation, .notEqual, .orientation(nil))),
+            ("date:2024-06-01T14:30", Self.filter(.date, .equal, .date(.time(2024, 6, 1, .minute(14, 30))))),
         ]
         for (text, expected) in cases {
             #expect(try Self.parse(text) == expected, "\(text)")

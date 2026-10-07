@@ -50,8 +50,9 @@ public extension LibraryGrouping {
             sorted = self.sorted(list, rows: rows, own: moments(of: list, rows: rows, setting: setting), order: byTime)
             let dated = sorted.codes.count { $0 != .min }
             describe = { code, group, span in
-                guard code != nil else { return (.moment(nil), Self.undated, nil) }
-                return (.moment(newestFirst ? dated - 1 - group : group), Self.name(of: span), nil)
+                guard let code else { return (.moment(nil), Self.undated, nil) }
+                let filter = sorted.crossed.contains(code) ? nil : span.flatMap(Self.filter(spanning:))
+                return (.moment(newestFirst ? dated - 1 - group : group), Self.name(of: span), filter)
             }
         case .day:
             let days = column(rows, store.captured) { $0 == .min ? .min : Int64(QueryCalendar.day(ofMilliseconds: $0)) }
@@ -101,6 +102,7 @@ public extension LibraryGrouping {
                     1
                 ordinals.append(shown)
             }
+            let cameras = GroupFilters(field: .camera, values: combined.cameras)
             describe = { code, group, span in
                 let camera = code.flatMap(combined.cameraName)
                 let suffix = " — " + (camera ?? "No camera")
@@ -108,7 +110,12 @@ public extension LibraryGrouping {
                     return (.momentCamera(nil, camera: camera), Self.undated + suffix, nil)
                 }
                 let ordinal = newestFirst ? dated - 1 - ordinals[group] : ordinals[group]
-                return (.momentCamera(ordinal, camera: camera), Self.name(of: span) + suffix, nil)
+                var filter: LibraryQuery?
+                if !sorted.crossed.contains(code), let camera, let times = span.flatMap(Self.filter(spanning:)),
+                   let byCamera = cameras.filter(for: camera) {
+                    filter = .joined([times, byCamera], or: false)
+                }
+                return (.momentCamera(ordinal, camera: camera), Self.name(of: span) + suffix, filter)
             }
         }
         let details = sorted.codes.enumerated().map { group, code in
@@ -137,6 +144,20 @@ extension LibraryGrouping {
     /// A span of capture times in words.
     static func name(of span: ClosedRange<Int64>?) -> String {
         span.map { GroupNames.span($0.lowerBound, $0.upperBound) } ?? undated
+    }
+
+    /// The `date:` finding the capture times of `span`, in milliseconds, to the second: the second of
+    /// both ends, or a range from the second of its first to that of its last. A moment's photos are
+    /// further from another moment's than a second, as the shortest pause starting a moment is 15 s.
+    /// Nil for times before the year 1 or after 9999, which the language doesn't write.
+    static func filter(spanning span: ClosedRange<Int64>) -> LibraryQuery? {
+        let (first, last) = (
+            QueryDate.second(ofMilliseconds: span.lowerBound),
+            QueryDate.second(ofMilliseconds: span.upperBound),
+        )
+        guard case let .time(start, _, _, _) = first, case let .time(end, _, _, _) = last, start >= 1, end <= 9999
+        else { return nil }
+        return .filter(LibraryQuery.Filter(.date, .equal, [first == last ? .date(first) : .dateRange(first, last)]))
     }
 
     /// `codes` by their names, in the Finder's order.

@@ -460,7 +460,9 @@ enum LibraryQueryValues {
     }
 
     private static func dates(_ text: String) throws(Invalid) -> LibraryQuery.Value {
-        let invalid = Invalid(message: "dates are written 2024, 2024-06 or 2024-06-01, or today, yesterday or last:30d")
+        let invalid = Invalid(
+            message: "dates are written 2024, 2024-06, 2024-06-01 or 2024-06-01T14:30, or today, yesterday or last:30d",
+        )
         guard let separator = text.range(of: "..") else {
             guard let date = date(Substring(text), allowingLast: true) else { throw invalid }
             return .date(date)
@@ -484,7 +486,8 @@ enum LibraryQueryValues {
         return .dateRange(lower, upper)
     }
 
-    /// `2024`, `2024-06`, `2024-06-01`, `today`, `yesterday` or, unless in a range, `last:30d`.
+    /// `2024`, `2024-06`, `2024-06-01`, a day and a time after a `T` (`2024-06-01T14:30`), `today`,
+    /// `yesterday` or, unless in a range, `last:30d`.
     private static func date(_ text: Substring, allowingLast: Bool) -> QueryDate? {
         let lowered = text.lowercased()
         if lowered == "today" {
@@ -499,6 +502,12 @@ enum LibraryQueryValues {
                   isDigits(span.dropLast()), let count = Int(span.dropLast()), (1 ... 100_000).contains(count)
             else { return nil }
             return .last(count, unit)
+        }
+        if let separator = text.firstIndex(where: { $0 == "T" || $0 == "t" }) {
+            guard case let .day(year, month, day)? = date(text[..<separator], allowingLast: false),
+                  let time = time(text[text.index(after: separator)...])
+            else { return nil }
+            return .time(year, month, day, time)
         }
         let parts = text.split(separator: "-", omittingEmptySubsequences: false)
         guard (1 ... 3).contains(parts.count), parts[0].count == 4, isDigits(parts[0]), let year = Int(parts[0]),
@@ -515,6 +524,19 @@ enum LibraryQueryValues {
         return .day(year, month, day)
     }
 
+    /// `14`, `14:30` or `14:30:05`: an hour of one or two digits, then minutes and seconds of two.
+    private static func time(_ text: Substring) -> QueryTime? {
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        guard (1 ... 3).contains(parts.count), (1 ... 2).contains(parts[0].count), isDigits(parts[0]),
+              let hour = Int(parts[0]), hour < 24
+        else { return nil }
+        guard parts.count > 1 else { return .hour(hour) }
+        guard parts[1].count == 2, isDigits(parts[1]), let minute = Int(parts[1]), minute < 60 else { return nil }
+        guard parts.count > 2 else { return .minute(hour, minute) }
+        guard parts[2].count == 2, isDigits(parts[2]), let second = Int(parts[2]), second < 60 else { return nil }
+        return .second(hour, minute, second)
+    }
+
     private static func isDigits(_ text: Substring) -> Bool {
         !text.isEmpty && text.allSatisfy { $0.isASCII && $0.isNumber }
     }
@@ -524,7 +546,7 @@ private extension QueryDate {
     /// What an absolute date spans, to check a range's ends; nil for one relative to today.
     var absoluteInterval: Range<Int64>? {
         switch self {
-        case .year, .month, .day: interval(today: 0)
+        case .year, .month, .day, .time: interval(today: 0)
         case .today, .yesterday, .last: nil
         }
     }

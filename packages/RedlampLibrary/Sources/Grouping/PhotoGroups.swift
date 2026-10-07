@@ -47,9 +47,12 @@ public struct PhotoGroup: Sendable, Hashable {
     /// How many of its photos are picks.
     public let picks: Int
     /// The query finding exactly its photos among the list's, where the language has one: a day's
-    /// `date:`, and a folder's, camera's or lens's term as a facet's value gives it
+    /// `date:`; a moment's capture times to the second (`date:2025-06-14T14:03:12..2025-06-14T14:47:05`),
+    /// and with its camera's term for a moment's photos from one camera; an orientation's
+    /// `orientation:`; and a folder's, camera's or lens's term as a facet's value gives it
     /// (`FacetValue.filter`), the other values among the list's it would also find left out. None
-    /// for a group a stack joined photos of another value to, or took its photos from.
+    /// for a group a stack joined photos of another value to, or took its photos from, nor for the
+    /// photos without a capture time, a folder, a camera or a lens.
     public let filter: LibraryQuery?
     /// When its first and last photos were taken, by the camera's clock read as UTC as the index keeps
     /// capture times; nil when none of them has a capture time.

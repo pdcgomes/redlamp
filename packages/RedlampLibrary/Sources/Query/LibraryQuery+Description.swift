@@ -115,9 +115,45 @@ extension QueryDate: CustomStringConvertible {
         case let .year(year): digits(year, 4)
         case let .month(year, month): digits(year, 4) + "-" + digits(month)
         case let .day(year, month, day): digits(year, 4) + "-" + digits(month) + "-" + digits(day)
+        case let .time(year, month, day, time): QueryDate.day(year, month, day).description + "T" + time.description
         case .today: "today"
         case .yesterday: "yesterday"
         case let .last(count, unit): "last:\(count)\(unit.rawValue)"
+        }
+    }
+
+    /// The second `milliseconds`, a capture time as the column store keeps it, falls in.
+    static func second(ofMilliseconds milliseconds: Int64) -> QueryDate {
+        let day = QueryCalendar.day(ofMilliseconds: milliseconds)
+        let (year, month, date) = QueryCalendar.civil(day)
+        let seconds = Int((milliseconds - Int64(day) * QueryCalendar.millisecondsPerDay) / 1000)
+        return .time(year, month, date, .second(seconds / 3600, seconds / 60 % 60, seconds % 60))
+    }
+}
+
+extension QueryTime: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case let .hour(hour): digits(hour)
+        case let .minute(hour, minute): digits(hour) + ":" + digits(minute)
+        case let .second(hour, minute, second): digits(hour) + ":" + digits(minute) + ":" + digits(second)
+        }
+    }
+
+    /// Milliseconds from midnight to its start, and how many it spans.
+    var start: Int64 {
+        switch self {
+        case let .hour(hour): Int64(hour) * 3_600_000
+        case let .minute(hour, minute): (Int64(hour) * 60 + Int64(minute)) * 60000
+        case let .second(hour, minute, second): ((Int64(hour) * 60 + Int64(minute)) * 60 + Int64(second)) * 1000
+        }
+    }
+
+    var length: Int64 {
+        switch self {
+        case .hour: 3_600_000
+        case .minute: 60000
+        case .second: 1000
         }
     }
 }
@@ -168,23 +204,30 @@ enum QueryCalendar {
 extension QueryDate {
     /// The capture times it spans, in milliseconds, its end excluded.
     func interval(today: Int) -> Range<Int64> {
-        let (first, end): (Int, Int) = switch self {
-        case let .year(year): (QueryCalendar.days(year, 1, 1), QueryCalendar.days(year + 1, 1, 1))
+        let days: (first: Int, end: Int)
+        switch self {
+        case let .time(year, month, day, time):
+            let start = Int64(QueryCalendar.days(year, month, day)) * QueryCalendar.millisecondsPerDay + time.start
+            return start ..< start + time.length
+        case let .year(year):
+            days = (QueryCalendar.days(year, 1, 1), QueryCalendar.days(year + 1, 1, 1))
         case let .month(year, month):
-            (
+            days = (
                 QueryCalendar.days(year, month, 1),
                 QueryCalendar.days(year, month, 1)
                     + QueryCalendar.daysInMonth(year, month),
             )
-        case let .day(year, month, day): (
-                QueryCalendar.days(year, month, day),
-                QueryCalendar.days(year, month, day) + 1,
-            )
-        case .today: (today, today + 1)
-        case .yesterday: (today - 1, today)
-        case let .last(count, unit): (Self.start(ofLast: count, unit, today: today), today + 1)
+        case let .day(year, month, day):
+            days = (QueryCalendar.days(year, month, day), QueryCalendar.days(year, month, day) + 1)
+        case .today:
+            days = (today, today + 1)
+        case .yesterday:
+            days = (today - 1, today)
+        case let .last(count, unit):
+            days = (Self.start(ofLast: count, unit, today: today), today + 1)
         }
-        return Int64(first) * QueryCalendar.millisecondsPerDay ..< Int64(end) * QueryCalendar.millisecondsPerDay
+        return Int64(days.first) * QueryCalendar.millisecondsPerDay ..< Int64(days.end) * QueryCalendar
+            .millisecondsPerDay
     }
 
     /// The first day of the last `count` units, today included: the day after the same day `count`

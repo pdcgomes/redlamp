@@ -127,16 +127,29 @@ struct QueryDifferentialTests {
         private mutating func date(ranges: Bool) -> LibraryQuery.Value {
             func one(_ random: inout SeededRandom, relative: Bool) -> QueryDate {
                 let year = random.int(in: 2005 ... 2026)
-                switch random.int(below: relative ? 5 : 3) {
+                switch random.int(below: relative ? 6 : 4) {
                 case 0: return .year(year)
                 case 1: return .month(year, random.int(in: 1 ... 12))
                 case 2: return .day(year, random.int(in: 1 ... 12), random.int(in: 1 ... 28))
-                case 3: return random.pick([.today, .yesterday])
+                case 3: return .time(year, random.int(in: 1 ... 12), random.int(in: 1 ... 28), time(&random))
+                case 4: return random.pick([.today, .yesterday])
                 default: return .last(random.int(in: 1 ... 400), random.pick(QueryDate.Unit.allCases))
+                }
+            }
+            func time(_ random: inout SeededRandom) -> QueryTime {
+                let (hour, minute) = (random.int(below: 24), random.int(below: 60))
+                switch random.int(below: 3) {
+                case 0: return .hour(hour)
+                case 1: return .minute(hour, minute)
+                default: return .second(hour, minute, random.int(below: 60))
                 }
             }
             guard ranges, random.chance(0.3) else { return .date(one(&random, relative: true)) }
             let first = random.int(in: 2005 ... 2025)
+            if random.chance(0.3) {
+                let start = QueryDate.time(first, 6, 14, .minute(random.int(below: 12), random.int(below: 60)))
+                return .dateRange(start, .time(first, 6, 14, .second(12 + random.int(below: 12), 30, 15)))
+            }
             return .dateRange(.year(first), random.chance(0.2) ? nil : .month(random.int(in: first ... 2026), 6))
         }
 
