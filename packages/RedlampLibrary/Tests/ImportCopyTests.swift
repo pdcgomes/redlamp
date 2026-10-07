@@ -190,9 +190,15 @@ struct ImportCopyTests {
             "A IMG_0001.JPG → IMG_0001.JPG", "B IMG_0001.JPG → IMG_0001-2.JPG", "A IMG_0002.JPG → IMG_0002.JPG",
             "B IMG_0002.JPG → IMG_0002-2.JPG", "A IMG_0003.JPG → IMG_0003.JPG", "B IMG_0003.JPG → IMG_0003-2.JPG",
         ])
-        let outcome = try await session.importer().run(plan)
+        let reports = Mutex<[ImportProgress]>([])
+        let outcome = try await session.importer().run(plan) { progress in reports.withLock { $0.append(progress) } }
         #expect(outcome.verified == 6 && outcome.sources.count == 2 && outcome.sources.allSatisfy(\.isSafeToErase))
         #expect(ImportSandbox.files(in: sandbox.backup).count == 6)
+        // Each card's part as it copies, adding up to the whole.
+        let told = reports.withLock { $0 }
+        #expect(told.allSatisfy { $0.sources.values.reduce(0) { $0 + $1.done } == $0.done })
+        #expect(told.last?.sources[first.id] == ImportProgress.Source(photos: 3, done: 3, failed: 0))
+        #expect(told.last?.sources[second.id] == ImportProgress.Source(photos: 3, done: 3, failed: 0))
     }
 
     @Test func `photos browsed in a session for each card are planned together, with the choices made in each`(

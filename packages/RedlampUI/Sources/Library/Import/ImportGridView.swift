@@ -103,7 +103,7 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     private func configure(_ item: ImportGridItem, at index: Int) {
         guard let photo = model.photo(at: index) else { return }
         let image = thumbnails?.image(for: photo)
-        item.show(photo, leftOut: model.isLeftOut(photo), copied: false, image: image)
+        item.show(photo, leftOut: model.isLeftOut(photo), copied: model.copied.contains(photo.id), image: image)
         let id = photo.id
         item.onToggle = { [weak self] in self?.toggle(id) }
         if image == nil {

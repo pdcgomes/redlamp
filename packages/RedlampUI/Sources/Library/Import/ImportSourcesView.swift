@@ -2,7 +2,8 @@ import AppKit
 import RedlampLibrary
 
 /// The import window's From (LIB-27): the cards on this Mac and the folders added, each with a box to
-/// import from it and its count, the photos the library has counted apart. Choosing one shows its photos.
+/// import from it, its count with the photos the library has counted apart, its part of the import as it
+/// copies, and at the end whether it's safe to erase, with Eject for a card. Choosing one shows its photos.
 @MainActor
 final class ImportSourcesViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
     let model: ImportWindowModel
@@ -89,6 +90,10 @@ final class ImportSourcesViewController: NSViewController, NSTableViewDataSource
         guard model.sources.indices.contains(row) else { return nil }
         let row = ImportSourceRow(model.sources[row], detail: model.detail(of: model.sources[row]))
         row.onIncluded = { [weak self] id, included in self?.model.setIncluded(id, included) }
+        row.onEject = { [weak self] id in
+            guard let self else { return }
+            Task { await self.model.eject(id) }
+        }
         return row
     }
 
@@ -108,18 +113,21 @@ final class ImportSourcesViewController: NSViewController, NSTableViewDataSource
     }
 }
 
-/// A source's row: the box and its name, and what it holds.
+/// A source's row: the box and its name, what it holds or how its import went, its part of the copying,
+/// and Eject for a card.
 final class ImportSourceRow: NSTableCellView {
     var onIncluded: ((String, Bool) -> Void)?
+    var onEject: ((String) -> Void)?
     private let id: String
     private let box: NSButton
+    private let ejectButton = NSButton(title: "Eject", target: nil, action: nil)
 
     init(_ source: ImportWindowModel.Source, detail: String) {
         id = source.id
         box = NSButton(checkboxWithTitle: source.source.name, target: nil, action: nil)
         super.init(frame: NSRect(x: 0, y: 0, width: 230, height: 72))
         box.state = source.isIncluded ? .on : .off
-        box.isEnabled = source.problem == nil
+        box.isEnabled = source.problem == nil && !source.isEjected
         box.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         box.target = self
         box.action = #selector(toggled)
@@ -132,7 +140,23 @@ final class ImportSourceRow: NSTableCellView {
         text.font = .systemFont(ofSize: 11)
         text.textColor = source.problem == nil ? .secondaryLabelColor : .systemRed
         text.maximumNumberOfLines = 2
-        let views: [NSView] = [box, kind, text]
+        var views: [NSView] = [box, kind, text]
+        if let progress = source.progress, progress.photos > 0 {
+            let bar = NSProgressIndicator()
+            bar.isIndeterminate = false
+            bar.minValue = 0
+            bar.maxValue = Double(progress.photos)
+            bar.doubleValue = Double(progress.done + progress.failed)
+            bar.controlSize = .small
+            views.append(bar)
+        }
+        if source.isCard, source.source.medium.isEjectable, !source.isEjected, source.progress == nil {
+            ejectButton.controlSize = .small
+            ejectButton.target = self
+            ejectButton.action = #selector(eject)
+            ejectButton.setAccessibilityIdentifier("import.eject." + source.source.name)
+            views.append(ejectButton)
+        }
         let stack = NSStackView(views: views)
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -155,5 +179,9 @@ final class ImportSourceRow: NSTableCellView {
 
     @objc private func toggled() {
         onIncluded?(id, box.state == .on)
+    }
+
+    @objc private func eject() {
+        onEject?(id)
     }
 }

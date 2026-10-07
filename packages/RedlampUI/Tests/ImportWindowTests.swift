@@ -8,7 +8,9 @@ import Testing
 @_spi(Harness) @testable import RedlampUI
 
 /// The import window (LIB-27), driven as the window drives it: its sources browsed and counted, the
-/// photos chosen, rated, flagged and labelled from the grid's keys, and the templates' example and errors.
+/// photos chosen, rated, flagged and labelled from the grid's keys, the templates' example and errors,
+/// Import copying to the destination and the backup with the choices made and showing the photos in
+/// Library, Cancel and Import again, and a forced quit resumed.
 @MainActor
 @Suite(.serialized)
 struct ImportWindowTests {
@@ -126,6 +128,7 @@ struct ImportWindowTests {
         #expect(await example() == "2026/2026-10-05/20261005-090001-img_0001.JPG")
         model.setNames("{camra}")
         #expect(model.namesError?.contains("camra isn't a token") == true)
+        #expect(model.importBlocker?.hasPrefix("The name template has an error") == true)
         #expect(await example() == nil)
         model.setNames("{name")
         #expect(model.namesError == nil, "a token still being typed isn't an error")
@@ -142,6 +145,121 @@ struct ImportWindowTests {
         let first = try #require(model.photo(at: 0))
         model.choose([first.id], false)
         #expect(await example() == "2026/2026-10-05 Wedding/IMG_0000.JPG", "the first photo chosen")
+    }
+
+    @Test func `Import copies the photos chosen to the destination and the backup, with their choices, then shows them in Library, selected`(
+    ) async throws {
+        let fixture = try await ImportWindowFixture.make()
+        defer { fixture.remove() }
+        let model = fixture.model()
+        try await model.addFolder(fixture.folder("Card", count: 4))
+        await model.browsed()
+        fixture.settle(model)
+        model.setKeywords(["Places/Portugal/Lisbon"])
+        let names = Dictionary(model.photos.map { ($0.primary.name, $0.id) }) { first, _ in first }
+        let (unchosen, rated, picked, red) = try (
+            #require(names["IMG_0000.JPG"]), #require(names["IMG_0001.JPG"]), #require(names["IMG_0002.JPG"]),
+            #require(names["IMG_0003.JPG"]),
+        )
+        model.choose([unchosen], false)
+        model.rate([rated], 3)
+        model.flag([picked], .pick)
+        model.label([red], .red)
+        let editor = EditorModel(engine: StubEngine(), library: FolderLibrary(defaults: fixture.defaults))
+        model.showInLibrary = { editor.showImported($0) }
+        #expect(model.importBlocker == nil)
+        model.startImport()
+        await model.imported()
+        let outcome = try #require(model.outcome)
+        #expect(outcome.state == .finished && outcome.verified == 3 && outcome.isSafeToErase)
+        #expect(model.phase == .finished && model.failure == nil && model.chosen.photos == 0)
+        #expect(model.detail(of: model.sources[0]).hasPrefix("Safe to erase"))
+        let day = "2026/2026-10-05/"
+        let photos = ["IMG_0001.JPG", "IMG_0002.JPG", "IMG_0003.JPG"]
+        #expect(ImportWindowFixture.files(in: fixture.backup) == Set(photos.map { day + $0 }))
+        #expect(ImportWindowFixture.files(in: fixture.destination)
+            .filter { $0.hasSuffix(".JPG") } == Set(photos.map { day + $0 }))
+        let sidecars = SidecarStore(locator: .besidePhotos)
+        func metadata(_ name: String) -> PhotoMetadata? {
+            sidecars.load(for: fixture.destination.appending(path: day + name))?.metadata
+        }
+        #expect(metadata("IMG_0001.JPG")?.rating == 3)
+        #expect(metadata("IMG_0002.JPG")?.flag == .pick)
+        #expect(metadata("IMG_0003.JPG")?.label == .red)
+        #expect(metadata("IMG_0001.JPG")?.keywords == ["Places/Portugal/Lisbon"])
+        #expect(model.destinationLines == ["Pictures: 3 of 3 photos verified", "Backup: 3 of 3 photos verified"])
+
+        let folder = fixture.destination.appending(path: day, directoryHint: .isDirectory)
+        let shown = photos.map { folder.appending(path: $0) }
+        try await waitUntil("the photos selected in Library") { editor.selectedPhotos.count == 3 }
+        #expect(editor.module == .library && editor.libraryView == .grid)
+        #expect(editor.folder.map(LibraryService.path) == LibraryService.path(folder))
+        #expect(Set(editor.selectedPhotos.map(LibraryService.path)) == Set(shown.map(LibraryService.path)))
+        #expect(editor.library.root(containing: folder) != nil, "the folder is in Folders")
+        // Photos imported are shown so, and Import again finds nothing left.
+        let copied = try #require(model.photos.first { $0.id == rated })
+        #expect(model.isLeftOut(copied))
+        #expect(model.importBlocker == "No photos are chosen.")
+    }
+
+    @Test func `Cancel stops the copying with nothing half copied, and Import again copies the rest`() async throws {
+        let fixture = try await ImportWindowFixture.make()
+        defer { fixture.remove() }
+        // A slow card: 4 MB a second, one read at a time, so its 24 photos take seconds to copy.
+        let slow = SimulatedFileSystem(profile: VolumeProfile(
+            name: "slow card", latency: .milliseconds(5), bandwidth: 4_000_000, maxInFlight: 1, isLocal: true,
+            isInternal: false,
+        ))
+        let model = fixture.model(fileSystem: slow)
+        try await model.addFolder(fixture.folder("Card", count: 24, padding: 400_000))
+        await model.browsed()
+        fixture.settle(model)
+        model.startImport()
+        try await waitUntil("the first photo copied") { model.progress != nil }
+        model.cancel()
+        await model.imported()
+        let stopped = try #require(model.outcome)
+        #expect(stopped.state == .stopped && stopped.verified >= 1 && stopped.verified < 24)
+        #expect(model.failure?.contains("cancelled") == true)
+        for root in [fixture.destination, fixture.backup] {
+            #expect(ImportWindowFixture.files(in: root).filter { $0.hasSuffix(".JPG") }.count == stopped.verified)
+            #expect(ImportWindowFixture.leftovers(in: root).isEmpty, "nothing half copied at \(root.lastPathComponent)")
+        }
+        #expect(model.chosen.photos == 24 - stopped.verified)
+
+        model.startImport()
+        await model.imported()
+        let rest = try #require(model.outcome)
+        #expect(rest.state == .finished && rest.verified == 24 - stopped.verified)
+        let all = Set((0 ..< 24).map { "2026/2026-10-05/" + ImportWindowFixture.name($0) })
+        #expect(ImportWindowFixture.files(in: fixture.backup) == all, "each photo once")
+        #expect(model.chosen.photos == 0)
+    }
+
+    @Test func `an import a forced quit cut short waits to be resumed, and Resume finishes it`() async throws {
+        let fixture = try await ImportWindowFixture.make()
+        defer { fixture.remove() }
+        let model = fixture.model()
+        try await model.addFolder(fixture.folder("Card", count: 6))
+        await model.browsed()
+        fixture.settle(model)
+        model.importer.interruption.withLock { $0 = .afterPhotos(2) }
+        model.startImport()
+        await model.imported()
+        model.close()
+
+        // The next launch's window.
+        let next = fixture.model()
+        next.start()
+        try await waitUntil("the interrupted import") { !next.interrupted.isEmpty }
+        #expect(next.importBlocker == "An import that was interrupted has to be resumed first.")
+        #expect(next.summary.contains("was interrupted with"))
+        next.resume()
+        await next.imported()
+        #expect(next.interrupted.isEmpty && next.failure == nil)
+        #expect(next.outcome?.state == .finished && next.outcome?.verified == 6 && next.outcome?.recoveredFrom != nil)
+        #expect(ImportWindowFixture.files(in: fixture.backup).count == 6)
+        #expect(ImportWindowFixture.leftovers(in: fixture.destination).isEmpty)
     }
 
     @Test func `the destination, backup, templates, raw only and keywords are kept from one import to the next`(

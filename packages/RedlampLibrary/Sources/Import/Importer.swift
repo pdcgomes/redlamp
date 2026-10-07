@@ -5,11 +5,20 @@ import Synchronization
 
 /// Where an import has got to, as it runs.
 public struct ImportProgress: Sendable, Hashable {
+    /// A source's part: the photos the plan copies from it, and those done and failed so far.
+    public struct Source: Sendable, Hashable {
+        public var photos = 0
+        public var done = 0
+        public var failed = 0
+    }
+
     public var photos: Int
     public var done: Int
     public var failed: Int
     public var bytes: Int64
     public var copied: Int64
+    /// Each source's part, by its ID.
+    public var sources: [String: Source] = [:]
 }
 
 /// What an import did.
@@ -177,6 +186,8 @@ public final class Importer: Sendable {
         var unflushed: [Int: Placement] = [:]
         var unflushedSince: ContinuousClock.Instant?
         var flushing = false
+        /// `verified` and `failed` counted for each source, by its ID.
+        var bySource: [String: ImportProgress.Source] = [:]
 
         /// Photos placed or failed, durable or not.
         var settled: Int {
@@ -201,6 +212,12 @@ public final class Importer: Sendable {
     private final class Run: Sendable {
         let tally = Mutex(Tally())
         let indexing = Mutex<Task<Void, Never>?>(nil)
+        /// Each photo's source, by its place in the plan.
+        let sources: [String]
+
+        init(_ plan: ImportPlan) {
+            sources = plan.items.map(\.source)
+        }
 
         var counts: Tally {
             tally.withLock { $0 }
@@ -232,11 +249,15 @@ public final class Importer: Sendable {
         let roots = [plan.settings.destination] + (plan.settings.backup.map { [$0] } ?? [])
         let copier = ImportCopier(fileSystem: destinationFileSystem, roots: roots)
         let locator = try await locator()
-        let run = Run()
+        let run = Run(plan)
         let destination = LibraryIndexer.path(plan.settings.destination)
         run.tally.withLock { tally in
             tally.verified.formUnion(logged.done)
+            for source in run.sources {
+                tally.bySource[source, default: ImportProgress.Source()].photos += 1
+            }
             for index in logged.done {
+                tally.bySource[run.sources[index]]?.done += 1
                 if let copy = plan.items[index].copies.first {
                     tally.waitingToIndex.insert(FilePlanner.split(destination + "/" + copy.path).folder)
                 }
@@ -256,7 +277,7 @@ public final class Importer: Sendable {
         let report = { @Sendable (tally: Tally) in
             progress?(ImportProgress(
                 photos: plan.items.count, done: tally.verified.count, failed: tally.failed.count, bytes: total,
-                copied: tally.bytes,
+                copied: tally.bytes, sources: tally.bySource,
             ))
         }
         @Sendable func indexFolders(_ folders: Set<String>) {
@@ -403,12 +424,18 @@ public final class Importer: Sendable {
             return nil
         case let .failed(message):
             try log.failed(index, message: message)
-            run.tally.withLock { $0.failed[index] = message }
+            run.tally.withLock { tally in
+                if tally.failed.updateValue(message, forKey: index) == nil {
+                    tally.bySource[run.sources[index]]?.failed += 1
+                }
+            }
             return nil
         case let .placed(files, backups, bytes, sidecars, problem):
             let now = ContinuousClock.now
             return run.tally.withLock { tally -> [Int: Placement]? in
-                tally.failed.removeValue(forKey: index)
+                if tally.failed.removeValue(forKey: index) != nil {
+                    tally.bySource[run.sources[index]]?.failed -= 1
+                }
                 tally.unflushed[index] = Placement(
                     files: files, backups: backups, bytes: bytes, sidecars: sidecars, sidecarFailed: problem,
                 )
@@ -440,7 +467,9 @@ public final class Importer: Sendable {
         let destination = LibraryIndexer.path(plan.settings.destination)
         return run.tally.withLock { tally -> Set<String>? in
             for (index, placement) in batch {
-                tally.verified.insert(index)
+                if tally.verified.insert(index).inserted {
+                    tally.bySource[run.sources[index]]?.done += 1
+                }
                 tally.files += placement.files
                 tally.backups += placement.backups
                 tally.bytes += placement.bytes

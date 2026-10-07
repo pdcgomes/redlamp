@@ -13,8 +13,13 @@ import Synchronization
 ///   session, and written in each photo's `.redlamp` at the destination.
 /// - **To:** the destination, the folder and name templates with a live example and their errors in
 ///   words, a backup, raw only and keywords, kept from one import to the next (`ImportPreferences`).
+/// - **Import:** the photos of every source included, planned together so collisions are numbered in
+///   capture order across them, and copied by one journaled `Importer` run off the main thread, with
+///   each source's part as it goes; Cancel stops it once the photos being copied are done. A run a
+///   forced quit cut short waits to be resumed. At the end each card says whether it's safe to erase,
+///   and the photos copied are shown in Library, selected.
 ///
-/// Events from the sessions reach the main thread in batches.
+/// Events from the sessions and the importer's progress reach the main thread in batches.
 @MainActor
 final class ImportWindowModel {
     /// A card or a folder in From.
@@ -33,6 +38,11 @@ final class ImportWindowModel {
         var isBrowsed = false
         /// Why it can't be imported from: it couldn't be listed, or its card was taken out.
         var problem: String?
+        /// Its part of the import as it copies.
+        var progress: ImportProgress.Source?
+        /// What the import made of it.
+        var outcome: ImportOutcome.Source?
+        var isEjected = false
 
         var id: String {
             source.id
@@ -68,8 +78,13 @@ final class ImportWindowModel {
     let cards: ImportCards
     let fileSystem: any LibraryFileSystem
     let destinationFileSystem: any LibraryFileSystem
-    /// Readers shared by every session, so a volume is read by one set of them.
+    /// Readers shared by every session and the importer, so a volume is read by one set of them.
     let volumes: VolumeIORegistry
+    let importer: Importer
+    /// Shows the photos copied in Library, selected.
+    var showInLibrary: @MainActor ([URL]) -> Void = { _ in }
+    /// Ejects a card's volume.
+    var ejector: @Sendable (ImportSource) async throws -> Void = { try await ImportCards.eject($0) }
     var onChange: ((Change) -> Void)?
 
     var sources: [Source] = []
@@ -78,6 +93,8 @@ final class ImportWindowModel {
     /// The shown source's photos, in its listing's order.
     private(set) var photos: [ImportPhoto] = []
     private var positions: [String: Int] = [:]
+    /// Photos this window has copied: shown as imported, and no longer counted as chosen.
+    var copied: Set<String> = []
 
     // The plan's settings, as typed.
     private(set) var folderText: String
@@ -88,12 +105,20 @@ final class ImportWindowModel {
     private(set) var example: String?
     private(set) var examplePhoto: String?
 
-    /// The import.
+    // The import.
     var phase = Phase.choosing
+    var progress: ImportProgress?
+    var plan: ImportPlan?
+    var outcome: ImportOutcome?
+    /// What went wrong, as a sentence.
+    var failure: String?
+    /// Imports a forced quit cut short, waiting to be resumed.
+    var interrupted: [ImportJournal.Entry] = []
     /// The library's keywords, for completing those typed.
     private(set) var keywordCompletion: KeywordCompletion?
 
     private var browsing: [String: Task<Void, Never>] = [:]
+    var importing: Task<Void, Never>?
     private var counted: (photos: Int, bytes: Int64)?
     private var countsDue = false
     private var exampleTask: Task<Void, Never>?
@@ -106,6 +131,8 @@ final class ImportWindowModel {
     static let batching = Duration.milliseconds(30)
     /// How often the counts browsing changes reach the window.
     static let countsInterval = Duration.milliseconds(250)
+    /// How often the importer's progress reaches the main thread.
+    static let progressInterval = Duration.milliseconds(100)
 
     init(
         library: ImportLibrary, preferences: ImportPreferences = .shared, cards: ImportCards = .shared,
@@ -130,14 +157,25 @@ final class ImportWindowModel {
         self.fileSystem = fileSystem
         self.destinationFileSystem = destinationFileSystem
         volumes = VolumeIORegistry(fileSystem: fileSystem)
+        importer = Importer(
+            library: self.library, fileSystem: fileSystem, destinationFileSystem: destinationFileSystem,
+            volumes: volumes,
+        )
         folderText = preferences.settings.folders.description
         namesText = preferences.settings.names.description
     }
 
-    /// Lists the cards in and follows them, and loads the library's keywords.
+    /// Lists the cards in and follows them, finds the imports a forced quit cut short, and loads the
+    /// library's keywords.
     func start() {
         cardsObservation = cards.observe { [weak self] cards in self?.cardsChanged(cards) }
         cardsChanged(cards.cards)
+        Task {
+            interrupted = await (try? importer.unfinishedEntries()) ?? []
+            if !interrupted.isEmpty {
+                notify(.status)
+            }
+        }
         if let index = library.index {
             let keywords = LibraryKeywords(index: index, paths: library.paths, live: library.live)
             Task {
@@ -146,11 +184,12 @@ final class ImportWindowModel {
         }
     }
 
-    /// Stops browsing and lets the sessions go.
+    /// Stops browsing and lets the sessions go, unless an import is copying, which carries on.
     func close() {
         cardsObservation?.invalidate()
         cardsObservation = nil
         exampleTask?.cancel()
+        guard phase != .copying, phase != .planning else { return }
         for task in browsing.values {
             task.cancel()
         }
@@ -243,7 +282,7 @@ final class ImportWindowModel {
         for card in cards {
             if let index = sources.firstIndex(where: { $0.id == card.id }) {
                 // A card taken out and put back is browsed afresh.
-                guard sources[index].problem != nil, !busy else { continue }
+                guard sources[index].problem != nil, !sources[index].isEjected, !busy else { continue }
                 remove(card.id)
             }
             add(card)
@@ -251,7 +290,10 @@ final class ImportWindowModel {
         let present = Set(cards.map(\.id))
         for index in sources.indices where sources[index].isCard && !present.contains(sources[index].id) {
             guard sources[index].problem == nil else { continue }
-            sources[index].problem = "The card was taken out."
+            sources[index].isEjected = sources[index].isEjected || sources[index].outcome != nil
+            if !sources[index].isEjected {
+                sources[index].problem = "The card was taken out."
+            }
             sources[index].isIncluded = false
             browsing.removeValue(forKey: sources[index].id)?.cancel()
         }
@@ -366,9 +408,9 @@ final class ImportWindowModel {
         positions[id]
     }
 
-    /// The photo's files are all in the library already: it's left out.
+    /// The photo's files are all in the library already, or this window copied it: it's left out.
     func isLeftOut(_ photo: ImportPhoto) -> Bool {
-        photo.isImported
+        photo.isImported || copied.contains(photo.id)
     }
 
     // MARK: - Choices
@@ -419,8 +461,8 @@ final class ImportWindowModel {
 
     // MARK: - Counts
 
-    /// Photos chosen from the sources included, those the library has left out, and their bytes, as raw
-    /// only counts them; counted once between changes.
+    /// Photos chosen from the sources included, those the library has or this window copied left out,
+    /// and their bytes, as raw only counts them; counted once between changes.
     var chosen: (photos: Int, bytes: Int64) {
         if let counted {
             return counted
@@ -448,21 +490,59 @@ final class ImportWindowModel {
 
     // MARK: - What the window says
 
-    /// The line under the photos: what's chosen, and what's left out.
+    /// The line under the photos: what's chosen, what's left out, and how the import is going.
     var summary: String {
-        let (photos, bytes) = chosen
-        var text = "\(Self.count(photos, "photo")) chosen, \(ImportFormat.size(bytes))"
-        let imported = alreadyImported
-        if imported > 0 {
-            text += "; \(Self.count(imported, "photo")) already in the library, left out"
+        if let entry = interrupted.first {
+            return "\(entry.title) was interrupted with \(entry.done) of \(entry.photos) photos copied. "
+                + "Resume copies the rest from their cards or folders, which have to be there."
         }
-        return text + "."
+        switch phase {
+        case .choosing:
+            let (photos, bytes) = chosen
+            var text = "\(Self.count(photos, "photo")) chosen, \(ImportFormat.size(bytes))"
+            let imported = alreadyImported
+            if imported > 0 {
+                text += "; \(Self.count(imported, "photo")) already in the library, left out"
+            }
+            return text + "."
+        case .planning:
+            return "Working out where each photo goes…"
+        case .copying:
+            guard let progress else { return "Copying…" }
+            return "Copied and verified \(progress.done) of \(Self.count(progress.photos, "photo")), "
+                + "\(ImportFormat.size(progress.copied)) of \(ImportFormat.size(progress.bytes))"
+                + (progress.failed > 0 ? "; \(progress.failed) couldn't be copied" : "") + "."
+        case .finished:
+            guard let outcome else { return failure ?? "" }
+            var text = "Copied and verified \(outcome.verified) of \(Self.count(outcome.photos, "photo"))"
+            if settings.backup != nil {
+                text += " at the destination and the backup"
+            }
+            text += String(format: " in %.0f s.", outcome.elapsed / .seconds(1))
+            if let failure {
+                text += " " + failure
+            }
+            return text
+        }
     }
 
     /// What a source's row says under its name.
     func detail(of source: Source) -> String {
+        if let outcome = source.outcome {
+            if source.isEjected {
+                return "Ejected. \(outcome.verified) of \(Self.count(outcome.photos, "photo")) copied and verified."
+            }
+            return outcome.isSafeToErase
+                ? "Safe to erase: every photo copied from it is verified at every destination."
+                : "Not safe to erase: \(outcome.verified) of \(outcome.photos) photos verified"
+                + (outcome.failed > 0 ? ", \(outcome.failed) not copied." : ".")
+        }
+        if let progress = source.progress {
+            return "Copying: \(progress.done) of \(progress.photos)"
+                + (progress.failed > 0 ? ", \(progress.failed) failed" : "")
+        }
         if let problem = source.problem {
-            return problem
+            return source.isEjected ? "Ejected." : problem
         }
         guard source.isListed else { return "Listing…" }
         var text = Self.count(source.photos.count, "photo")

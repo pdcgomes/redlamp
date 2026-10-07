@@ -75,7 +75,9 @@ final class ImportWindowFixture {
     func model(
         cards: ImportCards = ImportCards { _ in nil }, fileSystem: any LibraryFileSystem = LocalFileSystem(),
     ) -> ImportWindowModel {
-        ImportWindowModel(library: library, preferences: preferences, cards: cards, fileSystem: fileSystem)
+        let model = ImportWindowModel(library: library, preferences: preferences, cards: cards, fileSystem: fileSystem)
+        model.ejector = { _ in Issue.record("a test asked to eject a volume") }
+        return model
     }
 
     /// The settings every test imports with: the destination and the backup here, a folder a day.

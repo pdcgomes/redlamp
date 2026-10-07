@@ -3,7 +3,8 @@ import RedlampLibrary
 
 /// The import window's To (LIB-27): the destination, the folder template and the name template (each a
 /// preset or typed, its error said in words), the texts they use, a live example from the first photo
-/// chosen, a backup, raw only, keywords completed from the library's, and metadata presets' place.
+/// chosen, a backup, raw only, keywords completed from the library's, and metadata presets' place;
+/// while copying and after, each destination's count.
 @MainActor
 final class ImportDestinationViewController: NSViewController, NSTextFieldDelegate, NSTokenFieldDelegate {
     let model: ImportWindowModel
@@ -28,7 +29,9 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
     private let backupChoose = NSButton(title: "Choose…", target: nil, action: nil)
     private let rawOnly = NSButton(checkboxWithTitle: "Raw files only", target: nil, action: nil)
     private let keywords = NSTokenField()
+    private let destinations = NSTextField(wrappingLabelWithString: "")
     private var textFields: [String: NSTextField] = [:]
+    private var shownPhase: ImportWindowModel.Phase?
 
     init(model: ImportWindowModel) {
         self.model = model
@@ -92,6 +95,8 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         presets.isEnabled = false
         let presetsNote = Self.note("Metadata presets (creator, copyright, captions) come with the metadata panel.")
 
+        destinations.font = .systemFont(ofSize: 11)
+
         let stack = NSStackView(views: [
             title,
             Self.heading("Destination"), destination, choose,
@@ -102,12 +107,13 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
             Self.heading("Files"), rawOnly, rawNote,
             Self.heading("Keywords"), keywords,
             Self.heading("Metadata Preset"), presets, presetsNote,
+            destinations,
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 8, bottom: 12, right: 12)
-        for field in [destination, folders, names, folderError, nameError, example, backup, keywords] {
+        for field in [destination, folders, names, folderError, nameError, example, backup, keywords, destinations] {
             field.translatesAutoresizingMaskIntoConstraints = false
             field.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -20).isActive = true
         }
@@ -153,12 +159,14 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
     // MARK: - The model
 
     func modelChanged(_ change: ImportWindowModel.Change) {
-        if change == .settings {
+        // While browsing, the status changes a batch at a time and says nothing this column shows.
+        if change == .settings || change == .status && (model.phase != .choosing || shownPhase != model.phase) {
             update()
         }
     }
 
     private func update() {
+        shownPhase = model.phase
         let settings = model.settings
         destination.stringValue = settings.destination.path
         if folders.currentEditor() == nil {
@@ -184,6 +192,16 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         rawOnly.state = settings.rawOnly ? .on : .off
         if keywords.currentEditor() == nil {
             keywords.objectValue = settings.metadata.keywords
+        }
+        let lines = model.destinationLines
+        destinations.stringValue = lines.joined(separator: "\n")
+        destinations.isHidden = lines.isEmpty
+        let busy = model.phase == .copying || model.phase == .planning
+        for control in [folderPresets, namePresets, backupBox, backupChoose, rawOnly] as [NSControl] {
+            control.isEnabled = !busy
+        }
+        for field in [folders, names, keywords] as [NSTextField] {
+            field.isEditable = !busy
         }
     }
 

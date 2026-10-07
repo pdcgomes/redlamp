@@ -2,8 +2,9 @@ import AppKit
 import RedlampLibrary
 
 /// File › Import Photos… (LIB-27): a window of its own in three columns, From, the photos and To (see
-/// `ImportWindowModel`), and below them what's chosen. There's one at a time: asking again brings it
-/// forward; closed, it lets its sources go.
+/// `ImportWindowModel`), and below them what's chosen and how the import is going, with Import, Cancel
+/// and Resume. There's one at a time: asking again brings it forward. Closing it while it copies lets
+/// the import carry on, and asking again shows it; closed otherwise, it lets its sources go.
 @MainActor
 public final class ImportWindowController: NSWindowController, NSWindowDelegate {
     public nonisolated static let title = "Import Photos"
@@ -21,6 +22,10 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
     let grid: ImportGridViewController
     let destinationView: ImportDestinationViewController
     private let status = NSTextField(wrappingLabelWithString: "")
+    private let importButton = NSButton(title: "Import", target: nil, action: nil)
+    private let cancelButton = NSButton(title: "Cancel Import", target: nil, action: nil)
+    private let resumeButton = NSButton(title: "Resume", target: nil, action: nil)
+    private let progress = NSProgressIndicator()
 
     init(model: ImportWindowModel) {
         self.model = model
@@ -70,12 +75,27 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         status.font = .systemFont(ofSize: 12)
         status.setAccessibilityIdentifier("import.summary")
         status.maximumNumberOfLines = 3
-        let bar = NSStackView(views: [status])
+        progress.isIndeterminate = false
+        progress.minValue = 0
+        progress.maxValue = 1
+        progress.controlSize = .small
+        importButton.target = self
+        importButton.action = #selector(importChosen)
+        importButton.keyEquivalent = "\r"
+        importButton.setAccessibilityIdentifier("import.import")
+        cancelButton.target = self
+        cancelButton.action = #selector(cancelImport)
+        cancelButton.setAccessibilityIdentifier("import.cancel")
+        resumeButton.target = self
+        resumeButton.action = #selector(resume)
+        resumeButton.setAccessibilityIdentifier("import.resume")
+        let bar = NSStackView(views: [status, progress, resumeButton, cancelButton, importButton])
         bar.orientation = .horizontal
         bar.spacing = 10
         bar.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 10, right: 12)
         status.setContentHuggingPriority(.defaultLow, for: .horizontal)
         status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        progress.widthAnchor.constraint(equalToConstant: 160).isActive = true
 
         let content = NSStackView(views: [split, NSBox.separator, bar])
         content.orientation = .vertical
@@ -126,6 +146,7 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
     }
 
     public func windowWillClose(_: Notification) {
+        guard model.phase != .copying, model.phase != .planning else { return }
         model.close()
         if Self.current === self {
             Self.current = nil
@@ -140,6 +161,35 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         destinationView.modelChanged(change)
         guard change == .status || change == .settings else { return }
         status.stringValue = model.summary
+        let blocker = model.importBlocker
+        importButton.isEnabled = blocker == nil
+        importButton.toolTip = blocker
+        importButton.title = model.phase == .finished ? "Import Again" : "Import"
+        cancelButton.isHidden = model.phase != .copying && model.phase != .planning
+        resumeButton.isHidden = model.interrupted.isEmpty || model.phase == .copying
+        if model.phase == .copying, let progress = model.progress, progress.photos > 0 {
+            self.progress.isHidden = false
+            self.progress.doubleValue = Double(progress.done + progress.failed) / Double(progress.photos)
+        } else {
+            progress.isHidden = true
+        }
+        if model.phase == .finished, window?.isVisible != true, Self.current === self {
+            model.close()
+            Self.current = nil
+        }
+    }
+
+    @objc private func importChosen() {
+        window?.makeFirstResponder(grid.collectionView)
+        model.startImport()
+    }
+
+    @objc private func cancelImport() {
+        model.cancel()
+    }
+
+    @objc private func resume() {
+        model.resume()
     }
 
     // MARK: - Folders
