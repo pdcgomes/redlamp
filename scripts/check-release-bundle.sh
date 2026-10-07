@@ -61,7 +61,8 @@ if [ "${#undocumented[@]}" -gt 0 ]; then
 fi
 size_kb="$(du -sk "$APP" | cut -f1)"
 if [ "$size_kb" -gt "$BUDGET_KB" ]; then
-    echo "error: the app is $size_kb KB, over its budget of $BUDGET_KB KB" >&2
+    echo "error: the app is $size_kb KB, over its budget of $BUDGET_KB KB. If the growth is wanted," >&2
+    echo "       raise BUDGET_KB in scripts/check-release-bundle.sh, giving the reason in the commit." >&2
     failed=1
 fi
 [ "$failed" = 0 ] || exit 1
