@@ -333,7 +333,16 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
         RenameSheetController.current?.model.summary
     }
 
-    /// Returns once every rename asked for is made.
+    /// File steps on Library's Undo and Redo.
+    var fileUndoCount: Int {
+        fileSteps.undo.count
+    }
+
+    var fileRedoCount: Int {
+        fileSteps.redo.count
+    }
+
+    /// Returns once every rename asked for, and their Undos and Redos, are made.
     func filesMade() async {
         await fileSteps.made()
     }

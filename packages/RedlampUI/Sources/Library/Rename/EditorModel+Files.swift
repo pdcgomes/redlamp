@@ -3,7 +3,8 @@ import Foundation
 import RedlampLibrary
 import Synchronization
 
-/// Renaming photos in Library (LIB-25, LIB-26), each rename one of the library's journaled batches.
+/// Renaming photos in Library (LIB-25, LIB-26), each rename one of the library's journaled batches with Undo
+/// and Redo on Library's ⌘Z and ⇧⌘Z, in turn with culling's changes.
 ///
 /// - **Shown at once:** the photos go where the batch puts them in the grid and the filmstrip before it runs
 ///   (`LibraryMoves`), each keeping its ID, so the selection follows; the active photo, leaving Develop's
@@ -11,8 +12,14 @@ import Synchronization
 /// - **Saved first:** the sidecars the photos' saves still write are on disk before the batch plans, and the
 ///   batch runs in the library's changes' turn, after the culling batches asked for before it.
 /// - **Afterwards,** each photo is shown where the index has it, so a batch that stopped or was rolled back
-///   shows what it left. Steps are made one at a time, in the order they're asked for.
+///   shows what it left.
+/// - **Undo and Redo:** a step is newer than culling's latest change when culling's Undo held that change as
+///   the step was made; Redo makes the step again with a batch planned anew, and a culling change made since
+///   its Undo ends it, as a new change ends Redo. Steps are made one at a time, in the order they're asked for.
 public extension EditorModel {
+    /// File steps Undo can take back.
+    static let fileUndoLimit = 20
+
     /// Rename Photos…: the template sheet for the photos selected, with their raw and JPEG pairs.
     @discardableResult
     func renamePhotos() -> Bool {
@@ -43,10 +50,13 @@ extension EditorModel {
 
     // MARK: - Keys, menus and the palette
 
-    /// Rename Photos; nil for every other action.
+    /// Rename Photos, and Library's Undo and Redo when a file step is newer than culling's latest change; nil
+    /// for every other action.
     func performFileShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .renamePhotos: renamePhotos()
+        case .undo where module == .library && fileUndoIsNewest: undoFiles()
+        case .redo where module == .library && fileRedoIsNewest: redoFiles()
         default: nil
         }
     }
@@ -54,11 +64,13 @@ extension EditorModel {
     func canPerformFileShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .renamePhotos: canRenamePhotos
+        case .undo where module == .library && fileUndoIsNewest: true
+        case .redo where module == .library && fileRedoIsNewest: true
         default: nil
         }
     }
 
-    /// The renames made one at a time.
+    /// The renames Undo and Redo take back and make again.
     var fileSteps: LibraryFileSteps {
         if let steps = Self.fileSteps.object(forKey: self) {
             return steps
@@ -69,6 +81,25 @@ extension EditorModel {
     }
 
     private static let fileSteps = NSMapTable<EditorModel, LibraryFileSteps>.weakToStrongObjects()
+
+    /// Undo's latest file step was made when culling's Undo held its latest change, or held none.
+    var fileUndoIsNewest: Bool {
+        guard let step = fileSteps.undo.last else { return false }
+        guard let latest = cullingUndo.last else { return true }
+        return step.olderCulling.contains { $0 === latest }
+    }
+
+    /// Redo's latest file step was taken back after culling's latest change taken back; a culling change made
+    /// since it was taken back ends every file step's Redo.
+    var fileRedoIsNewest: Bool {
+        guard let step = fileSteps.redo.last else { return false }
+        if cullingUndo.contains(where: { change in !step.knownCulling.contains { $0 === change } }) {
+            fileSteps.redo.removeAll()
+            return false
+        }
+        guard let latest = cullingRedo.last else { return true }
+        return step.undoneAfter.contains { $0 === latest }
+    }
 
     // MARK: - Renaming
 
@@ -93,7 +124,7 @@ extension EditorModel {
             sheet.setPhase(.renaming(done: progress.done, total: progress.total))
         }
         let run = await fileSteps.make { [self] in
-            await perform(step) { await service.rename(renames) { relay.send($0) } }
+            await perform(step, undoing: false) { await service.rename(renames) { relay.send($0) } }
         }
         if run.batch != nil {
             sheet.renamed(batch)
@@ -102,26 +133,97 @@ extension EditorModel {
         return run.error
     }
 
+    // MARK: - Undo and Redo
+
+    /// Takes back the latest file step: shown at once, then its batch's Undo in the background.
+    @discardableResult
+    func undoFiles() -> Bool {
+        guard module == .library, let service = library.service, let step = fileSteps.undo.last,
+              let batch = step.batch
+        else { return false }
+        fileSteps.undo.removeLast()
+        step.undoneAfter = cullingRedo
+        step.knownCulling = cullingUndo + cullingRedo
+        fileSteps.redo.append(step)
+        activity.record(.action, "Undo \(step.title)")
+        let ids = step.photos.map(\.id)
+        fileSteps.enqueue { [weak self] in
+            guard let self else { return }
+            let run = await perform(step, undoing: true) { await service.undoFiles(batch, photos: ids) }
+            guard let error = run.error else { return }
+            activity.record(.error, "Undo \(step.title) wasn't done: \(error)")
+            if run.batch == nil, let place = fileSteps.redo.lastIndex(where: { $0 === step }) {
+                fileSteps.redo.remove(at: place)
+                fileSteps.undo.append(step)
+            }
+        }
+        return true
+    }
+
+    /// Makes the file step Undo took back last again, with a batch planned anew.
+    @discardableResult
+    func redoFiles() -> Bool {
+        guard module == .library, let service = library.service, let step = fileSteps.redo.popLast() else {
+            return false
+        }
+        step.olderCulling = cullingUndo
+        fileSteps.undo.append(step)
+        activity.record(.action, "Redo \(step.title)")
+        fileSteps.enqueue { [weak self] in
+            guard let self else { return }
+            let run = await perform(step, undoing: false) {
+                switch step.kind {
+                case let .rename(renames): await service.rename(renames)
+                }
+            }
+            if let batch = run.batch {
+                step.batch = batch
+            }
+            guard let error = run.error else { return }
+            activity.record(.error, "Redo \(step.title) wasn't done: \(error)")
+            if run.batch == nil, let place = fileSteps.undo.lastIndex(where: { $0 === step }) {
+                fileSteps.undo.remove(at: place)
+                fileSteps.redo.append(step)
+            }
+        }
+        return true
+    }
+
     // MARK: - Making a step
 
-    /// Shows `step` at once, waits for its photos' saves, runs `batch`, then shows each photo where the index
-    /// has it.
-    func perform(_ step: LibraryFileStep, batch: @escaping () async -> LibraryService.FileRun) async
-        -> LibraryService.FileRun {
-        let saving = await show(step.photos, of: step)
+    /// Shows `step` (or its Undo) at once, waits for its photos' saves, runs `batch`, then shows each photo
+    /// where the index has it. A new step goes on Undo once its batch has run, ending Redo.
+    func perform(
+        _ step: LibraryFileStep, undoing: Bool, batch: @escaping () async -> LibraryService.FileRun,
+    ) async -> LibraryService.FileRun {
+        let isNew = step.batch == nil && !undoing && !fileSteps.undo.contains { $0 === step }
+        let moves = step.photos.map { photo in
+            undoing ? (id: photo.id, from: photo.to, to: photo.from) : photo
+        }
+        let saving = await show(moves, of: step, undoing: undoing)
         await waitForSaves(of: saving)
         let run = await batch()
-        await follow(step.photos, of: step, paths: run.paths)
-        if let made = run.batch {
+        await follow(moves, of: step, paths: run.paths)
+        if isNew, let made = run.batch {
             step.batch = made
+            step.olderCulling = cullingUndo
+            fileSteps.undo.append(step)
+            if fileSteps.undo.count > Self.fileUndoLimit {
+                fileSteps.undo.removeFirst(fileSteps.undo.count - Self.fileUndoLimit)
+            }
+            fileSteps.redo.removeAll()
+            cullingRedo.removeAll()
         }
         return run
     }
 
-    /// Shows `moves` at once: the photos at their new URLs, or out of the folders shown. The active photo goes
-    /// with them, or, when it leaves the folders shown, the photo after it becomes active. Returns the URLs of the
-    /// photos as they were, whose saves the batch waits for.
-    private func show(_ moves: [(id: Int64, from: String, to: String)], of step: LibraryFileStep) async -> [URL] {
+    /// Shows `moves` at once: the photos at their new URLs, or out of the folders shown; those the folders shown
+    /// no longer list are shown again, selected as they were. The active photo goes with them, or, when it
+    /// leaves the folders shown, the photo after it becomes active. Returns the URLs of the photos as they were,
+    /// whose saves the batch waits for.
+    private func show(
+        _ moves: [(id: Int64, from: String, to: String)], of step: LibraryFileStep, undoing: Bool,
+    ) async -> [URL] {
         // What was asked for before reaches the lists first: culling's batches, then the list's changes.
         await cullingTail?.value
         if let live = library.service?.core?.live, let photo = moves.lazy.compactMap({ move -> (Int64, URL)? in
@@ -132,23 +234,30 @@ extension EditorModel {
             await library.caughtUp(with: (id: photo.0, url: photo.1), live: live)
         }
         var shown: [LibraryMoves.Move] = []
+        var restoring: [LibraryItem] = []
         var saving: [URL] = []
         for move in moves {
             saving.append(URL(fileURLWithPath: move.from))
-            guard let from = library.listedURL(ofPath: move.from), library.index(of: from) != nil else { continue }
+            let to = library.listedURL(ofPath: move.to)
+            guard let from = library.listedURL(ofPath: move.from), library.index(of: from) != nil else {
+                if let to, let item = step.items[move.id] {
+                    restoring.append(FolderLibrary.item(item, at: to))
+                }
+                continue
+            }
             saving.append(from)
-            if step.items[move.id] == nil, let item = library.item(for: from) {
+            if !undoing, step.items[move.id] == nil, let item = library.item(for: from) {
                 step.items[move.id] = item
             }
-            shown.append(LibraryMoves.Move(from: from, to: library.listedURL(ofPath: move.to)))
+            shown.append(LibraryMoves.Move(from: from, to: to))
         }
-        if step.active == nil {
+        if !undoing, step.active == nil {
             step.selected = Set(selectedPhotos)
             step.active = selection
         }
         let (active, activeRow) = (selection, selectionIndex)
         let destination = active.flatMap { active in shown.first { $0.from == active } }
-        await library.show(LibraryMoves(moves: shown)) { [self] in
+        await library.show(LibraryMoves(moves: shown, restoring: restoring)) { [self] in
             if let destination {
                 if let to = destination.to {
                     select(to, keepingSelection: true)
@@ -159,6 +268,13 @@ extension EditorModel {
             if let anchor = selectionAnchor, let moved = shown.first(where: { $0.from == anchor }) {
                 selectionAnchor = moved.to
             }
+        }
+        if !restoring.isEmpty, let active = step.active, library.index(of: active) != nil {
+            select(active, keepingSelection: true)
+            photoSelection.select(
+                step.selected.compactMap(library.photoID(of:)), active: library.photoID(of: active),
+                in: library.photoList,
+            )
         }
         return saving
     }
@@ -192,9 +308,12 @@ extension EditorModel {
     }
 }
 
-/// Library's renames, made one at a time in the order they're asked for.
+/// The renames Library's Undo and Redo take back and make again, made one at a time in the order they're
+/// asked for.
 @MainActor
 final class LibraryFileSteps {
+    var undo: [LibraryFileStep] = []
+    var redo: [LibraryFileStep] = []
     private var tail: Task<Void, Never>?
 
     /// Runs `body` once the steps asked for before it are made.
@@ -224,7 +343,7 @@ final class LibraryFileSteps {
     }
 }
 
-/// One of Library's renames.
+/// One of Library's renames, as Undo takes it back and Redo makes it again.
 @MainActor
 final class LibraryFileStep {
     enum Kind {
@@ -232,17 +351,23 @@ final class LibraryFileStep {
     }
 
     let kind: Kind
-    /// As the activity log names it: "Rename 12 Photos".
+    /// As Undo and the activity log name it: "Rename 12 Photos".
     let title: String
     /// Each photo, by index ID, and its path before and after the step.
     let photos: [(id: Int64, from: String, to: String)]
-    /// The batch that made it.
+    /// The batch that made it last, for its Undo.
     var batch: UUID?
     /// The photos as the folders shown listed them before it, by index ID.
     var items: [Int64: LibraryItem] = [:]
     /// The photos selected and the active one, before it.
     var selected: Set<URL> = []
     var active: URL?
+    /// Culling's changes on its Undo as the step was made or made again: those older than it.
+    var olderCulling: [CullingStep] = []
+    /// Culling's changes on its Redo as the step was taken back, which Redo makes after it.
+    var undoneAfter: [CullingStep] = []
+    /// Every culling change there was as the step was taken back: one not among them is newer.
+    var knownCulling: [CullingStep] = []
 
     init(kind: Kind, title: String, photos: [(id: Int64, from: String, to: String)]) {
         self.kind = kind

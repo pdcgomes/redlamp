@@ -10,8 +10,9 @@ import UniformTypeIdentifiers
 @_spi(Harness) @testable import RedlampUI
 
 /// Rename Photos (LIB-25, LIB-26): the preview's names, empty tokens and collisions numbered in capture order;
-/// presets saved and chosen; a rename that takes each raw with its JPEG, sidecars and other apps' `.xmp` and keeps
-/// the original name, the grid and the selection following.
+/// presets saved and chosen; a rename that takes each raw with its JPEG, sidecars and other apps' `.xmp`, keeps the
+/// original name, and is undone and made again through Library's Undo, the grid, the selection and the index
+/// following without reading a photo again.
 @MainActor
 struct RenameTests {
     /// A folder the library has indexed, shown from it in Library: IMG_0001.DNG beside IMG_0001.JPG, which has a
@@ -297,5 +298,84 @@ struct RenameTests {
         #expect(model.selection == folder.url("Wedding-02.JPG"), "the active photo goes with its file")
         #expect(model.info == nil, "Develop's document of the photo renamed is put away")
         #expect(folder.diffs.allSatisfy { !$0.reset }, "nothing is listed afresh")
+        #expect(model.fileUndoCount == 1)
+    }
+
+    @Test func `Undo and Redo take a rename back and make it again, the grid and the selection following`(
+    ) async throws {
+        let folder = RenameFolder()
+        defer { folder.cleanUp() }
+        try await folder.open()
+        let model = try #require(folder.model)
+        model.select(folder.url("IMG_0002.JPG"))
+        model.click(folder.url("IMG_0004.JPG"), toggling: true)
+        let ids = model.library.photoIDs
+        let selected = model.photoSelection
+        let before = folder.files()
+        let sheet = try await folder.sheet()
+        sheet.setText("Party-{sequence}")
+        #expect(await model.rename(sheet) == nil)
+        await model.filesMade()
+        let renamed = folder.files()
+        #expect(renamed.contains("Party-1.JPG") && renamed.contains("Party-2.JPG"))
+
+        #expect(model.canPerform(.undo) && model.perform(.undo))
+        try await folder.eventually(seconds: 0.5) { folder.shownNames().contains("IMG_0002.JPG") }
+        #expect(folder.shownNames().contains("IMG_0002.JPG"), "Undo shows before its batch is done")
+        await model.filesMade()
+        #expect(folder.files() == before)
+        #expect(folder.originalName("IMG_0002.JPG") == nil, "Undo takes the original name out")
+        #expect(model.photoSelection == selected && model.selection == folder.url("IMG_0004.JPG"))
+        #expect(model.fileUndoCount == 0 && model.fileRedoCount == 1)
+
+        #expect(model.canPerform(.redo) && model.perform(.redo))
+        await model.filesMade()
+        #expect(folder.files() == renamed)
+        #expect(folder.originalName("Party-1.JPG") == "IMG_0002.JPG")
+        #expect(Set(model.library.photoIDs) == Set(ids) && model.photoSelection == selected)
+        #expect(model.selection == folder.url("Party-2.JPG"))
+        #expect(folder.diffs.allSatisfy { !$0.reset })
+        #expect(try await folder.indexAgain() == 0, "the index follows without reading a photo again")
+    }
+
+    @Test func `Undo takes back the newest of a rename and a culling change first, and Redo makes them in turn`(
+    ) async throws {
+        let folder = RenameFolder()
+        defer { folder.cleanUp() }
+        try await folder.open()
+        let model = try #require(folder.model)
+        model.select(folder.url("IMG_0003.JPG"))
+        #expect(model.perform(.rating3))
+        let sheet = try await folder.sheet()
+        sheet.setText("Kept-{name}")
+        #expect(await model.rename(sheet) == nil)
+        await model.filesMade()
+        #expect(model.perform(.flagPick))
+        let photo = folder.url("Kept-IMG_0003.JPG")
+        #expect(model.library.item(for: photo)?.metadata.flag == .pick)
+
+        #expect(model.perform(.undo), "the flag, newest, first")
+        #expect(model.library.item(for: photo)?.metadata.flag == nil && model.fileUndoCount == 1)
+        #expect(model.perform(.undo), "then the rename")
+        await model.filesMade()
+        #expect(folder.files().contains("IMG_0003.JPG"))
+        #expect(model.library.item(for: folder.url("IMG_0003.JPG"))?.metadata.rating == 3)
+        #expect(model.perform(.undo), "then the rating")
+        #expect(model.library.item(for: folder.url("IMG_0003.JPG"))?.metadata.rating == 0)
+
+        #expect(model.perform(.redo), "the rating again")
+        #expect(model.library.item(for: folder.url("IMG_0003.JPG"))?.metadata.rating == 3)
+        #expect(model.perform(.redo), "then the rename")
+        await model.filesMade()
+        #expect(folder.files().contains("Kept-IMG_0003.JPG"))
+        #expect(model.perform(.redo), "then the flag")
+        #expect(model.library.item(for: photo)?.metadata.flag == .pick)
+        #expect(!model.canPerform(.redo))
+
+        #expect(model.perform(.undo) && model.perform(.undo))
+        await model.filesMade()
+        #expect(model.perform(.rating5), "a new change")
+        #expect(!model.canPerform(.redo), "ends the rename's Redo too")
+        await model.filesMade()
     }
 }
