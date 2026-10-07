@@ -72,6 +72,14 @@ struct SessionCacheTests {
         #expect(cache.bytesCached == expected)
     }
 
+    /// Every photo kept ready holds its analysis copy, so the copy takes no padding.
+    @Test func `a photo's analysis copy takes 12 bytes a pixel`() throws {
+        let analysis = try #require(sessions[Self.urls[0]]).analysis
+        withKnownIssue("the analysis copy is padded to 16 bytes a pixel") {
+            #expect(analysis.pixels.withUnsafeBytes(\.count) == analysis.width * analysis.height * 12)
+        }
+    }
+
     @Test func `prefetches stay within the budget, the photo being opened first`() async throws {
         let size = try held(0)
         for (budget, kept) in [(size * 5 / 2, [0, 1]), (size / 2, [0])] {
