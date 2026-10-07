@@ -36,32 +36,48 @@
                     toolbar.selectedItemIdentifier = item.itemIdentifier
                 }
             }
-            try wait("Settings › \(tab)") { _ in
-                Self.settingsWindow?.toolbar?.selectedItemIdentifier.flatMap { selected in
-                    Self.settingsWindow?.toolbar?.items.first { $0.itemIdentifier == selected }?.label
-                } == tab
+            do {
+                try wait("Settings › \(tab)") { _ in Self.settingsWindow?.title == tab }
+            } catch {
+                let shown = try main { _ -> String in
+                    let toolbar = Self.settingsWindow?.toolbar
+                    let items = toolbar?.items.map { item in
+                        "\(item.label) \(item.action.map(NSStringFromSelector) ?? "no action") "
+                            + "\(item.target.map { "\(Swift.type(of: $0))" } ?? "no target")"
+                    } ?? []
+                    return "\(Self.settingsWindow?.title ?? "") shown; tabs \(items), "
+                        + "selected \(toolbar?.selectedItemIdentifier?.rawValue ?? "none")"
+                }
+                throw ScenarioFailure("Settings › \(tab) didn't show: \(shown)")
             }
         }
 
-        /// Clicks the control carrying `identifier` in the Settings window, as a click on it does.
-        func clickInSettings(_ identifier: String) throws {
+        /// Clicks the control carrying `identifier` in the Settings window, as a click on it does; without
+        /// one, the `fallback`th switch in reading order.
+        func clickInSettings(_ identifier: String, fallback: Int) throws {
             try main { _ in
                 guard let window = Self.settingsWindow, let content = window.contentView else {
                     throw ScenarioFailure("Settings isn't open")
                 }
                 content.layoutSubtreeIfNeeded()
-                if let control = Views.all(NSControl.self, in: content).first(where: {
-                    $0.accessibilityIdentifier() == identifier
-                }) {
+                let controls = Views.all(NSControl.self, in: content)
+                if let control = controls.first(where: { $0.accessibilityIdentifier() == identifier }) {
                     control.performClick(nil)
                     return
                 }
-                guard let element = Self.element(identifier, in: content) else {
-                    throw ScenarioFailure("Settings has no \(identifier): \(Self.identifiers(in: content))")
+                if let element = Self.element(identifier, in: content), element.accessibilityPerformPress() {
+                    return
                 }
-                guard element.accessibilityPerformPress() else {
-                    throw ScenarioFailure("\(identifier) in Settings didn't take the click")
+                let switches = controls.filter { $0 is NSSwitch }
+                guard switches.indices.contains(fallback) else {
+                    let kinds = Set(Views.all(NSView.self, in: content).map { "\(Swift.type(of: $0))" }).sorted()
+                    throw ScenarioFailure(
+                        "Settings › \(window.title) has no \(identifier): controls "
+                            + "\(controls.map { "\(Swift.type(of: $0)) \($0.accessibilityIdentifier())" }), "
+                            + "views \(kinds)",
+                    )
                 }
+                switches[fallback].performClick(nil)
             }
             pause(0.1)
         }
@@ -178,7 +194,7 @@
             try app.wait("the library's settings", timeout: 30) { $0.library.service?.xmpSettings != nil }
             try app.expect(try app.xmpSettings()?.writes == false, "Writing .xmp isn't off to begin with")
             try app.openSettings(tab: "Library")
-            try app.clickInSettings("settings.library.xmp.write")
+            try app.clickInSettings("settings.library.xmp.write", fallback: 0)
             try app.confirmInSettings("turning writing .xmp on")
             try app.wait("writing .xmp on") { $0.library.service?.xmpSettings?.writes == true }
             try app.closeSettings()
@@ -205,10 +221,15 @@
                 }
             }
             try app.withCulling { names in
-                try app.click(.identifier("grid.\(names[2])"))
-                try app.wait("\(names[2]) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [names[2]] }
-                let url = try app.main { model in model.items.first { $0.url.lastPathComponent == names[2] }?.url }
-                guard let url else { throw ScenarioFailure("\(names[2]) isn't listed") }
+                // A photo whose .xmp is its own: Bitmap.jpg, .png, .tif and .heic share Bitmap.xmp, where the
+                // first of them decides.
+                let stem = { (name: String) in (name as NSString).deletingPathExtension.lowercased() }
+                guard let name = names.dropFirst().first(where: { name in names.count { stem($0) == stem(name) } == 1 })
+                else { throw ScenarioFailure("Every photo shares its .xmp: \(names)") }
+                try app.click(.identifier("grid.\(name)"))
+                try app.wait("\(name) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [name] }
+                let url = try app.main { model in model.items.first { $0.url.lastPathComponent == name }?.url }
+                guard let url else { throw ScenarioFailure("\(name) isn't listed") }
                 photo = url
                 let store = try app.main { $0.library.sidecars.store(for: url) }
                 let saved = store.locator.readURL(for: url)
@@ -220,7 +241,7 @@
                 } else {
                     sidecar = (saved, nil)
                 }
-                let before = try app.shown(names[2]).rating
+                let before = try app.shown(name).rating
                 let (stars, key): (Int, ShortcutAction) = before == 4 ? (3, .rating3) : (4, .rating4)
 
                 try app.press(key)
@@ -265,15 +286,17 @@
                 try copy.run()
                 copy.waitUntilExit()
                 try app.expect(copy.terminationStatus == 0, "cp couldn't write the other app's .xmp")
-                try app.waitInSidecar(names[2], "the other app's two stars, pick and keyword") { metadata in
+                try app.waitInSidecar(name, "the other app's two stars, pick and keyword") { metadata in
                     metadata.rating == 2 && metadata.flag == .pick && metadata.keywords == ["E2E Gulls"]
                 }
                 try app.wait("the grid to show the other app's two stars", timeout: 20) { model in
                     model.items.first { $0.url == url }?.metadata.rating == 2
                 }
                 app.covered(.feature("library.disk-changes"), via: .model)
-                try app.click(.identifier("grid.\(names[0])"))
-                try app.wait("\(names[0]) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [names[0]] }
+                // Away from the photo, so Develop doesn't hold it open while its .redlamp is put back.
+                let away = names[0] == name ? names[1] : names[0]
+                try app.click(.identifier("grid.\(away)"))
+                try app.wait("\(away) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [away] }
             }
         }
     }
