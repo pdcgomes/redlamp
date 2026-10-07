@@ -67,6 +67,7 @@ struct SettingsSyncTests {
 
         #expect(model.canPerform(.undoSync))
         model.undoSync()
+        #expect(!model.canPerform(.undoSync), "while it runs")
         await model.settingsSync.idle()
         #expect(store.load(for: b)?.recipe[.contrast] == 30)
         #expect(store.load(for: b)?.recipe[.exposure] == 0)
@@ -96,6 +97,46 @@ struct SettingsSyncTests {
         let kept = try #require(store.load(for: b), "the rating added since keeps the sidecar")
         #expect(kept.metadata?.rating == 4)
         #expect(kept.recipe[.exposure] == 0)
+        model.copySelection = .default
+    }
+
+    @Test func `Undo Sync reads and writes the sidecars off the main thread`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (a, b) = (folder.appending(path: "A.ARW"), folder.appending(path: "B.ARW"))
+        let store = SidecarStore()
+        let model = EditorModel(engine: StubEngine())
+        [a, b].forEach { model.library.insert(LibraryItem(url: $0)) }
+        try await open(model, a)
+        model.setValue(.exposure, 1)
+        model.selectAllPhotos()
+        model.copySelection = .default
+        model.syncSettings()
+        await model.settingsSync.idle()
+        #expect(store.load(for: b)?.recipe[.exposure] == 1)
+
+        // Another writer holds B's sidecar, as a busy disk would: Undo Sync's read of it waits, the main thread
+        // doesn't.
+        let release = DispatchSemaphore(value: 0)
+        let sidecar = store.url(for: b)
+        await withCheckedContinuation { held in
+            Thread {
+                var error: NSError?
+                NSFileCoordinator(filePresenter: nil)
+                    .coordinate(writingItemAt: sidecar, options: [], error: &error) { _ in
+                        held.resume()
+                        _ = release.wait(timeout: .now() + 2)
+                    }
+            }.start()
+        }
+        let started = ContinuousClock.now
+        model.undoSync()
+        let returned = ContinuousClock.now - started
+        release.signal()
+        #expect(returned < .milliseconds(500), "Undo Sync returned in \(returned)")
+        await model.settingsSync.idle()
+        #expect(store.load(for: b) == nil, "the sidecar the sync made is removed")
         model.copySelection = .default
     }
 
