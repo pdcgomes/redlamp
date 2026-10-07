@@ -85,6 +85,56 @@ struct FilmstripTests {
         #expect(scrollView.contentView.frame.height == strip.bounds.height)
     }
 
+    @Test func `the strip's cells sit in one row, and those a rect meets are found from where it is`() {
+        let layout = FilmstripLayout(
+            itemSize: CGSize(width: 96, height: 70), spacing: 6,
+            insets: NSEdgeInsets(top: 6, left: 10, bottom: 5, right: 10),
+        )
+        let collectionView = NSCollectionView(frame: CGRect(x: 0, y: 0, width: 900, height: 82))
+        let source = CountingSource(count: 20000)
+        collectionView.dataSource = source
+        collectionView.collectionViewLayout = layout
+        collectionView.reloadData()
+        #expect(layout.collectionViewContentSize == NSSize(width: 10 + 20000 * 96 + 19999 * 6 + 10, height: 82))
+        #expect(layout.frame(ofItem: 0) == CGRect(x: 10, y: 6, width: 96, height: 70))
+        #expect(layout.frame(ofItem: 3) == CGRect(x: 316, y: 6, width: 96, height: 70))
+        #expect(layout.items(in: CGRect(x: 0, y: 0, width: 900, height: 82)) == 0 ..< 9)
+        // A rect starting in the spacing after a cell meets only the next ones.
+        #expect(layout.items(in: CGRect(x: 10 + 102 * 5000 + 97, y: 0, width: 102, height: 82)) == 5001 ..< 5002)
+        #expect(layout.items(in: CGRect(x: 10 + 102 * 19990, y: 0, width: 5000, height: 82)) == 19990 ..< 20000)
+        #expect(layout.items(in: CGRect(x: 0, y: 80, width: 900, height: 2)).isEmpty)
+        #expect(layout.layoutAttributesForItem(at: IndexPath(item: 20000, section: 0)) == nil)
+    }
+
+    @Test func `reloading twenty thousand photos asks only for the cells on screen`() throws {
+        let model = EditorModel(engine: StubEngine())
+        _ = NSApplication.shared
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 900, height: FilmstripStripView.height), styleMask: [.titled],
+            backing: .buffered, defer: false,
+        )
+        let strip = FilmstripStripView(model: model)
+        window.contentView = strip
+        defer { window.contentView = nil }
+        let source = CountingSource(count: 20000)
+        strip.collectionView.dataSource = source
+        strip.layoutSubtreeIfNeeded()
+        strip.collectionView.reloadData()
+        strip.collectionView.layoutSubtreeIfNeeded()
+        let asked = source.asked
+        #expect(asked > 0 && asked < 40, "\(asked) cells made for a 900 pt strip")
+        let layout = try #require(strip.collectionView.collectionViewLayout as? FilmstripLayout)
+        #expect(strip.collectionView.frame.width == layout.collectionViewContentSize.width)
+        strip.collectionView.scrollToItems(
+            at: [IndexPath(item: 15000, section: 0)],
+            scrollPosition: .centeredHorizontally,
+        )
+        strip.collectionView.layoutSubtreeIfNeeded()
+        #expect(strip.collectionView.indexPathsForVisibleItems().contains(IndexPath(item: 15000, section: 0)))
+        #expect(layout.items(in: strip.scrollView.contentView.bounds).contains(15000))
+        #expect(source.asked - asked < 40)
+    }
+
     @Test func `visible cells get their thumbnails, and a badge changes only its cell`() async throws {
         defer { cleanUp() }
         let (model, strip, window) = try await showStrip(count: 50)
@@ -271,5 +321,27 @@ struct FilmstripTests {
         #expect(strip.collectionView.numberOfItems(inSection: 0) == 6)
         #expect(cell(strip, 0) === first)
         #expect(cell(strip, 3)?.item?.name == "IMG_00002a.ARW")
+    }
+}
+
+/// A strip's photos without a library: plain cells, counted as they're made.
+@MainActor
+private final class CountingSource: NSObject, NSCollectionViewDataSource {
+    let count: Int
+    private(set) var asked = 0
+
+    init(count: Int) {
+        self.count = count
+    }
+
+    func collectionView(_: NSCollectionView, numberOfItemsInSection _: Int) -> Int {
+        count
+    }
+
+    func collectionView(
+        _ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath,
+    ) -> NSCollectionViewItem {
+        asked += 1
+        return collectionView.makeItem(withIdentifier: FilmstripItem.identifier, for: indexPath)
     }
 }

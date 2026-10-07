@@ -17,7 +17,6 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     NSCollectionViewPrefetching {
     static let height: CGFloat = 82
     private static let spacing: CGFloat = 6
-    /// A flow layout needs its items strictly shorter than the view minus these.
     private static let insets = NSEdgeInsets(top: 6, left: 10, bottom: 5, right: 10)
 
     let collectionView = NSCollectionView()
@@ -42,13 +41,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     init(model: EditorModel) {
         self.model = model
         super.init(frame: CGRect(x: 0, y: 0, width: 600, height: Self.height))
-        let layout = NSCollectionViewFlowLayout()
-        layout.scrollDirection = .horizontal
-        layout.itemSize = FilmstripCellView.size
-        layout.minimumLineSpacing = Self.spacing
-        layout.minimumInteritemSpacing = Self.spacing
-        layout.sectionInset = Self.insets
-        collectionView.collectionViewLayout = layout
+        collectionView.collectionViewLayout = FilmstripLayout(
+            itemSize: FilmstripCellView.size, spacing: Self.spacing, insets: Self.insets,
+        )
         collectionView.backgroundColors = [.clear]
         collectionView.isSelectable = false
         collectionView.register(FilmstripItem.self, forItemWithIdentifier: FilmstripItem.identifier)
@@ -56,7 +51,6 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         collectionView.delegate = self
         collectionView.prefetchDataSource = self
         collectionView.setAccessibilityLabel("Filmstrip")
-        // Laid out at the strip's height from the start: a flow layout taller than its view logs.
         scrollView.frame = bounds
         collectionView.frame = bounds
         scrollView.documentView = collectionView
@@ -360,6 +354,78 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             return
         }
         center(row: row, animated: animated)
+    }
+}
+
+/// One row of cells of one size, each one's place worked out from its row: a reload or a change to the
+/// photos lays out the cells on screen, at any count, where a flow layout lays out every one.
+final class FilmstripLayout: NSCollectionViewLayout {
+    let itemSize: CGSize
+    let spacing: CGFloat
+    let insets: NSEdgeInsets
+
+    /// The collection view's count as it has it now, which `prepare` can be a reload behind.
+    private var count: Int {
+        guard let collectionView, collectionView.numberOfSections > 0 else { return 0 }
+        return collectionView.numberOfItems(inSection: 0)
+    }
+
+    init(itemSize: CGSize, spacing: CGFloat, insets: NSEdgeInsets) {
+        self.itemSize = itemSize
+        self.spacing = spacing
+        self.insets = insets
+        super.init()
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var collectionViewContentSize: NSSize {
+        let height = max(collectionView?.bounds.height ?? 0, insets.top + itemSize.height + insets.bottom)
+        guard count > 0 else { return NSSize(width: 0, height: height) }
+        return NSSize(
+            width: insets.left + CGFloat(count) * itemSize.width + CGFloat(count - 1) * spacing + insets.right,
+            height: height,
+        )
+    }
+
+    func frame(ofItem item: Int) -> CGRect {
+        CGRect(
+            origin: CGPoint(x: insets.left + CGFloat(item) * (itemSize.width + spacing), y: insets.top),
+            size: itemSize,
+        )
+    }
+
+    /// The rows whose cells `rect` meets.
+    func items(in rect: CGRect) -> Range<Int> {
+        guard count > 0, rect.maxY > insets.top, rect.minY < insets.top + itemSize.height else { return 0 ..< 0 }
+        let pitch = itemSize.width + spacing
+        let first = max(Int(((rect.minX - insets.left - itemSize.width) / pitch).rounded(.down)) + 1, 0)
+        let last = min(Int(((rect.maxX - insets.left) / pitch).rounded(.up)), count)
+        return first < last ? first ..< last : 0 ..< 0
+    }
+
+    override func layoutAttributesForElements(in rect: NSRect) -> [NSCollectionViewLayoutAttributes] {
+        items(in: rect).compactMap { layoutAttributesForItem(at: IndexPath(item: $0, section: 0)) }
+    }
+
+    override func layoutAttributesForItem(at indexPath: IndexPath) -> NSCollectionViewLayoutAttributes? {
+        guard indexPath.section == 0, (0 ..< count).contains(indexPath.item) else { return nil }
+        let attributes = NSCollectionViewLayoutAttributes(forItemWith: indexPath)
+        attributes.frame = frame(ofItem: indexPath.item)
+        return attributes
+    }
+
+    /// The collection view asks any layout for this, as a flow layout has it: without it, it keeps its
+    /// width at the clip view's and scrolls nowhere.
+    @objc var scrollDirection: NSCollectionView.ScrollDirection {
+        .horizontal
+    }
+
+    override func shouldInvalidateLayout(forBoundsChange newBounds: NSRect) -> Bool {
+        newBounds.height != collectionView?.bounds.height
     }
 }
 
