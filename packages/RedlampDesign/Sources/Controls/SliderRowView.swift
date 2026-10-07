@@ -7,7 +7,8 @@ import RedlampEngineAPI
 /// - Shift-drag for fine control.
 /// - Double-click the label or thumb to reset.
 /// - Option-drag on tone sliders previews clipping.
-/// - Click the value to type; arrow keys step (Shift for ×10).
+/// - Drag the value to scrub it (Shift for fine control), or click it to type; arrow keys step
+///   (Shift for ×10).
 /// - ⌘-scroll adjusts the slider under the pointer (Shift ×10, Option ×0.1); plain scrolling
 ///   still scrolls the panels.
 ///
@@ -47,6 +48,7 @@ public final class SliderRowView: NSView {
         labelView = RowLabelView(text: label ?? parameter.spec.label)
         trackView = SliderTrackView(spec: parameter.spec)
         valueView = ValueFieldView(spec: parameter.spec)
+        valueView.trailingInset = ValueFieldView.wellPadding
         super.init(frame: CGRect(x: 0, y: 0, width: 280, height: Metrics.rowHeight))
         wantsLayer = true
         clipsToBounds = false
@@ -60,7 +62,7 @@ public final class SliderRowView: NSView {
         trackView.setAccessibilityIdentifier("slider.\(parameter.rawValue).track")
         valueView.setAccessibilityIdentifier("slider.\(parameter.rawValue).value")
         toolTip = spec.availability.isLive
-            ? "Double-click to reset. Shift-drag for fine control. ⌘-scroll to adjust."
+            ? "Double-click to reset. Shift-drag for fine control. ⌘-scroll to adjust. Drag or click the number."
             : "\(spec.label) is laid out for reference and renders in \(Self.phase(spec))."
         wireActions()
     }
@@ -92,7 +94,9 @@ public final class SliderRowView: NSView {
         let height = bounds.height
         labelView.frame = CGRect(x: 0, y: 0, width: Metrics.labelWidth, height: height)
         let valueX = bounds.width - Metrics.valueWidth
-        valueView.frame = CGRect(x: valueX, y: 0, width: Metrics.valueWidth, height: height)
+        valueView.frame = CGRect(
+            x: valueX, y: 0, width: Metrics.valueWidth + ValueFieldView.wellPadding, height: height,
+        )
         let trackX = Metrics.labelWidth + Metrics.rowSpacing
         trackView.frame = CGRect(
             x: trackX,
@@ -148,7 +152,7 @@ public final class SliderRowView: NSView {
         let parameter = parameter
         labelView.onClick = { [weak self] in self?.editor.focusedParameter = parameter }
         labelView.onDoubleClick = { [weak self] in self?.editor.resetSlider(parameter) }
-        trackView.onBegin = { [weak self] in
+        let begin: () -> Void = { [weak self] in
             guard let self else { return }
             editor.focusedParameter = parameter
             editor.beginEdit(parameter)
@@ -156,13 +160,19 @@ public final class SliderRowView: NSView {
                 editor.setTemporaryClipping(true)
             }
         }
-        trackView.onChange = { [weak self] in self?.editor.setSliderValue(parameter, $0) }
-        trackView.onEnd = { [weak self] in
+        let change: (Double) -> Void = { [weak self] in self?.editor.setSliderValue(parameter, $0) }
+        let end: () -> Void = { [weak self] in
             self?.editor.setTemporaryClipping(false)
             self?.editor.endEdit(name: nil)
         }
+        trackView.onBegin = begin
+        trackView.onChange = change
+        trackView.onEnd = end
         trackView.onReset = { [weak self] in self?.editor.resetSlider(parameter) }
-        valueView.onCommit = { [weak self] in self?.editor.setSliderValue(parameter, $0) }
+        valueView.onBegin = begin
+        valueView.onChange = change
+        valueView.onEnd = end
+        valueView.onCommit = change
     }
 
     // MARK: - Scroll

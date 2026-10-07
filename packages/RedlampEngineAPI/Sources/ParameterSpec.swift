@@ -150,13 +150,18 @@ public struct ParameterSpec: Sendable, Hashable, Identifiable {
     /// where `x` is `current`, so "x+10" or "x/2" adjust what's there. A trailing unit (K, %, EV)
     /// is ignored.
     public func parse(_ text: String, current: Double? = nil) -> Double? {
+        Self.evaluate(text, current: current).map(clamp)
+    }
+
+    /// The number typed text stands for, by `parse`'s rules, before it is clamped to a range.
+    public static func evaluate(_ text: String, current: Double? = nil) -> Double? {
         var expression = text.lowercased().filter { !$0.isWhitespace }
-        for unit in ["ev", "k", "%", "°"] where expression.hasSuffix(unit) {
+        for unit in ["ev", "k", "%", "°", "px"] where expression.hasSuffix(unit) {
             expression.removeLast(unit.count)
         }
         var parser = ExpressionParser(characters: Array(expression), variable: current)
         guard let value = parser.parse(), value.isFinite else { return nil }
-        return clamp(value)
+        return value
     }
 }
 
