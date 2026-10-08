@@ -67,6 +67,10 @@ public final class LibraryFilters {
     @ObservationIgnored private var completing: Task<Void, Never>?
     @ObservationIgnored private var findingRemoval: Task<Void, Never>?
     @ObservationIgnored private var findingSuggestion: Task<Void, Never>?
+    /// The search for a suggestion for the query last handed to the list, started with it (`suggest`).
+    @ObservationIgnored private var suggesting: (
+        query: LibraryQuery, photos: PhotoSource, task: Task<QuerySuggestion?, Never>,
+    )?
     @ObservationIgnored private var countAgain = false
     @ObservationIgnored private var lastChange = ContinuousClock.now
     /// The text has the keyboard: the active photo stays as it is until it's given back.
@@ -286,6 +290,7 @@ public final class LibraryFilters {
     /// Hands the filter to the library's list of the source shown.
     private func apply() {
         guard let source, let photos else { return }
+        suggest(filter.isEnabled ? applied : nil, in: photos)
         let request = request(for: source)
         if case let .folder(folder, subfolders) = photos {
             if service?.filter(folder, includingSubfolders: subfolders, by: request) == true {
@@ -368,13 +373,14 @@ public final class LibraryFilters {
     // MARK: - A filter that finds nothing
 
     /// When the list the filter made is empty and the source isn't: the term to offer to take out, and a name
-    /// to offer in a misspelt word's place, each found off the main thread. Any other list takes them back.
+    /// to offer in a misspelt word's place, each found off the main thread. Any other list takes them back, and
+    /// so does a list made for an earlier query, whose own list follows.
     private func findOffers(after listing: LibraryListing) {
         findingRemoval?.cancel()
         findingSuggestion?.cancel()
         (findingRemoval, findingSuggestion) = (nil, nil)
-        guard listing.shown == 0, listing.total > 0, let query = listing.filter.query, let photos,
-              let engine = service?.engine
+        guard listing.shown == 0, listing.total > 0, let query = listing.filter.query,
+              query == (filter.isEnabled ? applied : nil), let photos, let engine = service?.engine
         else {
             withdrawOffers()
             return
@@ -387,14 +393,35 @@ public final class LibraryFilters {
             }
         }
         let started = ContinuousClock.now
+        suggest(query, in: photos)
+        guard let searching = suggesting?.task else { return }
+        // A search answers one list: the next, made once the photos have changed, looks again.
+        suggesting = nil
         findingSuggestion = Task { [weak self] in
-            let found = try? await engine.suggestion(for: query, in: photos)
+            let found = await searching.value
             guard !Task.isCancelled, let self else { return }
             if suggestion != found {
                 suggestion = found
             }
             lastSuggesting = .now - started
         }
+    }
+
+    /// Looks for a suggestion for `query` in `photos` off the main thread, unless that search is under way: from
+    /// the moment the query is handed to the list, so a key that finds nothing has its offer about as soon as the
+    /// list. A query that finds photos costs the engine a count before it gives none.
+    private func suggest(_ query: LibraryQuery?, in photos: PhotoSource) {
+        guard let query, let engine = service?.engine else {
+            suggesting?.task.cancel()
+            suggesting = nil
+            return
+        }
+        if let suggesting, suggesting.query == query, suggesting.photos == photos {
+            return
+        }
+        suggesting?.task.cancel()
+        let task = Task.detached(priority: .userInitiated) { try? await engine.suggestion(for: query, in: photos) }
+        suggesting = (query, photos, task)
     }
 
     /// The filter changed: the offers, and the search for them, go.
