@@ -17,9 +17,8 @@ struct MoveToFolderTests {
     ) async throws {
         let folder = RenameTests.RenameFolder()
         defer { folder.cleanUp() }
-        // Made before the folder's indexed: change tracking would otherwise index it, a new folder, as the move
-        // fills it, which is the indexer's to leave to batches (LIB-26).
         try await folder.open(folders: ["Picked"])
+        try folder.stopChangeTracking()
         let model = try #require(folder.model)
         let picked = folder.root.appending(path: "Picked", directoryHint: .isDirectory)
         model.select(folder.url("IMG_0001.JPG"))

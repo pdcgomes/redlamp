@@ -98,6 +98,12 @@ struct RenameTests {
             SidecarStore().load(for: url(name))?.metadata?.originalName
         }
 
+        /// Stops change tracking, which reads a folder's files as a batch moves them, until the indexer leaves
+        /// folders under a batch alone (LIB-26): what's read again is then the batches' doing.
+        func stopChangeTracking() throws {
+            try #require(service.core).tracker.stop()
+        }
+
         /// Reads the folder again as change tracking does, and returns the photos the indexer read again.
         func indexAgain() async throws -> Int {
             let core = try #require(service.core)
@@ -345,6 +351,7 @@ struct RenameTests {
         defer { folder.cleanUp() }
         try await folder.open()
         let model = try #require(folder.model)
+        try folder.stopChangeTracking()
         model.select(folder.url("IMG_0002.JPG"))
         model.click(folder.url("IMG_0004.JPG"), toggling: true)
         let ids = model.library.photoIDs
