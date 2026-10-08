@@ -7,6 +7,7 @@ import RedlampKernels
 import RedlampMasking
 import RedlampServices
 import simd
+import Synchronization
 import Testing
 @testable import RedlampEngine
 
@@ -1078,6 +1079,88 @@ extension MaskRenderTests {
         #expect(try await ready(within: 30))
         _ = try await engine.open(EngineSmokeTests.fixtures[1])
         #expect(try await ready(within: 30), "the next photo")
+    }
+
+    /// A stand-in for a model, and how many were made.
+    final class StubModel: Sendable {}
+    final class Made: Sendable {
+        let count = Mutex(0)
+        func load() async throws -> StubModel {
+            count.withLock { $0 += 1 }
+            try await Task.sleep(for: .milliseconds(100))
+            return StubModel()
+        }
+    }
+
+    @Test func `a model asked for twice at once loads once`() async throws {
+        let slot = ModelSlot<StubModel>()
+        let made = Made()
+        async let first = slot.model(loading: made.load)
+        async let second = slot.model(loading: made.load)
+        let (one, other) = try await (first, second)
+        withKnownIssue {
+            #expect(made.count.withLock { $0 } == 1)
+            #expect(one === other)
+        }
+    }
+
+    @Test func `an unloaded model loads again when asked for`() async throws {
+        let slot = ModelSlot<StubModel>()
+        let made = Made()
+        _ = try await slot.model(loading: made.load)
+        slot.unload()
+        withKnownIssue {
+            #expect(slot.model == nil)
+        }
+        _ = try await slot.model(loading: made.load)
+        withKnownIssue {
+            #expect(made.count.withLock { $0 } == 2)
+        }
+    }
+
+    @Test func `a model unloads once it's been idle a while`() async throws {
+        let slot = ModelSlot<StubModel>(idle: .milliseconds(200))
+        let made = Made()
+        _ = try await slot.model(loading: made.load)
+        try await Task.sleep(for: .milliseconds(100))
+        _ = try await slot.model(loading: made.load)
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(slot.model != nil, "asked for again meanwhile")
+        for _ in 0 ..< 100 where slot.model != nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        withKnownIssue {
+            #expect(slot.model == nil)
+        }
+        #expect(made.count.withLock { $0 } == 1)
+    }
+
+    /// Closing the Masking tool frees the models, and photos opened after aren't warmed up;
+    /// closing the editor window frees them too.
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.samIsInstalled))
+    func `closing the Masking tool unloads its models and stops warming up`() async throws {
+        let engine = try RedlampEngine()
+        _ = try await engine.objectSegmenter()
+        #expect(engine.loadedMaskModels == 1)
+        engine.warmUpMasks()
+        await engine.releaseMaskModels()
+        withKnownIssue {
+            #expect(engine.loadedMaskModels == 0)
+        }
+
+        _ = try await engine.open(EngineSmokeTests.fixtures[0])
+        for _ in 0 ..< 50 where engine.analysisCache.withLock({ $0 == nil }) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        withKnownIssue {
+            #expect(engine.analysisCache.withLock { $0 == nil }, "not warmed up")
+        }
+
+        _ = try await engine.objectSegmenter()
+        await engine.releaseResources()
+        withKnownIssue {
+            #expect(engine.loadedMaskModels == 0, "the window closed")
+        }
     }
 
     /// With SAM 3 on this Mac: the Sony sample's trees are vegetation, named for the class, and

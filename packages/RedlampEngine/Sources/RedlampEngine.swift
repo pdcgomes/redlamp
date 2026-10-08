@@ -72,6 +72,15 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             + [surfaces, overviews, comparisons, comparisonOverviews].flatMap(\.textures)
     }
 
+    /// How many AI mask models are loaded, for tests.
+    var loadedMaskModels: Int {
+        let loaded: [Any?] = [
+            segmenter.withLock { $0 }, depthModel.withLock { $0 }, depthAnything3Model.withLock { $0 },
+            sam3Model.withLock { $0 }, vitMatteModel.withLock { $0 }, thingFinder.withLock { $0 },
+        ]
+        return loaded.compactMap(\.self).count
+    }
+
     let sessions: SessionCache
     /// Lets go of cached sessions when the system runs short of memory.
     private let memoryPressure: any DispatchSourceMemoryPressure

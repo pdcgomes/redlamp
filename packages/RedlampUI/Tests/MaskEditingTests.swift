@@ -95,11 +95,16 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
 
     /// Every photo `open` was asked for, in order.
     var opened: [URL] = []
-    /// How many times the engine let go of its photos.
+    /// How many times the engine let go of its photos, and of its AI mask models.
     var releases = 0
+    var maskModelReleases = 0
 
     func releaseResources() async {
         releases += 1
+    }
+
+    func releaseMaskModels() async {
+        maskModelReleases += 1
     }
 
     func open(_ url: URL) async throws -> ImageInfo {
@@ -362,6 +367,25 @@ struct MaskEditingTests {
         }
         #expect(model.info != nil)
         return (model, { try? FileManager.default.removeItem(at: folder) })
+    }
+
+    @Test func `closing the Masking tool lets go of the AI mask models`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let engine = try #require(model.engine as? StubEngine)
+        model.activeTool = .masking
+        model.activeTool = .heal
+        for _ in 0 ..< 200 where engine.maskModelReleases == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        withKnownIssue {
+            #expect(engine.maskModelReleases == 1)
+        }
+        model.activeTool = .edit
+        try await Task.sleep(for: .milliseconds(50))
+        withKnownIssue {
+            #expect(engine.maskModelReleases == 1, "only the Masking tool's closing")
+        }
     }
 
     @Test func `strokes paint into one brush component`() async throws {

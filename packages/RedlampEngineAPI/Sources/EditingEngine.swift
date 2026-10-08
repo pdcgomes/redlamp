@@ -86,6 +86,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// tool opens.
     func warmUpMasks()
 
+    /// Stops getting AI masks ready and frees their models' memory (the Masking tool closed).
+    /// The models load again when a mask next needs them.
+    func releaseMaskModels() async
+
     /// The AI mask kinds that need a model downloaded first, and that model.
     func modelNeeded(for kind: MaskKind) async -> ModelInfo?
 
@@ -272,6 +276,8 @@ public extension EditingEngine {
     }
 
     func releaseGenerativeFill() async {}
+
+    func releaseMaskModels() async {}
 
     func releaseResources() async {}
 }
