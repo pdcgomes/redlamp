@@ -190,4 +190,90 @@ struct LibraryDragTests {
         #expect(sources.count(of: .collection(selects)) == 2)
         #expect(sources.count(of: .collection(picks)) == 0)
     }
+
+    // MARK: - A keyword onto photos (LIB-21)
+
+    @Test func `a keyword dragged onto a photo tags it alone, or the selection when it's in it, each one change with Undo and Redo`(
+    ) async throws {
+        let sandbox = DragSandbox()
+        defer { sandbox.close() }
+        try await sandbox.open(photos: ["A.JPG", "B.JPG", "C.JPG"])
+        let model = try #require(sandbox.model)
+        let panels = model.libraryPanels
+        try await sandbox.eventually { panels.keywordList != nil }
+        #expect(panels.create("Lisbon"))
+        try await sandbox.panelsWritten()
+        try await sandbox.eventually { sandbox.view("keywordList.name.Lisbon") != nil }
+        sandbox.layOut()
+        let label = try #require(sandbox.view("keywordList.name.Lisbon") as? KeywordDragLabel)
+        try sandbox.click("A.JPG")
+        try sandbox.click("B.JPG", modifiers: .command)
+        try await sandbox.eventually { panels.selection.ids.count == 2 }
+
+        let changes = panels.undoCount
+        try sandbox.drag(label, to: sandbox.cell("C.JPG"), release: false)
+        let outlined = sandbox.grid.cells.values.filter(\.isDropTarget).compactMap { $0.item?.name }
+        #expect(outlined == ["C.JPG"], "the photo under the drag, not selected, alone")
+        try label.mouseUp(with: sandbox.mouse(.leftMouseUp, at: sandbox.cell("C.JPG")))
+        #expect(sandbox.grid.cells.values.allSatisfy { !$0.isDropTarget })
+        try await sandbox.eventually { panels.undoCount > changes }
+        try await sandbox.panelsWritten()
+        #expect(panels.undoCount == changes + 1, "one change")
+        #expect(sandbox.keywords("C.JPG") == ["Lisbon"])
+        #expect(sandbox.keywords("A.JPG").isEmpty && sandbox.keywords("B.JPG").isEmpty)
+        #expect(model.perform(.undo))
+        try await sandbox.panelsWritten()
+        #expect(sandbox.keywords("C.JPG").isEmpty)
+        #expect(model.perform(.redo))
+        try await sandbox.panelsWritten()
+        #expect(sandbox.keywords("C.JPG") == ["Lisbon"])
+
+        // The list shows its rows again as the keyword's count changes.
+        sandbox.layOut()
+        let shown = try #require(sandbox.view("keywordList.name.Lisbon") as? KeywordDragLabel)
+        try sandbox.drag(shown, to: sandbox.cell("B.JPG"), release: false)
+        let selected = Set(sandbox.grid.cells.values.filter(\.isDropTarget).compactMap { $0.item?.name })
+        #expect(selected == ["A.JPG", "B.JPG"], "a selected photo under the drag: the selection")
+        try shown.mouseUp(with: sandbox.mouse(.leftMouseUp, at: sandbox.cell("B.JPG")))
+        try await sandbox.eventually { panels.undoCount > changes + 1 }
+        try await sandbox.panelsWritten()
+        #expect(sandbox.keywords("A.JPG") == ["Lisbon"] && sandbox.keywords("B.JPG") == ["Lisbon"])
+        #expect(try panels.selection.hasEverywhere(#require(KeywordPath("Lisbon"))) == true)
+        #expect(model.perform(.undo))
+        try await sandbox.panelsWritten()
+        #expect(sandbox.keywords("A.JPG").isEmpty && sandbox.keywords("B.JPG").isEmpty)
+        #expect(sandbox.keywords("C.JPG") == ["Lisbon"])
+    }
+
+    @Test func `a click on a keyword's name selects its row, and a keyword dropped between cells tags nothing`(
+    ) async throws {
+        let sandbox = DragSandbox()
+        defer { sandbox.close() }
+        try await sandbox.open(photos: ["A.JPG", "B.JPG"])
+        let panels = sandbox.model.libraryPanels
+        try await sandbox.eventually { panels.keywordList != nil }
+        #expect(panels.create("Lisbon, Porto"))
+        try await sandbox.panelsWritten()
+        try await sandbox.eventually { sandbox.view("keywordList.name.Porto") != nil }
+        sandbox.layOut()
+        let label = try #require(sandbox.view("keywordList.name.Porto") as? KeywordDragLabel)
+        let outline = try #require(sandbox.first(KeywordOutlineView.self))
+        let frame = label.convert(label.bounds, to: nil)
+        let middle = CGPoint(x: frame.midX, y: frame.midY)
+        #expect(
+            try outline.hitTest(#require(outline.superview?.convert(middle, from: nil))) === label,
+            "the name takes the press",
+        )
+        try label.mouseDown(with: sandbox.mouse(.leftMouseDown, at: middle))
+        try label.mouseUp(with: sandbox.mouse(.leftMouseUp, at: middle))
+        #expect(outline.selectedRow == outline.row(for: label), "a click on the name selects its row")
+
+        let changes = panels.undoCount
+        let first = sandbox.grid.gridLayout.frame(forItem: 0)
+        let between = sandbox.grid.content.convert(CGPoint(x: first.minX - 2, y: first.minY - 2), to: nil)
+        try sandbox.drag(label, to: between)
+        try await Task.sleep(for: .milliseconds(200))
+        await panels.written()
+        #expect(panels.undoCount == changes && sandbox.keywords("A.JPG").isEmpty && sandbox.keywords("B.JPG").isEmpty)
+    }
 }

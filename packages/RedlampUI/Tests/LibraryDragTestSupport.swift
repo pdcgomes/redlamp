@@ -87,7 +87,7 @@ final class DragSandbox {
         }
     }
 
-    /// The window's middle and both side panels as the app builds them, as `ModuleFixture` shows them.
+    /// The window's middle between both side panels, as the app builds them.
     private func show() -> ModuleWindow {
         let content = ModuleContentController(model: model, theme: ThemeSettings(), develop: PlainViewController())
         let left = ModuleColumnView(
@@ -98,7 +98,7 @@ final class DragSandbox {
         )
         let frame = CGRect(x: 0, y: 0, width: 1600, height: 900)
         let root = NSView(frame: frame)
-        content.view.frame = frame
+        content.view.frame = CGRect(x: 250, y: 0, width: 1034, height: 900)
         left.frame = CGRect(x: 0, y: 0, width: 250, height: 900)
         right.frame = CGRect(x: 1284, y: 0, width: 316, height: 900)
         for view in [content.view, left, right] {
@@ -223,6 +223,38 @@ final class DragSandbox {
     /// Lets go of the press at `location`.
     func release(at location: CGPoint, modifiers: NSEvent.ModifierFlags = []) throws {
         try grid.content.mouseUp(with: mouse(.leftMouseUp, at: location, modifiers: modifiers))
+    }
+
+    /// Presses `view` in its middle and moves the press to `end` in steps, holding `modifiers`; with `release`, lets
+    /// go there. The events go to `view`, as the window sends a press's drags and release to the view it pressed.
+    func drag(
+        _ view: NSView, to end: CGPoint, modifiers: NSEvent.ModifierFlags = [], release: Bool = true,
+    ) throws {
+        let frame = view.convert(view.bounds, to: nil)
+        let start = CGPoint(x: frame.midX, y: frame.midY)
+        try view.mouseDown(with: mouse(.leftMouseDown, at: start, modifiers: modifiers))
+        for step in 1 ... 8 {
+            let t = CGFloat(step) / 8
+            let location = CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
+            try view.mouseDragged(with: mouse(.leftMouseDragged, at: location, modifiers: modifiers))
+        }
+        if release {
+            try view.mouseUp(with: mouse(.leftMouseUp, at: end, modifiers: modifiers))
+        }
+    }
+
+    /// Waits for the panels' changes asked for, the lists holding them and the panels showing them.
+    func panelsWritten() async throws {
+        await model.libraryPanels.written()
+        await service.settled()
+        try await Task.sleep(for: .milliseconds(30))
+        await model.libraryPanels.refreshed()
+        await model.libraryPanels.keywordsRead()
+    }
+
+    /// The keywords `name`'s sidecar holds, sorted.
+    func keywords(_ name: String) -> [String] {
+        (SidecarStore().load(for: photo(name))?.metadata?.keywords ?? []).sorted()
     }
 
     // MARK: - Files

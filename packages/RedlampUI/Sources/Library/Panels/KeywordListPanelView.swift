@@ -4,16 +4,17 @@ import RedlampLibrary
 
 /// The Keyword List panel (LIB-21): the library's keywords in their hierarchy, each with how many photos have
 /// it or one inside it, filtered by name. A row's checkbox puts its keyword on the photos selected or takes it
-/// off them, showing whether every one, some or none has it; its arrow shows the keyword's photos through the
-/// filter bar; its context menu, the panel's menu for the row chosen, and a double-click edit the keyword's name,
-/// synonyms, export options and kind, merge it into another and delete it. Lightroom Classic's keyword-list file
+/// off them, showing whether every one, some or none has it; its name drags it onto photos in the grid
+/// (`KeywordDrag`); its arrow shows the keyword's photos through the filter bar; its context menu, the panel's
+/// menu for the row chosen, and a double-click edit the keyword's name, synonyms, export options and kind,
+/// merge it into another and delete it. Lightroom Classic's keyword-list file
 /// is imported and exported from the panel's menu and the File menu.
 final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuDelegate,
     NSSearchFieldDelegate {
     private let panels: LibraryPanels
     private let model: EditorModel
     private let filter = NSSearchField()
-    private let outline = NSOutlineView()
+    private let outline = KeywordOutlineView()
     private let scroll = NSScrollView()
     private let empty = PanelControls.label("No keywords yet", secondary: true)
     /// Each keyword's node, kept by path so the outline keeps its rows open across reloads.
@@ -346,7 +347,7 @@ final class KeywordNode: NSObject {
 final class KeywordRowView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("keywordRow")
     private let check = NSButton(checkboxWithTitle: "", target: nil, action: nil)
-    private let name = PanelControls.label("")
+    private let name = KeywordDragLabel.make()
     private let count = PanelControls.label("", secondary: true)
     private let arrow = NSButton()
     private var path: KeywordPath?
@@ -383,6 +384,8 @@ final class KeywordRowView: NSTableCellView {
 
     func show(_ keyword: KeywordList.Keyword, selection: PanelSelection) {
         path = keyword.path
+        name.keyword = keyword.path
+        name.setAccessibilityIdentifier("keywordList.name.\(keyword.path.text)")
         name.stringValue = keyword.name
         name.toolTip = keyword.path.displayName
             + (keyword.options.synonyms.isEmpty ? "" : " (\(keyword.options.synonyms.joined(separator: ", ")))")

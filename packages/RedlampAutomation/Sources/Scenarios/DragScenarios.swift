@@ -11,7 +11,7 @@
     /// drop targets' dragging destinations; only the window server's part of a drag, which doesn't follow a
     /// synthetic mouse, is the suite's (`LibraryDrags.simulates`).
     enum DragScenarios {
-        static let all: [Scenario] = [toFolder, toCollection]
+        static let all: [Scenario] = [toFolder, toCollection, keywordOntoPhotos]
 
         static let toFolder = Scenario(
             "library.drag-to-folder",
@@ -114,6 +114,58 @@
             app.pause(0.5)
             try app.expect(try app.main { $0.libraryPanels.undoCount } == changes, "The smart collection took photos")
         }
+
+        static let keywordOntoPhotos = Scenario(
+            "library.drag-keyword",
+            "A keyword dragged by its name from the Keyword List onto a photo in the grid tags that photo, or the "
+                + "selection when the photo is in it, each one change that ⌘Z takes back",
+            claims: [.feature("library.keywords")],
+        ) { app in
+            let scratch = try DragScratch()
+            defer { scratch.remove(app) }
+            try scratch.show(app)
+            try app.simulateLibraryDrags(true)
+            defer { try? app.simulateLibraryDrags(false) }
+            let text = "Dragged-\(UUID().uuidString.prefix(6))"
+            guard let keyword = KeywordPath(text) else { throw ScenarioFailure("No keyword path") }
+            try app.main { model in
+                model.rightPanelVisible = true
+                if !model.libraryPanels.isExpanded(.keywordList) {
+                    model.libraryPanels.toggle(.keywordList)
+                }
+                model.libraryPanels.create(text)
+            }
+            defer { try? app.main { model in _ = model.libraryPanels.delete(keyword) } }
+            try app.wait("the keyword in the Keyword List", timeout: 30) { _ in
+                Views.editorWindow.flatMap { Views.find("keywordList.name." + text, in: $0) } != nil
+            }
+            let (a, b, c) = (scratch.photo("A.jpg"), scratch.photo("B.jpg"), scratch.photo("C.jpg"))
+            try app.main { model in
+                model.select(a)
+                model.click(b, toggling: true)
+            }
+            try app.wait("A and B selected, as the panels have them") { model in
+                Set(model.selectedPhotos) == [a, b] && model.libraryPanels.selection.ids.count == 2
+            }
+            func keywords(_ photo: URL) -> [String] {
+                SidecarStore(locator: .besidePhotos).load(for: photo)?.metadata?.keywords ?? []
+            }
+
+            try app.dragKeyword(text, ontoPhoto: "C.jpg")
+            try app.wait("C tagged alone", timeout: 30) { _ in
+                keywords(c) == [text] && keywords(a).isEmpty && keywords(b).isEmpty
+            }
+            app.covered(.feature("library.keywords"), via: .mouse)
+            try app.press(.undo)
+            try app.wait("⌘Z to take it off C", timeout: 30) { _ in keywords(c).isEmpty }
+
+            try app.dragKeyword(text, ontoPhoto: "B.jpg")
+            try app.wait("A and B tagged, B being selected", timeout: 30) { _ in
+                keywords(a) == [text] && keywords(b) == [text] && keywords(c).isEmpty
+            }
+            try app.press(.undo)
+            try app.wait("⌘Z to take it off them", timeout: 30) { _ in keywords(a).isEmpty && keywords(b).isEmpty }
+        }
     }
 
     /// Small JPEGs of the run's own on the external disk's scratch folder, A to D, A with a sidecar, and an empty
@@ -211,6 +263,16 @@
                 .identifier("grid.\(name)"), by: CGVector(dx: to.midX - from.midX, dy: to.midY - from.midY),
                 steps: 12, modifiers: modifiers,
             )
+        }
+
+        /// Presses the name of `keyword` (its path) in the Keyword List, drags it onto the grid's cell of `name` and
+        /// lets
+        /// go there, through the window as the mouse does.
+        func dragKeyword(_ keyword: String, ontoPhoto name: String) throws {
+            let label = Target.identifier("keywordList.name." + keyword)
+            let from = try frame(of: label)
+            let to = try frame(of: .identifier("grid.\(name)"))
+            try drag(label, by: CGVector(dx: to.midX - from.midX, dy: to.midY - from.midY), steps: 12)
         }
 
         /// Counts the library again, and again, until `condition` holds of the left panel's sources: a drop's change

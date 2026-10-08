@@ -59,6 +59,15 @@ final class LibraryGridCell {
         }
     }
 
+    /// A keyword dragged over it would tag it, or the painter has painted it in the stroke under way.
+    var isDropTarget = false {
+        didSet {
+            if isDropTarget != oldValue {
+                updateBackground()
+            }
+        }
+    }
+
     init() {
         background.cornerRadius = 4
         thumbnail.contentsGravity = .resizeAspect
@@ -123,6 +132,7 @@ final class LibraryGridCell {
             text?.contents = nil
             textKey = nil
             isMenuTarget = false
+            isDropTarget = false
         }
         root.opacity = item.metadata.flag == .reject ? 0.45 : 1
         showBadges(of: item)
@@ -163,7 +173,7 @@ final class LibraryGridCell {
 
     private func updateBackground() {
         background.backgroundColor = NSColor(white: isActive ? 0.3 : isInSelection ? 0.24 : 0.17, alpha: 1).cgColor
-        if isMenuTarget {
+        if isMenuTarget || isDropTarget {
             background.borderWidth = 2
             background.borderColor = NSColor.controlAccentColor.cgColor
         } else {

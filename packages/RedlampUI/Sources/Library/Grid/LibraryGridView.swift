@@ -77,8 +77,10 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private var hasToolTip = false
     /// A rubber band being drawn: where it started, and the selection it adds to (with ⇧ or ⌘).
     private var band: Band?
-    /// A press on a photo, which a drag takes along (`LibraryGridView+Drag`).
+    /// A press on a photo, which a drag takes along, and where a keyword dragged over the grid would land
+    /// (`LibraryGridView+Drag`).
     var photoPress: PhotoPress?
+    var keywordTarget: KeywordTarget?
     /// The item whose context menu is open.
     private var menuItem: Int?
     /// The cells' accessibility elements, by photo, and the headers', by group, as last asked for.
@@ -376,7 +378,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     /// The row of item `index`'s photo; nil for a header.
-    private func row(ofItem index: Int) -> Int? {
+    func row(ofItem index: Int) -> Int? {
         if case let .photo(row) = content(ofItem: index) {
             return row
         }
@@ -1268,6 +1270,7 @@ final class LibraryGridContentView: NSView {
         setAccessibilityRole(.grid)
         setAccessibilityLabel("Grid")
         setAccessibilityIdentifier("library.grid")
+        registerForDraggedTypes([LibraryDrags.keyword])
     }
 
     @available(*, unavailable)
@@ -1317,6 +1320,28 @@ final class LibraryGridContentView: NSView {
 
     override func accessibilityChildren() -> [Any]? {
         grid?.accessibleCells()
+    }
+
+    // MARK: - A keyword dropped (`LibraryGridView+Drag`)
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        grid?.keywordDragged(sender) ?? []
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        grid?.keywordDragged(sender) ?? []
+    }
+
+    override func draggingExited(_: (any NSDraggingInfo)?) {
+        grid?.showKeywordTarget(nil)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        grid?.keywordDropped(sender) ?? false
+    }
+
+    override func concludeDragOperation(_: (any NSDraggingInfo)?) {
+        grid?.showKeywordTarget(nil)
     }
 }
 

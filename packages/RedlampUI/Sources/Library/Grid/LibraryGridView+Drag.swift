@@ -11,9 +11,17 @@ struct PhotoPress {
     var selectsOnRelease: Bool
 }
 
-/// The grid's drags (LIB-23, LIB-26): a press on a photo that moves a few points drags the selection when the photo
-/// is in it, else the photo alone, as a dragging session (`LibraryDrags`), onto a folder or a collection in the left
-/// panel. The drag shows the pressed photo's thumbnail, badged with how many photos it carries.
+/// Where a keyword dragged over the grid lands: the photo under it, or the selection when that photo is in it.
+enum KeywordTarget: Equatable {
+    case photo(list: Int64, url: URL)
+    case selection
+}
+
+/// The grid's drags (LIB-21, LIB-23, LIB-26): a press on a photo that moves a few points drags the selection when the
+/// photo is in it, else the photo alone, as a dragging session (`LibraryDrags`), onto a folder or a collection in the
+/// left panel; the drag shows the pressed photo's thumbnail, badged with how many photos it carries. A keyword
+/// dragged from the Keyword List onto a photo tags it, or the selection when the photo is in it, the cells it would
+/// tag outlined as it passes.
 extension LibraryGridView {
     /// How far a press moves before it drags.
     static let dragDistance: CGFloat = 4
@@ -59,6 +67,75 @@ extension LibraryGridView {
             mask: LibraryGridContentView.photoOperations,
             photos: photos,
         )
+    }
+
+    // MARK: - A keyword dropped (LIB-21)
+
+    func keywordDragged(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        let operation = [NSDragOperation.copy, .generic].first { sender.draggingSourceOperationMask.contains($0) }
+        guard let operation, LibraryDrags.keyword(in: sender) != nil,
+              let target = keywordTarget(at: sender.draggingLocation)
+        else {
+            showKeywordTarget(nil)
+            return []
+        }
+        showKeywordTarget(target)
+        return operation
+    }
+
+    func keywordDropped(_ sender: any NSDraggingInfo) -> Bool {
+        defer { showKeywordTarget(nil) }
+        guard let keyword = LibraryDrags.keyword(in: sender), let target = keywordTarget(at: sender.draggingLocation)
+        else { return false }
+        let panels = model.libraryPanels
+        switch target {
+        case .selection where !panels.selection.ids.isEmpty:
+            return panels.add([keyword])
+        case .selection:
+            let ids = model.library.photoIDs
+            let selection = model.photoSelection
+            let photos = zip(ids, model.items).filter { selection.contains($0.0) }.map { (list: $0.0, url: $0.1.url) }
+            Task { await panels.change([keyword], on: photos) }
+        case let .photo(list, url):
+            Task { await panels.change([keyword], on: [(list, url)]) }
+        }
+        return true
+    }
+
+    /// The photo under `location` (window points), or the selection when it's among several selected; nil between
+    /// cells, and while the photos shown aren't the library's.
+    private func keywordTarget(at location: NSPoint) -> KeywordTarget? {
+        let library = model.library
+        guard library.service?.isReady == true, library.isShownFromLibrary || model.librarySources.shown != nil,
+              !library.showsRecentlyTrashed
+        else { return nil }
+        let point = content.convert(location, from: nil)
+        guard let index = gridLayout.item(at: point), index < shownCount, let row = row(ofItem: index),
+              library.photoIDs.indices.contains(row)
+        else { return nil }
+        let id = library.photoIDs[row]
+        if model.isMultiSelecting, model.photoSelection.contains(id) {
+            return .selection
+        }
+        return .photo(list: id, url: model.items[row].url)
+    }
+
+    /// Outlines the cells on screen that `target` would tag.
+    func showKeywordTarget(_ target: KeywordTarget?) {
+        guard target != keywordTarget else { return }
+        keywordTarget = target
+        let ids = model.library.photoIDs
+        let selection = model.photoSelection
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for cell in cells.values {
+            cell.isDropTarget = switch target {
+            case let .photo(list, _): ids.indices.contains(cell.row) && ids[cell.row] == list
+            case .selection: ids.indices.contains(cell.row) && selection.contains(ids[cell.row])
+            case nil: false
+            }
+        }
+        CATransaction.commit()
     }
 }
 
