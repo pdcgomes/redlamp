@@ -13,6 +13,8 @@
 # the run's reports go to (perf.txt, perf.json for scripts/perf-record.sh, profile.txt); without
 # it each run makes its own under /tmp and removes it afterwards, so runs from other checkouts
 # at the same time never take or delete each other's report. It can't contain whitespace.
+# IDLE=<seconds> then leaves the app alone that long with the photo open (after 5 s to settle)
+# and reports its CPU, wakeups and memory.
 
 set -euo pipefail
 
@@ -20,6 +22,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGURATION="${1:-Debug}"
 PARAMETER="${2:-exposure}"
 SCRIPT="${3:-select=3,panel=all}"
+IDLE="${IDLE:-0}"
 FIXTURES="$ROOT/tests/fixtures/raw"
 DERIVED_DATA="${DERIVED_DATA:-$ROOT/build/DerivedData}"
 BUNDLE="$DERIVED_DATA/Build/Products/$CONFIGURATION/Redlamp.app"
@@ -58,12 +61,14 @@ PROFILE_FLAG=""
 # PANELS=swiftui measures the SwiftUI Develop panels instead of the AppKit ones.
 PANELS_FLAG=""
 [[ "${PANELS:-appkit}" == "swiftui" ]] && PANELS_FLAG="--swiftui-panels"
+IDLE_FLAG=""
+[[ "$IDLE" != "0" ]] && IDLE_FLAG="--sweep-idle $IDLE"
 # Beside the bundle, so a launch from another checkout at the same moment can't take them.
-echo "$FIXTURES --perf-report $REPORT --script $SCRIPT --sweep $PARAMETER --sweep-seconds 3 --sweep-quit $PROFILE_FLAG $PANELS_FLAG" \
+echo "$FIXTURES --perf-report $REPORT --script $SCRIPT --sweep $PARAMETER --sweep-seconds 3 --sweep-quit $PROFILE_FLAG $PANELS_FLAG $IDLE_FLAG" \
     >"$(dirname "$BUNDLE")/redlamp-launch-args"
 open -n -g "$BUNDLE"
 PID=""
-for _ in $(seq 1 80); do
+for _ in $(seq 1 $((80 + (IDLE > 0 ? 2 * (IDLE + 5) : 0)))); do
     sleep 0.5
     [[ -z "$PID" ]] && PID="$(pgrep -f "$EXECUTABLE" | grep -vxF "${BEFORE:-none}" | head -1 || true)"
     [[ -f "$REPORT/perf.txt" ]] && break

@@ -112,8 +112,8 @@ CFFIXED_USER_HOME="$WORK/home" "$CLI" bench --runs "$RUNS" "$WORK/fixtures/"* \
 if [[ "${SKIP_SWEEP:-0}" != "1" ]]; then
     echo "== slider sweep"
     note_load "sweep"
-    launch "$WORK/reports/sweep" 60 "$WORK/fixtures" --script "select=3,panel=all" --sweep exposure \
-        --sweep-seconds 3 --sweep-quit
+    launch "$WORK/reports/sweep" 100 "$WORK/fixtures" --script "select=3,panel=all" --sweep exposure \
+        --sweep-seconds 3 --sweep-idle 30 --sweep-quit
     find "$WORK/fixtures" -name '*.redlamp' -prune -exec rm -rf {} +
 fi
 

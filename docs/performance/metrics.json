@@ -1,5 +1,5 @@
 {
-  "description": "Every metric on redlamp.app/performance. measuredBy: the harness that records it (bench: redlamp bench; sweep: scripts/perf-sweep.sh; folders: scripts/folders-perf.sh), or [] when only the README's history has it. readme: how scripts/perf-backfill.py finds it in past READMEs: a table row whose label starts with `row` (`phrase` picks one of several values in the cell by the label's own wording; `columns` reads a table whose columns are stages, the last being current), or a `pattern` in the text, with an optional `before` pattern for a figure quoted from before a change.",
+  "description": "Every metric on redlamp.app/performance. measuredBy: the harness that records it (bench: redlamp bench; sweep: scripts/perf-sweep.sh; folders: scripts/folders-perf.sh; e2e: the regression suite's performance tier; release: scripts/perf-history.py release, from a release's zip), or [] when only the README's history has it. readme: how scripts/perf-backfill.py finds it in past READMEs: a table row whose label starts with `row` (`phrase` picks one of several values in the cell by the label's own wording; `columns` reads a table whose columns are stages, the last being current), or a `pattern` in the text, with an optional `before` pattern for a figure quoted from before a change.",
   "groups": [
     "Opening",
     "Editing",
@@ -7,8 +7,10 @@
     "Detail",
     "Focus stacking",
     "Memory",
+    "CPU",
     "Folders",
-    "Responsiveness"
+    "Responsiveness",
+    "Size"
   ],
   "metrics": [
     {
@@ -539,6 +541,83 @@
       "better": "lower",
       "measuredBy": [
         "e2e"
+      ]
+    },
+    {
+      "id": "footprint-photo",
+      "label": "Memory with a photo open",
+      "detail": "What macOS charges the app for (Activity Monitor's Memory) with a 24 MP raw open at Fit, after a slider drag and 30 seconds untouched",
+      "unit": "MB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ]
+    },
+    {
+      "id": "footprint-peak",
+      "label": "Peak memory opening and editing a photo",
+      "detail": "The highest footprint since launch, as the kernel records it, after opening a 24 MP raw and dragging a slider with every panel open",
+      "unit": "MB",
+      "group": "Memory",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ]
+    },
+    {
+      "id": "idle-cpu",
+      "label": "CPU with a photo open and nothing to do",
+      "detail": "The app's CPU time over 30 seconds untouched, after a slider drag, as a share of one core",
+      "unit": "%",
+      "group": "CPU",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ]
+    },
+    {
+      "id": "idle-wakeups",
+      "label": "Wakeups with a photo open and nothing to do",
+      "detail": "How often a timer or an interrupt woke the app's threads over the same 30 seconds, whatever else the Mac is running",
+      "unit": "/s",
+      "group": "CPU",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ]
+    },
+    {
+      "id": "drag-cpu",
+      "label": "CPU while dragging a slider",
+      "detail": "The app's CPU time on every thread during the drag, as a share of one core; the GPU does the rendering",
+      "unit": "%",
+      "group": "CPU",
+      "better": "lower",
+      "measuredBy": [
+        "sweep"
+      ]
+    },
+    {
+      "id": "download-size",
+      "label": "Download size",
+      "detail": "The release's zip on GitHub, in MB of 10⁶ bytes",
+      "unit": "MB",
+      "group": "Size",
+      "better": "lower",
+      "measuredBy": [
+        "release"
+      ]
+    },
+    {
+      "id": "app-size",
+      "label": "Installed size",
+      "detail": "Redlamp.app unzipped, as Finder counts it, in MB of 10⁶ bytes",
+      "unit": "MB",
+      "group": "Size",
+      "better": "lower",
+      "measuredBy": [
+        "release"
       ]
     }
   ]

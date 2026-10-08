@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
 # Records one performance run into docs/performance/history.jsonl: builds the redlamp CLI in
-# Release and runs `redlamp bench` on the CC0 fixtures, then the slider sweep (perf-sweep.sh) and,
-# when the 50,000-photo fixture exists, the folders run (folders-perf.sh), and prints what changed
-# since the previous comparable run. Commit the new line with the change it measures.
+# Release and runs `redlamp bench` on the CC0 fixtures, then the slider sweep (perf-sweep.sh),
+# which then leaves the app alone 30 s with the photo open for its CPU, wakeups and memory,
+# and, when the 50,000-photo fixture exists, the folders run (folders-perf.sh), and prints what
+# changed since the previous comparable run. Commit the new line, and the README's performance
+# card it redraws, with the change it measures.
 #
 # Measure on a quiet Mac: a run whose load average exceeds 8 is recorded as noisy and never
 # compared. The page at redlamp.app/performance draws the history.
@@ -40,7 +42,7 @@ echo "== redlamp bench"
 ARGS=(--bench "$WORK/bench.json")
 if [[ "${SKIP_SWEEP:-0}" != "1" ]]; then
     echo "== slider sweep"
-    if REPORT_DIR="$WORK/sweep" scripts/perf-sweep.sh Release exposure "select=3,panel=all" \
+    if REPORT_DIR="$WORK/sweep" IDLE=30 scripts/perf-sweep.sh Release exposure "select=3,panel=all" \
         && [[ -f "$WORK/sweep/perf.json" ]]; then
         ARGS+=(--sweep "$WORK/sweep/perf.json")
     else

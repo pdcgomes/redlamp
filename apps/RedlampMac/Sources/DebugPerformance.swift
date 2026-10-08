@@ -262,7 +262,8 @@
         }
 
         /// Runs `step` with progress 0…1 at 120 Hz (like a trackpad drag), then writes main-thread
-        /// and frame statistics to /tmp/redlamp-perf.txt.
+        /// and frame statistics to /tmp/redlamp-perf.txt; with `--sweep-idle <seconds>`, after
+        /// measuring the app left alone that long with the photo open.
         private static func drag(
             _ label: String,
             seconds: Double,
@@ -277,6 +278,7 @@
             let sampler = LaunchArguments.all.contains("--sweep-profile") ? MainThreadSampler() : nil
             sampler?.start()
             monitor.start()
+            let activityBefore = ProcessActivity.now()
             begin()
             let started = CFAbsoluteTimeGetCurrent()
             var events = 0
@@ -288,6 +290,7 @@
             model.endEdit()
             try? await Task.sleep(for: .milliseconds(300))
             monitor.stop()
+            let dragging = ProcessActivity.now().since(activityBefore)
             sampler?.stop()
             trace("drag finished")
             if let sampler {
@@ -314,7 +317,7 @@
             }
             let renders = milliseconds(model.debugRenderDurations.suffix(frames))
             let latencies = milliseconds(model.debugFrameLatencies.suffix(frames))
-            let report = [
+            var lines = [
                 monitor.report("main thread during \(label)", seconds: seconds),
                 String(
                     format: "drag events: %d (%.0f/s), frames received: %d (%.0f/s)",
@@ -332,20 +335,59 @@
                     percentile(latencies, 50), percentile(latencies, 95), percentile(latencies, 99),
                     latencies.last ?? 0,
                 ),
-            ].joined(separator: "\n")
+            ]
+            var metrics: [String: Double] = [:]
+            if let summary = monitor.summary(seconds: seconds) {
+                metrics["drag-busy"] = summary.busy * 100
+                metrics["drag-median"] = summary.p50
+                metrics["drag-p95"] = summary.p95
+                metrics["drag-p99"] = summary.p99
+            }
+            // The profiler's sampling thread would count as the app's own work.
+            if sampler == nil {
+                metrics["drag-cpu"] = dragging.cpu
+                lines.append(String(format: "CPU while dragging: %.0f%% of one core, every thread", dragging.cpu))
+            }
+            let arguments = LaunchArguments.all
+            if let index = arguments.firstIndex(of: "--sweep-idle"), index + 1 < arguments.count,
+               let idleSeconds = Double(arguments[index + 1]), idleSeconds > 0 {
+                let (idleMetrics, line) = await idle(seconds: idleSeconds)
+                metrics.merge(idleMetrics) { $1 }
+                lines.append(line)
+            }
+            // Scripts wait for the report, so the metrics are written first.
+            writeMetrics(metrics)
+            let report = lines.joined(separator: "\n")
             print(report)
             try? (report + "\n").write(toFile: PerformanceReport.text, atomically: true, encoding: .utf8)
-            if let summary = monitor.summary(seconds: seconds) {
-                writeMetrics([
-                    "drag-busy": summary.busy * 100,
-                    "drag-median": summary.p50,
-                    "drag-p95": summary.p95,
-                    "drag-p99": summary.p99,
-                ])
-            }
-            if LaunchArguments.all.contains("--sweep-quit") {
+            if arguments.contains("--sweep-quit") {
                 NSApp.terminate(nil)
             }
+        }
+
+        /// The app left alone with the photo open: after 5 seconds for it to settle, its CPU and how
+        /// often it woke an idle processor over `seconds`, then its memory and the highest since launch.
+        private static func idle(seconds: Double) async -> (metrics: [String: Double], line: String) {
+            trace("idle start")
+            defer { trace("idle end") }
+            try? await Task.sleep(for: .seconds(5))
+            let before = ProcessActivity.now()
+            try? await Task.sleep(for: .seconds(seconds))
+            let activity = ProcessActivity.now().since(before)
+            let memory = MemorySnapshot.light()
+            let footprint = mb(memory.ledgers.footprint)
+            let peak = mb(memory.ledgers.lifetimePeak)
+            let metrics = [
+                "idle-cpu": activity.cpu, "idle-wakeups": activity.wakeups,
+                "footprint-photo": footprint, "footprint-peak": peak,
+            ]
+            let line = String(
+                format: "left alone %.0f s with the photo open: CPU %.2f%% of one core, %.1f wakeups a second "
+                    + "(%.1f of an idle processor); memory %.0f MB (GPU %.0f MB), %.0f MB at its highest since launch",
+                seconds, activity.cpu, activity.wakeups, activity.idleWakeups, footprint,
+                mb(memory.ledgers.graphics), peak,
+            )
+            return (metrics, line)
         }
 
         /// The next frame shown and when it landed, or nil once `timeout` passes without one.
@@ -443,6 +485,53 @@
             if LaunchArguments.all.contains("--browse-quit") {
                 NSApp.terminate(nil)
             }
+        }
+    }
+
+    /// The process's CPU time on every thread, finished ones included, and how often a timer or an
+    /// interrupt has woken its threads, and of those how often it woke an idle processor (Activity
+    /// Monitor's Idle Wake Ups, which a busy Mac never has).
+    struct ProcessActivity {
+        let cpuSeconds: Double
+        let wakeups: UInt64
+        let idleWakeups: UInt64
+        let at: ContinuousClock.Instant
+
+        static func now() -> ProcessActivity {
+            var usage = rusage()
+            getrusage(RUSAGE_SELF, &usage)
+            // task_power_info's CPU times are in Mach ticks; only its wakeup counts are read.
+            var power = task_power_info_data_t()
+            var count = mach_msg_type_number_t(
+                MemoryLayout<task_power_info_data_t>.size / MemoryLayout<natural_t>.size,
+            )
+            let result = withUnsafeMutablePointer(to: &power) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                    task_info(mach_task_self_, task_flavor_t(TASK_POWER_INFO), $0, &count)
+                }
+            }
+            func seconds(_ time: timeval) -> Double {
+                Double(time.tv_sec) + Double(time.tv_usec) / 1e6
+            }
+            let read = result == KERN_SUCCESS
+            return ProcessActivity(
+                cpuSeconds: seconds(usage.ru_utime) + seconds(usage.ru_stime),
+                wakeups: read ? power.task_interrupt_wakeups : 0,
+                idleWakeups: read ? power.task_platform_idle_wakeups : 0,
+                at: .now,
+            )
+        }
+
+        /// Since `earlier`: the share of one core used, in percent, and wakeups a second.
+        func since(_ earlier: ProcessActivity) -> (cpu: Double, wakeups: Double, idleWakeups: Double) {
+            let elapsed = earlier.at.duration(to: at)
+            let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+            guard seconds > 0 else { return (0, 0, 0) }
+            return (
+                (cpuSeconds - earlier.cpuSeconds) / seconds * 100,
+                Double(wakeups - earlier.wakeups) / seconds,
+                Double(idleWakeups - earlier.idleWakeups) / seconds,
+            )
         }
     }
 #endif
