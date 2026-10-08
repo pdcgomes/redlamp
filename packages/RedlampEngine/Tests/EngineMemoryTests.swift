@@ -857,11 +857,11 @@ struct EngineMemoryTests {
         let retouchesAfter = engine.renderQueue.sync {
             Set(engine.retouch.retouchedSessions.map(ObjectIdentifier.init))
         }
-        withKnownIssue("the retouch and mask stages keep the last photo they rendered a still for") {
+        #expect(during.retouch == 0, "\(during.retouch) bytes of its retouched copies kept")
+        #expect(retouchesAfter == retouches, "the open photo's retouches were made again")
+        withKnownIssue("the mask stage keeps the last photo it rendered a still for") {
             #expect(photo == nil, "\(photoBytes) bytes of the exported photo kept")
-            #expect(during.retouch == 0, "\(during.retouch) bytes of its retouched copies kept")
             #expect(during.masks <= before, "\(during.masks - before) bytes of mask textures kept for it")
-            #expect(retouchesAfter == retouches, "the open photo's retouches were made again")
         }
         #expect(engine.renderQueue.sync { engine.masks.slicesDrawn } == slices)
     }
@@ -888,9 +888,9 @@ struct EngineMemoryTests {
         }
         let photoBytes = photo?.allocatedBytes ?? 0
         let (retouch, masks) = Self.retouchAndMaskBytes(engine, open: nil)
-        withKnownIssue("the retouch and mask stages keep the last photo they rendered a still for") {
+        #expect(retouch == 0, "\(retouch) bytes of its retouched copy kept")
+        withKnownIssue("the mask stage keeps the last photo it rendered a still for") {
             #expect(photo == nil, "\(photoBytes) bytes of the photo kept")
-            #expect(retouch == 0, "\(retouch) bytes of its retouched copy kept")
             #expect(masks == 0, "\(masks) bytes of mask textures kept")
         }
     }

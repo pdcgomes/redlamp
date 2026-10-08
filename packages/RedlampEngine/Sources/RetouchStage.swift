@@ -17,7 +17,7 @@ final class RetouchStage: @unchecked Sendable {
     /// The most points on a brushed spot's outline, and on its stroke.
     static let maximumOutline = 1024
     static let maximumStroke = 512
-    /// A recipe and the one it's compared with.
+    /// A photo's recipe and the one it's compared with.
     private static let maximumEntries = 2
 
     /// Where a spot lands in the pyramid, in level-0 texels.
@@ -184,7 +184,7 @@ final class RetouchStage: @unchecked Sendable {
         }
     }
 
-    /// Fills are kept across rebuilds, so moving another spot doesn't fill this one again.
+    /// A photo's fills are kept across rebuilds, so moving another spot doesn't fill this one again.
     private static let maximumFills = 32
     /// The working level makes a hole at most this many texels across. REDLAMP_FILL_EXTENT
     /// overrides it, to tune.
@@ -254,11 +254,12 @@ final class RetouchStage: @unchecked Sendable {
         // differ from this one's least (another removal's object doesn't come back meanwhile).
         let latest = entries.last { $0.original === original && $0.refreshed != nil }?.refreshed?.maps
         // Renders wait for their commands, so an evicted copy is free to reuse, once its maps
-        // aren't being made.
+        // aren't being made. Another photo's still evicts none of the open photo's.
         var reusable: (any MTLTexture)?
-        if entries.count >= Self.maximumEntries {
-            let evicted = entries.removeFirst()
-            if evicted.original === original, !refreshing.contains(ObjectIdentifier(evicted.retouched.pyramid)) {
+        if entries.count(where: { $0.original === original }) >= Self.maximumEntries,
+           let index = entries.firstIndex(where: { $0.original === original }) {
+            let evicted = entries.remove(at: index)
+            if !refreshing.contains(ObjectIdentifier(evicted.retouched.pyramid)) {
                 reusable = evicted.retouched.pyramid
             }
         }
@@ -292,7 +293,8 @@ final class RetouchStage: @unchecked Sendable {
     }
 
     /// Lets go of the retouches and Remove fills of photos other than `session`'s, and of their
-    /// sessions; of every one, and of the generative fills' bitmaps, when it's nil.
+    /// sessions; of every one, and of the generative fills' bitmaps and the regions' shapes, when
+    /// it's nil.
     func keepOnly(_ session: ImageSession?) {
         let original = session?.original
         let photo = original.map(ObjectIdentifier.init)
@@ -307,6 +309,7 @@ final class RetouchStage: @unchecked Sendable {
             if original == nil {
                 storedFills = [:]
                 storedOrder = []
+                regions = [:]
             }
             return dropped
         }
@@ -409,8 +412,9 @@ final class RetouchStage: @unchecked Sendable {
                     )
                 }
                 fillOrder.append(key)
-                if fillOrder.count > Self.maximumFills {
-                    fills[fillOrder.removeFirst()] = nil
+                if fillOrder.count(where: { $0.session == key.session }) > Self.maximumFills,
+                   let index = fillOrder.firstIndex(where: { $0.session == key.session }) {
+                    fills[fillOrder.remove(at: index)] = nil
                 }
                 buffer = try makeCommandBuffer()
             }

@@ -36,6 +36,10 @@ public extension RedlampEngine {
                     let specks = try? findSpecks(
                         recipe: photo.recipe, sensitivity: min(sensitivity + 15, 100), session: session,
                     )
+                    let open = currentSession()
+                    if open !== session {
+                        retouch.keepOnly(open)
+                    }
                     continuation.resume(returning: specks ?? [])
                 }
             }
