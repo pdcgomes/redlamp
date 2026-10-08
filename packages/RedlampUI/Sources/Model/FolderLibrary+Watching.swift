@@ -47,30 +47,18 @@ extension FolderLibrary {
 
     static let pollInterval: TimeInterval = 15
 
-    /// Watches the roots that can be found; called whenever they change. The stream is replaced off the main
-    /// thread: starting and stopping one waits on FSEvents' service, for seconds while it's busy.
+    /// Watches the roots that can be found; called whenever they change.
     func watchRoots() {
         observeMounts()
         service?.follow(roots.map(\.url))
         let paths = roots.filter { !missing.contains($0.id) }.map(\.path)
         guard paths != watching.paths else { return }
-        let replaced = watching.watcher
-        watching.watcher = nil
+        watching.watcher?.stop()
         watching.paths = paths
-        scheduler.submit(.onScreen) { [weak self] in
-            replaced?.stop()
-            let watcher = paths.isEmpty ? nil : FolderWatcher(paths: paths) { [weak self] directories in
-                Task { @MainActor in
-                    guard let library = self else { return }
-                    library.changed(directories.map(library.watching.translate))
-                }
-            }
-            Task { @MainActor [weak self] in
-                guard let self, watching.paths == paths, watching.watcher == nil else {
-                    watcher?.stop()
-                    return
-                }
-                watching.watcher = watcher
+        watching.watcher = paths.isEmpty ? nil : FolderWatcher(paths: paths) { [weak self] directories in
+            Task { @MainActor in
+                guard let library = self else { return }
+                library.changed(directories.map(library.watching.translate))
             }
         }
         scheduler.submit(.lookAhead) {
