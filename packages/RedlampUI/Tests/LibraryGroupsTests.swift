@@ -109,6 +109,8 @@ struct LibraryGroupsTests {
             try write(photo)
         }
         let library = FolderLibrary()
+        // The folder's own 14 photos: Below's E01 is a source of its own here.
+        library.setIncludesSubfolders(false)
         library.add([root])
         let service = LibraryService(
             paths: LibraryPaths(root: base.appending(path: "Library", directoryHint: .isDirectory)),
