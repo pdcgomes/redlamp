@@ -6,19 +6,21 @@ import RedlampLibrary
 /// The Library filter bar (LIB-18), as Lightroom Classic's: Text, Attribute and Metadata over one
 /// query in the library's language, the sort, saved filters, and a lock that keeps one filter across
 /// sources. Each source keeps its own filter and sort, for the 25 latest sources and across launches,
-/// so a folder's filter is there again when it's shown again.
+/// so a folder's filter is there again when it's shown again; the Library panel's entries and the
+/// collections are sources as folders are (LIB-23).
 ///
 /// Typing never waits on the engine: the text is read as it's typed and handed to the library's list
 /// of the source, which works out the photos off the main thread, the latest filter winning
-/// (`LibraryFolderList`). The metadata columns are counted once the list is shown, each over the
-/// photos of the filter but its own choice and those of the columns after it, so choosing in one
-/// narrows the next.
+/// (`LibraryFolderList`, `LibrarySourceList`). The metadata columns are counted once the list is
+/// shown, each over the photos of the filter but its own choice and those of the columns after it, so
+/// choosing in one narrows the next.
 @MainActor
 @Observable
 public final class LibraryFilters {
     /// The bar is shown above the grid and the loupe (`\`).
     public internal(set) var isBarShown = false
-    /// The source the bar shows and edits, by `key(_:includingSubfolders:)`.
+    /// The source the bar shows and edits, by `key(_:includingSubfolders:)` for a folder, or the Library
+    /// panel's entry's or the collection's `LibrarySource.key`.
     public private(set) var source: String?
     public private(set) var filter = LibraryFilter()
     public private(set) var sort = LibrarySort()
@@ -48,7 +50,10 @@ public final class LibraryFilters {
     @ObservationIgnored private let defaults: UserDefaults?
     @ObservationIgnored private let presetsURL: URL?
     @ObservationIgnored private var sources: [SourceFilter] = []
-    @ObservationIgnored private var folder: (url: URL, subfolders: Bool)?
+    /// The source's photos, as the query engine knows them.
+    @ObservationIgnored private var photos: PhotoSource?
+    /// The list of the Library panel's entry or the collection shown, which its filter is handed to.
+    @ObservationIgnored weak var sourceList: LibrarySourceList?
     /// The query the photos are filtered by while the text has an error.
     @ObservationIgnored private var applied: LibraryQuery?
     @ObservationIgnored private var counting: Task<Void, Never>?
@@ -110,9 +115,21 @@ public final class LibraryFilters {
 
     /// Shows `folder` in the bar: its own filter and sort, or with the lock on, the filter kept.
     public func follow(_ folder: URL?, includingSubfolders: Bool) {
-        let key = folder.map { Self.key($0, includingSubfolders: includingSubfolders) }
+        follow(
+            folder.map { Self.key($0, includingSubfolders: includingSubfolders) },
+            photos: folder.map { .folder($0, includingSubfolders: includingSubfolders) },
+        )
+    }
+
+    /// Shows the Library panel's entry or the collection `source` in the bar, `photos` as the library lists
+    /// them, as a folder is shown.
+    func follow(_ source: LibrarySource, photos: PhotoSource) {
+        follow(source.key, photos: photos)
+    }
+
+    private func follow(_ key: String?, photos: PhotoSource?) {
+        self.photos = photos
         guard key != source else { return }
-        self.folder = folder.map { ($0, includingSubfolders) }
         source = key
         let kept = key.flatMap { key in sources.last { $0.source == key } }
         if !isLocked {
@@ -127,9 +144,13 @@ public final class LibraryFilters {
         remember()
     }
 
-    /// What the library's list of a source is filtered and sorted by.
+    /// What the library's list of a folder is filtered and sorted by.
     func request(for folder: URL, includingSubfolders: Bool) -> LibraryListFilter {
-        let key = Self.key(folder, includingSubfolders: includingSubfolders)
+        request(for: Self.key(folder, includingSubfolders: includingSubfolders))
+    }
+
+    /// What the library's list of the source kept under `key` is filtered and sorted by.
+    func request(for key: String) -> LibraryListFilter {
         if key == source {
             return LibraryListFilter(query: filter.isEnabled ? applied : nil, sort: sort)
         }
@@ -252,11 +273,17 @@ public final class LibraryFilters {
 
     /// Hands the filter to the library's list of the source shown.
     private func apply() {
-        guard let folder else { return }
-        let request = request(for: folder.url, includingSubfolders: folder.subfolders)
-        if service?.filter(folder.url, includingSubfolders: folder.subfolders, by: request) != true {
-            countColumns()
+        guard let source, let photos else { return }
+        let request = request(for: source)
+        if case let .folder(folder, subfolders) = photos {
+            if service?.filter(folder, includingSubfolders: subfolders, by: request) == true {
+                return
+            }
+        } else if let list = sourceList, list.source == photos {
+            list.setFilter(request)
+            return
         }
+        countColumns()
     }
 
     private func remember() {
@@ -313,37 +340,34 @@ public final class LibraryFilters {
     // MARK: - What the library listed
 
     /// The library handed over the source's filtered or sorted list.
-    func listed(_ ordered: LibraryFolderList.Ordered) {
+    func listed(_ listing: LibraryListing) {
         listings += 1
         lastListed = LibraryListFilterSummary(
-            query: ordered.filter.query, sort: ordered.filter.sort, reversed: ordered.filter.reversed,
+            query: listing.filter.query, sort: listing.filter.sort, reversed: listing.filter.reversed,
         )
-        lastListing = ordered.took
-        if listed?.shown != ordered.items.count || listed?.total != ordered.total {
-            listed = (ordered.items.count, ordered.total)
+        lastListing = listing.took
+        if listed?.shown != listing.shown || listed?.total != listing.total {
+            listed = (listing.shown, listing.total)
         }
         countColumns()
-        findRemoval(after: ordered)
+        findRemoval(after: listing)
     }
 
     // MARK: - A filter that finds nothing
 
     /// When the list the filter made is empty and the source isn't: the term to offer to take out,
     /// found off the main thread. Any other list takes the offer back.
-    private func findRemoval(after ordered: LibraryFolderList.Ordered) {
+    private func findRemoval(after listing: LibraryListing) {
         findingRemoval?.cancel()
         findingRemoval = nil
-        guard ordered.items.isEmpty, ordered.total > 0, let query = ordered.filter.query, let folder,
+        guard listing.shown == 0, listing.total > 0, let query = listing.filter.query, let photos,
               let engine = service?.engine
         else {
-            if removal != nil {
-                removal = nil
-            }
+            withdrawRemoval()
             return
         }
-        let source = PhotoSource.folder(folder.url, includingSubfolders: folder.subfolders)
         findingRemoval = Task { [weak self] in
-            let found = try? await engine.removal(from: query, in: source)
+            let found = try? await engine.removal(from: query, in: photos)
             guard !Task.isCancelled, let self else { return }
             if removal != found {
                 removal = found
@@ -376,14 +400,13 @@ public final class LibraryFilters {
     /// Counts the metadata columns again, once what's under way is done: when the source's photos
     /// change, or the columns are shown.
     public func countColumns() {
-        guard isBarShown, filter.sections.contains(.metadata), let folder, let engine = service?.engine else { return }
+        guard isBarShown, filter.sections.contains(.metadata), let photos, let engine = service?.engine else { return }
         guard counting == nil else {
             countAgain = true
             lastChange = .now
             return
         }
-        let source = PhotoSource.folder(folder.url, includingSubfolders: folder.subfolders)
-        let key = self.source
+        let key = source
         lastChange = .now
         counting = Task { [weak self] in
             while let self, ContinuousClock.now - lastChange < Self.columnDelay {
@@ -391,8 +414,8 @@ public final class LibraryFilters {
             }
             guard let requests = self?.columnRequests() else { return }
             do {
-                for try await counts in engine.columns(requests, in: source) {
-                    guard let self, self.source == key else { break }
+                for try await counts in engine.columns(requests, in: photos) {
+                    guard let self, source == key else { break }
                     if columns[counts.index] != counts {
                         columns[counts.index] = counts
                     }
@@ -432,7 +455,7 @@ public final class LibraryFilters {
             completionRange = nil
             return
         }
-        let source = folder.map { PhotoSource.folder($0.url, includingSubfolders: $0.subfolders) } ?? .allPhotographs
+        let source = photos ?? .allPhotographs
         completing = Task { [weak self] in
             let values = await engine.completions(term.value, field: term.field, limit: 8, in: source)
             guard !Task.isCancelled, let self else { return }
@@ -447,6 +470,16 @@ public final class LibraryFilters {
         completions = []
         completionRange = nil
     }
+}
+
+/// A list the library handed over for the source the bar shows, made by its filter or sort.
+struct LibraryListing {
+    /// The photos the filter found, of the source's.
+    var shown: Int
+    var total: Int
+    var filter: LibraryListFilter
+    /// How long the query engine took to find its photos, and the list to be made of them.
+    var took: (query: Duration, list: Duration)
 }
 
 /// The filter of a list the library handed over, for the harness.

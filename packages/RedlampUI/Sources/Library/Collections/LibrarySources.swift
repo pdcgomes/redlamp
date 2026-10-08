@@ -15,7 +15,8 @@ import RedlampLibrary
 ///   go or change, says when; so does the definitions' folder, which collections made, renamed, moved and
 ///   deleted rewrite. Only the rows whose counts changed are drawn again (`observeCounts`).
 /// - **A source shown** takes the open folder's place (`FolderLibrary+Collections`), its list kept current by
-///   LibraryLive (`LibrarySourceList`); opening a folder, or Recently Trashed, ends it.
+///   LibraryLive and filtered as the filter bar has it (`LibrarySourceList`), its view kept as it's left and shown
+///   again with it; opening a folder, or Recently Trashed, ends it.
 /// - **Collections changed** are the library's batches (`LibraryCollections`), each on Library's Undo with the
 ///   panels' and culling's changes (`LibraryPanels`).
 @MainActor
@@ -95,6 +96,7 @@ public final class LibrarySources {
         expanded = defaults?.stringArray(forKey: Self.expandedKey).map { Set($0.compactMap(Panel.init(rawValue:))) }
             ?? Set(Panel.allCases)
         collapsedSets = Set(defaults?.stringArray(forKey: Self.collapsedSetsKey) ?? [])
+        model.library.leavingSource = { [weak model] source in model?.rememberView(of: source) }
     }
 
     /// Whether the set at `path` shows what's inside it in the collection list.
@@ -357,7 +359,7 @@ public final class LibrarySources {
     /// in; false while the library isn't open, and for Previous Import while there's none.
     @discardableResult
     public func show(_ source: LibrarySource) -> Bool {
-        guard let model, let core = model.library.service?.core, model.library.service?.isReady == true else {
+        guard let model, model.library.service?.core != nil, model.library.service?.isReady == true else {
             return false
         }
         guard let (listed, only) = photos(of: source) else {
@@ -375,13 +377,13 @@ public final class LibrarySources {
         model.stackSuggestions = []
         followShown()
         close()
-        let generation = model.library.openSource()
+        let (generation, list) = model.library.openSource(source, photos: listed, only: only) { [weak self] in
+            self?.received($0, generation: $1)
+        }
         self.generation = generation
         shown = source
         awaitingFirst = true
-        list = LibrarySourceList(core: core, source: listed, only: only) { [weak self] change in
-            self?.received(change, generation: generation)
-        }
+        self.list = list
         return true
     }
 
@@ -410,12 +412,12 @@ public final class LibrarySources {
         else { return }
         Self.release(ids)
         ids = change.ids
-        if awaitingFirst {
+        if awaitingFirst, let shown {
             awaitingFirst = false
             // Only after the photos are in: a filmstrip out of sight doesn't take them, and one placing itself
             // as it goes out of sight would look for a photo it doesn't have.
             model.showModule(.library)
-            model.didList(Array(model.library.items.prefix(Self.warmedAsShown)), select: nil)
+            model.didList(shown, Array(model.library.items.prefix(Self.warmedAsShown)))
         }
     }
 

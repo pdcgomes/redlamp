@@ -62,8 +62,10 @@ public struct FolderNode: Sendable, Equatable {
 ///   folder beneath it is listed in parallel and streamed in in order. The badges of photos with a
 ///   sidecar follow from light probes of their `edit.json`, visible photos first.
 /// - With the library on, a folder it has indexed is shown from its photo list instead, and one it
-///   hasn't switches over once it has (see `FolderLibrary+Library`). Recently Trashed, the photos its
-///   batches moved to the Trash, can be shown in place of a folder (see `FolderLibrary+Trash`).
+///   hasn't switches over once it has (see `FolderLibrary+Library`). The Library panel's entries and
+///   the collections can be shown in place of a folder, from their photo lists (see
+///   `FolderLibrary+Collections`), and so can Recently Trashed, the photos its batches moved to the
+///   Trash (see `FolderLibrary+Trash`).
 /// - `items` isn't observed (a badge mustn't re-render SwiftUI views); views observe `count`,
 ///   `revision` or `openFolder`, and the filmstrip applies `LibraryDiff`s row by row.
 @MainActor
@@ -94,6 +96,12 @@ public final class FolderLibrary {
     public internal(set) var isOpenFolderUnavailable = false
     /// Recently Trashed is the source shown, in place of a folder (LIB-26, `FolderLibrary+Trash`).
     public internal(set) var showsRecentlyTrashed = false
+    /// The Library panel's entry or the collection shown in place of a folder, from the library's list of its
+    /// photos (LIB-23, `FolderLibrary+Collections`).
+    public internal(set) var shownSource: LibrarySource?
+    /// Keeps the view of the entry or collection shown as another opening replaces it, while its photos are
+    /// still the ones shown.
+    @ObservationIgnored var leavingSource: (@MainActor (LibrarySource) -> Void)?
     /// How many photos Recently Trashed holds; nil until the library has looked, and with it off.
     public internal(set) var trashedCount: Int?
     /// The number of photos shown.
@@ -160,6 +168,7 @@ public final class FolderLibrary {
 
     isolated deinit {
         fromLibrary.list?.close()
+        fromLibrary.sourceList?.close()
         trash.following?.cancel()
         if let activation = trash.activation {
             NotificationCenter.default.removeObserver(activation)
@@ -187,6 +196,7 @@ public final class FolderLibrary {
             return madeList
         }
         let source = openFolder.map { PhotoSource.folder($0, includingSubfolders: includesSubfolders) }
+            ?? fromLibrary.sourcePhotos
         let list = PhotoList(source: source ?? .allPhotographs, ids: photoIDs)
         madeList = list
         return list
@@ -224,6 +234,10 @@ public final class FolderLibrary {
     /// photos, then calls `opened` with them once the first ones are in (once, unless another
     /// folder opens first). `nil` closes the open folder.
     public func open(_ folder: URL?, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in }) {
+        if let shownSource {
+            leavingSource?(shownSource)
+            self.shownSource = nil
+        }
         generation += 1
         let generation = generation
         scheduler.cancel(prefix: probeKeyPrefix(generation - 1))

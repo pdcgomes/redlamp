@@ -480,8 +480,8 @@
             "The Metadata panel shows the photos selected's IPTC Core fields, mixed where they differ; a field typed "
                 + "reaches every photo as one change kept in their sidecars, with Undo; a preset made in Metadata "
                 + "Presets… gives its ticked fields, appending or replacing; a code typed in Code Replacements… "
-                + "expands in a field",
-            claims: [.feature("library.metadata")],
+                + "expands in a field; the panels follow the selection in a collection as in a folder",
+            claims: [.feature("library.metadata"), .feature("library.collections")],
         ) { app in
             try app.withPanels { names in
                 try app.selectFromKeyboard(1, of: names)
@@ -553,6 +553,37 @@
                     _ = await $0.libraryPanels.saveCodeReplacements(codes)
                 }
                 app.covered(.feature("library.metadata"), via: .key)
+            }
+
+            // A collection's photos selected from the keyboard: a title typed reaches both, and ⌘Z takes it back.
+            try app.withCollection(of: ["A.jpg", "B.jpg", "C.jpg"]) { scratch, _ in
+                try app.main { model in
+                    model.rightPanelVisible = true
+                    if !model.libraryPanels.isExpanded(.metadata) {
+                        model.libraryPanels.toggle(.metadata)
+                    }
+                }
+                // The column slides in.
+                app.pause(0.6)
+                try app.selectFromKeyboard(2, of: scratch.names)
+                try app.wait("the panels on the collection's two photos") { model in
+                    model.libraryPanels.selection.isAvailable && model.libraryPanels.selection.ids.count == 2
+                }
+                let selected = try app.main { $0.selectedPhotos.map(\.lastPathComponent) }
+                try app.typeInField("metadata.title", "E2E Collection")
+                try app.wait("the title on both") { model in
+                    model.libraryPanels.selection.fields[.title] == .same("E2E Collection")
+                }
+                try app.waitForPanels()
+                for name in selected {
+                    try app.expect(try app.sidecarMetadata(name)?.title == "E2E Collection", "\(name) kept the title")
+                }
+                try app.press(.undo)
+                try app.waitForPanels()
+                for name in selected {
+                    try app.expect(try app.sidecarMetadata(name)?.title == nil, "⌘Z took \(name)'s title back")
+                }
+                app.covered([.feature("library.metadata"), .feature("library.collections")], via: .key)
             }
         }
 

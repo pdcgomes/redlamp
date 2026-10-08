@@ -147,8 +147,9 @@
         }
     }
 
-    /// A folder of small JPEGs of the run's own on the external disk's scratch folder, each its own colour, and
-    /// empty files written ten minutes ago, added to Folders; taken out of Folders and removed afterwards.
+    /// A folder of small JPEGs of the run's own on the external disk's scratch folder, each its own colour (a
+    /// name with a slash in a subfolder), and empty files written ten minutes ago, added to Folders; taken out of
+    /// Folders and removed afterwards.
     struct SourcesScratch: Sendable {
         let folder: URL
         let names: [String]
@@ -159,6 +160,9 @@
             names = photos
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             for (number, name) in photos.enumerated() {
+                try FileManager.default.createDirectory(
+                    at: photo(name).deletingLastPathComponent(), withIntermediateDirectories: true,
+                )
                 try Self.jpeg(number: number).write(to: photo(name))
             }
             let earlier = Date().addingTimeInterval(-600)

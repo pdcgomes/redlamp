@@ -310,12 +310,49 @@
             pause(0.1)
         }
 
+        /// Runs `body` on a collection of a scratch folder's photos, `names`, made as its set-up and shown by a
+        /// click on its row in the Collections panel, in Library's grid; then shows the run's photos folder again,
+        /// and removes the collection and the scratch, also when `body` fails.
+        func withCollection(of names: [String], _ body: (SourcesScratch, CollectionPath) throws -> Void) throws {
+            let scratch = try SourcesScratch(self, photos: names)
+            let photos = photos
+            defer {
+                removeCollectionsMade()
+                scratch.remove(self)
+                try? main { model in
+                    model.showFolder(photos)
+                    model.showModule(.develop)
+                }
+                try? wait("the photos folder again", timeout: 20) { $0.folder == photos && !$0.library.isListing }
+            }
+            try scratch.index(self)
+            let name = "Views \(scratch.folder.lastPathComponent.suffix(8))"
+            guard let path = CollectionPath(name) else { throw ScenarioFailure("No collection path for \(name)") }
+            try main { model in
+                model.selectAllPhotos()
+                model.librarySources.create(.collection, named: name, adding: true)
+            }
+            let label = "\(name), \(names.count) photos"
+            try waitForRow("collections.\(name)", label, "the collection with the scratch's photos")
+            try clickSourceRow("collections.\(name)")
+            try waitForSource("the collection shown", timeout: 20) { model in
+                model.librarySources.shown == .collection(path) && !model.librarySources.isListing
+                    && model.items.count == names.count && model.library.isShownFromLibrary
+            }
+            try main { $0.showLibrary(.grid) }
+            try wait("its grid's cells") { _ in
+                Views.editorWindow.flatMap { Views.find("grid.\(scratch.photo(names[0]).lastPathComponent)", in: $0) }
+                    != nil
+            }
+            try body(scratch, path)
+        }
+
         /// Deletes every collection and set the scenarios made, which their names end with the scratch's tag.
         func removeCollectionsMade() {
             try? main { model in
                 let sources = model.librarySources
                 for place in sources.collections(inside: nil)
-                    where ["Clients ", "Portfolio ", "Best ", "Picks ", "Picked "]
+                    where ["Clients ", "Portfolio ", "Best ", "Picks ", "Picked ", "Views "]
                     .contains(where: place.path.name.hasPrefix) {
                     sources.delete(place.path)
                 }

@@ -221,12 +221,13 @@
         static let sources = Scenario(
             "library.filter-sources",
             "Each source keeps its filter and sort, the lock keeps one filter across sources, sorts order the grid "
-                + "both ways, and saved filters come back",
+                + "both ways, and saved filters come back; a collection is filtered and counted as a folder is",
             claims: [
                 .action(.lockFilters),
                 .action(.sortByFileSize),
                 .action(.reverseSort),
                 .feature("library.filter"),
+                .feature("library.collections"),
             ],
         ) { app in
             try app.withFilterBar { names in
@@ -280,6 +281,34 @@
                     }
                 }
                 app.covered([.feature("library.filter"), .action(.lockFilters), .action(.sortByFileSize)], via: .menu)
+            }
+
+            // A collection: the bar's text narrows it and counts its photos, and it keeps its filter.
+            defer { try? app.resetFilter() }
+            try app.withCollection(of: ["A.jpg", "B.jpg", "C.jpg"]) { scratch, path in
+                try app.press(.toggleFilterBar)
+                try app.wait("the filter bar's text to take the keyboard") { _ in
+                    (Views.editorWindow?.firstResponder as? NSTextView)?.delegate is NSTextField
+                }
+                try app.typeQuery("name:b")
+                try app.wait("the collection's photo named B, of its three") { model in
+                    model.library.isFiltered && model.items.map(\.name) == ["B.jpg"]
+                        && model.libraryFilters?.listed.map { $0.shown == 1 && $0.total == 3 } == true
+                }
+                app.covered(.feature("library.filter"), via: .key)
+                try app.main { $0.showFolder(scratch.folder) }
+                try app.wait("the scratch folder, with a filter of its own") { model in
+                    model.folder == scratch.folder && !model.library.isListing && model.items.count == 3
+                        && model.libraryFilters?.filter.text.isEmpty == true
+                }
+                try app.clickSourceRow("collections.\(path.text)")
+                try app.waitForSource("the collection again, its filter kept", timeout: 20) { model in
+                    model.librarySources.shown == .collection(path) && model.items.map(\.name) == ["B.jpg"]
+                        && model.libraryFilters?.filter.text == "name:b"
+                }
+                app.covered(.feature("library.collections"), via: .mouse)
+                try app.main { $0.libraryFilters?.setFilter(LibraryFilter()) }
+                try app.wait("the collection's three photos") { $0.items.count == 3 && !$0.library.isFiltered }
             }
         }
 

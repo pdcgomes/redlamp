@@ -396,8 +396,10 @@ struct LibraryFilterTests {
 
         filters.setText("camera:X-T5 rating:4 x")
         #expect(filters.removal == nil, "a change to the filter takes the offer back at once")
+        try await eventually { button.isHidden }
         try await filtered(model, "camera:X-T5 rating:4")
-        try await eventually { filters.removal != nil }
+        // The bar follows the offer a turn after the filter has it.
+        try await eventually { filters.removal != nil && !button.isHidden }
         try click("library.filter.removal", in: window)
         try await listed(model)
         #expect(filters.filter.text == "camera:X-T5" && Set(names(model)) == ["IMG_0001.JPG", "IMG_0002.JPG"])

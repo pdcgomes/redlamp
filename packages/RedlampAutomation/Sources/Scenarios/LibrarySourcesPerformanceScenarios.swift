@@ -7,15 +7,18 @@
     /// The left panel's Library and Collections sections on a copy of lib-1m's index (LIB-23): their counts while
     /// they change, which the budget wants under 8.3 ms at p99 on the main thread, and a collection of 10,000 photos
     /// and Rejected shown within the budgets of a source opened (`--library-perf`'s): every photo in the filmstrip
-    /// within 300 ms, and the main thread's p99 under 8.3 ms meanwhile. The collection, its sets and a smart
-    /// collection are written into the copy's index and definitions; no photo or sidecar of the fixture is touched.
-    /// Skipped where the fixture or its index isn't.
+    /// within 300 ms, and the main thread's p99 under 8.3 ms meanwhile. Then the collection as a library view, timed
+    /// as folders are: the panels following its selection within 16 ms, Group By and the Tighter–Looser setting
+    /// changed with the main thread's p99 under 8.3 ms, and typing in the filter bar, noted. The collection, its sets
+    /// and a smart collection are written into the copy's index and definitions; no photo or sidecar of the fixture
+    /// is touched. Skipped where the fixture or its index isn't.
     enum LibrarySourcesPerformanceScenarios {
         static let all: [Scenario] = [sources]
 
         static let sources = Scenario(
             "performance.library-sources",
-            "The Library and Collections panels counting lib-1m while counts change, and a collection and Rejected shown",
+            "The Library and Collections panels counting lib-1m while counts change, a collection and Rejected shown, "
+                + "and the panels, Group By and the filter bar on the collection",
             tiers: [.performance], claims: [],
         ) { app in
             let fixture = URL(
@@ -133,11 +136,66 @@
                         + "\(summary.map { String(format: "%.2f", $0.p99) } ?? "-") ms"
                 }.joined(separator: "; "),
             ])
+
+            try views(app, made, selects)
+
             try app.expect(summary.p99 < 8.3, "The main thread's p99 was \(summary.p99) ms while the counts changed")
             for (name, milliseconds, summary) in shown {
                 try app.expect(milliseconds < 300, "\(name)'s photos took \(milliseconds) ms")
                 try app.expect((summary?.p99 ?? 0) < 8.3, "\(name)'s main thread p99 was \(summary?.p99 ?? 0) ms")
             }
+            let panels = try app.main { _ in (made.measured["panels"] ?? []).dropFirst().max() ?? .infinity }
+            try app.expect(panels < 16, "The collection's selection reached the panels in up to \(panels) ms")
+            let grouping = try app.main { _ in made.turns["grouping"]?.p99 ?? .infinity }
+            try app.expect(grouping < 8.3, "Group By on the collection: the main thread's p99 was \(grouping) ms")
+        }
+
+        /// The collection as a library view: the panels following its selection, Group By and the filter bar on it,
+        /// timed as they're timed on folders, and noted.
+        private static func views(_ app: RunningApp, _ made: SourcesBenchBox, _ selects: CollectionPath) throws {
+            try app.main { _ in _ = made.editor?.librarySources.show(.collection(selects)) }
+            try app.wait("the collection again", timeout: 60) { _ in
+                guard let editor = made.editor else { return false }
+                return !editor.librarySources.isListing && editor.items.count == 10000
+                    && editor.library.isShownFromLibrary
+            }
+            try app.run("the panels following the collection's selection", timeout: 300) { _ in
+                await made.measurePanels()
+            }
+            try app.main { _ in made.openModules() }
+            try app.run("Group By on the collection", timeout: 300) { _ in await made.measureGrouping() }
+            try app.run("typing in the filter bar on the collection", timeout: 900) { _ in await made.measureTyping() }
+            let (measured, turns) = try app.main { _ in (made.measured, made.turns) }
+            func sorted(_ name: String) -> [Double] {
+                (measured[name] ?? []).sorted()
+            }
+            func percentile(_ name: String, _ share: Double) -> Double {
+                let times = sorted(name)
+                return times.isEmpty ? .infinity : times[min(times.count - 1, Int(Double(times.count) * share))]
+            }
+            func described(_ name: String) -> String {
+                let times = sorted(name)
+                return String(
+                    format: "%d, p50 %.1f ms, p95 %.1f ms, max %.1f ms", times.count, percentile(name, 0.5),
+                    percentile(name, 0.95), times.last ?? 0,
+                )
+            }
+            func mainThread(_ name: String) -> String {
+                turns[name].map { String(format: "main thread p99 %.2f ms, max %.1f ms", $0.p99, $0.max) } ?? "-"
+            }
+            let panels: [Double] = Array((measured["panels"] ?? []).dropFirst())
+            app.record("e2e-collection-panels-max", panels.max() ?? .infinity)
+            app.record("e2e-collection-grouping-p95", percentile("grouping", 0.95))
+            app.record("e2e-collection-grouping-p99", turns["grouping"]?.p99 ?? .infinity)
+            app.record("e2e-collection-typing-p95", percentile("typing", 0.95))
+            app.record("e2e-collection-typing-p99", turns["typing"]?.p99 ?? .infinity)
+            var note = "10,000 photos: the panels following the selection \(described("panels")), the first "
+            note += String(format: "%.1f ms", measured["panels"]?.first ?? 0)
+            note += "; Group By and the setting on screen \(described("grouping")), \(mainThread("grouping")), "
+            note += String(format: "the first grouping %.0f ms", measured["grouping-first"]?.first ?? 0)
+            note += "; typing, a key's photos on screen \(described("typing")), \(mainThread("typing"))"
+            note += "; load \(ProcessInfo.processInfo.loadAverage)"
+            app.recorder.write("note", ["collection-views": note])
         }
     }
 
@@ -196,11 +254,179 @@
 
         func close() {
             window?.contentView = nil
+            modules?.orderOut(nil)
+            modules?.contentViewController = nil
             service?.close()
             window = nil
+            modules = nil
             editor = nil
             library = nil
             service = nil
+        }
+
+        // MARK: - The collection as a library view
+
+        private var modules: NSWindow?
+        /// What's measured on the collection, in milliseconds, by part, and the main thread over each part.
+        private(set) var measured: [String: [Double]] = [:]
+        private(set) var turns: [String: MainThreadMonitor.Summary] = [:]
+
+        /// The editor's own module views in a window of their own, behind the others, for what's timed on screen.
+        func openModules() {
+            guard let editor else { return }
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
+                styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false,
+            )
+            window.contentViewController = ModuleViews.make(model: editor, theme: ThemeSettings())
+            window.setContentSize(NSSize(width: 1600, height: 1000))
+            window.orderBack(nil)
+            modules = window
+            editor.showModule(.library)
+            editor.showLibrary(.grid)
+        }
+
+        /// Each selection change's time to reach the panels, every photo of the collection selected and then one by
+        /// turns, the panels in no window, as `performance.library-panels` times them on folders.
+        func measurePanels() async {
+            guard let editor else { return }
+            let panels = editor.libraryPanels
+            panels.follow()
+            var times: [Double] = []
+            for step in 0 ..< 12 {
+                await panels.refreshed()
+                let before = panels.followed.count
+                if step.isMultiple(of: 2) {
+                    editor.selectAllPhotos()
+                } else {
+                    editor.select(editor.items[step % 7 + 1].url)
+                }
+                let selected = editor.photoSelection.isEmpty ? 1 : editor.photoSelection.count
+                let started = ContinuousClock.now
+                while panels.followed.count <= before || panels.selection.count != selected,
+                      ContinuousClock.now - started < .seconds(20) {
+                    try? await Task.sleep(for: .milliseconds(1))
+                }
+                times.append(panels.followed.last.map(Self.milliseconds) ?? .infinity)
+            }
+            measured["panels"] = times
+        }
+
+        /// Group By and the Tighter–Looser setting changed on the collection, twice through: each change's time
+        /// until its groups are drawn and committed, and the main thread meanwhile, as `--library-perf` times them
+        /// on folders. The first grouping, which reads the photos' IDs, is timed apart.
+        func measureGrouping() async {
+            guard let editor, let window = modules else { return }
+            editor.select(editor.items[0].url)
+            try? await Task.sleep(for: .milliseconds(500))
+            let groups = editor.gridGroups
+            func grouped(by key: GroupKey, looseness: Int, since started: ContinuousClock.Instant) async -> Bool {
+                let setting = MomentSetting(looseness: looseness)
+                while groups.list.map({ $0.groups.key != key || $0.groups.setting != setting }) ?? true,
+                      ContinuousClock.now - started < .seconds(5) {
+                    try? await Task.sleep(for: .microseconds(250))
+                }
+                guard groups.list.map({ $0.groups.key == key && $0.groups.setting == setting }) == true else {
+                    return false
+                }
+                window.displayIfNeeded()
+                CATransaction.flush()
+                return true
+            }
+            var started = ContinuousClock.now
+            editor.setGroupKey(.moment)
+            if await grouped(by: .moment, looseness: 0, since: started) {
+                measured["grouping-first"] = [Self.milliseconds(ContinuousClock.now - started)]
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+            let monitor = MainThreadMonitor()
+            monitor.start()
+            let began = ContinuousClock.now
+            var onScreen: [Double] = []
+            for _ in 0 ..< 2 {
+                for key in [GroupKey.day, .camera, .folder, .lens, .orientation, .momentCamera, .moment] {
+                    started = .now
+                    editor.setGroupKey(key)
+                    if await grouped(by: key, looseness: 0, since: started) {
+                        onScreen.append(Self.milliseconds(ContinuousClock.now - started))
+                    }
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+                for looseness in [-1, -2, -1, 0, 1, 2, 1, 0] {
+                    started = .now
+                    editor.setLooseness(looseness)
+                    if await grouped(by: .moment, looseness: looseness, since: started) {
+                        onScreen.append(Self.milliseconds(ContinuousClock.now - started))
+                    }
+                    try? await Task.sleep(for: .milliseconds(150))
+                }
+            }
+            monitor.stop()
+            if let summary = monitor.summary(seconds: Self.seconds(ContinuousClock.now - began)) {
+                turns["grouping"] = summary
+            }
+            measured["grouping"] = onScreen
+            editor.setLooseness(0)
+            editor.setGroupKey(.ungrouped)
+        }
+
+        /// The fixture's queries typed in the filter bar a character at a time, a key every 60 ms, the metadata
+        /// columns shown: for each key that changes what the filter finds, its time until the photos it finds are
+        /// drawn and committed, and the main thread meanwhile, as `--library-perf` times them on folders.
+        func measureTyping() async {
+            guard let editor, let window = modules, let filters = editor.libraryFilters else { return }
+            filters.setFilter(LibraryFilter(sections: [.text, .metadata]))
+            filters.setBarShown(true)
+            try? await Task.sleep(for: .milliseconds(500))
+            /// Until the library has listed what `text` reads as, or a second.
+            func listed(_ text: String, since started: ContinuousClock.Instant) async -> Bool {
+                let query = (try? LibraryQuery(parsing: text, asYouType: true)).map { $0 == .all ? nil : $0 }
+                guard let query else { return false }
+                while filters.lastListed?.query != query, ContinuousClock.now - started < .seconds(1) {
+                    try? await Task.sleep(for: .microseconds(250))
+                }
+                return filters.lastListed?.query == query
+            }
+            let monitor = MainThreadMonitor()
+            monitor.start()
+            let began = ContinuousClock.now
+            var onScreen: [Double] = []
+            for query in FixtureQuery.corpus {
+                LibraryFilterBars.clear(in: window)
+                _ = await listed("", since: .now)
+                var typed = ""
+                for character in query.text {
+                    let before = (try? LibraryQuery(parsing: typed, asYouType: true)) ?? .all
+                    typed.append(character)
+                    let started = ContinuousClock.now
+                    guard LibraryFilterBars.type(String(character), in: window) else { break }
+                    if let after = try? LibraryQuery(parsing: typed, asYouType: true), after != before,
+                       await listed(typed, since: started) {
+                        window.displayIfNeeded()
+                        CATransaction.flush()
+                        onScreen.append(Self.milliseconds(ContinuousClock.now - started))
+                    }
+                    let wait = started + .milliseconds(60) - ContinuousClock.now
+                    if wait > .zero {
+                        try? await Task.sleep(for: wait)
+                    }
+                }
+            }
+            monitor.stop()
+            if let summary = monitor.summary(seconds: Self.seconds(ContinuousClock.now - began)) {
+                turns["typing"] = summary
+            }
+            measured["typing"] = onScreen
+            filters.setFilter(LibraryFilter())
+            filters.setBarShown(false)
+        }
+
+        private nonisolated static func milliseconds(_ duration: Duration) -> Double {
+            Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15
+        }
+
+        private nonisolated static func seconds(_ duration: Duration) -> Double {
+            milliseconds(duration) / 1000
         }
     }
 #endif

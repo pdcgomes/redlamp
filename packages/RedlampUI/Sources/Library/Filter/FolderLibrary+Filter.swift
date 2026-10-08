@@ -4,11 +4,13 @@ import RedlampLibrary
 /// The open folder filtered and sorted (LIB-18): the library's list of the photos the filter finds, in
 /// the sort's order, takes the place of the folder's photos. Each photo that stays keeps its ID, so
 /// the selection keeps the photos that remain, and a change that keeps the photos' order reaches the
-/// filmstrip and the grid row by row.
+/// filmstrip and the grid row by row. The Library panel's entries and the collections are filtered the
+/// same way, by their own lists (`FolderLibrary+Collections`).
 public extension FolderLibrary {
-    /// Whether the photos shown are filtered or sorted, rather than the folder's as Folders lists them.
+    /// Whether the photos shown are filtered or sorted, rather than the source's as it lists them: a
+    /// folder's as Folders does, an entry's or a collection's in capture order.
     var isFiltered: Bool {
-        fromLibrary.list.map { !$0.filter.isEmpty } ?? false
+        (fromLibrary.list?.filter ?? fromLibrary.sourceList?.filter).map { !$0.isEmpty } ?? false
     }
 
     /// The filter bar of the library the folders are shown from.
@@ -51,6 +53,8 @@ extension FolderLibrary {
             opened(items)
             refreshStacks()
         }
-        filters?.listed(ordered)
+        filters?.listed(LibraryListing(
+            shown: ordered.items.count, total: ordered.total, filter: ordered.filter, took: ordered.took,
+        ))
     }
 }

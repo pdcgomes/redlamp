@@ -179,9 +179,9 @@
         static let groupBy = Scenario(
             "library.group-by",
             "Group By from the View menu, the grid's toolbar and the palette groups the grid by each key, each group "
-                + "a header with its name, photos and picks; each source keeps its grouping",
+                + "a header with its name, photos and picks; each source keeps its grouping, a collection as a folder",
             claims: ShortcutAction.allCases.filter { $0.groupKey != nil }.map(Claim.action)
-                + [.feature("library.grid"), .feature("library.subfolders")],
+                + [.feature("library.grid"), .feature("library.subfolders"), .feature("library.collections")],
         ) { app in
             try app.showGroups(by: .ungrouped)
             for action in ShortcutAction.allCases where action.groupKey != nil && action != .groupByNone {
@@ -225,6 +225,29 @@
             try app.choose(.groupByNone)
             try app.wait("ungrouped") { $0.gridGroups.list == nil }
             try app.backToDevelop()
+
+            // A collection is grouped as a folder is, and keeps a grouping of its own.
+            try app.withCollection(of: ["A.jpg", "B.jpg", "Inner/C.jpg"]) { scratch, path in
+                try app.wait("the collection shown from the library") { $0.canGroupPhotos }
+                try app.choose(.groupByFolder)
+                try app.wait("the collection by folder: the scratch's and its subfolder's") { model in
+                    model.gridGroups.list.map { list in
+                        list.groups.key == .folder && list.groups.count == 2 && list.groups.photos.count == 3
+                    } == true
+                }
+                try app.wait("a header on screen") { _ in !GroupScenarios.headersOnScreen().isEmpty }
+                try app.main { $0.showFolder(scratch.folder) }
+                try app.wait("the scratch folder ungrouped, as it was left") { model in
+                    model.folder == scratch.folder && !model.library.isListing && model.gridGroups.list == nil
+                }
+                try app.clickSourceRow("collections.\(path.text)")
+                try app.wait("the collection by folder again", timeout: 20) { model in
+                    model.librarySources.shown == .collection(path) && model.gridGroups.list?.groups.key == .folder
+                }
+                app.covered(.feature("library.collections"), via: .mouse)
+                try app.choose(.groupByNone)
+                try app.wait("ungrouped") { $0.gridGroups.list == nil }
+            }
         }
 
         static let openAndClose = Scenario(

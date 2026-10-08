@@ -26,6 +26,10 @@ struct FromLibrary {
     var keys: [URL: ContentKey] = [:]
     /// The opening whose list didn't deliver within `libraryPatience`: it stays listed here.
     var gaveUp: Int?
+    /// The photos of the Library panel's entry or collection shown, as the query engine knows them, and their
+    /// list, which `LibrarySources` keeps (`FolderLibrary+Collections`).
+    var sourcePhotos: PhotoSource?
+    weak var sourceList: LibrarySourceList?
 }
 
 /// What `FolderLibrary` keeps for counting the folder tree from the library.
@@ -55,9 +59,10 @@ public extension FolderLibrary {
         service.start(following: roots.map(\.url))
     }
 
-    /// Whether the open folder is shown from the library.
+    /// Whether the photos shown are the library's: the open folder's from its photo list, or those of the Library
+    /// panel's entry or the collection shown.
     var isShownFromLibrary: Bool {
-        fromLibrary.list != nil
+        fromLibrary.list != nil || shownSource != nil
     }
 
     /// What the library's search waits for while it opens, for the filter bar and the palette to say
@@ -128,6 +133,7 @@ extension FolderLibrary {
 
     func closeLibraryList() {
         fromLibrary.list?.close()
+        fromLibrary.sourceList?.close()
         fromLibrary = FromLibrary(gaveUp: fromLibrary.gaveUp)
     }
 

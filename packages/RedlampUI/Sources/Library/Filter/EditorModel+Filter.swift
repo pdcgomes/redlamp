@@ -27,9 +27,14 @@ public extension EditorModel {
         select(kept ?? items[min(selectionIndex ?? 0, items.count - 1)].url, keepingSelection: kept != nil)
     }
 
-    /// The source shown, in the bar.
+    /// The source shown, in the bar: the open folder, or the Library panel's entry or the collection shown.
     func followSource() {
-        libraryFilters?.follow(folder, includingSubfolders: library.includesSubfolders)
+        guard let filters = libraryFilters else { return }
+        if let shown = library.shownSource, let photos = library.shownSourcePhotos {
+            filters.follow(shown, photos: photos)
+        } else {
+            filters.follow(folder, includingSubfolders: library.includesSubfolders)
+        }
     }
 
     func sort(by field: LibrarySortField) {
@@ -62,6 +67,11 @@ public extension ShortcutAction {
 }
 
 extension EditorModel {
+    /// Whether a source is shown that the bar filters: a folder, or the Library panel's entry or a collection.
+    var hasFilterSource: Bool {
+        folder != nil || library.shownSource != nil
+    }
+
     /// The filter bar's actions; nil for every other.
     func performFilterShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
@@ -69,7 +79,7 @@ extension EditorModel {
         default:
             guard action.sortField != nil else { return nil }
         }
-        guard let filters = libraryFilters, folder != nil else { return false }
+        guard let filters = libraryFilters, hasFilterSource else { return false }
         followSource()
         switch action {
         case .toggleFilterBar: toggleFilterBar()
@@ -91,6 +101,6 @@ extension EditorModel {
         default:
             guard action.sortField != nil else { return nil }
         }
-        return libraryFilters != nil && folder != nil
+        return libraryFilters != nil && hasFilterSource
     }
 }

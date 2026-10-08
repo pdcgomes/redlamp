@@ -124,7 +124,7 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
-                _ = (model.folder, model.library.includesSubfolders)
+                _ = (model.folder, model.library.includesSubfolders, model.library.shownSource)
                 model.followSource()
             },
             Tracker { [weak self] in self?.update() },
@@ -166,7 +166,7 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         let shown = model.library.isFiltered ? model.library.count : total
         set(
             count,
-            model.folder == nil ? "" : shown == total
+            !model.hasFilterSource ? "" : shown == total
                 ? "\(total.formatted()) photos" : "\(shown.formatted()) of \(total.formatted()) photos",
         )
         set(note, model.libraryFilterNote)
