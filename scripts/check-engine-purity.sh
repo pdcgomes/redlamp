@@ -25,6 +25,7 @@ ENGINE_PACKAGES=(
     RedlampMasking
     RedlampEngine
     RedlampGenerative
+    RedlampBench
 )
 UI_PACKAGES=(
     RedlampCanvas

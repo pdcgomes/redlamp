@@ -15,6 +15,9 @@ public enum Module: String, CaseIterable {
     case recipes = "RedlampRecipes"
     case masking = "RedlampMasking"
     case generative = "RedlampGenerative"
+    /// Bench tasks (ARC-11): the folder format, pairing results with their references, the store,
+    /// and the hub the iPhone app talks to. The harness and the iPhone app link it; the app doesn't.
+    case bench = "RedlampBench"
     case engine = "RedlampEngine"
     case canvas = "RedlampCanvas"
     case design = "RedlampDesign"
@@ -41,7 +44,7 @@ public enum Module: String, CaseIterable {
     /// Whether the module belongs to the platform-neutral engine side of the boundary.
     public var isEngineLayer: Bool {
         switch self {
-        case .engineAPI, .kernels, .color, .services, .document, .recipes, .masking, .generative, .engine: true
+        case .engineAPI, .kernels, .color, .services, .document, .recipes, .masking, .generative, .bench, .engine: true
         case .canvas, .design, .ui, .lab, .automation: false
         }
     }
@@ -77,11 +80,13 @@ public enum Module: String, CaseIterable {
         case .masking: [.engineAPI, .color]
         // Generative models on MLX (generative fill, RM-10), kept apart so nothing else links MLX.
         case .generative: [.engineAPI]
+        // Pairing reads the capture kit's barcodes and matches photos with Recipes' analysis.
+        case .bench: [.engineAPI, .recipes]
         case .engine: [.engineAPI, .kernels, .color, .services, .masking]
         case .canvas: [.engineAPI]
         case .design: [.engineAPI]
         case .ui: [.engineAPI, .canvas, .design, .document, .recipes]
-        case .lab: [.engineAPI, .design, .recipes, .ui]
+        case .lab: [.engineAPI, .design, .recipes, .ui, .bench]
         case .automation: [.engineAPI, .canvas, .design, .document, .recipes, .ui]
         }
     }

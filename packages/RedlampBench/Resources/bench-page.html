@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redlamp Bench</title>
+<style>
+  :root { color-scheme: light dark; font: 15px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; }
+  body { max-width: 640px; margin: 32px auto; padding: 0 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 8px; }
+  p, li { color: CanvasText; }
+  .muted { opacity: 0.65; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent); }
+  input, button { font: inherit; padding: 6px 10px; }
+  .error { color: #c0392b; }
+  [hidden] { display: none; }
+</style>
+</head>
+<body>
+<h1 id="hub">Redlamp Bench</h1>
+<p class="muted">The Recipe Lab's hub. The iPhone app pulls tasks from here and sends them back when they're complete.</p>
+
+<form id="pair" hidden>
+  <h2>Pair this browser</h2>
+  <p>Enter the code the Recipe Lab's Bench tab shows.</p>
+  <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" required>
+  <button type="submit">Pair</button>
+  <p id="pair-error" class="error"></p>
+</form>
+
+<section id="main" hidden>
+  <h2>Waiting for the phone</h2>
+  <ul id="tasks"></ul>
+  <h2>Back in the Lab</h2>
+  <ul id="done"></ul>
+  <h2>Send a task back</h2>
+  <p>A <code>.redtask</code> file saved from the iPhone app.</p>
+  <input id="file" type="file" accept=".redtask,application/zip">
+  <p id="upload-status" class="muted"></p>
+</section>
+
+<script>
+const token = () => localStorage.getItem("bench-token");
+const api = async (path, options = {}) => {
+  const headers = Object.assign({}, options.headers, token() ? { Authorization: `Bearer ${token()}` } : {});
+  const response = await fetch(path, Object.assign({}, options, { headers }));
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || response.statusText);
+  return body;
+};
+const item = (title, detail) => {
+  const li = document.createElement("li");
+  li.textContent = title;
+  const small = document.createElement("div");
+  small.className = "muted";
+  small.textContent = detail;
+  li.append(small);
+  return li;
+};
+async function refresh() {
+  const info = await api("/api/hub");
+  document.getElementById("hub").textContent = info.name;
+  document.getElementById("pair").hidden = info.paired;
+  document.getElementById("main").hidden = !info.paired;
+  if (!info.paired) return;
+  const tasks = await api("/api/tasks");
+  const list = document.getElementById("tasks");
+  list.replaceChildren(...tasks.filter(t => !t.template && !t.withdrawn)
+    .map(t => item(t.title, `${t.kind}, ${t.files.length - 1} file(s)`)));
+  if (!list.children.length) list.append(item("Nothing waiting", ""));
+  const done = await api("/api/done");
+  const doneList = document.getElementById("done");
+  doneList.replaceChildren(...done.map(d => item(d.title, `${d.summary}${d.complete ? "" : " (not complete)"}`)));
+  if (!doneList.children.length) doneList.append(item("Nothing yet", ""));
+}
+document.getElementById("pair").addEventListener("submit", async event => {
+  event.preventDefault();
+  try {
+    const reply = await api("/api/pair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: document.getElementById("code").value, device: `Browser (${navigator.platform})` }),
+    });
+    localStorage.setItem("bench-token", reply.token);
+    document.getElementById("pair-error").textContent = "";
+    refresh();
+  } catch (error) {
+    document.getElementById("pair-error").textContent = error.message;
+  }
+});
+document.getElementById("file").addEventListener("change", async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const status = document.getElementById("upload-status");
+  status.textContent = `Sending ${file.name}…`;
+  try {
+    const receipt = await api("/api/inbox", { method: "POST", headers: { "Content-Type": "application/zip" }, body: file });
+    status.textContent = `${receipt.title}: ${receipt.summary}`;
+    refresh();
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+refresh().catch(error => { document.getElementById("hub").textContent = `Redlamp Bench: ${error.message}`; });
+setInterval(() => refresh().catch(() => {}), 10000);
+</script>
+</body>
+</html>
