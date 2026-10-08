@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import ImageIO
 import RedlampDocument
 import RedlampEngineAPI
@@ -19,6 +19,7 @@ struct ExportTests {
     }
 
     private func openEditor() async throws -> Fixture {
+        _ = NSApplication.shared
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let engine = StubEngine()
