@@ -212,7 +212,9 @@ struct ExportTests {
         // Not an export, as the reader reads it, so the export takes the next number.
         try Data("photo".utf8).write(to: folder.appending(path: "IMG_0001-redlamp.jpg"))
         let store = ExportPresetStore(defaults: defaults())
-        store.recordExport(ExportSettings(), presetID: nil)
+        var settings = ExportSettings()
+        settings.revealInFinder = false
+        store.recordExport(settings, presetID: nil)
 
         ExportActions.exportWithPrevious(model: model, store: store)
 
