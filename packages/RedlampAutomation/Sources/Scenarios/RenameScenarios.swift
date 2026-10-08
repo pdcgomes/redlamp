@@ -34,7 +34,7 @@
             try app.waitForSheet("Rename Photos")
             try app.wait("the photos read and named", timeout: 30) { $0.renameSheetNames != nil }
             try app.selectSheetField()
-            try app.typeInSheet("Trip-")
+            try app.typeInAttachedSheet("Trip-")
             try app.chooseToken("{sequence:4:folder}")
             let renamed = scratch.names.map { name in
                 let stem = name.hasPrefix("IMG_0001") ? "0001" : String(name.dropFirst(4).prefix(4))
@@ -128,7 +128,7 @@
                 for end in template.indices {
                     let typed = String(template[...end])
                     let started = Date()
-                    try app.typeInSheet(String(template[end]))
+                    try app.typeInAttachedSheet(String(template[end]))
                     try app.wait("the names to follow \(typed)", timeout: 10) { model in
                         model.renameSheetTemplate == typed && model.renameSheetFollows
                     }
@@ -148,7 +148,7 @@
             try app.waitForSheet("Rename Photos")
             try app.wait("1,000 photos read and named", timeout: 120) { $0.renameSheetFollows }
             try app.selectSheetField()
-            try app.typeInSheet("Trip-")
+            try app.typeInAttachedSheet("Trip-")
             try app.chooseToken("{sequence:4:folder}")
             try app.wait("the names to follow the template", timeout: 30) { model in
                 model.renameSheetTemplate == "Trip-{sequence:4:folder}" && model.renameSheetFollows
@@ -500,7 +500,7 @@
 
         /// Types `text` in the sheet, a key at a time, through the sheet's window; a character this keyboard
         /// layout types with other keys goes in as the text system puts it in.
-        func typeInSheet(_ text: String) throws {
+        func typeInAttachedSheet(_ text: String) throws {
             for character in text {
                 try main { _ in
                     guard let sheet = Views.editorWindow?.attachedSheet else { throw ScenarioFailure("No sheet is up") }
