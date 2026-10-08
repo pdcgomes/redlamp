@@ -181,6 +181,30 @@ struct CollectionsPanelTests {
         #expect(sources.count(of: .marked) == 1 && model.items.last?.metadata.mark == true)
     }
 
+    @Test func `a smart collection given another query counts and shows the photos the new one finds`() async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["Shoot/A.JPG", "Shoot/B.JPG"])
+        let model = try await sandbox.open()
+        let sources = model.librarySources
+        let (a, b) = (sandbox.photo("Shoot/A.JPG"), sandbox.photo("Shoot/B.JPG"))
+        model.showFolder(sandbox.folder("Shoot"))
+        try await sandbox.eventually { model.items.count == 2 }
+        try await sandbox.cull(.flagPick, [a, b])
+        try await sandbox.cull(.rating3, [a])
+        let picked = try path("Picked")
+        #expect(sources.saveSmart("flag:pick", named: "Picked", inside: nil))
+        try await made(sandbox) { $0.count(of: .collection(picked)) == 2 }
+        #expect(sources.count(of: .collection(picked)) == 2)
+
+        #expect(sources.saveSmart("flag:pick rating>=3", named: "Picked", inside: nil, editing: picked))
+        try await made(sandbox) { $0.count(of: .collection(picked)) == 1 }
+        #expect(sources.count(of: .collection(picked)) == 1, "its count follows its query")
+        #expect(sources.show(.collection(picked)))
+        try await sandbox.eventually { !sources.isListing && model.items.count == 1 }
+        #expect(model.items.map(\.url) == [a], "its photos follow its query")
+    }
+
     @Test func `⌘N makes a collection in Library and a snapshot in Develop, and ⌫ takes photos out only in Library`() {
         #expect(ShortcutAction.resolve(.char("n", command: true), in: .library)?.action == .newCollection)
         #expect(ShortcutAction.resolve(.char("n", command: true), in: .develop)?.action == .newSnapshot)
