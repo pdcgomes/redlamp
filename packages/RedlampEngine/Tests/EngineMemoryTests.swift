@@ -451,13 +451,9 @@ struct EngineMemoryTests {
             try round(index)
         }
         let switches = stage.allocated.count - before
-        withKnownIssue("PIPE-15: each switch of photo resets the scratch") {
-            #expect(switches == 0, "six rounds of switches made \(switches) textures")
-        }
+        #expect(switches == 0, "six rounds of switches made \(switches) textures")
         stage.keepOnly(nil)
-        withKnownIssue("PIPE-15: closing the photo keeps the scratch") {
-            #expect(stage.heldTextures.isEmpty, "\(stage.heldTextures.count) textures held after closing")
-        }
+        #expect(stage.heldTextures.isEmpty, "\(stage.heldTextures.count) textures held after closing")
     }
 
     // MARK: - Tiles

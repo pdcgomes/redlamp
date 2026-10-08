@@ -368,9 +368,10 @@ final class DetailStage {
     let pool: WorkTexturePool
     /// Process 11's Clarity base per photo, in the ladder's luminance, made when first needed.
     var clarityBases: [(owner: ImageSession, texture: any MTLTexture)] = []
-    /// Each format's working textures by slot, allocated as passes first use them, for one photo.
+    /// Each format's working textures by slot, allocated as passes first use them and grown as
+    /// areas need. They follow the photo the editor shows: an export of another photo uses them as
+    /// they are, so switching between the two doesn't make them again.
     private var scratch: [MTLPixelFormat: [Int: any MTLTexture]] = [:]
-    private var scratchPhoto: PhotoKey?
     /// While tiles are encoded, the largest one's size: every scratch texture is made that size.
     private var scratchFloor: SIMD2<Int>?
     /// The texels a scratch texture may grow to in the render being encoded.
@@ -432,8 +433,8 @@ final class DetailStage {
 
     /// Lets go of what the stage keeps for photos other than `session`'s (for every photo when nil),
     /// and of their sessions: cached outputs, sharpening's analyses, ladders and kept sources, and
-    /// Clarity bases, and of the work textures kept to be written over. Renders that cache call it
-    /// when they move to another photo.
+    /// Clarity bases, and of the work textures kept to be written over and the scratch textures,
+    /// sized for the photo before. Renders that cache call it when they move to another photo.
     func keepOnly(_ session: ImageSession?) {
         let photo = session.map { PhotoKey(url: $0.info.url, size: $0.info.pixelSize) }
         let other = { (owner: ImageSession) in PhotoKey(url: owner.info.url, size: owner.info.pixelSize) != photo }
@@ -443,6 +444,8 @@ final class DetailStage {
         clarityBases.removeAll { other($0.owner) }
         pool.removeAll()
         encoding?.taken.removeAll()
+        scratch.removeAll()
+        layout = nil
         cachedPhoto = photo
     }
 
@@ -563,12 +566,6 @@ final class DetailStage {
                 entries.append(entry)
                 return entry.output
             }
-        }
-        let photo = PhotoKey(url: session.info.url, size: session.info.pixelSize)
-        if photo != scratchPhoto {
-            scratch.removeAll()
-            layout = nil
-            scratchPhoto = photo
         }
 
         let texture = try workTexture(.rgba16Float, work)
