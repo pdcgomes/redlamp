@@ -59,7 +59,7 @@
             try app.wait("the folder's row in the Folders panel") { _ in
                 Views.editorWindow.flatMap { Views.find(row, in: $0) } != nil
             }
-            try app.rightClick(.identifier(row), choosing: "Remove from Folders")
+            try app.rightClickFolderRow(row, choosing: "Remove from Folders")
             try app.waitForSource("All Photographs without the folder's photos", timeout: 30) { model in
                 model.librarySources.shown == .allPhotographs
                     && Set(model.items.map(\.name)).isDisjoint(with: Set(names))
@@ -399,6 +399,38 @@
     }
 
     extension RunningApp {
+        /// Right-clicks the Folders panel's row carrying `identifier`, as the mouse does, and chooses `title` in the
+        /// menu that opens as a click on the item does: the menu closes, then the item's action is sent.
+        /// `rightClick(_:choosing:)` performs the item while the menu still tracks, which an item taking away the
+        /// row the menu belongs to holds up.
+        func rightClickFolderRow(_ identifier: String, choosing title: String) throws {
+            let items = try rightClick(.identifier(identifier))
+            try expect(
+                items.contains { $0.title == title },
+                "\(identifier)'s menu has no \(title): \(items.map(\.title))",
+            )
+            try main { _ in
+                guard let window = Views.editorWindow, let root = window.contentView?.superview,
+                      let cell = Views.all(NSView.self, in: root).first(where: {
+                          $0.accessibilityIdentifier() == identifier && !$0.isHiddenOrHasHiddenAncestor
+                      })
+                else { throw ScenarioFailure("\(identifier) isn't on screen") }
+                var outline = cell.superview
+                while let view = outline, !(view is NSOutlineView) {
+                    outline = view.superview
+                }
+                let location = cell.convert(NSPoint(x: cell.bounds.midX, y: cell.bounds.midY), to: nil)
+                guard let outline, let press = NSEvent.mouseEvent(
+                    with: .rightMouseDown, location: location, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+                ), let item = outline.menu(for: press)?.items.first(where: { $0.title == title }),
+                let action = item.action
+                else { throw ScenarioFailure("\(identifier)'s menu has no \(title) to choose") }
+                NSApp.sendAction(action, to: item.target, from: item)
+            }
+        }
+
         /// How many photos the library finds for `query`; -1 when it can't search.
         func photosFound(_ query: String) throws -> Int {
             let found = Mutex(-1)

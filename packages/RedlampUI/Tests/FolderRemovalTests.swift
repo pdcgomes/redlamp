@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
@@ -89,6 +90,47 @@ struct FolderRemovalTests {
         #expect(try await Self.ids("kw:Lisbon", service).count == 1)
         try await sandbox.eventually { model.items.count == 4 }
         #expect(model.items.count == 4, "All Photographs, shown, has them again")
+    }
+
+    @Test func `Remove from Folders, chosen in a root's menu as a click does, holds the main thread for no time`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["A.jpg"])
+        let trip = try Self.trip(in: sandbox)
+        let model = try await sandbox.open()
+        try await Self.add(trip, to: model.library, service: #require(sandbox.service))
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 280, height: 900), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentView = SidebarListViews.make(model: model)
+        defer { window.contentView = nil }
+        let identifier = "folders." + trip.standardizedFileURL.path
+        var row: NSView?
+        for _ in 0 ..< 500 where row == nil {
+            window.contentView?.layoutSubtreeIfNeeded()
+            row = Self.view(identifier, in: window.contentView)
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let cell = try #require(row as? SidebarCellView, "Trip's row on screen")
+        let item = try #require(cell.contextMenu()?.items.first { $0.title == "Remove from Folders" })
+        let started = ContinuousClock.now
+        try NSApplication.shared.sendAction(#require(item.action), to: item.target, from: item)
+        let took = ContinuousClock.now - started
+        #expect(took < .milliseconds(100), "the action took \(took)")
+        #expect(model.library.roots.map(\.url) == [sandbox.root])
+        try await sandbox.counts { $0.count(of: .allPhotographs) == 1 }
+        #expect(model.librarySources.count(of: .allPhotographs) == 1)
+    }
+
+    /// The view carrying `identifier` in `view`'s tree.
+    static func view(_ identifier: String, in view: NSView?) -> NSView? {
+        guard let view else { return nil }
+        if view.accessibilityIdentifier() == identifier {
+            return view
+        }
+        return view.subviews.lazy.compactMap { Self.view(identifier, in: $0) }.first
     }
 
     @Test func `a folder removed before the library opens is taken out as it opens`() async throws {
