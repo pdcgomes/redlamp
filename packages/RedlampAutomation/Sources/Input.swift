@@ -278,6 +278,61 @@
         }
     }
 
+    extension RunningApp {
+        /// Clicks the pop-up button showing `shown` in the sheet in front, through the sheet as the
+        /// mouse does, and chooses `title` in the menu that opens with the keyboard, which ends the
+        /// menu's tracking with the item chosen, as a click on it does. The item may open a dialog,
+        /// so this doesn't wait for what it does; the menu returned says when it stopped tracking,
+        /// until `stop()`.
+        func choose(_ title: String, inPopUpButtonShowing shown: String) throws -> OpenedMenu {
+            let location = try main { _ -> NSPoint in
+                guard let button = Views.popUpButton(showing: shown) else {
+                    throw ScenarioFailure("No pop-up button in the sheet shows \(shown)")
+                }
+                let frame = button.convert(button.bounds, to: nil)
+                return NSPoint(x: frame.midX, y: frame.midY)
+            }
+            let opened = OpenedMenu()
+            try main { _ in
+                opened.watch { menu in
+                    let items = menu.items.filter { !$0.isSeparatorItem && !$0.isHidden && $0.isEnabled }
+                    guard let position = items.firstIndex(where: { $0.title == title }) else { return }
+                    // The menu's tracking reads them from the queue: up to the first item, which
+                    // arrows don't wrap past, down to this one, and Return.
+                    let keys = Array(repeating: KeyCombo(.up), count: items.count)
+                        + Array(repeating: KeyCombo(.down), count: position) + [KeyCombo(.character("\r"))]
+                    guard let events = try? keys.map(Keyboard.event) else { return }
+                    events.forEach { NSApp.postEvent($0, atStart: false) }
+                    opened.chose = true
+                }
+            }
+            // The menu tracks inside the press. A sheet that isn't key spends a press on becoming
+            // key unless the view under it accepts first mouse, so the press goes to the view then.
+            post { _ in
+                guard let sheet = Views.editorWindow?.attachedSheet else { return }
+                let events = [NSEvent.EventType.leftMouseDown, .leftMouseUp].compactMap { type in
+                    NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: [],
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: sheet.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1,
+                    )
+                }
+                guard events.count == 2 else { return }
+                NSApp.postEvent(events[1], atStart: false)
+                let hit = sheet.contentView?.superview?.hitTest(location)
+                if let hit, !sheet.isKeyWindow, !hit.acceptsFirstMouse(for: events[0]) {
+                    hit.mouseDown(with: events[0])
+                } else {
+                    sheet.sendEvent(events[0])
+                }
+            }
+            pause(0.2)
+            try wait("the menu of the pop-up button showing \(shown) to open") { _ in opened.menu != nil }
+            try expect(try main { _ in opened.chose }, "The menu of the pop-up button showing \(shown) has no \(title)")
+            return opened
+        }
+    }
+
     // MARK: - Menus
 
     public extension RunningApp {
@@ -455,9 +510,12 @@
     final class OpenedMenu: @unchecked Sendable {
         var menu: NSMenu?
         var closed = false
+        /// Whether `onOpen` chose an item.
+        var chose = false
         private var observers: [any NSObjectProtocol] = []
 
-        @MainActor func watch() {
+        /// `onOpen` runs as the menu starts tracking, inside its tracking.
+        @MainActor func watch(onOpen: (@MainActor (NSMenu) -> Void)? = nil) {
             let center = NotificationCenter.default
             observers = [
                 // Menus post these on the main thread.
@@ -466,6 +524,7 @@
                     MainActor.assumeIsolated {
                         if self.menu == nil, let opened, opened.supermenu == nil {
                             self.menu = opened
+                            onOpen?(opened)
                         }
                     }
                 },
@@ -489,6 +548,13 @@
     extension Views {
         static func window(titled title: String) -> NSWindow? {
             NSApp.windows.first { $0.isVisible && $0.title == title }
+        }
+
+        /// The pop-up button showing `shown` in the sheet in front. A sheet's SwiftUI controls give
+        /// out no identifiers, so it's found by what it shows, as a person finds it.
+        static func popUpButton(showing shown: String) -> NSPopUpButton? {
+            guard let root = editorWindow?.attachedSheet?.contentView else { return nil }
+            return all(NSPopUpButton.self, in: root).first { !$0.pullsDown && $0.title == shown }
         }
 
         /// The control carrying `identifier`, found through the window's accessibility: SwiftUI gives

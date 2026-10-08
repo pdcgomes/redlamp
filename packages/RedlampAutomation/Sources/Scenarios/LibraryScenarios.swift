@@ -360,7 +360,7 @@
     }
 
     enum ExportScenarios {
-        static let all: [Scenario] = [formats, sizes, metadata, previous, shortWindow]
+        static let all: [Scenario] = [formats, sizes, metadata, previous, shortWindow, chooseFolder]
 
         /// #290: on the editor window at its smallest, the dialog was taller than the window and
         /// its settings didn't scroll, so the last ones were out of reach.
@@ -425,6 +425,38 @@
 
         @MainActor private static func fields(in view: NSView) -> [NSTextField] {
             ((view as? NSTextField).map { $0.isEditable ? [$0] : [] } ?? []) + view.subviews.flatMap(fields)
+        }
+
+        /// #356: Choose… in Export to ran the folder panel from the picker's selection, which SwiftUI
+        /// sets while the menu still tracks the mouse; on macOS 27 the panel didn't come up there, and
+        /// it took choosing Choose… a second time.
+        static let chooseFolder = Scenario(
+            "export.choose-folder",
+            "Choose… in Export to opens the folder panel once its menu has closed, and Cancel leaves the folder as it was",
+            claims: [.feature("export.dialog")],
+        ) { app in
+            try app.openWorking()
+            try app.choose(Menus.title(of: .export))
+            try app.waitForSheet("the Export dialog")
+            app.pause(0.5)
+            defer { try? app.main { _ in (NSApp.modalWindow as? NSOpenPanel)?.cancel(nil) } }
+            let original = "Same Folder as Original"
+            let menu = try app.choose("Choose…", inPopUpButtonShowing: original)
+            defer { try? app.main { _ in menu.stop() } }
+            // A launch's first panel waits to connect to AppKit's panel service.
+            try app.wait("the folder panel", timeout: 60) { _ in NSApp.modalWindow is NSOpenPanel }
+            try app.expect(
+                try app.main { _ in menu.closed },
+                "The folder panel came up while Export to's menu still tracked the mouse, where macOS 27 doesn't show it",
+            )
+            try app.main { _ in (NSApp.modalWindow as? NSOpenPanel)?.cancel(nil) }
+            try app.wait("the folder panel to close") { _ in !(NSApp.modalWindow is NSOpenPanel) }
+            try app.expect(
+                try app.main { _ in Views.popUpButton(showing: original) != nil },
+                "Cancel in the folder panel changed Export to",
+            )
+            try app.expect(try app.pressInSheet(KeyCombo(.escape)), "The Export dialog didn't close on Escape")
+            app.covered(.feature("export.dialog"), via: .mouse)
         }
 
         static let formats = Scenario(
