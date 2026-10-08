@@ -58,9 +58,14 @@
             }
         }
 
-        /// The photos in the run's folder, in the filmstrip's order.
+        /// The photos in the run's folder, in the filmstrip's order, with every stack opened, and the stacks found
+        /// later coming open, so each photo has its cell: the folder's copies of a frame and its formats make pairs
+        /// and bursts, which scenarios not about stacks don't expect.
         func photoNames() throws -> [String] {
-            try main { $0.items.map(\.url.lastPathComponent) }
+            try main { model in
+                model.gridStacks.openAll()
+                return model.items.map(\.url.lastPathComponent)
+            }
         }
 
         /// The photo actions and sliders are checked on: a raw, so white balance applies.

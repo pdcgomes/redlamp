@@ -59,17 +59,15 @@
 
     extension RunningApp {
         /// Runs `body` on a scratch folder with stacks (`StackScratch`), added to Folders and shown in Library's grid
-        /// from
-        /// the library, compact, once its pair and its burst are found and closed; then takes it out of Folders,
-        /// removes
-        /// it, and shows the run's folder again, ungrouped with its stacks closed, also when `body` fails.
+        /// from the library, compact, once its pair and its burst are found and closed; then takes it out of Folders,
+        /// removes it, and shows the run's folder again, ungrouped with its stacks open, also when `body` fails.
         func withStacks(_ body: (StackScratch) throws -> Void) throws {
             let scratch = try StackScratch(self)
             defer {
                 try? main { model in
                     model.setGroupKey(.ungrouped)
                     model.setCellStyle(.compact)
-                    model.gridStacks.closeAll()
+                    model.gridStacks.openAll()
                 }
                 scratch.sources.remove(self)
                 try? openWorking()
