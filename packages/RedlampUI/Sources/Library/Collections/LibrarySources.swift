@@ -71,6 +71,8 @@ public final class LibrarySources {
     @ObservationIgnored private var libraryObservation: LibraryObservation?
     @ObservationIgnored private var following: Following?
     @ObservationIgnored private var followers = 0
+    /// The module the menu bar's keys were last brought up to date for.
+    @ObservationIgnored private var menusModule: AppModule?
     @ObservationIgnored private var counting = false
     @ObservationIgnored private var countAgain = false
     /// The previous import as the journal last had it, and the journal's files then.
@@ -138,6 +140,12 @@ public final class LibrarySources {
         followShown()
         let tracker = Tracker { [weak self] in
             guard let self, let model else { return }
+            if model.module != menusModule {
+                menusModule = model.module
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { ModuleMenuKeys.refresh() }
+                }
+            }
             if model.module == .library, model.library.service?.state == .ready {
                 startCounting()
             } else {
@@ -209,6 +217,7 @@ public final class LibrarySources {
         let started = ContinuousClock.now
         Task { [weak self] in
             let read = await Task.detached(priority: .utility) { () -> (LibraryCounts, ([String], PreviousImport?))? in
+                await core.live.settle()
                 let journal = ImportJournal(paths: core.paths)
                 let stamp = Self.stamp(of: journal.folder)
                 let previous = if let kept, kept.stamp == stamp {
@@ -225,7 +234,7 @@ public final class LibrarySources {
             if let (counts, previous) = read {
                 self.previous = previous
                 apply(counts)
-                countsTook.append(.now - started)
+                countsTook = countsTook.suffix(999) + [.now - started]
             }
             guard countAgain else {
                 counting = false

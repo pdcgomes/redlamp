@@ -42,7 +42,7 @@
 
             // A click on Marked's row shows its photos.
             try app.clickSourceRow("sources.marked")
-            try app.wait("Marked's two photos", timeout: 20) { model in
+            try app.waitForSource("Marked's two photos") { model in
                 model.librarySources.shown == .marked && !model.librarySources.isListing
                     && Set(model.items.map(\.name)) == Set(names.prefix(2))
             }
@@ -68,15 +68,15 @@
             try app.main { $0.showFolder(scratch.folder) }
             try app.wait("the folder again", timeout: 20) { $0.folder == scratch.folder && !$0.library.isListing }
             try app.press(.showMarked)
-            try app.wait("Marked again") { $0.librarySources.shown == .marked }
+            try app.waitForSource("Marked again") { $0.librarySources.shown == .marked }
 
             // The View menu, then the palette.
             try app.choose(.showRejected)
-            try app.wait("Rejected's photo", timeout: 20) { model in
+            try app.waitForSource("Rejected's photo", timeout: 20) { model in
                 model.librarySources.shown == .rejected && model.items.map(\.name) == [names[2]]
             }
             try app.runFromPalette(.showAllPhotographs)
-            try app.wait("All Photographs", timeout: 20) { model in
+            try app.waitForSource("All Photographs", timeout: 20) { model in
                 model.librarySources.shown == .allPhotographs && !model.librarySources.isListing
                     && Set(names).isSubset(of: Set(model.items.map(\.name)))
             }
@@ -86,7 +86,7 @@
                 app.sourceRowLabel("sources.health.damaged")?.hasPrefix("Damaged Files, ") == true
             }
             try app.clickSourceRow("sources.health.damaged")
-            try app.wait("the damaged file", timeout: 20) { model in
+            try app.waitForSource("the damaged file", timeout: 20) { model in
                 model.librarySources.shown == .health(.damaged) && model.items.map(\.name).contains("Empty.jpg")
             }
 
@@ -113,7 +113,7 @@
             try app.wait("the import", timeout: 120) { _ in ImportWindowController.current?.isFinished == true }
             try app.main { _ in ImportWindowController.current?.close() }
             try app.runFromPalette(.showPreviousImport)
-            try app.wait("Previous Import's photo", timeout: 30) { model in
+            try app.waitForSource("Previous Import's photo", timeout: 30) { model in
                 model.librarySources.shown == .previousImport && model.items.map(\.name) == imported.names
             }
             try app.wait("Previous Import's row", timeout: 30) { _ in
@@ -213,6 +213,24 @@
     }
 
     extension RunningApp {
+        /// Waits for a source to show what `condition` wants; a failure says what's shown instead.
+        func waitForSource(
+            _ what: String, timeout: Double = 20, _ condition: @escaping @MainActor (EditorModel) -> Bool,
+        ) throws {
+            do {
+                try wait(what, timeout: timeout, until: condition)
+            } catch {
+                let state = try main { model in
+                    let sources = model.librarySources
+                    return "shown \(sources.shown.map { "\($0)" } ?? "none"), listing \(sources.isListing), "
+                        + "\(model.items.count) photos \(model.items.prefix(4).map(\.name)), folder "
+                        + "\(model.folder?.lastPathComponent ?? "none"), \(model.module), selection "
+                        + "\(model.selection?.lastPathComponent ?? "none"), sheet \(model.isModalDialogOpen)"
+                }
+                throw ScenarioFailure("\(error) (\(state))")
+            }
+        }
+
         /// Clicks the Library or Collections section's row carrying `identifier`, as the mouse does: the press goes
         /// to its list, which tracks it, and the release waits in the queue, where the list takes it from. A list
         /// in a window that isn't key takes the press as the click after activation would.

@@ -83,7 +83,7 @@
 
             // Selects shown by a click on its row: ⌫ takes A out, and ⌘Z puts it back.
             try app.clickSourceRow("collections.\(selects)")
-            try app.wait("Selects shown", timeout: 20) { model in
+            try app.waitForSource("Selects shown", timeout: 20) { model in
                 !model.librarySources.isListing && Set(model.items.map(\.url)) == [a, b]
             }
             try app.main { $0.select(a) }
@@ -201,9 +201,11 @@
             try app.replaceInSheet("smart.rule.1.value", with: "no")
             try app.wait("the rules' text") { _ in (try? app.smartSheetValue("smart.text")) == "flag:pick edited:no" }
             try app.confirmSheet("New Smart Collection")
-            try app.wait("the smart collection counting the two picks", timeout: 30) { _ in
-                app.sourceRowLabel("collections.\(picked)") == "\(picked), 2 photos"
-            }
+            try app.waitForRow(
+                "collections.\(picked)",
+                "\(picked), 2 photos",
+                "the smart collection counting the two picks",
+            )
 
             // Edited: its rules read from its query; the text typed makes them again.
             try app.rightClick(.identifier("collections.\(picked)"), choosing: "Edit Smart Collection…")
@@ -220,7 +222,7 @@
                 app.sourceRowLabel("collections.\(picked)") == "\(picked), 1 photo"
             }
             try app.clickSourceRow("collections.\(picked)")
-            try app.wait("its photo shown", timeout: 20) { model in
+            try app.waitForSource("its photo shown", timeout: 20) { model in
                 !model.librarySources.isListing && model.items.map(\.url) == [a]
             }
             app.covered(.feature("library.collections"), via: .mouse)
@@ -228,6 +230,20 @@
     }
 
     extension RunningApp {
+        /// Waits for the left panel's row `identifier` to say `label`; a failure says what it and the list say.
+        func waitForRow(_ identifier: String, _ label: String, _ what: String, timeout: Double = 30) throws {
+            do {
+                try wait(what, timeout: timeout) { _ in self.sourceRowLabel(identifier) == label }
+            } catch {
+                let state = try main { model in
+                    let places = model.librarySources.collections.values.map { "\($0.path.text) \($0.kind)" }.sorted()
+                    return "the row says \(self.sourceRowLabel(identifier) ?? "nothing"); the list has \(places); "
+                        + "\(model.libraryPanels.problem ?? "no problem")"
+                }
+                throw ScenarioFailure("\(error) (\(state))")
+            }
+        }
+
         /// The text of the field, or the title chosen in the pop-up, carrying `identifier` in the sheet in front.
         func smartSheetValue(_ identifier: String) throws -> String? {
             try main { _ in

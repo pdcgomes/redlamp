@@ -88,7 +88,7 @@ extension SidebarCellView {
         let sources = model.librarySources
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Show") { sources.show(row.source) })
-        menu.addItem(NSMenuItem(title: "Show Summary…") { [weak anchor] in
+        menu.addItem(afterMenu("Show Summary…") { [weak anchor] in
             guard let anchor else { return }
             sources.showSummary(of: row.source, relativeTo: anchor)
         })
@@ -105,21 +105,21 @@ extension SidebarCellView {
         guard case let .collection(path) = row.source, let kind = row.kind else { return menu }
         menu.addItem(.separator())
         if kind == .set {
-            menu.addItem(NSMenuItem(title: "New Collection Inside…") {
+            menu.addItem(afterMenu("New Collection Inside…") {
                 CollectionSheets.create(.collection, inside: path, model: model)
             })
-            menu.addItem(NSMenuItem(title: "New Smart Collection Inside…") {
+            menu.addItem(afterMenu("New Smart Collection Inside…") {
                 SmartCollectionSheet.create(inside: path, model: model)
             })
-            menu.addItem(NSMenuItem(title: "New Collection Set Inside…") {
+            menu.addItem(afterMenu("New Collection Set Inside…") {
                 CollectionSheets.create(.set, inside: path, model: model)
             })
             menu.addItem(.separator())
         }
         if kind == .smart {
-            menu.addItem(NSMenuItem(title: "Edit Smart Collection…") { SmartCollectionSheet.edit(path, model: model) })
+            menu.addItem(afterMenu("Edit Smart Collection…") { SmartCollectionSheet.edit(path, model: model) })
         }
-        menu.addItem(NSMenuItem(title: "Rename…") { CollectionSheets.rename(path, model: model) })
+        menu.addItem(afterMenu("Rename…") { CollectionSheets.rename(path, model: model) })
         let move = NSMenuItem(title: "Move To", action: nil, keyEquivalent: "")
         let places = NSMenu()
         for set in [nil] + sources.sets.map(Optional.some) where set != path.parent && !(set?.isWithin(path) ?? false) {
@@ -131,6 +131,16 @@ extension SidebarCellView {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Delete") { sources.delete(path) })
         return menu
+    }
+
+    /// An item whose sheet or popover opens once its menu has closed: one begun while the menu tracks doesn't
+    /// show until it closes.
+    static func afterMenu(_ title: String, _ open: @escaping @MainActor () -> Void) -> NSMenuItem {
+        NSMenuItem(title: title) {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated(open)
+            }
+        }
     }
 
     /// Library Health's menu: the rule for raw and JPEG pairs.

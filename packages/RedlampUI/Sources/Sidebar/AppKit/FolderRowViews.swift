@@ -91,7 +91,7 @@ extension SidebarCellView {
             })
             if let service = model.library.service, service.isReady {
                 let source = PhotoSource.folder(row.url, includingSubfolders: model.library.includesSubfolders)
-                menu.addItem(NSMenuItem(title: "Show Summary…") { [weak anchor] in
+                menu.addItem(afterMenu("Show Summary…") { [weak anchor] in
                     guard let anchor else { return }
                     SourceSummaryPopover.show(row.name, relativeTo: anchor) { await service.summary(of: source) }
                 })
