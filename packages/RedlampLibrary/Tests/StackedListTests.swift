@@ -62,6 +62,26 @@ struct StackedListTests {
         #expect(stacked.open(id("jpeg0")).isEmpty, "a photo inside a closed stack has no cell")
     }
 
+    @Test func `found bursts start closed, and when they start open, a burst closed stays closed and a new one opens`() {
+        let (library, choices, ids) = Self.library()
+        let stacks = library.find(choices)
+        let id = { (name: String) in ids[name]! }
+        #expect(!StackedList.opensFoundBursts)
+        #expect(StackedList(library.list, stacks: stacks).badges(of: id("raw0")).stack?.isOpen == false)
+
+        var stacked = StackedList(library.list, stacks: stacks, open: false, bursts: true)
+        #expect(stacked.badges(of: id("raw0")).stack?.isOpen == true)
+        #expect(stacked.badges(of: id("pairRaw")).pair?.isOpen == false)
+        #expect(stacked.badges(of: id("far")).stack?.isOpen == false)
+        _ = stacked.close(id("raw0"))
+        let again = stacked.remade(list: library.list, stacks: stacks, bursts: true)
+        #expect(again.badges(of: id("raw0")).stack?.isOpen == false)
+        let unstacked = StackedList(library.list, stacks: Stacks(), open: false, bursts: true)
+        let found = unstacked.remade(list: library.list, stacks: stacks, bursts: true)
+        #expect(found.badges(of: id("raw0")).stack?.isOpen == true)
+        #expect(found.badges(of: id("far")).stack?.isOpen == false)
+    }
+
     @Test func `stacks relabelled with a view's own IDs show its list as the library's IDs show the library's`() throws {
         let (library, choices, ids) = Self.library()
         let id = { (name: String) in ids[name]! }

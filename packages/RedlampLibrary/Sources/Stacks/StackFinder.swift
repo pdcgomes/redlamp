@@ -12,7 +12,8 @@ import RedlampDocument
 ///   exposures shot back to back stay together where the gap between capture times would part
 ///   them. The index knows a camera's model but not its body, so a folder (one card's photos)
 ///   keeps two bodies of one model, or a second card's copies, from mixing. The first frame is on
-///   top unless the user chose another.
+///   top unless the user chose another. A copy of a frame is in no burst: an export or another
+///   format of it, taken at its moment, named for it (`isCopy`).
 /// - **Focus suggestions:** `StackDetector.runs`' rules over each folder's frames in name order,
 ///   from the settings the column store keeps (f-numbers to a hundredth, focal lengths to a tenth
 ///   of a millimetre, exposure lengths to the microsecond, times to the millisecond). A raw and its
@@ -27,6 +28,52 @@ public enum StackFinder {
     /// the next. Continuous drive shoots a frame a second at its slowest, so its frames stay one
     /// burst, while shots taken one at a time are usually further apart.
     public static let burstGap: Double = 1
+
+    // MARK: - Copies
+
+    /// Which of two names, by their folded stems, comes from the other.
+    enum Copy: Equatable {
+        /// The left one is the right one's stem followed by a separator and more.
+        case left
+        case right
+        /// One stem, so another format of the same frame.
+        case alike
+    }
+
+    /// The separators an export or an edit puts after the name it comes from: `_DSC0009-redlamp`,
+    /// `IMG_1-Edit`, `IMG_1_edited`, `IMG_1 copy`, `IMG_1.CR3`.
+    private static let separators: [UInt8] = [
+        UInt8(ascii: "-"),
+        UInt8(ascii: "_"),
+        UInt8(ascii: " "),
+        UInt8(ascii: "."),
+    ]
+
+    /// The kinds a pair holds: raw, JPEG and HEIC.
+    static let pairable: ClosedRange<UInt8> = 1 ... 3
+
+    /// Which of the stems `lhs` and `rhs` comes from the other, if either does.
+    static func copy(_ lhs: String, _ rhs: String) -> Copy? {
+        let (left, right) = (lhs.utf8, rhs.utf8)
+        guard left.count != right.count else { return left.elementsEqual(right) ? .alike : nil }
+        let (short, long) = left.count < right.count ? (left, right) : (right, left)
+        guard long.starts(with: short),
+              separators.contains(long[long.index(long.startIndex, offsetBy: short.count)])
+        else { return nil }
+        return left.count < right.count ? .right : .left
+    }
+
+    /// The whole second a capture time in milliseconds falls in.
+    static func second(of captured: Int64) -> Int64 {
+        let (quotient, remainder) = captured.quotientAndRemainder(dividingBy: 1000)
+        return remainder < 0 ? quotient - 1 : quotient
+    }
+
+    /// Whether two capture times in milliseconds are one moment: equal, or in one second when either is
+    /// a whole second, as a time without sub-seconds is kept.
+    static func sameMoment(_ lhs: Int64, _ rhs: Int64) -> Bool {
+        lhs == rhs || (lhs % 1000 == 0 || rhs % 1000 == 0) && second(of: lhs) == second(of: rhs)
+    }
 
     /// The stacks among `store`'s photos, `names` holding their names and `choices` what the user
     /// decided. Runs on every core; call it off the main thread.
@@ -321,6 +368,9 @@ extension StackFinder {
         private var frames: [Int32] = []
         private var frameFlags: [UInt8] = []
         private var order: [Int32] = []
+        /// For each frame in `order`: whether it's a copy of another, and the stems of a run's names.
+        private var copies: [Bool] = []
+        private var stems: [String] = []
         private var run: [Int32] = []
         /// The run's gaps, in milliseconds, ascending.
         private var gaps: [Int64] = []
@@ -423,6 +473,8 @@ extension StackFinder {
                 return (columns.cameras[left], columns.captured[left], columns.nameRanks[left])
                     < (columns.cameras[right], columns.captured[right], columns.nameRanks[right])
             }
+            leaveOutCopies(row)
+            guard order.count > 1 else { return }
             let gap = Int64(StackFinder.burstGap * 1_000_000)
             func follows(_ earlier: Int, _ later: Int) -> Bool {
                 guard columns.cameras[earlier] == columns.cameras[later],
@@ -445,6 +497,71 @@ extension StackFinder {
                 }
                 start = index
             }
+        }
+
+        /// Takes out of `order`, sorted by camera and capture time, each frame that is a copy of another
+        /// the camera took in the same second.
+        private mutating func leaveOutCopies(_ row: (Int32) -> Int) {
+            copies.removeAll(keepingCapacity: true)
+            copies.append(contentsOf: repeatElement(false, count: order.count))
+            var found = false
+            var start = 0
+            while start < order.count {
+                let first = row(order[start])
+                let (camera, second) = (columns.cameras[first], StackFinder.second(of: columns.captured[first]))
+                var end = start + 1
+                while end < order.count, columns.cameras[row(order[end])] == camera,
+                      StackFinder.second(of: columns.captured[row(order[end])]) == second {
+                    end += 1
+                }
+                if end - start > 1, markCopies(in: start ..< end, row) {
+                    found = true
+                }
+                start = end
+            }
+            guard found else { return }
+            var kept = 0
+            for index in order.indices where !copies[index] {
+                order[kept] = order[index]
+                kept += 1
+            }
+            order.removeLast(order.count - kept)
+        }
+
+        /// Marks in `copies` the frames of `run`, one camera's in one second, that are copies of others
+        /// there: at the same moment, with names `StackFinder.copy` finds one to come from the other.
+        /// Returns whether it marked any.
+        private mutating func markCopies(in run: Range<Int>, _ row: (Int32) -> Int) -> Bool {
+            stems.removeAll(keepingCapacity: true)
+            for index in run {
+                stems.append(NamingJob.fold(NamingJob.split(columns.name(ofRow: row(order[index]))).base))
+            }
+            var found = false
+            for earlier in run {
+                for later in earlier + 1 ..< run.upperBound {
+                    let (left, right) = (row(order[earlier]), row(order[later]))
+                    guard StackFinder.sameMoment(columns.captured[left], columns.captured[right]),
+                          let copy = StackFinder.copy(stems[earlier - run.lowerBound], stems[later - run.lowerBound])
+                    else { continue }
+                    switch copy {
+                    case .left:
+                        copies[earlier] = true
+                    case .right:
+                        copies[later] = true
+                    case .alike:
+                        // Another format of the frame: the one a pair can't hold, else the later name.
+                        let (leftPairs, rightPairs) = (
+                            StackFinder.pairable.contains(columns.kinds[left]),
+                            StackFinder.pairable.contains(columns.kinds[right]),
+                        )
+                        let leftIsCopy = leftPairs == rightPairs
+                            ? columns.nameRanks[left] > columns.nameRanks[right] : rightPairs
+                        copies[leftIsCopy ? earlier : later] = true
+                    }
+                    found = true
+                }
+            }
+            return found
         }
 
         // MARK: Focus suggestions

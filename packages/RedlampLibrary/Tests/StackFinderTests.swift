@@ -69,6 +69,72 @@ struct StackFinderTests {
         #expect(stacks.allPhotos(of: burst) == [pairs[0].raw, pairs[0].jpeg, pairs[1].raw, pairs[1].jpeg])
     }
 
+    @Test func `an export or an edit taken at its frame's moment and named for it is in no burst`() {
+        var library = StackLibrary()
+        let original = library.add("_DSC0009.ARW", at: 1000.25)
+        let exports = [
+            library.add("_DSC0009-redlamp.jpg", at: 1000.25),
+            library.add("_DSC0009-redlamp-redlamp.jpg", at: 1000.25),
+            // An export that kept the second but not its fraction.
+            library.add("_dsc0009 copy.JPG", at: 1000),
+        ]
+        let edited = [library.add("IMG_1.CR3", at: 2000), library.add("IMG_1-Edit.tif", at: 2000)]
+        // A burst, and its second frame exported beside it.
+        let burst = (1 ... 3).map { library.add("DSC_000\($0).NEF", at: 3000 + Double($0) / 8) }
+        let export = library.add("DSC_0002_edited.JPG", at: 3000.25)
+
+        let stacks = library.find()
+        #expect(stacks.photos(.burst) == [burst])
+        for id in [original, export] + exports + edited {
+            #expect(stacks.stack(containing: id) == nil, "\(library.photo(id).name)")
+        }
+    }
+
+    @Test func `another format of a frame is in no burst, beside a pair or alone`() {
+        var library = StackLibrary()
+        let (raw, jpeg) = library.addPair("IMG_7", at: 1000)
+        let tiff = library.add("IMG_7.TIF", at: 1000)
+        let formats = [
+            library.add("Bitmap.jpg", at: 2000.5), library.add("Bitmap.png", at: 2000.5),
+            library.add("Bitmap.tif", at: 2000.5),
+        ]
+
+        let stacks = library.find()
+        #expect(stacks.photos(.pair) == [[raw, jpeg]] && stacks.count(of: .burst) == 0)
+        for id in [tiff] + formats {
+            #expect(stacks.stack(containing: id) == nil, "\(library.photo(id).name)")
+        }
+    }
+
+    @Test func `frames with their own names stay a burst, with sub-seconds or without`() {
+        var library = StackLibrary()
+        let fractions = (1 ... 3).map { library.add("DSC_000\($0).NEF", at: 1000 + Double($0) / 10) }
+        // Named like another, but taken a fraction of a second later.
+        let alike = [library.add("P_1.NEF", at: 2000.125), library.add("P_1_1.NEF", at: 2000.375)]
+        // A camera that writes whole seconds: several frames in each.
+        let whole = [
+            library.add("DSC_0101.JPG", at: 3000), library.add("DSC_0102.JPG", at: 3000),
+            library.add("DSC_0103.JPG", at: 3000), library.add("DSC_0104.JPG", at: 3001),
+        ]
+
+        let stacks = library.find()
+        #expect(Set(stacks.photos(.burst)) == [fractions, alike, whole])
+    }
+
+    @Test func `a copy's name is its frame's stem and a separator, or the same stem`() {
+        #expect(StackFinder.copy("_dsc0009", "_dsc0009-redlamp") == .right)
+        #expect(StackFinder.copy("img_1-edit", "img_1") == .left)
+        for separated in ["img_1_2", "img_1 copy", "img_1.cr3"] {
+            #expect(StackFinder.copy("img_1", separated) == .right, "\(separated)")
+        }
+        #expect(StackFinder.copy("bitmap", "bitmap") == .alike)
+        for other in ["img_10", "img_2", "img1", "dsc_0001"] {
+            #expect(StackFinder.copy("img_1", other) == nil, "\(other)")
+        }
+        #expect(StackFinder.sameMoment(1_000_250, 1_000_000) && StackFinder.sameMoment(-1500, -2000))
+        #expect(!StackFinder.sameMoment(1_000_250, 1_000_375) && !StackFinder.sameMoment(1_000_000, 1_001_000))
+    }
+
     @Test func `a burst shows its first frame on top unless the user chose another`() {
         var library = StackLibrary()
         let frames = (0 ..< 3).map { library.addPair("IMG_000\($0)", at: 1000 + Double($0) / 8) }

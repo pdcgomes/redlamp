@@ -41,9 +41,22 @@ public struct StackedList: Sendable, RandomAccessCollection {
     private(set) var shown: RowBits
     public private(set) var count: Int
 
-    /// `list` with `stacks` shown, every one closed, or every one open.
+    /// Whether a list shows the bursts it finds open until they're closed. Pairs and manual stacks start closed.
+    public static let opensFoundBursts = false
+
+    /// `list` with `stacks` shown, every one open, or each as its kind starts (`opensFoundBursts`).
     public init(_ list: PhotoList, stacks: Stacks, open: Bool = false) {
-        self.init(list, stacks: stacks, opened: RowBits(rows: stacks.count, filled: open))
+        self.init(list, stacks: stacks, open: open, bursts: Self.opensFoundBursts)
+    }
+
+    init(_ list: PhotoList, stacks: Stacks, open: Bool, bursts: Bool) {
+        var opened = RowBits(rows: stacks.count, filled: open)
+        if !open, bursts {
+            for stack in stacks.groups where stacks.kinds[stack] == .burst {
+                opened.insert(stack)
+            }
+        }
+        self.init(list, stacks: stacks, opened: opened)
     }
 
     init(_ list: PhotoList, stacks: Stacks, opened: RowBits) {
@@ -623,8 +636,9 @@ public struct StackedList: Sendable, RandomAccessCollection {
         return updated(list: update.list, changed: changed, selection: &selection)
     }
 
-    /// `list` with `stacks`, the stacks open here open there: those holding an open one's top photo.
-    func remade(list: PhotoList, stacks: Stacks) -> StackedList {
+    /// `list` with `stacks`, the stacks open here open there: those holding an open one's top photo. With
+    /// `bursts`, a burst none of whose photos was in a burst or manual stack here opens too.
+    func remade(list: PhotoList, stacks: Stacks, bursts: Bool = opensFoundBursts) -> StackedList {
         var open = RowBits(rows: stacks.count)
         opened.forEach { stack in
             guard stack < self.stacks.count, let top = self.stacks.members(of: stack).first else { return true }
@@ -633,6 +647,12 @@ public struct StackedList: Sendable, RandomAccessCollection {
                 open.insert(found)
             }
             return true
+        }
+        if bursts {
+            for stack in stacks.groups where stacks.kinds[stack] == .burst
+                && !stacks.members(of: stack).contains(where: { self.stacks.groupIndex(of: $0) != nil }) {
+                open.insert(stack)
+            }
         }
         return StackedList(list, stacks: stacks, opened: open)
     }
