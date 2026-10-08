@@ -59,20 +59,29 @@ struct ExportLocationSection: View {
                 case let .folder(url):
                     settings.destinationFolder = url
                 case .choose:
-                    let panel = NSOpenPanel()
-                    panel.canChooseDirectories = true
-                    panel.canChooseFiles = false
-                    panel.canCreateDirectories = true
-                    panel.prompt = "Choose"
-                    panel.message = "Choose the folder exports go to."
-                    panel.directoryURL = settings.destinationFolder ?? photo.deletingLastPathComponent()
-                    if panel.runModal() == .OK, let url = panel.url {
-                        chosenFolder = url
-                        settings.destinationFolder = url
+                    // The picker sets its selection while its menu still tracks the mouse, and a
+                    // panel made inside that tracking may not come up: macOS 27 doesn't show the
+                    // first one. Neither of these modes runs while a menu tracks.
+                    RunLoop.main.perform(inModes: [.default, .modalPanel]) {
+                        MainActor.assumeIsolated { chooseFolder() }
                     }
                 }
             },
         )
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose"
+        panel.message = "Choose the folder exports go to."
+        panel.directoryURL = settings.destinationFolder ?? photo.deletingLastPathComponent()
+        if panel.runModal() == .OK, let url = panel.url {
+            chosenFolder = url
+            settings.destinationFolder = url
+        }
     }
 }
 
