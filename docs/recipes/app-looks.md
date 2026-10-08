@@ -1,5 +1,7 @@
 # Measuring phone-app looks
 
+[Looks and the bench](../bench-and-looks.md) walks through capturing a look and contributing one; this page is the reference.
+
 The owner decided (DEC-19 in [the research tracker](../research/research-tracker.md)) to measure the filters of phone apps such as Prequel and Lightroom mobile presets pixel for pixel into Redlamp's own look tables. The results ship only under Redlamp's own names. This page covers the two capture kits the owner runs through an app, the importer that turns the exports into a recipe, and what that can and can't capture. Other look tools are in [look-development.md](look-development.md).
 
 ```bash

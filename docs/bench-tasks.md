@@ -1,5 +1,7 @@
 # Redlamp Bench: tasks in other apps, and look references
 
+[Looks and the bench](bench-and-looks.md) explains both workflows from start to finish, and how to contribute a look; this page is the reference.
+
 Some work needs the owner in another app: an agent measuring Lightroom's masks needs Lightroom's own masks on a set of photos, and a look captured from a phone app's filter needs the capture kit run through that filter. Redlamp Bench makes that a round trip with nothing moved by hand. An agent writes a **bench task**, the iPhone app pulls it from the Recipe Lab's **hub**, the owner follows its steps in the other app and shares the results back, and the phone sends the task back to the Lab as soon as it's complete. A **look reference** is the same round trip started on the phone. The code is in `packages/RedlampBench` (ARC-11), the hub runs in the harness's Recipe Lab (ARC-13), and the iPhone app is `apps/RedlampBenchApp` (ARC-12).
 
 ## A bench folder
