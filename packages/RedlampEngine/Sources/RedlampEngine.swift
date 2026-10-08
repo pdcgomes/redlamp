@@ -310,6 +310,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         sessions.removeAll()
         release(keeping: nil)
         unloadMaskModels()
+        await EmbeddingCache.shared.releaseMemory()
         await releaseGenerativeFill()
         await withCheckedContinuation { (released: CheckedContinuation<Void, Never>) in
             renderQueue.async { [self] in

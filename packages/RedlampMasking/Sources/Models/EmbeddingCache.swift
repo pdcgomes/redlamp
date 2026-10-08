@@ -37,6 +37,11 @@ public actor EmbeddingCache {
         return data
     }
 
+    /// Lets go of the entry kept in memory; the next read maps its file again.
+    public func releaseMemory() {
+        memory = nil
+    }
+
     public func store(_ data: Data, for key: String) {
         memory = (key, data)
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

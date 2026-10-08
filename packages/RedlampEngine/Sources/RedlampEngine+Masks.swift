@@ -736,7 +736,9 @@ extension RedlampEngine {
             embedding = try await Task.detached(priority: .userInitiated) { try segmenter.embedding(for: image) }.value
             await EmbeddingCache.shared.store(embedding.data(), for: key)
         }
-        keep((analysis.hash, embedding), in: objectEmbeddingCache, madeFrom: analysis.hash)
+        if !keep((analysis.hash, embedding), in: objectEmbeddingCache, madeFrom: analysis.hash) {
+            await EmbeddingCache.shared.releaseMemory()
+        }
         return embedding
     }
 
@@ -869,12 +871,13 @@ extension RedlampEngine {
     }
 
     /// Keeps `result`, made from the analysis render `hash`, in `cache` while that render is the
-    /// open photo's, decided as `keep(_:in:)` decides.
-    func keep<Value: Sendable>(_ result: Value, in cache: borrowing Mutex<Value?>, madeFrom hash: String) {
+    /// open photo's, decided as `keep(_:in:)` decides. Returns whether it was kept.
+    @discardableResult
+    func keep<Value: Sendable>(_ result: Value, in cache: borrowing Mutex<Value?>, madeFrom hash: String) -> Bool {
         cache.withLock { kept in
-            if currentSession().flatMap(keptAnalysis(for:))?.hash == hash {
-                kept = result
-            }
+            guard currentSession().flatMap(keptAnalysis(for:))?.hash == hash else { return false }
+            kept = result
+            return true
         }
     }
 
@@ -901,6 +904,7 @@ extension RedlampEngine {
         vitMatteModel.unload()
         thingFinder.unload()
         keptAnalyses.withLock { $0.removeAll() }
+        Task { await EmbeddingCache.shared.releaseMemory() }
     }
 
     func warmIfWanted(_ session: ImageSession) {

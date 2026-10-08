@@ -931,11 +931,9 @@ struct EngineMemoryTests {
         let unloaded = try await held(key)
         print("embedding in memory: \(embedded ?? 0) bytes; \(closing) once closed, \(late) after a late mask, "
             + "\(unloaded) once the models unloaded")
-        withKnownIssue("the shared embedding cache keeps its last entry in memory") {
-            #expect(closing == 0, "\(closing) bytes kept once the window closed")
-            #expect(late == 0, "\(late) bytes kept after a mask reached the model once it closed")
-            #expect(unloaded == 0, "\(unloaded) bytes kept once the models unloaded")
-        }
+        #expect(closing == 0, "\(closing) bytes kept once the window closed")
+        #expect(late == 0, "\(late) bytes kept after a mask reached the model once it closed")
+        #expect(unloaded == 0, "\(unloaded) bytes kept once the models unloaded")
     }
 
     /// The photo open now, fitted in a canvas.
