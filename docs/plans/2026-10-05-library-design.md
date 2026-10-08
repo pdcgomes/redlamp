@@ -400,6 +400,14 @@ Groups in lists (`GroupedList`): a list's photos under their groups, stacks clos
 | One moment closed or opened | 0.75 to 0.88 µs median, 36 µs at the slowest | under 2 ms |
 | Regrouped after 1,000 flags change | 75 to 77 ms | |
 
+In the grid (612a5f5d to d172fb32): Group By none, moment, day, folder, camera, lens, orientation, or moment then camera, from View › Group By, the grid's toolbar and the palette, kept with each source's view. Each group's header holds its title, count and picks, and a click opens or closes it, ⌥-click every group; the grid follows `GroupedList`'s diffs, keeping the selection and the focused photo without reloading, and ← and → step in the grid's order past closed groups. ⌥← and ⌥→ go to the first photo of the group before or after, opening it, also from the Photo menu and the palette. The Tighter–Looser control sits in the toolbar while grouped by moment, kept with the source. Orientations are completed with their titles and have a column in the filter bar. The moments without a pick are counted in a toolbar button that shows them alone, and in the View menu. A source's first grouping takes about 180 ms at 20,000 photos, most of it reading index IDs off the main thread, and badges' changes regroup once they've been quiet for half a second.
+
+| `--library-perf … --library-perf-groups-only`, Release, load 15 to 40 | 2007 folder (1,398 photos, 129 moments) | 20,000 photos (1,766 moments) | Budget |
+|---|---|---|---|
+| Group By or the Tighter–Looser setting changed: main thread p99, on screen | 12 to 15 ms, up to 17.5 ms | 9.0 to 9.3 ms, up to 20 ms | 8.3 ms, 16 ms: FAIL |
+| Every group opened and closed: main thread p99, on screen | 5.9 to 7.4 ms, up to 7.3 ms | 7.8 to 8.3 ms, up to 8.2 ms | 8.3 ms, 16 ms |
+| Held arrow keys, grouped (ungrouped) | 6.5 to 11 ms (7.5 to 9.2) | 9.6 and 9.7 ms (9.2 to 9.5), one run 16.2 ms | 8.3 ms |
+
 Soft frames (LIB-42) would propose a pick for each moment: the sharpest frame of each burst at the camera's focus point, measured on the largest embedded preview and judged only within its burst, kept in the index by content key, drawn dashed until accepted, never touching a frame the user decided, with Changed by You as a filter.
 
 ## Other apps' metadata (LIB-24)
@@ -869,7 +877,7 @@ What it changed: the first version took 3.7 s for the million, keeping 13 to 16 
 - The traits Wide Open, Telephoto and Ultra Wide need the lens's widest aperture and the 35 mm-equivalent focal length as index columns.
 - Indexing folders in iCloud Drive without downloading every photo: from what's already downloaded, and the rest as it arrives.
 - Whether FSEvents reports Redlamp's own writes on this Mac. The streams don't ask to leave them out (`kFSEventStreamCreateFlagIgnoreSelf` isn't set), so they should, but the app's saves were seen going unreported, perhaps only inside Cursor's sandbox. The app reports its writes to `LibraryLive` either way.
-- Moments in the app: Group By and the Tighter–Looser setting kept with each source's view, the grid driven by `GroupedList`'s diffs and selection, ⌥← and ⌥→ by moment, and a scenario; titles for the orientation completions (shown as "orientation" now), and an orientation column in the filter bar, which needs RedlampUI's switch over `FacetColumn` to take it. Their defaults, 60 s, four times the median and the median's 15-minute cap, are to be measured on the owner's culled shoots.
+- Moments in the app: a change of Group By or of the Tighter–Looser setting within budget (main thread p99 9 to 15 ms against 8.3, up to 20 ms on screen at 20,000 against 16), and held arrow keys, which miss 8.3 ms at this load grouped or not (one run at 16.2 ms, its cause not found); the moments without a pick as a filter-bar term, which needs a term evaluated with the source's moment setting, a library change; culling's Auto Advance and the filmstrip following the grid's order rather than the list's; stacks closed inside groups. The defaults, 60 s, four times the median and the median's 15-minute cap, are to be measured on the owner's culled shoots.
 - The filter bar works but doesn't look or feel native: small, and dated beside the Mac's own controls. The library's UI is revamped in a polish phase once its parts are in the app, the filter bar first (LIB-45); until then a part only has to offer every feature it has.
 - The import window resumes an import cut short but can't roll a whole one back, doesn't show Library after a Resume, and has a disabled place for IPTC presets, which need `ImportMetadata` to carry LIB-22's fields and a preset picker.
 - Custom labels' colours need a definitions file, a palette, the grid's badges and an XMP mapping.

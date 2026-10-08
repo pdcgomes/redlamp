@@ -259,7 +259,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Stacks | Yes | In progress | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks |
 | Bringing a Lightroom Classic catalog | Yes | Planned | | P4 | LIB-29, LIB-30 | Ratings, flags, labels, keywords and collections, from a copy of the catalog, with a report; Capture One and darktable libraries too |
 | Library Health | Partly | In progress | | P4 | LIB-39, LIB-40 | Exact duplicates, damaged and misnamed files, and a rule for raw and JPEG pairs, each shown only while it has findings and moved to the Trash only from a list you confirm, with Undo |
-| Photos grouped into moments | No | In progress | | P4 | LIB-41 | By pauses in shooting, with one Tighter–Looser control, or by day, folder, camera, lens or orientation, with the moments that have no pick |
+| Photos grouped into moments | No | In progress | | P4 | LIB-41 | In the grid, by pauses in shooting with one Tighter–Looser control, or by day, folder, camera, lens or orientation; each group with its count and picks, opened and closed, ⌥← and ⌥→ between them, and the moments that have no pick shown alone |
 | Soft frames found in bursts | Partly | Later | | | LIB-42 | The sharpest frame of each burst at the camera's focus point, proposed and never applied to a frame you decided. Lightroom Classic's assisted culling judges sharpness; whether it ranks a burst isn't documented |
 | People (face recognition) and Map | Yes | Later | | | LIB-34, LIB-35 | |
 | AI search | Yes | Later | | | LIB-32, LIB-33 | On the Mac |
