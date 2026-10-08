@@ -84,9 +84,10 @@
                 model.librarySources.saveSmart("flag:pick", named: picks.name, inside: nil)
             }
             defer {
-                try? app.main { model in
+                try? app.run("the collections deleted") { model in
                     model.librarySources.delete(selects)
                     model.librarySources.delete(picks)
+                    await model.libraryPanels.written()
                 }
             }
             try app.waitForDropCounts("the two collections listed") { sources in
@@ -135,7 +136,12 @@
                 }
                 model.libraryPanels.create(text)
             }
-            defer { try? app.main { model in _ = model.libraryPanels.delete(keyword) } }
+            defer {
+                try? app.run("the keyword deleted") { model in
+                    model.libraryPanels.delete(keyword)
+                    await model.libraryPanels.written()
+                }
+            }
             try app.wait("the keyword in the Keyword List", timeout: 30) { _ in
                 Views.editorWindow.flatMap { Views.find("keywordList.name." + text, in: $0) } != nil
             }
@@ -180,10 +186,11 @@
             let text = "Painted-\(UUID().uuidString.prefix(6))"
             guard let keyword = KeywordPath(text) else { throw ScenarioFailure("No keyword path") }
             defer {
-                try? app.main { model in
+                try? app.run("the painter put away and its keyword deleted") { model in
                     model.keywordPainter.setOn(false)
                     model.keywordPainter.text = ""
-                    _ = model.libraryPanels.delete(keyword)
+                    model.libraryPanels.delete(keyword)
+                    await model.libraryPanels.written()
                 }
             }
             let (a, b, c, d) = (
@@ -325,6 +332,13 @@
         /// lets
         /// go there, through the window as the mouse does.
         func dragKeyword(_ keyword: String, ontoPhoto name: String) throws {
+            // A change's progress bar in Keywording comes and goes as it's made, moving the Keyword List below it.
+            try run("the panels to settle") { model in
+                await model.libraryPanels.written()
+                await model.libraryPanels.refreshed()
+                await model.libraryPanels.keywordsRead()
+            }
+            pause(0.3)
             let label = Target.identifier("keywordList.name." + keyword)
             let from = try frame(of: label)
             let to = try frame(of: .identifier("grid.\(name)"))
