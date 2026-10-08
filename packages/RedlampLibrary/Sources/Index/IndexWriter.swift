@@ -59,11 +59,12 @@ public extension LibraryIndex.Writer {
         try statement.run()
     }
 
-    /// Adds the root, or updates the one at its path, and returns its ID.
+    /// Adds the root, or updates the one at its path, and returns its ID: a new root's is one no root had
+    /// (`IndexIDs`).
     @discardableResult
     func upsertRoot(_ root: RootRecord) throws -> Int64 {
         let statement = try database.cached("""
-        INSERT INTO roots (volume, path, bookmark, sidecars) VALUES (?, ?, ?, ?)
+        INSERT INTO roots (volume, path, bookmark, sidecars, id) VALUES (?, ?, ?, ?, ?)
         ON CONFLICT (path) DO UPDATE SET volume = excluded.volume, bookmark = excluded.bookmark,
           sidecars = excluded.sidecars
         RETURNING id
@@ -72,14 +73,19 @@ public extension LibraryIndex.Writer {
         try statement.bind(root.path, at: 2)
         try statement.bind(root.bookmark, at: 3)
         try statement.bind(root.sidecars.rawValue, at: 4)
+        try statement.bind(self.root(path: root.path) == nil ? newID(of: .roots) : nil, at: 5)
         return try returnedID(statement)
     }
 
-    /// Adds the folder, or updates the one at its path, and returns its ID.
+    /// Adds the folder, or updates the one at its path, and returns its ID: a new folder's is one no folder had
+    /// (`IndexIDs`).
     @discardableResult
     func upsertFolder(_ folder: FolderRecord) throws -> Int64 {
+        let existing = try database.cached("SELECT 1 FROM folders WHERE path = ?")
+        try existing.bind(folder.path, at: 1)
         let statement = try database.cached("""
-        INSERT INTO folders (root, parent, path, signature, indexed_signature, listed_at) VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO folders (root, parent, path, signature, indexed_signature, listed_at, id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (path) DO UPDATE SET root = excluded.root, parent = excluded.parent,
           signature = excluded.signature, indexed_signature = excluded.indexed_signature,
           listed_at = excluded.listed_at
@@ -91,6 +97,7 @@ public extension LibraryIndex.Writer {
         try statement.bind(folder.signature, at: 4)
         try statement.bind(folder.indexedSignature, at: 5)
         try statement.bind(folder.listedAt?.timeIntervalSince1970, at: 6)
+        try statement.bind(existing.first { _ in true } == nil ? newID(of: .folders) : nil, at: 7)
         return try returnedID(statement)
     }
 
@@ -140,8 +147,9 @@ public extension LibraryIndex.Writer {
     // MARK: - Photos
 
     /// Adds the photos, or updates those already in their folders under their names, keeping
-    /// their IDs; returns the IDs in order. `id` in the records is ignored. Pass a batch in one
-    /// call: each call writes its photos' text once all its rows are in.
+    /// their IDs; returns the IDs in order. A photo added gets an ID no photo had (`IndexIDs`); `id`
+    /// in the records is ignored. Pass a batch in one call: each call writes its photos' text once
+    /// all its rows are in.
     @discardableResult
     func upsertPhotos(_ photos: [PhotoRecord]) throws -> [Int64] {
         let existing = try database.cached("SELECT id, title, caption FROM photos WHERE folder = ? AND name = ?")
@@ -151,6 +159,7 @@ public extension LibraryIndex.Writer {
         var added: [Int64] = []
         var replaced: [Int64] = []
         var scheduled = Set<Int64>()
+        var given: Int64?
         for photo in photos {
             try existing.bind(photo.folder, at: 1)
             try existing.bind(photo.name, at: 2)
@@ -161,6 +170,10 @@ public extension LibraryIndex.Writer {
                 )
             }
             try bind(photo, to: upsert)
+            if before == nil {
+                given = try (given ?? lastID(of: .photos)) + 1
+            }
+            try upsert.bind(before == nil ? given : nil, at: Self.upsertPhotoID)
             let id = try returnedID(upsert)
             ids.append(id)
             if before?.unchanged == true || scheduled.contains(id) {
@@ -172,6 +185,9 @@ public extension LibraryIndex.Writer {
             } else {
                 replaced.append(id)
             }
+        }
+        if let given {
+            try noteGiven(given, of: .photos)
         }
         try writeText(adding: added, replacing: replaced)
         return ids
@@ -378,15 +394,19 @@ public extension LibraryIndex.Writer {
 }
 
 extension LibraryIndex.Writer {
+    /// A photo's fields in `IndexColumns.photoFields` order, then at `upsertPhotoID` the ID of a photo added, none
+    /// for one its folder has.
     static let upsertPhoto: String = {
         let fields = IndexColumns.photoFields
-        let parameters = fields.indices.map { "?\($0 + 1)" }.joined(separator: ", ")
+        let parameters = (fields.indices.map { "?\($0 + 1)" } + ["?\(upsertPhotoID)"]).joined(separator: ", ")
         let updates = fields.dropFirst(2).map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
         return """
-        INSERT INTO photos (\(fields.joined(separator: ", "))) VALUES (\(parameters))
+        INSERT INTO photos (\(fields.joined(separator: ", ")), id) VALUES (\(parameters))
         ON CONFLICT (folder, name) DO UPDATE SET \(updates) RETURNING id
         """
     }()
+
+    static let upsertPhotoID = Int32(IndexColumns.photoFields.count + 1)
 
     /// Binds `photo`'s fields in `IndexColumns.photoFields` order.
     func bind(_ photo: PhotoRecord, to statement: SQLiteStatement) throws {

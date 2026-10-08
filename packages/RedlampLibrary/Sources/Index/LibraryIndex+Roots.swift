@@ -105,12 +105,15 @@ public extension LibraryIndex.Writer {
         return sweep
     }
 
-    /// Removes the root's row and its mark; its folders are taken out or given to other roots first.
+    /// Removes the root's row, its mark and what the settings keep of where its sidecars are; its folders are taken
+    /// out or given to other roots first.
     private func deleteRoot(_ id: Int64) throws {
         let statement = try database.cached("DELETE FROM roots WHERE id = ?")
         try statement.bind(id, at: 1)
         try statement.run()
-        try setSetting(nil, for: Self.removingKey(id))
+        for key in [Self.removingKey(id), LibrarySidecars.probedKey(id), LibrarySidecars.pathKey(id)] {
+            try setSetting(nil, for: key)
+        }
     }
 
     /// The ID of the root at `path`, made on `volume` when the index has none.

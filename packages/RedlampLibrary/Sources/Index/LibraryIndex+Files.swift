@@ -99,6 +99,7 @@ public extension LibraryIndex.Writer {
             try renumber.bind(removed.photo.id, at: 1)
             try renumber.bind(id, at: 2)
             try renumber.run()
+            try noteGiven(removed.photo.id, of: .photos)
             let text = try database.cached("DELETE FROM photo_text WHERE rowid = ?")
             try text.bind(id, at: 1)
             try text.run()
@@ -125,17 +126,19 @@ public extension LibraryIndex.Writer {
         return restored
     }
 
-    /// Puts back a folder's row as it was, under its own ID unless another folder has taken it.
+    /// Puts back a folder's row as it was, under its own ID unless another folder has taken it, in the root that
+    /// holds its path now: none, and nothing put back, once the folder it was in has left the library.
     @discardableResult
-    func restoreFolder(_ removed: RemovedFolder) throws -> Int64 {
+    func restoreFolder(_ removed: RemovedFolder) throws -> Int64? {
         if let existing = try folder(anyFormOf: removed.path) {
             return existing.id
         }
+        guard let root = try root(containing: removed.path) else { return nil }
         let slash = removed.path.lastIndex(of: "/") ?? removed.path.startIndex
         let parentPath = slash == removed.path.startIndex ? "/" : String(removed.path[..<slash])
-        let parent = try root(containing: removed.path)?.path == removed.path ? nil : folderID(forPath: parentPath)
+        let parent = root.path == removed.path ? nil : try folderID(forPath: parentPath)
         let id = try upsertFolder(FolderRecord(
-            root: removed.root, parent: parent, path: removed.path, signature: removed.signature,
+            root: root.id, parent: parent, path: removed.path, signature: removed.signature,
             indexedSignature: removed.indexedSignature,
         ))
         guard id != removed.id, try folder(id: removed.id) == nil else { return id }
@@ -148,6 +151,7 @@ public extension LibraryIndex.Writer {
             try statement.bind(id, at: 2)
             try statement.run()
         }
+        try noteGiven(removed.id, of: .folders)
         return removed.id
     }
 }
