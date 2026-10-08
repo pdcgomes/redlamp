@@ -233,9 +233,11 @@
                     && (try? app.smartSheetValue("smart.rule.1.value")) == "3"
             }
             try app.confirmCollectionSheet("Edit Smart Collection")
-            try app.wait("the smart collection counting the rated pick", timeout: 30) { _ in
-                app.sourceRowLabel("collections.\(picked)") == "\(picked), 1 photo"
-            }
+            try app.waitForRow(
+                "collections.\(picked)",
+                "\(picked), 1 photo",
+                "the smart collection counting the rated pick",
+            )
             try app.clickSourceRow("collections.\(picked)")
             try app.waitForSource("its photo shown", timeout: 20) { model in
                 !model.librarySources.isListing && model.items.map(\.url) == [a]
@@ -267,8 +269,11 @@
                 try wait(what, timeout: timeout) { _ in self.sourceRowLabel(identifier) == label }
             } catch {
                 let state = try main { model in
-                    let places = model.librarySources.collections.values.map { "\($0.path.text) \($0.kind)" }.sorted()
-                    let photos = model.items.map { "\($0.name) \($0.metadata.flag.map(\.rawValue) ?? "-")" }
+                    let places = model.librarySources.collections.values
+                        .map { "\($0.path.text) \($0.kind)\($0.query.map { " “\($0)”" } ?? "")" }.sorted()
+                    let photos = model.items.map {
+                        "\($0.name) \($0.metadata.flag.map(\.rawValue) ?? "-") \($0.metadata.rating)"
+                    }
                     return "the row says \(self.sourceRowLabel(identifier) ?? "nothing"); the list has \(places); "
                         + "\(model.libraryPanels.problem ?? "no problem"); shown \(photos)"
                 }
