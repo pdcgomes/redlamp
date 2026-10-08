@@ -9,13 +9,12 @@ import RedlampLibrary
 /// folder's shown from its photo list are, so the panels, Group By and the filter bar work on them, and the
 /// source keeps its own filter and view.
 extension FolderLibrary {
-    /// Closes the open folder for `source`'s photos, `photos` as the library lists them (with `only`, just those
-    /// of them), filtered and sorted as the filter bar has `source`: each change of their list goes to `deliver`
-    /// with the opening's generation, for `showSource`. The folder that was open is the one the next launch
-    /// opens. Returns the generation, which a later opening ends, and the list, which its owner closes; no list
-    /// without the library.
+    /// Closes the open folder for `source`'s photos, `photos` as the library lists them, filtered and sorted as
+    /// the filter bar has `source`: each change of their list goes to `deliver` with the opening's generation, for
+    /// `showSource`. The folder that was open is the one the next launch opens. Returns the generation, which a
+    /// later opening ends, and the list, which its owner closes; no list without the library.
     func openSource(
-        _ source: LibrarySource, photos: PhotoSource, only: Set<Int64>?,
+        _ source: LibrarySource, photos: PhotoSource,
         deliver: @escaping @MainActor @Sendable (LibrarySourceList.Change, Int) -> Void,
     ) -> (generation: Int, list: LibrarySourceList?) {
         let before = openFolder ?? trash.folderBefore
@@ -33,7 +32,7 @@ extension FolderLibrary {
         guard let core = service?.core else { return (generation, nil) }
         filters?.follow(source, photos: photos)
         let list = LibrarySourceList(
-            core: core, source: photos, only: only, filter: filters?.request(for: source.key) ?? LibraryListFilter(),
+            core: core, source: photos, filter: filters?.request(for: source.key) ?? LibraryListFilter(),
         ) { change in deliver(change, generation) }
         fromLibrary.sourceList = list
         filters?.sourceList = list

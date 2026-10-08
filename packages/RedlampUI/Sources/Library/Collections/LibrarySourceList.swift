@@ -58,11 +58,9 @@ final class LibrarySourceList: Sendable {
     /// the filmstrip and the grid take faster than as many rows.
     static let largestDiff = 32
 
-    /// The list opens once LibraryLive has applied the changes it has gathered. With `only`, it holds just
-    /// those photos of the source's.
+    /// The list opens once LibraryLive has applied the changes it has gathered.
     init(
-        core: LibraryCore, source: PhotoSource, only: Set<Int64>? = nil,
-        filter: LibraryListFilter = LibraryListFilter(),
+        core: LibraryCore, source: PhotoSource, filter: LibraryListFilter = LibraryListFilter(),
         deliver: @escaping @MainActor @Sendable (Change) -> Void,
     ) {
         self.source = source
@@ -94,7 +92,7 @@ final class LibrarySourceList: Sendable {
                 forwarding.cancel()
                 handing.finish()
             }
-            var mapping = Mapping(only: only)
+            var mapping = Mapping()
             var handedFilter: LibraryListFilter?
             for await event in events {
                 let filter = state.withLock { $0.filter }
@@ -176,7 +174,6 @@ final class LibrarySourceList: Sendable {
     /// What maps a list's updates to changes: every photo of the source by ID, filtered or not, their folders'
     /// paths, and the photos handed over last.
     struct Mapping: Sendable {
-        let only: Set<Int64>?
         private var items: [Int64: LibraryItem] = [:]
         private var folders: [Int64: String] = [:]
         /// The source's photos in its own order, capture time's.
@@ -190,10 +187,6 @@ final class LibrarySourceList: Sendable {
         /// The IDs handed over last, in order, their photos, and each one's place among them; nil before the first.
         private var handed: (ids: [Int64], items: [LibraryItem], places: [Int64: Int32])?
 
-        init(only: Set<Int64>?) {
-            self.only = only
-        }
-
         /// Whether photo `id` is one of the source's.
         func holds(_ id: Int64) -> Bool {
             items[id] != nil
@@ -202,10 +195,7 @@ final class LibrarySourceList: Sendable {
         /// The source's photos as `update` leaves them, reading the rows of those new or changed.
         mutating func take(_ update: PhotoListUpdate, index: LibraryIndex) async throws {
             let list = update.list
-            var ids = Array(list.ids)
-            if let only {
-                ids.removeAll { !only.contains($0) }
-            }
+            let ids = Array(list.ids)
             var changed = Set<Int64>()
             if !update.diff.reset {
                 changed.formUnion(update.diff.inserted.map { list[$0] })

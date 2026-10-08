@@ -2,7 +2,7 @@ import Foundation
 import RedlampDocument
 
 /// Where a list's photos come from (LIB-10): a folder, alone or with every folder below it, a
-/// search, a collection, All Photographs or Rejected.
+/// search, a collection, All Photographs or Rejected, or photos named by their IDs.
 public enum PhotoSource: Sendable, Hashable {
     /// The photos in a folder, and with `includingSubfolders` those in every folder below it.
     case folder(URL, includingSubfolders: Bool)
@@ -20,6 +20,8 @@ public enum PhotoSource: Sendable, Hashable {
     case health(HealthCheck)
     /// The photos whose findings the user kept anyway, any check's (LIB-40).
     case keptAnyway
+    /// The photos of these IDs the library has: an import's (LIB-23, LIB-27), whose folders may hold others.
+    case photos(Set<Int64>)
 
     /// Whether it holds photos that can't be read, which other sources leave out (LIB-40).
     var findsUnreadable: Bool {
@@ -61,6 +63,8 @@ extension QueryEngine {
             return try await store.rows(withIDs: healthFindings(check, in: store, generation: generation).photos)
         case .keptAnyway:
             return try await store.rows(withIDs: keptAnyway(generation: generation))
+        case let .photos(ids):
+            return store.rows(withIDs: Array(ids))
         case let .folder(url, includingSubfolders):
             let path = LibraryIndexer.path(url)
             let below = path == "/" ? "/" : path + "/"

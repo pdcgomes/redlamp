@@ -73,8 +73,15 @@ struct LibrarySourceViewsTests {
             #expect(sources.add(to: selects))
             try await sandbox.eventually { model.libraryPanels.undoCount > 2 }
             await model.libraryPanels.written()
-            try await sandbox.counts { $0.count(of: .collection(selects)) == 3 && $0.count(of: .rejected) == 2 }
-            try #require(sources.count(of: .collection(selects)) == 3 && sources.count(of: .marked) == 2)
+            try await sandbox.counts(seconds: 60) {
+                $0.count(of: .collection(selects)) == 3 && $0.count(of: .rejected) == 2
+            }
+            let state = "Selects \(String(describing: sources.count(of: .collection(selects)))), undo "
+                + "\(model.libraryPanels.undoCount), \(model.libraryPanels.problem ?? "no problem"), opening "
+                + "\(String(describing: model.opening))"
+            try #require(
+                sources.count(of: .collection(selects)) == 3 && sources.count(of: .marked) == 2, "\(state)",
+            )
         }
 
         /// Shows `source`, and waits until its photos are `photos`.
@@ -232,5 +239,39 @@ struct LibrarySourceViewsTests {
         try await library.sandbox.eventually { model.items.map(\.url) == [library.c, library.e, library.a] }
         #expect(model.items.map(\.url) == [library.c, library.e, library.a])
         filters.setSort(LibrarySort())
+    }
+
+    @Test func `Previous Import's filter bar counts the photos it copied alone, not the others in their folder`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["Imported/Before.JPG"])
+        let card = sandbox.base.appending(path: "Card", directoryHint: .isDirectory)
+        try sandbox.photos(["IMG_0001.JPG", "IMG_0002.JPG"], under: card, from: 10)
+        let model = try await sandbox.open()
+        let sources = model.librarySources
+        try await sandbox.counts { $0.count(of: .allPhotographs) == 1 }
+        let core = try #require(sandbox.service?.core)
+        let library = ImportLibrary(
+            paths: core.paths, index: core.index, store: core.store, indexer: core.indexer, live: core.live,
+        )
+        let session = try ImportSession(sources: [ImportSource.at(card)], library: library, makesPreviews: false)
+        let plan = try await session.plan(ImportSettings(
+            destination: sandbox.folder("Imported"), folders: NamingTemplate(parsing: ""),
+        ))
+        let outcome = try await session.importer().run(plan)
+        try #require(outcome.state == .finished && outcome.verified == 2)
+        try await sandbox.counts { $0.count(of: .previousImport) == 2 && $0.count(of: .allPhotographs) == 3 }
+        #expect(model.perform(.showPreviousImport))
+        try await sandbox.eventually { !sources.isListing && model.items.count == 2 }
+        #expect(model.items.map(\.name).sorted() == ["IMG_0001.JPG", "IMG_0002.JPG"])
+
+        let filters = try #require(model.libraryFilters)
+        filters.setBarShown(true)
+        filters.setFilter(LibraryFilter(sections: [.metadata], columns: [.folder]))
+        filters.countColumns()
+        try await sandbox.eventually { filters.columns[0] != nil }
+        #expect(filters.columns[0]?.total == 2, "the import's two of the folder's three")
+        #expect(filters.columns[0]?.values.map(\.count) == [2])
     }
 }

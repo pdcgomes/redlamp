@@ -5,19 +5,15 @@ import RedlampLibrary
 /// lenses, its ISO, shutter and aperture ranges, and its pairs and stacks, from the column store and the stacks
 /// found in it, off the main thread.
 extension LibraryService {
-    /// `source`'s summary as the library has it now, of just the photos `only` names when it's given; nil while
-    /// the library isn't open.
-    func summary(of source: PhotoSource, only: Set<Int64>? = nil) async -> SourceSummary? {
+    /// `source`'s summary as the library has it now; nil while the library isn't open.
+    func summary(of source: PhotoSource) async -> SourceSummary? {
         guard let core else { return nil }
         let (index, engine) = (core.index, core.engine)
         return await Task.detached(priority: .userInitiated) { () -> SourceSummary? in
-            guard var list = try? await engine.list(source), let store = engine.store,
+            guard let list = try? await engine.list(source), let store = engine.store,
                   let stacks = try? await StackFinder.find(in: index, store: store),
                   let grouping = try? await engine.grouping(stacks: stacks)
             else { return nil }
-            if let only {
-                list = PhotoList(source: source, sort: list.sort, ids: list.ids.filter(only.contains))
-            }
             return try? grouping.summary(of: list)
         }.value
     }
