@@ -1,4 +1,3 @@
-import AppKit
 import RedlampEngineAPI
 import SwiftUI
 
@@ -185,7 +184,7 @@ private struct SpotHandles: View {
         let strength = isSelected ? 0.95 : 0.55
 
         if let region = spot.region {
-            regionHandles(region, center: center)
+            regionHandles(region, center: center, strength: strength)
         } else {
             shapeHandles(center: center, source: source, radius: radius, strength: strength)
         }
@@ -198,16 +197,20 @@ private struct SpotHandles: View {
         }
     }
 
-    /// A picked person or object: its mask, tinted while selected, and a pin to select it by.
+    /// A picked person or object: its outline while selected, so the fill inside it shows, and a
+    /// pin to select it by.
     @ViewBuilder
-    private func regionHandles(_ region: AIMask, center: CGPoint) -> some View {
-        if isSelected, let image = Self.tint(region.bitmap) {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.medium)
-                .frame(width: frame.rect.width, height: frame.rect.height)
-                .position(x: frame.rect.midX, y: frame.rect.midY)
-                .allowsHitTesting(false)
+    private func regionHandles(_ region: AIMask, center: CGPoint, strength: Double) -> some View {
+        if isSelected, let loops = model.regionOutlines[region.bitmap.sha256] {
+            Path { path in
+                for loop in loops {
+                    path.addLines(loop.map(frame.view))
+                    path.closeSubpath()
+                }
+            }
+            .stroke(Color.white.opacity(strength), lineWidth: 2)
+            .shadow(color: .black.opacity(0.6), radius: 1)
+            .allowsHitTesting(false)
         }
         Circle()
             .fill(isSelected ? Color.accentColor : Color.white.opacity(0.85))
@@ -218,19 +221,11 @@ private struct SpotHandles: View {
             .position(center)
             .onTapGesture { model.selectedSpotID = spot.id }
             .help("\(spot.mode.name) \(region.kind == .people ? "person" : "object")")
-    }
-
-    /// A mask as translucent accent over the photo.
-    private static func tint(_ bitmap: MaskBitmap) -> NSImage? {
-        guard let png = bitmap.png, let mask = NSBitmapImageRep(data: png)?.cgImage else { return nil }
-        let size = NSSize(width: mask.width, height: mask.height)
-        return NSImage(size: size, flipped: false) { rect in
-            guard let context = NSGraphicsContext.current?.cgContext else { return false }
-            context.clip(to: rect, mask: mask)
-            context.setFillColor(NSColor.controlAccentColor.withAlphaComponent(0.4).cgColor)
-            context.fill(rect)
-            return true
-        }
+            .task(id: isSelected ? region.bitmap : nil) {
+                if isSelected {
+                    await model.traceOutline(of: region)
+                }
+            }
     }
 
     /// A circle or stroke, its source when it has one, and a handle to resize it.

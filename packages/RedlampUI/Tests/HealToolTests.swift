@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
+import SwiftUI
 import Testing
 @testable import RedlampUI
 
@@ -131,6 +132,118 @@ struct HealToolTests {
         model.removesShadows = false
         await model.pickRegion(at: ImagePoint(x: 0.3, y: 0.4))
         #expect(model.recipe.spots.count == 2 && model.recipe.spots.last?.region?.center == ImagePoint(x: 0.25, y: 0.5))
+    }
+
+    /// An Objects mask of 300 × 200 pixels, as for the stub's 600 × 400 photo, covering what lies
+    /// between `inner` and `outer` image heights from `centre`.
+    private func ring(at centre: ImagePoint, outer: Double, inner: Double = 0) throws -> AIMask {
+        let (width, height) = (300, 200)
+        let aspect = Double(width) / Double(height)
+        let pixels = (0 ..< width * height).map { index -> UInt8 in
+            let dx = ((Double(index % width) + 0.5) / Double(width) - centre.x) * aspect
+            let dy = (Double(index / width) + 0.5) / Double(height) - centre.y
+            let distance = (dx * dx + dy * dy).squareRoot()
+            return distance <= outer && distance >= inner ? 255 : 0
+        }
+        let rep = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 1,
+            hasAlpha: false, isPlanar: false, colorSpaceName: .deviceWhite, bytesPerRow: width, bitsPerPixel: 8,
+        ))
+        rep.bitmapData?.update(from: pixels, count: pixels.count)
+        let png = try #require(rep.representation(using: .png, properties: [:]))
+        return AIMask(
+            kind: .objects, provider: "stub", revision: 1, analysisHash: "h", center: centre,
+            bitmap: MaskBitmap(png: png, width: width, height: height),
+        )
+    }
+
+    /// The Healing tool's overlay drawn over a canvas of `size` points, a pixel a point: how opaque
+    /// it is at a point of the canvas, and where the photo's points are on it.
+    private func drawOverlay(_ model: EditorModel, size: CGSize) throws
+        -> (opacity: (CGPoint) -> Double, frame: ImageFrame) {
+        model.canvas.updateView(size: size, backingScale: 1)
+        let renderer = ImageRenderer(
+            content: HealOverlayView().environment(model).frame(width: size.width, height: size.height),
+        )
+        renderer.scale = 1
+        let image = try #require(renderer.cgImage)
+        let (width, height) = (image.width, image.height)
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
+        ))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let data = try #require(context.data)
+        let pixels = Array(UnsafeBufferPointer(
+            start: data.bindMemory(to: UInt8.self, capacity: width * height * 4), count: width * height * 4,
+        ))
+        let frame = ImageFrame(rect: model.canvas.imageRect(in: size), geometry: model.canvasGeometry)
+        return ({ point in
+            let (x, y) = (min(max(Int(point.x), 0), width - 1), min(max(Int(point.y), 0), height - 1))
+            return Double(pixels[(y * width + x) * 4 + 3]) / 255
+        }, frame)
+    }
+
+    /// Picks the disc the engine finds about `centre` and draws the Healing tool's overlay with it
+    /// selected, its outline traced, then expects its edge outlined, eight ways round, and nothing
+    /// drawn over the photo inside it.
+    private func expectOutlinedPick(_ model: EditorModel, at centre: ImagePoint, radius: Double) async throws {
+        model.activeTool = .heal
+        model.spotPick = .object
+        await model.pickRegion(at: centre)
+        let region = try #require(model.selectedSpot?.region)
+        await model.traceOutline(of: region)
+        let (opacity, frame) = try drawOverlay(model, size: CGSize(width: 600, height: 400))
+        func shown(_ distance: Double, _ angle: Double) -> CGPoint {
+            frame.view(ImagePoint(x: centre.x + distance * cos(angle) / 1.5, y: centre.y + distance * sin(angle)))
+        }
+        let point = 1 / Double(frame.heightScale)
+        for angle in stride(from: 0.0, to: 2 * .pi, by: .pi / 4) {
+            #expect(opacity(shown(radius / 2, angle)) == 0, "inside the pick, \(angle) radians round")
+            let edge = stride(from: -4.0, through: 4, by: 0.5).map { opacity(shown(radius + $0 * point, angle)) }
+            #expect(edge.max() ?? 0 > 0.8, "its edge, \(angle) radians round")
+        }
+    }
+
+    @Test func `a selected pick is outlined, leaving the photo inside it to be seen`() async throws {
+        let engine = StubEngine()
+        engine.computed = try [ring(at: ImagePoint(x: 0.5, y: 0.5), outer: 0.25)]
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        try await expectOutlinedPick(model, at: ImagePoint(x: 0.5, y: 0.5), radius: 0.25)
+    }
+
+    @Test func `a selected pick's outline is on it in the cropped photo`() async throws {
+        let engine = StubEngine()
+        engine.computed = try [ring(at: ImagePoint(x: 0.25, y: 0.5), outer: 0.2)]
+        let (model, cleanup) = try await openEditor(engine)
+        defer { cleanup() }
+        model.setCrop(CropRect(left: 0, top: 0, right: 0.5, bottom: 1))
+        let info = try #require(model.info)
+        model.canvas.imageSize = GeometryMap(recipe: model.recipe, imageSize: info.pixelSize, lens: nil).outputSize
+        #expect(model.canvas.imageSize == PixelSize(width: 300, height: 400))
+        try await expectOutlinedPick(model, at: ImagePoint(x: 0.25, y: 0.5), radius: 0.2)
+    }
+
+    @Test func `a mask's outline is a closed loop along each of its edges, in the photo's coordinates`() throws {
+        let png = try #require(try ring(at: ImagePoint(x: 0.5, y: 0.5), outer: 0.3, inner: 0.15).bitmap.png)
+        let loops = EditorModel.outline(ofMask: png).sorted { $0.count > $1.count }
+        #expect(loops.count == 2)
+        for (loop, radius) in zip(loops, [0.3, 0.15]) {
+            let distances = loop.map { hypot(($0.x - 0.5) * 1.5, $0.y - 0.5) }
+            #expect(distances.allSatisfy { abs($0 - radius) < 1.5 / 200 }, "the edge \(radius) from the middle")
+        }
+
+        // The left half of the frame: closed along the frame's edges.
+        let halves = try EditorModel.outline(ofMask: #require(half(true).bitmap.png))
+        let edge = try #require(halves.first)
+        let (xs, ys) = (edge.map(\.x), edge.map(\.y))
+        #expect(halves.count == 1)
+        #expect(abs((xs.min() ?? 1) - 0) < 1e-6 && abs((xs.max() ?? 0) - 0.5) < 1e-6)
+        #expect(abs((ys.min() ?? 1) - 0) < 1e-6 && abs((ys.max() ?? 0) - 1) < 1e-6)
+
+        let empty = try #require(try ring(at: ImagePoint(x: 0.5, y: 0.5), outer: 0).bitmap.png)
+        #expect(EditorModel.outline(ofMask: empty).isEmpty)
     }
 
     private static let car = FoundThing(

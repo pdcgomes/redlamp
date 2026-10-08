@@ -396,6 +396,9 @@ public final class EditorModel {
     /// What a click in the Healing tool does.
     public var spotPick: SpotPick = .spot
     public internal(set) var isPickingRegion = false
+    /// The outline of each picked person or object's mask, by the mask's hash, once traced
+    /// (`traceOutline(of:)`); kept until the photo closes.
+    public internal(set) var regionOutlines: [String: [[ImagePoint]]] = [:]
     /// Why the last pick found nothing, shown in the Healing panel.
     public var pickMessage: String?
     public internal(set) var isFindingDust = false
@@ -998,6 +1001,7 @@ public final class EditorModel {
         foundThings = []
         cancelGenerativeFill()
         generatedFills = [:]
+        regionOutlines = [:]
         isPlacingGuides = false
         let frameSize = loaded.developedSize(imageSize: opened.pixelSize)
         if !hasFrame {

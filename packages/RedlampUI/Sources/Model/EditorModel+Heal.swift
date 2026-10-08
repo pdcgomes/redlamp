@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 import RedlampDocument
 import RedlampEngineAPI
 
@@ -135,6 +136,101 @@ public extension EditorModel {
         return covering ?? masks.min { a, b in
             hypot(a.center.x - point.x, a.center.y - point.y) < hypot(b.center.x - point.x, b.center.y - point.y)
         }
+    }
+
+    /// Traces the outline of `region`'s mask for the canvas (`regionOutlines`), off the main
+    /// thread, once a mask.
+    func traceOutline(of region: AIMask) async {
+        let bitmap = region.bitmap
+        guard let visit = currentVisit, regionOutlines[bitmap.sha256] == nil, let png = bitmap.png else { return }
+        let loops = await Task.detached(priority: .userInitiated) { Self.outline(ofMask: png) }.value
+        guard currentVisit == visit else { return }
+        regionOutlines[bitmap.sha256] = loops
+    }
+
+    /// Where a mask crosses half coverage, as closed loops in the photo's coordinates: marching
+    /// squares over a copy at most `longEdge` pixels across, each crossing placed between its two
+    /// pixels by how much they cover.
+    nonisolated static func outline(ofMask png: Data, longEdge: Int = 1024) -> [[ImagePoint]] {
+        guard let source = CGImageSourceCreateWithData(png as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil), image.width > 0, image.height > 0
+        else { return [] }
+        let scale = min(Double(longEdge) / Double(max(image.width, image.height)), 1)
+        let width = max(Int((Double(image.width) * scale).rounded()), 1)
+        let height = max(Int((Double(image.height) * scale).rounded()), 1)
+        // A pixel of nothing all round, so a loop that reaches the frame's edge closes along it.
+        let (columns, rows) = (width + 2, height + 2)
+        guard let context = CGContext(
+            data: nil, width: columns, height: rows, bitsPerComponent: 8, bytesPerRow: columns,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue,
+        ) else { return [] }
+        context.setFillColor(gray: 0, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: columns, height: rows))
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 1, y: 1, width: width, height: height))
+        guard let data = context.data else { return [] }
+        let pixels = Array(UnsafeBufferPointer(
+            start: data.bindMemory(to: UInt8.self, capacity: columns * rows), count: columns * rows,
+        ))
+        func covers(_ index: Int) -> Bool {
+            pixels[index] >= 128
+        }
+        // A crossing is named by the pixel it leaves: 2i towards the next in its row, 2i + 1
+        // towards the one below. Each is linked to the crossing on either side of it.
+        var links: [Int: [Int]] = [:]
+        func link(_ a: Int, _ b: Int) {
+            links[a, default: []].append(b)
+            links[b, default: []].append(a)
+        }
+        for y in 0 ..< rows - 1 {
+            for x in 0 ..< columns - 1 {
+                let i = y * columns + x
+                let corners = (covers(i) ? 8 : 0) | (covers(i + 1) ? 4 : 0) | (covers(i + columns + 1) ? 2 : 0)
+                    | (covers(i + columns) ? 1 : 0)
+                let (top, bottom, left, right) = (2 * i, 2 * (i + columns), 2 * i + 1, 2 * (i + 1) + 1)
+                switch corners {
+                case 1, 14: link(left, bottom)
+                case 2, 13: link(bottom, right)
+                case 3, 12: link(left, right)
+                case 4, 11: link(top, right)
+                case 6, 9: link(top, bottom)
+                case 7, 8: link(left, top)
+                case 5, 10:
+                    // Opposite corners covered: they join through the middle when it's covered.
+                    let middle = Int(pixels[i]) + Int(pixels[i + 1]) + Int(pixels[i + columns])
+                        + Int(pixels[i + columns + 1])
+                    if (corners == 5) == (middle >= 4 * 128) {
+                        link(left, top)
+                        link(bottom, right)
+                    } else {
+                        link(top, right)
+                        link(left, bottom)
+                    }
+                default: break
+                }
+            }
+        }
+        func point(_ crossing: Int) -> ImagePoint {
+            let (i, along) = (crossing / 2, crossing % 2 == 0)
+            let (a, b) = (Double(pixels[i]), Double(pixels[along ? i + 1 : i + columns]))
+            let t = (127.5 - a) / (b - a)
+            let (x, y) = (Double(i % columns) + (along ? t : 0), Double(i / columns) + (along ? 0 : t))
+            return ImagePoint(x: (x - 0.5) / Double(width), y: (y - 0.5) / Double(height))
+        }
+        var loops: [[ImagePoint]] = []
+        var walked = Set<Int>()
+        for start in links.keys where !walked.contains(start) {
+            var loop: [ImagePoint] = []
+            var (previous, current) = (start, start)
+            repeat {
+                guard let ends = links[current], ends.count == 2 else { break }
+                walked.insert(current)
+                loop.append(point(current))
+                (previous, current) = (current, ends[0] == previous ? ends[1] : ends[0])
+            } while current != start
+            loops.append(loop)
+        }
+        return loops
     }
 
     /// Find's lowest score worth outlining: below it OWLv2's boxes are mostly guesses.
