@@ -61,6 +61,8 @@
                 knownIssues: plan.knownIssues ?? [:], knownStalls: plan.knownStalls ?? [:], host: host,
             )
             let watchdog = Watchdog(recorder: recorder)
+            let knownStalls = Array((plan.knownStalls ?? [:]).keys)
+            MainThread.isInKnownStall = { watchdog.isMainThread(inAnyOf: knownStalls) }
             recorder.write("launch", [
                 "group": launch, "scenarios": plan.scenarios, "focus": plan.focus, "seed": plan.seed,
                 "pid": Int(ProcessInfo.processInfo.processIdentifier), "footprintMB": Memory.footprint(),

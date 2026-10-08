@@ -20,6 +20,10 @@
             var result: Result<T, Error>?
         }
 
+        /// Whether the main thread is in a stall in system code the run knows of (`knownStalls`),
+        /// which `run` waits out. Set once, before the driver starts.
+        nonisolated(unsafe) static var isInKnownStall: (@Sendable () -> Bool)?
+
         /// Runs `work` on the main thread and waits for it. Never pass work that can start a
         /// modal loop: use `post` for input, then wait for its effect.
         static func run<T>(timeout: Double = 30, _ work: @escaping @MainActor () throws -> T) throws -> T {
@@ -38,9 +42,12 @@
                 done.signal()
             }
             CFRunLoopWakeUp(CFRunLoopGetMain())
-            guard done.wait(timeout: .now() + timeout) == .success, let result = box.result else {
-                throw Timeout(seconds: timeout)
+            var waited = timeout
+            while done.wait(timeout: .now() + timeout) == .timedOut {
+                guard waited < 4 * timeout, isInKnownStall?() == true else { throw Timeout(seconds: waited) }
+                waited += timeout
             }
+            guard let result = box.result else { throw Timeout(seconds: waited) }
             return try result.get()
         }
 

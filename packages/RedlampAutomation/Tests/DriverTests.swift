@@ -150,6 +150,29 @@ struct DriverTests {
         #expect(answer == 42)
     }
 
+    @Test func `the driver waits out a stall in system code the run knows of, and no other`() async {
+        @Sendable func answer() async -> Int {
+            await withCheckedContinuation { continuation in
+                Thread.detachNewThread {
+                    continuation.resume(returning: (try? MainThread.run(timeout: 0.25) { 7 }) ?? -1)
+                }
+            }
+        }
+        defer { MainThread.isInKnownStall = nil }
+        MainThread.isInKnownStall = { true }
+        async let known = answer()
+        stall(0.6)
+        #expect(await known == 7)
+        MainThread.isInKnownStall = { false }
+        async let other = answer()
+        stall(0.6)
+        #expect(await other == -1)
+    }
+
+    private func stall(_ seconds: Double) {
+        Thread.sleep(forTimeInterval: seconds)
+    }
+
     @Test func `the main thread's own calls run in place`() throws {
         #expect(try MainThread.run { 7 } == 7)
     }

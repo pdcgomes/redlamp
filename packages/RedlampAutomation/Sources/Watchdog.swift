@@ -60,6 +60,11 @@
             }
         }
 
+        /// Whether the main thread is in one of `frames` now.
+        func isMainThread(inAnyOf frames: [String]) -> Bool {
+            sampleMainThread().contains { entry in frames.contains { entry.contains($0) } }
+        }
+
         /// The main thread's call stack, by symbol: suspended, its frame pointers walked, resumed.
         private func sampleMainThread() -> [String] {
             var state = arm_thread_state64_t()
