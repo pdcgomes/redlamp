@@ -306,6 +306,14 @@ public extension FeedbackArea {
                         "metadata preset", "capture time", "time zone",
                     ],
                 ),
+                FeedbackFeature(
+                    "rename",
+                    "Rename and Move",
+                    [
+                        "rename", "rename photos", "naming template", "token", "sequence", "original name", "f2",
+                        "move to folder", "move photos",
+                    ],
+                ),
             ],
         ),
         FeedbackArea(

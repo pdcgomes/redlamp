@@ -426,6 +426,10 @@
           "title" : "Metadata, Presets and Capture Time"
         },
         {
+          "id" : "library.rename",
+          "title" : "Rename and Move"
+        },
+        {
           "id" : "library.other",
           "title" : "Something else in Library"
         }
