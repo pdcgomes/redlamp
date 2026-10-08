@@ -141,6 +141,15 @@ struct FilmstripTests {
         #expect(strip.scrollView.contentView.bounds.contains(frame), "at \(strip.scrollView.contentView.bounds)")
     }
 
+    /// The model's list can be ahead of the rows the strip has loaded.
+    @Test func `centring a row the strip hasn't loaded leaves it where it is rather than raising`() async throws {
+        defer { cleanUp() }
+        let (_, strip, window) = try await showStrip(count: 10)
+        defer { window.contentView = nil }
+        strip.center(row: 500, animated: false)
+        #expect(strip.scrollView.contentView.bounds.origin.x == 0)
+    }
+
     /// The strip follows the selection a turn after it changes; cells drawn in between, while the
     /// strip scrolls or reloads, mustn't keep a highlight it never followed.
     @Test func `a photo selected only briefly isn't left highlighted`() async throws {

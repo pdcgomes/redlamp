@@ -107,9 +107,11 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     /// strip whose scroll view says it has no horizontal scroller (`FilmstripScrollView`).
     func center(row: Int, animated: Bool) {
         collectionView.layoutSubtreeIfNeeded()
-        guard let item = collectionView.layoutAttributesForItem(at: IndexPath(item: row, section: 0))?.frame else {
-            return
-        }
+        // The model's list can be ahead of the rows the strip has loaded, and asking for one it hasn't raises;
+        // the reload that brings the row centres it.
+        guard collectionView.numberOfSections > 0, row < collectionView.numberOfItems(inSection: 0),
+              let item = collectionView.layoutAttributesForItem(at: IndexPath(item: row, section: 0))?.frame
+        else { return }
         let clip = scrollView.contentView
         let end = max(collectionView.frame.width - clip.bounds.width, 0)
         let origin = CGPoint(x: min(max(item.midX - clip.bounds.width / 2, 0), end), y: 0)
