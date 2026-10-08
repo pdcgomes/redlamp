@@ -22,6 +22,15 @@ final class BenchModel {
     let library: BenchLibrary
     private(set) var tasks: [BenchFolder] = []
     private(set) var looks: [BenchFolder] = []
+    private(set) var queue: [BenchLibrary.Queued] = []
+    private(set) var sent: [String: String] = [:]
+    private(set) var sentAt: [String: Date] = [:]
+    /// The folder being uploaded, and how far it's got.
+    private(set) var sending: (id: String, progress: Double?)?
+    /// Counts folders the Lab confirmed, for the haptic that says so.
+    private(set) var confirmed = 0
+    /// Each folder's current step, by ID.
+    private var steps: [String: Int] = UserDefaults.standard.dictionary(forKey: "steps") as? [String: Int] ?? [:]
     private(set) var hub: Hub = .none
     private(set) var syncing = false
     private(set) var message: String?
@@ -30,6 +39,8 @@ final class BenchModel {
     /// A folder to open once the app is up.
     var opened: String?
     private var lastAttempt = Date.distantPast
+    private var uploading = false
+    private var sendAgain = false
     /// Labs on the network, as Bonjour reports them while the app is open.
     private var labs: [BonjourWatcher.Service] = []
     @ObservationIgnored private var watcher: BonjourWatcher?
@@ -40,21 +51,34 @@ final class BenchModel {
         reload()
     }
 
+    /// Reads the folders and the queue again: after a change here, or one the share extension
+    /// made while the app was in the background.
     func reload() {
         tasks = library.tasks
         looks = library.looks
+        queue = library.queue
+        sent = library.sent
+        sentAt = library.sentAt
     }
 
     func folder(_ id: String) -> BenchFolder? {
-        library.folder(id)
+        tasks.first { $0.id == id } ?? looks.first { $0.id == id }
     }
 
-    var queued: Set<String> {
-        Set(library.queue.map(\.id))
+    func status(_ folder: BenchFolder) -> FolderStatus {
+        FolderStatus(folder, queue: queue, sent: sent, sentAt: sentAt, sending: sending)
     }
 
-    func isSent(_ folder: BenchFolder) -> Bool {
-        library.sent[folder.id] == folder.resultsDigest
+    /// Whether finished work has to wait for the Lab.
+    var labAway: Bool {
+        switch hub {
+        case .connected: false
+        default: true
+        }
+    }
+
+    var waitingToSend: Int {
+        queue.count
     }
 
     // MARK: - The hub
@@ -220,11 +244,43 @@ final class BenchModel {
         await send(client)
     }
 
+    /// Sends the queue, once at a time: what's queued meanwhile goes in another round.
     private func send(_ client: BenchClient) async {
-        for (id, outcome) in await library.sendQueued(client) {
-            if case let .failure(error) = outcome {
-                message = "Couldn't send \(library.folder(id)?.manifest.title ?? id): \(error)"
+        guard !uploading else {
+            sendAgain = true
+            return
+        }
+        uploading = true
+        defer { uploading = false }
+        repeat {
+            sendAgain = false
+            let outcomes = await library.sendQueued(client) { event in
+                Task { @MainActor [weak self] in self?.sendingChanged(event) }
             }
+            sending = nil
+            for (id, outcome) in outcomes {
+                switch outcome {
+                case .success: confirmed += 1
+                case let .failure(error): message = "Couldn't send \(folder(id)?.manifest.title ?? id): \(error)"
+                }
+            }
+            reload()
+        } while sendAgain
+    }
+
+    private func sendingChanged(_ event: BenchLibrary.Sending) {
+        switch event {
+        case let .started(id):
+            sending = (id, nil)
+        case let .progress(id, done):
+            // A redraw for each percent, not for each packet.
+            if sending?.id == id, let shown = sending?.progress, abs(shown - done) < 0.01, done < 1 {
+                return
+            }
+            sending = (id, done)
+        case .finished:
+            sending = nil
+            reload()
         }
     }
 
@@ -265,6 +321,11 @@ final class BenchModel {
         reload()
     }
 
+    /// Sends what's queued now, as Try Again does after a failure.
+    func retry() {
+        Task { await refresh() }
+    }
+
     /// The owner says a manual task is done.
     func markDone(_ folder: BenchFolder) {
         guard var folder = library.folder(folder.id) else { return }
@@ -277,6 +338,7 @@ final class BenchModel {
     func sendNow(_ folder: BenchFolder) {
         guard let folder = library.folder(folder.id) else { return }
         library.enqueue(folder)
+        reload()
         Task { await refresh() }
     }
 
@@ -341,11 +403,12 @@ final class BenchModel {
     // MARK: - Steps
 
     func step(for folder: BenchFolder) -> Int {
-        min(UserDefaults.standard.integer(forKey: "step.\(folder.id)"), max(0, folder.manifest.steps.count - 1))
+        min(steps[folder.id] ?? 0, max(0, folder.manifest.steps.count - 1))
     }
 
     func setStep(_ index: Int, for folder: BenchFolder) {
-        UserDefaults.standard.set(index, forKey: "step.\(folder.id)")
+        steps[folder.id] = max(0, min(index, folder.manifest.steps.count - 1))
+        UserDefaults.standard.set(steps, forKey: "steps")
     }
 }
 

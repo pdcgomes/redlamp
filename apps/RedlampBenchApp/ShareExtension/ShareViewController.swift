@@ -37,6 +37,9 @@ final class ShareModel {
     private(set) var state = "Reading…"
     private(set) var working = true
     private(set) var filed: [BenchResult] = []
+    /// The folder the files went into, once saved.
+    private(set) var saved: BenchFolder?
+    private(set) var status: FolderStatus?
 
     /// The next variant of the last look reference, offered when that one is already complete.
     private(set) var nextLook: BenchManifest.LookReference?
@@ -44,7 +47,8 @@ final class ShareModel {
 
     init(context: NSExtensionContext?) {
         self.context = context
-        folders = library.all
+        let library = library
+        folders = library.all.filter { $0.id == library.suggested?.id || !FolderStatus($0, in: library).isSent }
         let suggested = library.suggested
         if let suggested, var look = suggested.manifest.look, suggested.isComplete {
             look.variant = look.variant.flatMap { Int($0) }.map { "\($0 + 1)" } ?? look.variant
@@ -109,23 +113,32 @@ final class ShareModel {
                 library: library,
             )
             filed = results
-            let paired = results.filter { $0.asset != nil }.count
-            state = paired == results.count ? "Paired \(paired) of \(results.count)" : "Paired \(paired) of \(results.count); pair the rest in the app"
+            saved = folder
+            status = FolderStatus(folder, in: library)
+            state = ""
             if folder.isComplete, let client = BenchShared.client(library) {
-                state += ". Sending to the Lab…"
-                let outcome = await library.sendQueued(client)[folder.id]
-                if case .success = outcome {
-                    state = "Complete, and sent to the Lab"
-                } else {
-                    state = "Complete. The app sends it when the Lab is reachable"
+                status = .sending(nil)
+                await library.sendQueued(client) { event in
+                    if case let .progress(id, done) = event, id == folder.id {
+                        Task { @MainActor [weak self] in self?.status = .sending(done) }
+                    }
                 }
+                status = FolderStatus(folder, in: library)
             }
         } catch {
             state = "\(error)"
         }
         working = false
-        try? await Task.sleep(for: .seconds(1.2))
-        finish()
+        if let status, status.isSent, filed.allSatisfy({ $0.asset != nil }) {
+            try? await Task.sleep(for: .seconds(2))
+            finish()
+        }
+    }
+
+    func label(of result: BenchResult) -> String? {
+        guard let asset = result.asset else { return nil }
+        let manifest = saved?.manifest
+        return manifest?.assets.first { $0.id == asset }.map { $0.label ?? $0.id } ?? asset
     }
 
     func finish() {
@@ -142,37 +155,10 @@ struct ShareView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    ScrollView(.horizontal) {
-                        HStack {
-                            ForEach(model.incoming) { file in
-                                VStack {
-                                    ShareThumbnail(url: file.url)
-                                    Text(file.name).font(.caption2).lineLimit(1).frame(width: 84)
-                                }
-                            }
-                        }
-                    }
-                }
-                if model.folders.isEmpty {
-                    Section {
-                        Text(
-                            "Open Redlamp Bench first: tasks come from the Lab, and look references start with New Look.",
-                        )
-                    }
+                if let folder = model.saved {
+                    filed(into: folder)
                 } else {
-                    Section("For") {
-                        Picker("Task", selection: $model.target) {
-                            if let next = model.nextLook {
-                                Text("New: \(next.title)").tag(Optional(ShareModel.newLookTag))
-                            }
-                            ForEach(model.folders, id: \.id) { folder in
-                                Text(folder.manifest.look?.title ?? folder.manifest.title).tag(Optional(folder.id))
-                            }
-                        }
-                        .pickerStyle(.inline)
-                        .labelsHidden()
-                    }
+                    choose
                 }
                 if !model.state.isEmpty {
                     Text(model.state).foregroundStyle(.secondary)
@@ -181,10 +167,95 @@ struct ShareView: View {
             .navigationTitle("Redlamp Bench")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { model.finish() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await model.save() } }
-                        .disabled(model.working || model.target == nil || model.incoming.isEmpty)
+                if model.saved == nil {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { model.finish() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { Task { await model.save() } }
+                            .disabled(model.working || model.target == nil || model.incoming.isEmpty)
+                    }
+                } else {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { model.finish() }.disabled(model.working)
+                    }
+                }
+            }
+            .sensoryFeedback(.success, trigger: model.status?.isSent == true) { _, sent in sent }
+        }
+    }
+
+    @ViewBuilder
+    private var choose: some View {
+        Section {
+            ScrollView(.horizontal) {
+                HStack {
+                    ForEach(model.incoming) { file in
+                        VStack {
+                            ShareThumbnail(url: file.url)
+                            Text(file.name).font(.caption2).lineLimit(1).frame(width: 84)
+                        }
+                    }
+                }
+            }
+        } footer: {
+            Text("\(model.incoming.count) image\(model.incoming.count == 1 ? "" : "s")")
+        }
+        if model.folders.isEmpty {
+            Section {
+                Text("Open Redlamp Bench first: tasks come from the Lab, and look references start with New Look.")
+            }
+        } else {
+            Section("Add to") {
+                Picker("Task", selection: $model.target) {
+                    if let next = model.nextLook {
+                        Label("New: \(next.title)", systemImage: "plus.circle").tag(Optional(ShareModel.newLookTag))
+                    }
+                    ForEach(model.folders, id: \.id) { folder in
+                        let status = FolderStatus(folder, in: model.library)
+                        VStack(alignment: .leading) {
+                            Text(folder.manifest.look?.title ?? folder.manifest.title)
+                            Text(status.title(labAway: false)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .tag(Optional(folder.id))
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func filed(into folder: BenchFolder) -> some View {
+        if let status = model.status {
+            Section {
+                HStack(spacing: 12) {
+                    FolderStatusIcon(status: status, size: 36)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(folder.manifest.look?.title ?? folder.manifest.title).font(.headline)
+                        Text(status.title(labAway: model.library.settings.token == nil))
+                            .font(.subheadline).foregroundStyle(status.tint)
+                    }
+                }
+                if case let .sending(progress) = status, let progress {
+                    ProgressView(value: progress)
+                }
+            }
+        }
+        Section("Paired") {
+            ForEach(Array(zip(model.incoming, model.filed)), id: \.0.id) { file, result in
+                HStack(spacing: 10) {
+                    ShareThumbnail(url: file.url, side: 44)
+                    VStack(alignment: .leading) {
+                        Text(file.name).font(.subheadline).lineLimit(1)
+                        if let label = model.label(of: result) {
+                            Text("→ \(label)").font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Text("Not paired: pair it in the app").font(.caption).foregroundStyle(.orange)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: result.asset == nil ? "questionmark.circle" : "checkmark.circle.fill")
+                        .foregroundStyle(result.asset == nil ? Color.orange : Color.green)
                 }
             }
         }
@@ -193,6 +264,7 @@ struct ShareView: View {
 
 struct ShareThumbnail: View {
     let url: URL
+    var side: CGFloat = 84
     @State private var image: CGImage?
 
     var body: some View {
@@ -203,8 +275,8 @@ struct ShareThumbnail: View {
                 Rectangle().fill(.quaternary)
             }
         }
-        .frame(width: 84, height: 84)
-        .clipped()
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .task { image = BenchShared.thumbnail(url, maxPixels: 240) }
     }
 }

@@ -72,6 +72,12 @@ public struct BenchLibrary: Sendable {
         nonmutating set { write(newValue, to: "sent.json") }
     }
 
+    /// When the hub confirmed each folder.
+    public var sentAt: [String: Date] {
+        get { read("sent-at.json") ?? [:] }
+        nonmutating set { write(newValue, to: "sent-at.json") }
+    }
+
     private func read<T: Decodable>(_ name: String) -> T? {
         (try? Data(contentsOf: root.appending(path: name))).flatMap { try? JSONDecoder.bench.decode(T.self, from: $0) }
     }
@@ -286,20 +292,36 @@ public struct BenchLibrary: Sendable {
         return true
     }
 
+    /// What `sendQueued` reports as it goes, for a progress display.
+    public enum Sending: Sendable {
+        case started(String)
+        /// The share of the folder's archive uploaded, from 0 to 1.
+        case progress(String, Double)
+        case finished(String)
+    }
+
     /// Sends everything queued. What fails stays queued, with its error, for the next try.
     @discardableResult
-    public func sendQueued(_ client: BenchClient) async -> [String: Result<BenchProtocol.Receipt, Error>] {
+    public func sendQueued(
+        _ client: BenchClient,
+        reporting report: @escaping @Sendable (Sending) -> Void = { _ in },
+    ) async -> [String: Result<BenchProtocol.Receipt, Error>] {
         var outcomes: [String: Result<BenchProtocol.Receipt, Error>] = [:]
         for entry in queue {
             guard let folder = folder(entry.id) else {
                 queue.removeAll { $0.id == entry.id }
                 continue
             }
+            report(.started(folder.id))
+            defer { report(.finished(folder.id)) }
             do {
-                let receipt = try await client.send(folder)
+                let receipt = try await client.send(folder) { report(.progress(folder.id, $0)) }
                 var sent = sent
                 sent[folder.id] = receipt.resultsDigest
                 self.sent = sent
+                var sentAt = sentAt
+                sentAt[folder.id] = Date()
+                self.sentAt = sentAt
                 var queue = queue
                 if receipt.resultsDigest == folder.resultsDigest {
                     queue.removeAll { $0.id == folder.id }

@@ -113,7 +113,11 @@ public struct BenchClient: Sendable {
     }
 
     /// Sends a folder as one archive to the hub's inbox.
-    public func send(_ folder: BenchFolder) async throws -> BenchProtocol.Receipt {
+    /// Sends a folder as one archive, reporting the share uploaded as it goes.
+    public func send(
+        _ folder: BenchFolder,
+        progress: (@Sendable (Double) -> Void)? = nil,
+    ) async throws -> BenchProtocol.Receipt {
         let archive = FileManager.default.temporaryDirectory
             .appending(path: "\(folder.id)-\(UUID().uuidString).\(BenchArchive.fileExtension)")
         defer { try? FileManager.default.removeItem(at: archive) }
@@ -121,7 +125,9 @@ public struct BenchClient: Sendable {
         var request = request("POST", "api/inbox")
         request.setValue("application/zip", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 600
-        let (data, response) = try await session.upload(for: request, fromFile: archive)
+        let (data, response) = try await session.upload(
+            for: request, fromFile: archive, delegate: progress.map(UploadProgress.init),
+        )
         try check(response, body: data)
         return try JSONDecoder.bench.decode(BenchProtocol.Receipt.self, from: data)
     }
@@ -156,6 +162,23 @@ public struct BenchClient: Sendable {
                 http.statusCode,
                 message ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode),
             )
+        }
+    }
+}
+
+private final class UploadProgress: NSObject, URLSessionTaskDelegate, Sendable {
+    let report: @Sendable (Double) -> Void
+
+    init(_ report: @escaping @Sendable (Double) -> Void) {
+        self.report = report
+    }
+
+    func urlSession(
+        _: URLSession, task _: URLSessionTask, didSendBodyData _: Int64,
+        totalBytesSent sent: Int64, totalBytesExpectedToSend expected: Int64,
+    ) {
+        if expected > 0 {
+            report(Double(sent) / Double(expected))
         }
     }
 }

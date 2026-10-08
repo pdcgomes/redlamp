@@ -24,6 +24,12 @@ struct FolderView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
                 .padding(.bottom, 8)
+                if showing == .photos || folder.manifest.steps.isEmpty
+                    || model.step(for: folder) + 1 < folder.manifest.steps.count {
+                    StatusBanner(model: model, folder: folder)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                }
                 switch showing {
                 case .steps where !folder.manifest.steps.isEmpty:
                     StepsView(model: model, folder: folder)
@@ -49,6 +55,8 @@ struct FolderView: View {
                 }
             }
             .sheet(isPresented: $allSteps) { AllStepsView(model: model, folder: folder) }
+            .sensoryFeedback(.success, trigger: model.status(folder).isSent) { _, sent in sent }
+            .sensoryFeedback(.increase, trigger: folder.results.results.count)
             .onAppear { model.used(folder) }
         } else {
             ContentUnavailableView("This task is gone", systemImage: "tray")
@@ -61,14 +69,22 @@ struct FolderView: View {
 struct StepsView: View {
     @Bindable var model: BenchModel
     let folder: BenchFolder
+    @State private var forward = true
 
     var body: some View {
         let steps = folder.manifest.steps
         let index = model.step(for: folder)
         let step = steps[index]
+        let last = index + 1 == steps.count
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                ProgressView(value: Double(index + 1), total: Double(steps.count))
+                HStack(spacing: 4) {
+                    ForEach(steps.indices, id: \.self) { i in
+                        Capsule()
+                            .fill(i <= index ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
+                            .frame(height: 4)
+                    }
+                }
                 HStack {
                     Text("Step \(index + 1) of \(steps.count)")
                     Spacer()
@@ -93,23 +109,28 @@ struct StepsView: View {
                         FileImage(url: url, maxPixels: 1200)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
+                    if last {
+                        CompletionCard(model: model, folder: folder)
+                    }
                     if let action = step.action {
                         StepActionView(model: model, folder: folder, action: action)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .id(step.id)
+            .transition(.push(from: forward ? .trailing : .leading))
             HStack {
                 Button {
-                    model.setStep(index - 1, for: folder)
+                    go(to: index - 1, forward: false)
                 } label: {
                     Label("Back", systemImage: "chevron.left")
                 }
                 .disabled(index == 0)
                 Spacer()
-                if index + 1 < steps.count {
+                if !last {
                     Button {
-                        model.setStep(index + 1, for: folder)
+                        go(to: index + 1, forward: true)
                     } label: {
                         HStack(spacing: 4) {
                             Text("Next")
@@ -117,16 +138,119 @@ struct StepsView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                } else {
-                    Text(folder
-                        .isComplete ? (model.isSent(folder) ? "Sent to the Lab" : "Complete") :
-                        "\(folder.missing.count) still to come back")
-                        .foregroundStyle(.secondary)
+                } else if model.status(folder).isSent {
+                    Button("Done") { model.path.removeAll { $0 == folder.id } }
+                        .buttonStyle(.borderedProminent)
                 }
             }
             .controlSize(.large)
         }
         .padding()
+        .clipped()
+        .sensoryFeedback(.selection, trigger: index)
+    }
+
+    private func go(to index: Int, forward: Bool) {
+        self.forward = forward
+        withAnimation(.snappy) {
+            model.setStep(index, for: folder)
+        }
+    }
+}
+
+/// A line at the top of a folder's screen: how far it is, and whether it's waiting, going or
+/// gone to the Lab.
+struct StatusBanner: View {
+    @Bindable var model: BenchModel
+    let folder: BenchFolder
+
+    var body: some View {
+        let status = model.status(folder)
+        HStack(spacing: 10) {
+            FolderStatusIcon(status: status, size: 24)
+            Text(status.title(labAway: model.labAway))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(status.tint)
+            Spacer()
+            if case .waiting = status, !model.labAway {
+                Button("Send") { model.retry() }.buttonStyle(.bordered).controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(status.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .animation(.default, value: status)
+    }
+}
+
+/// The last step's summary: what's still to come back, or that the folder is on its way to the
+/// Lab or there, and what's left to do.
+struct CompletionCard: View {
+    @Bindable var model: BenchModel
+    let folder: BenchFolder
+
+    var body: some View {
+        let status = model.status(folder)
+        HStack(alignment: .top, spacing: 14) {
+            FolderStatusIcon(status: status, size: 44)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(headline(status)).font(.headline)
+                Text(detail(status)).font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                switch status {
+                case let .sending(progress):
+                    if let progress {
+                        ProgressView(value: progress)
+                    }
+                case .waiting where !model.labAway:
+                    Button("Send Now") { model.retry() }.buttonStyle(.bordered)
+                case let .toDo(back, _) where back > 0:
+                    Button("Send What's Back Now") { model.sendNow(folder) }.buttonStyle(.bordered)
+                default:
+                    EmptyView()
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding()
+        .background(status.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+        .animation(.default, value: status)
+    }
+
+    private func headline(_ status: FolderStatus) -> String {
+        switch status {
+        case let .toDo(back, of): of == 0 ? "Not done yet" : "\(back) of \(of) back"
+        case .waiting: "Complete"
+        case .sending: "Sending to the Lab…"
+        case .sent: "Sent to the Lab"
+        case .sentEarly: "Sent early"
+        }
+    }
+
+    private func detail(_ status: FolderStatus) -> String {
+        let app = folder.manifest.app ?? folder.manifest.look?.app ?? "the other app"
+        switch status {
+        case let .toDo(back, of):
+            if of == 0 {
+                return "Mark it done from the ⋯ menu when you've finished."
+            }
+            let left = of - back
+            return "Share \(left == 1 ? "the last export" : "the other \(left) exports") from \(app) to Redlamp Bench. Each one finds its photo by itself, and the task goes to the Lab as soon as the last is in."
+        case let .waiting(problem):
+            if let problem {
+                return "The last try failed (\(problem)). It tries again when the Lab is reachable."
+            }
+            return model.labAway
+                ? "It goes to the Lab as soon as the Lab is reachable: open the Recipe Lab on your Mac."
+                : "It's next to go."
+        case .sending:
+            return "Keep the app open until it's done; it carries on for a while in the background."
+        case let .sent(date):
+            let when = date.map { " \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
+            return "The Lab has it\(when.isEmpty ? "" : ", since\(when)"). Nothing else to do here."
+        case let .sentEarly(back, of):
+            return "\(back) of \(of) back went to the Lab. The rest goes when the task is complete."
+        }
     }
 }
 
@@ -179,7 +303,7 @@ struct StepActionView: View {
         Button {
             Task { saved = await PhotoSaver.save(urls(assets)) }
         } label: {
-            Label(saved ?? "Save to Photos", systemImage: "photo.badge.plus")
+            Label(saved ?? "Save to Photos", systemImage: saved == nil ? "photo.badge.plus" : "checkmark")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
@@ -219,32 +343,37 @@ struct ResultsProgressView: View {
     let assets: [BenchManifest.Asset]
 
     var body: some View {
-        let back = assets.filter { folder.results.current(for: $0.id) != nil }.count
-        VStack(alignment: .leading, spacing: 10) {
-            Label(
-                back == assets
-                    .count ? "All \(assets.count) back" : "Waiting for results: \(back) of \(assets.count) back",
-                systemImage: back == assets.count ? "checkmark.circle.fill" : "hourglass",
-            )
-            .font(.headline)
-            .foregroundStyle(back == assets.count ? .green : .primary)
-            Text("Share the exports from the other app to Redlamp Bench; each pairs with its photo.")
-                .font(.callout).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(assets) { asset in
+                let result = folder.results.current(for: asset.id)
                 HStack(spacing: 8) {
                     if let url = folder.file(asset.file) {
-                        FileImage(url: url).frame(width: 64, height: 64).clipped()
+                        FileImage(url: url).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    Image(systemName: "arrow.right").foregroundStyle(.secondary)
-                    if let result = folder.results.current(for: asset.id), let url = folder.file(result.file) {
-                        FileImage(url: url).frame(width: 64, height: 64).clipped()
-                    } else {
-                        RoundedRectangle(cornerRadius: 4).fill(.quaternary).frame(width: 64, height: 64)
+                    Image(systemName: "arrow.right").foregroundStyle(.tertiary)
+                    Group {
+                        if let result, let url = folder.file(result.file) {
+                            FileImage(url: url)
+                        } else {
+                            RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary, style: StrokeStyle(dash: [4]))
+                        }
                     }
-                    Text(asset.label ?? asset.id).font(.caption).lineLimit(2)
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(asset.label ?? asset.id).font(.subheadline).lineLimit(2)
+                        Text(result == nil ? "Waiting" : "Back")
+                            .font(.caption).foregroundStyle(result == nil ? .secondary : Color.green)
+                    }
+                    Spacer()
+                    Image(systemName: result == nil ? "circle.dashed" : "checkmark.circle.fill")
+                        .foregroundStyle(result == nil ? .secondary : Color.green)
+                        .font(.title3)
                 }
+                .transition(.opacity)
             }
         }
+        .animation(.default, value: folder.results.results.count)
     }
 }
 

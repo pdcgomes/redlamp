@@ -1,25 +1,29 @@
 import RedlampBench
 import SwiftUI
 
-/// Tasks pulled from the Lab, look references made here, and the hub's state.
+/// Tasks pulled from the Lab, look references made here, what's been sent, and the hub's state.
 struct HomeView: View {
     @Bindable var model: BenchModel
     @State private var pairing = false
     @State private var newLook = false
 
     var body: some View {
+        let open = model.tasks.filter { !model.status($0).isSent }
+        let openLooks = model.looks.filter { !model.status($0).isSent }
+        let sent = (model.tasks + model.looks).filter { model.status($0).isSent }
+            .sorted { (model.sentAt[$0.id] ?? .distantPast) > (model.sentAt[$1.id] ?? .distantPast) }
         NavigationStack(path: $model.path) {
             List {
                 hubSection
-                if !model.tasks.isEmpty {
-                    Section("Tasks") {
-                        ForEach(model.tasks, id: \.id) { row($0) }
-                            .onDelete { offsets in offsets.map { model.tasks[$0] }.forEach(model.delete) }
+                if !open.isEmpty {
+                    Section("To do") {
+                        ForEach(open, id: \.id) { row($0) }
+                            .onDelete { offsets in offsets.map { open[$0] }.forEach(model.delete) }
                     }
                 }
                 Section {
-                    ForEach(model.looks, id: \.id) { row($0) }
-                        .onDelete { offsets in offsets.map { model.looks[$0] }.forEach(model.delete) }
+                    ForEach(openLooks, id: \.id) { row($0) }
+                        .onDelete { offsets in offsets.map { openLooks[$0] }.forEach(model.delete) }
                     Button {
                         newLook = true
                     } label: {
@@ -31,6 +35,12 @@ struct HomeView: View {
                     Text(
                         "A filter from another app, run over the capture kit, so the Lab can rebuild it as a Redlamp look.",
                     )
+                }
+                if !sent.isEmpty {
+                    Section("Sent to the Lab") {
+                        ForEach(sent, id: \.id) { row($0) }
+                            .onDelete { offsets in offsets.map { sent[$0] }.forEach(model.delete) }
+                    }
                 }
                 if model.tasks.isEmpty, model.looks.isEmpty {
                     Section {
@@ -51,7 +61,9 @@ struct HomeView: View {
                     model.path.append(folder.id)
                 }
             }
+            .animation(.default, value: sent.map(\.id))
         }
+        .sensoryFeedback(.success, trigger: model.confirmed)
         .onChange(of: model.opened) { _, id in
             if let id {
                 model.path = [id]
@@ -65,6 +77,7 @@ struct HomeView: View {
             switch model.hub {
             case .searching:
                 Label("Looking for the Lab…", systemImage: "antenna.radiowaves.left.and.right")
+                    .symbolEffect(.variableColor.iterative, options: .repeating)
             case let .found(name, _):
                 Button {
                     Task { await model.pairWithLab() }
@@ -78,8 +91,11 @@ struct HomeView: View {
                     ProgressView()
                 }
             case let .connected(name):
-                Label(name, systemImage: "checkmark.circle")
-                    .foregroundStyle(.green)
+                Label {
+                    Text("Connected to \(name)")
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                }
             case let .away(name):
                 Label("\(name) isn't reachable; finished work waits here", systemImage: "wifi.slash")
                     .foregroundStyle(.secondary)
@@ -87,9 +103,27 @@ struct HomeView: View {
                 Label("Open the Recipe Lab on your Mac, on the same network", systemImage: "desktopcomputer")
                     .foregroundStyle(.secondary)
             }
-            if !model.queued.isEmpty {
-                Label("\(model.queued.count) waiting to send", systemImage: "arrow.up.circle")
-                    .foregroundStyle(.secondary)
+            if let sending = model.sending, let folder = model.folder(sending.id) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Sending \(title(folder))", systemImage: "arrow.up.circle")
+                    if let progress = sending.progress {
+                        ProgressView(value: progress)
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            } else if model.waitingToSend > 0 {
+                HStack {
+                    Label(
+                        "\(model.waitingToSend) complete, \(model.labAway ? "waiting for the Lab" : "waiting to send")",
+                        systemImage: "clock.arrow.circlepath",
+                    )
+                    .foregroundStyle(.orange)
+                    Spacer()
+                    if !model.labAway {
+                        Button("Send") { model.retry() }.buttonStyle(.borderless)
+                    }
+                }
             }
             if let message = model.message {
                 Text(message).font(.footnote).foregroundStyle(.secondary)
@@ -106,28 +140,26 @@ struct HomeView: View {
     }
 
     private func row(_ folder: BenchFolder) -> some View {
-        NavigationLink(value: folder.id) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(folder.manifest.look?.title ?? folder.manifest.title)
-                    .font(.headline)
-                Text(status(folder))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        let status = model.status(folder)
+        return NavigationLink(value: folder.id) {
+            HStack(spacing: 12) {
+                FolderStatusIcon(status: status)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title(folder)).font(.headline)
+                    Text(status.title(labAway: model.labAway))
+                        .font(.subheadline)
+                        .foregroundStyle(status.tint)
+                    if let who = folder.manifest.requestedBy?.workstream {
+                        Text("For \(who)").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
+            .padding(.vertical, 2)
         }
     }
 
-    private func status(_ folder: BenchFolder) -> String {
-        if model.isSent(folder) {
-            return folder.isComplete ? "Sent to the Lab" : "Sent early; more results go when it's complete"
-        }
-        if model.queued.contains(folder.id) {
-            return "Complete, waiting to send"
-        }
-        let required = folder.manifest.requiredAssets.count
-        let back = required - folder.missing.count
-        let who = folder.manifest.requestedBy?.workstream.map { " · for \($0)" } ?? ""
-        return required == 0 ? "\(folder.results.results.count) results\(who)" : "\(back) of \(required) back\(who)"
+    private func title(_ folder: BenchFolder) -> String {
+        folder.manifest.look?.title ?? folder.manifest.title
     }
 }
 
