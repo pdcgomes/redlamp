@@ -69,6 +69,8 @@ import RedlampLibrary
     @ObservationIgnored private var indexedPhotos: IndexedPhotos?
     /// The stacks' openings and closings counted when the grouping in progress took them.
     @ObservationIgnored private var stackOpenings = 0
+    /// The badges' changes counted, so a grouping's picks are taken only when none came while it was made.
+    @ObservationIgnored private var badgeChanges = 0
     /// How long the last grouping took off the main thread, for `--library-perf`, and its parts: the photos'
     /// IDs in the index, the engine's grouping handed over, the groups made, and the list of them.
     @ObservationIgnored @_spi(Harness) public private(set) var lastGrouping: Duration = .zero
@@ -143,7 +145,7 @@ import RedlampLibrary
         let request = Request(
             items: library.items, ids: library.photoIDs, known: indexIDs, indexed: indexedPhotos,
             sort: library.filters?.sort.query ?? QuerySort(), grouping: wanted, finder: stacks.finder,
-            stacks: stacks.list, opensStacks: stacks.opensNew,
+            stacks: stacks.list, opensStacks: stacks.opensNew, badgeChanges: badgeChanges,
         )
         // Detached, so the grouping starts at once rather than once the main thread has drawn the change of Group
         // By that asked for it.
@@ -168,7 +170,7 @@ import RedlampLibrary
             }
             if result.grouping == now {
                 let adopting = ContinuousClock.now
-                adopt(result.grouped)
+                adopt(result.grouped, picks: result.badgeChanges == badgeChanges ? result.picks : nil)
                 lastAdoption = ContinuousClock.now - adopting
             }
         }
@@ -189,11 +191,15 @@ import RedlampLibrary
         /// The stacks as the filmstrip shows them, open and closed, and whether stacks come open.
         var stacks: StackedList?
         var opensStacks: Bool
+        var badgeChanges: Int
     }
 
     private struct Result: Sendable {
         /// The groups, every one open: made here, as it's a pass over the photos.
         var grouped: GroupedList
+        /// Each group's picks, from the request's badges.
+        var picks: [Int]
+        var badgeChanges: Int
         /// The index's IDs found for photos `known` didn't have.
         var found: [Int64: Int64]
         var indexed: IndexedPhotos
@@ -289,13 +295,18 @@ import RedlampLibrary
             grouped.openAllStacks()
         }
         lap()
-        return Result(grouped: grouped, found: found, indexed: photos, grouping: request.grouping, parts: parts)
+        return Result(
+            grouped: grouped, picks: picks(of: relabelled, items: items, ids: ids),
+            badgeChanges: request.badgeChanges, found: found, indexed: photos, grouping: request.grouping,
+            parts: parts,
+        )
     }
 
     /// Shows `made`'s groups, with the groups open that were open in the list it replaces, matched by their
     /// value, or for moments, which keep none from one grouping to the next, by the first of their photos it
-    /// had. The same photos in the same groups change only the headers whose names changed.
-    private func adopt(_ made: GroupedList) {
+    /// had. The same photos in the same groups change only the headers whose names changed. `picks` are its
+    /// groups' picks, counted here when nil.
+    private func adopt(_ made: GroupedList, picks: [Int]?) {
         var made = made
         if let stacks = model?.libraryViews.stacks, stacks.openings != stackOpenings, let shown = stacks.list {
             made.openStacks(as: shown)
@@ -319,7 +330,7 @@ import RedlampLibrary
             opensNew = true
             showsUnpicked = false
         }
-        set(grouped)
+        set(grouped, picks: picks)
     }
 
     /// Whether two groupings show the same cells: their stacks are the same, opened alike.
@@ -385,9 +396,9 @@ import RedlampLibrary
         }
     }
 
-    private func set(_ grouped: GroupedList?) {
+    private func set(_ grouped: GroupedList?, picks: [Int]? = nil) {
         list = grouped
-        countPicks()
+        countPicks(picks)
         if let grouped {
             model?.deselectClosed(in: grouped)
         }
@@ -426,6 +437,7 @@ import RedlampLibrary
     private func libraryChanged(_ diff: LibraryDiff) {
         guard model?.libraryViews.groupKey != .ungrouped else { return }
         guard !diff.reset, diff.removed.isEmpty, diff.inserted.isEmpty, list != nil else { return regroup() }
+        badgeChanges += 1
         badgesChanged(diff.updated)
         quiet?.cancel()
         quiet = Task { [weak self] in
@@ -437,20 +449,26 @@ import RedlampLibrary
 
     // MARK: - Picks
 
-    private func countPicks() {
+    /// The list's picks: `counted`, or counted here.
+    private func countPicks(_ counted: [Int]? = nil) {
         guard let list, let model else {
             picks = []
             coverage = nil
             return
         }
-        picks = Self.picks(of: list.groups, in: model.library)
+        picks = counted ?? Self.picks(of: list.groups, in: model.library)
         updateCoverage()
+    }
+
+    private static func picks(of groups: PhotoGroups, in library: FolderLibrary) -> [Int] {
+        picks(of: groups, items: library.items, ids: library.photoIDs)
     }
 
     /// Each group's picks, in one pass over the photos shown: loops, as a closure formed in the main actor's
     /// code checks it's on the main actor each time it's called, a photo at a time.
-    private static func picks(of groups: PhotoGroups, in library: FolderLibrary) -> [Int] {
-        let (items, ids) = (library.items, library.photoIDs)
+    private nonisolated static func picks(
+        of groups: PhotoGroups, items: [LibraryItem], ids: ContiguousArray<Int64>,
+    ) -> [Int] {
         var picks = [Int](repeating: 0, count: groups.count)
         for row in items.indices where row < ids.count && items[row].metadata.flag == .pick {
             if let group = groups.index(of: ids[row]) {
