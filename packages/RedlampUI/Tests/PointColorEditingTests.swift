@@ -27,6 +27,15 @@ struct PointColorEditingTests {
         }
     }
 
+    /// Waits for what the engine reports off the main thread, such as its AI masks (RESP-15),
+    /// which can take seconds on a busy Mac.
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
     private let skin = OKLCh(lightness: 0.7, chroma: 0.08, hue: 55)
     private let sky = OKLCh(lightness: 0.6, chroma: 0.1, hue: 240)
 
@@ -218,6 +227,7 @@ struct PointColorEditingTests {
         )]
         let model = try await openModel()
         let preset = try #require(MaskPreset.builtIn.first { $0.id == "redlamp.evenSkinTone" })
+        try await eventually { model.canApply(preset) }
         #expect(model.canApply(preset))
         await model.applyMaskPreset(preset)
         let mask = try #require(model.masks.last)
