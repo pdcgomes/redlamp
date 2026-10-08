@@ -33,18 +33,23 @@ struct BundledBaseLookTests {
         }
     }
 
-    @Test func `listing the bundled looks reads no table, and using a look reads only its own`() throws {
+    @Test func `listing the bundled looks reads no table, and using a look reads only its own, keeping no text`(
+    ) throws {
         let looks = BuiltInBaseLooks.read()
         #expect(looks.contains { $0.table != nil })
         _ = looks.map(\.reference)
         _ = BuiltInBaseLooks.newest(looks)
         _ = Set(looks)
-        #expect(looks.allSatisfy { $0.table?.isRead != true })
+        #expect(looks.allSatisfy { ($0.table?.reads ?? 0) == 0 })
 
         let look = try #require(looks.first { $0.table != nil })
         let definition = try look.definition()
         #expect(definition.table?.contentHash == look.table?.sha256)
-        #expect(looks.count(where: { $0.table?.isRead == true }) == 1)
+        #expect(looks.count(where: { ($0.table?.reads ?? 0) > 0 }) == 1)
+
+        // The text isn't kept once its table is decoded.
+        _ = try look.definition()
+        #expect(look.table?.reads == 2)
     }
 
     @Test func `installing a look writes it compressed and lists it in the folder's index`() throws {

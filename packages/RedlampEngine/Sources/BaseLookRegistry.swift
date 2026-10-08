@@ -5,8 +5,9 @@ import RedlampEngineAPI
 /// Base Looks the engine can render, and their tables as GPU textures.
 ///
 /// Registration can happen on any thread while renders read from the render queue; all
-/// state is behind `lock`. A table is uploaded when a render first uses it, outside the
-/// lock, and cached by content hash, so a look registered twice is uploaded once.
+/// state is behind `lock`. A look registered from a `BaseLookSource` is read when a render
+/// first uses it, and its table uploaded then, both outside the lock; tables are cached by
+/// content hash, so a look registered twice is uploaded once.
 final class BaseLookRegistry: @unchecked Sendable {
     struct Resolved {
         var parameters: BaseLookParameters
@@ -22,20 +23,49 @@ final class BaseLookRegistry: @unchecked Sendable {
         var version: Int
     }
 
+    /// A registered look: what edits pin it by, and the look itself once read.
+    private struct Entry {
+        var name: String
+        var parameters: BaseLookParameters
+        var contentHash: String?
+        var look: BaseLookDefinition?
+        var load: (@Sendable () -> BaseLookDefinition?)?
+        /// Its loader failed: edits that use it show it missing, and render without it.
+        var isUnreadable = false
+        /// Tells the entry a read started from apart from one registered meanwhile.
+        var serial: UInt64 = 0
+
+        init(_ look: BaseLookDefinition) {
+            name = look.name
+            parameters = look.parameters
+            contentHash = look.table?.contentHash
+            self.look = look
+        }
+
+        init(_ source: BaseLookSource) {
+            name = source.reference.name
+            parameters = source.parameters
+            contentHash = source.reference.contentHash
+            load = source.load
+        }
+
+        func describesSameLook(as other: Entry) -> Bool {
+            name == other.name && parameters == other.parameters && contentHash == other.contentHash
+        }
+    }
+
     /// Tables stay on the GPU up to this count (32 tables of 33³ are about 9 MB); evicted
     /// ones are uploaded again from their definition when next used.
     static let textureLimit = 32
 
     private let device: any MTLDevice
-    /// Signalled when a batch of looks has been registered.
-    private let lock = NSCondition()
-    private var definitions: [Key: BaseLookDefinition] = [:]
+    private let lock = NSLock()
+    private var entries: [Key: Entry] = [:]
+    private var serials: UInt64 = 0
     private var textures: [String: any MTLTexture] = [:]
     /// Least recently used first.
     private var textureOrder: [String] = []
     private var registrations: UInt64 = 0
-    /// Batches still being decoded; renders of looks not yet registered wait for them.
-    private var pendingBatches = 0
     /// Bound when an edit has no table, because Metal needs a texture in every slot.
     let identity: any MTLTexture
 
@@ -65,34 +95,29 @@ final class BaseLookRegistry: @unchecked Sendable {
     func register(_ look: BaseLookDefinition) {
         lock.lock()
         defer { lock.unlock() }
-        store(look)
+        store(Entry(look), key: Key(id: look.id, version: look.version))
     }
 
-    /// Registers what `load` returns, decoding on a background queue.
-    func register(_ load: @escaping @Sendable () -> [BaseLookDefinition]) {
+    func register(_ looks: [BaseLookSource]) {
         lock.lock()
-        pendingBatches += 1
-        lock.unlock()
-        DispatchQueue.global(qos: .userInitiated).async { [self] in
-            let looks = load()
-            lock.lock()
-            defer { lock.unlock() }
-            for look in looks {
-                store(look)
-            }
-            pendingBatches -= 1
-            lock.broadcast()
+        defer { lock.unlock() }
+        for look in looks {
+            store(Entry(look), key: Key(id: look.reference.id, version: look.reference.version))
         }
     }
 
     /// Call with `lock` held.
-    private func store(_ look: BaseLookDefinition) {
-        let key = Key(id: look.id, version: look.version)
-        if let current = definitions[key], current.name == look.name, current.parameters == look.parameters,
-           current.table?.contentHash == look.table?.contentHash {
+    private func store(_ entry: Entry, key: Key) {
+        if let current = entries[key], !current.isUnreadable, current.describesSameLook(as: entry) {
+            if current.look == nil, entry.look != nil {
+                entries[key]?.look = entry.look
+            }
             return
         }
-        definitions[key] = look
+        var entry = entry
+        serials &+= 1
+        entry.serial = serials
+        entries[key] = entry
         registrations &+= 1
     }
 
@@ -102,36 +127,69 @@ final class BaseLookRegistry: @unchecked Sendable {
         }
         lock.lock()
         defer { lock.unlock() }
-        guard let look = definitions[Key(id: reference.id, version: reference.version)] else { return false }
-        return look.table?.contentHash == reference.contentHash
+        guard let entry = entries[Key(id: reference.id, version: reference.version)] else { return false }
+        return !entry.isUnreadable && entry.contentHash == reference.contentHash
     }
 
-    /// The look to render for `reference`, at full strength; callers scale by amount.
+    /// The look to render for `reference`, at full strength; callers scale by amount. Reads
+    /// the look first if it hasn't been yet.
     func resolve(_ reference: BaseLookReference) -> Resolved {
         if let builtIn = BuiltInBaseLook(reference: reference) {
             return Resolved(parameters: builtIn.parameters, table: nil, tableSize: 0, isAvailable: true)
         }
         let key = Key(id: reference.id, version: reference.version)
         lock.lock()
-        while definitions[key] == nil, pendingBatches > 0 {
-            lock.wait()
-        }
-        let look = definitions[key]
-        let cached = look?.table.flatMap { cachedTexture($0.contentHash) }
+        let entry = entries[key]
         lock.unlock()
-        guard let look else {
-            return Resolved(parameters: .identity, table: nil, tableSize: 0, isAvailable: false)
+        let missing = Resolved(parameters: .identity, table: nil, tableSize: 0, isAvailable: false)
+        guard let entry, !entry.isUnreadable else {
+            return missing
         }
         guard let hash = reference.contentHash else {
-            return Resolved(parameters: look.parameters, table: nil, tableSize: 0, isAvailable: look.table == nil)
+            return Resolved(
+                parameters: entry.parameters,
+                table: nil,
+                tableSize: 0,
+                isAvailable: entry.contentHash == nil,
+            )
         }
-        guard let table = look.table, table.contentHash == hash, let texture = cached ?? upload(table) else {
+        guard entry.contentHash == hash else {
+            return Resolved(parameters: entry.parameters, table: nil, tableSize: 0, isAvailable: false)
+        }
+        guard let look = entry.look ?? read(entry, key: key) else {
+            return missing
+        }
+        guard let table = look.table, table.contentHash == hash else {
+            return Resolved(parameters: entry.parameters, table: nil, tableSize: 0, isAvailable: false)
+        }
+        lock.lock()
+        let cached = cachedTexture(hash)
+        lock.unlock()
+        guard let texture = cached ?? upload(table) else {
             return Resolved(parameters: look.parameters, table: nil, tableSize: 0, isAvailable: false)
         }
         return Resolved(
             parameters: look.parameters, table: texture, tableSize: table.size, isAvailable: true,
             tableSpace: table.space,
         )
+    }
+
+    /// Reads `entry`'s look without holding `lock`, keeping it unless the look was registered
+    /// again meanwhile. A look that can't be read is marked unreadable, moving the generation
+    /// once so edits that use it show it missing.
+    private func read(_ entry: Entry, key: Key) -> BaseLookDefinition? {
+        let look = entry.load?()
+        lock.lock()
+        defer { lock.unlock() }
+        guard entries[key]?.serial == entry.serial, entries[key]?.isUnreadable == false else { return look }
+        if let look {
+            entries[key]?.look = look
+        } else {
+            entries[key]?.isUnreadable = true
+            registrations &+= 1
+        }
+        entries[key]?.load = nil
+        return look
     }
 
     /// The cached texture for `hash`, marked as just used. Call with `lock` held.

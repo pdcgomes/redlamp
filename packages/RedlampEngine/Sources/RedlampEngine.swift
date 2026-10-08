@@ -707,8 +707,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         baseLooks.register(look)
     }
 
-    public func registerBaseLooks(_ load: @escaping @Sendable () -> [BaseLookDefinition]) {
-        baseLooks.register(load)
+    public func registerBaseLooks(_ looks: [BaseLookSource]) {
+        baseLooks.register(looks)
     }
 
     public func canRender(_ reference: BaseLookReference) -> Bool {

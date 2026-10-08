@@ -245,3 +245,24 @@ public struct BaseLookDefinition: Sendable, Hashable {
         BaseLookReference(id: id, version: version, name: name, contentHash: table?.contentHash)
     }
 }
+
+/// A Base Look registered before its table is read: what edits pin it by, and how to read
+/// the whole look when a render first uses it.
+public struct BaseLookSource: Sendable {
+    /// The look at full strength, pinned to its table's content hash.
+    public var reference: BaseLookReference
+    public var parameters: BaseLookParameters
+    /// The look, whose `reference` and `parameters` must be the ones above; nil when it
+    /// can't be read.
+    public var load: @Sendable () -> BaseLookDefinition?
+
+    public init(
+        reference: BaseLookReference,
+        parameters: BaseLookParameters,
+        load: @escaping @Sendable () -> BaseLookDefinition?,
+    ) {
+        self.reference = reference
+        self.parameters = parameters
+        self.load = load
+    }
+}

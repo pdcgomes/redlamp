@@ -22,12 +22,16 @@ struct RecipeCatalogTests {
         )
     }
 
-    @Test func `launch registers every look the library has`() throws {
+    @Test func `launch registers every look the library has, reading none of their tables`() throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let engine = StubEngine()
         let catalog = try catalog(engine)
-        let registered = Set(engine.registeredLooks.map(\.reference))
-        #expect(registered == Set(catalog.baseLooks.compactMap { try? $0.definition().reference }))
+        #expect(engine.registeredLooks.isEmpty)
+        let sources = engine.lookSources
+        let read = sources.compactMap { $0.load() }
+        #expect(read.count == sources.count)
+        #expect(Set(read) == Set(catalog.baseLooks.compactMap { try? $0.definition() }))
+        #expect(zip(sources, read).allSatisfy { $0.reference == $1.reference && $0.parameters == $1.parameters })
     }
 
     @Test func `toggling a favourite registers nothing`() throws {
@@ -37,26 +41,26 @@ struct RecipeCatalogTests {
         let recipe = try #require(catalog.save(Recipe(
             id: "user/test/plain", name: "Plain", group: "Mine", includes: [.tone], settings: RecipeSettings(),
         )))
-        let before = engine.registeredLooks.count
+        let before = engine.lookSources.count
         catalog.setFavorite(recipe, true)
         catalog.setFavorite(recipe, false)
-        #expect(engine.registeredLooks.count == before)
+        #expect(engine.lookSources.count == before)
     }
 
     @Test func `adding a look registers that look alone`() throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let engine = StubEngine()
         let catalog = try catalog(engine)
-        let before = engine.registeredLooks.count
+        let before = engine.lookSources.count
         let look = try grey(0.5)
         catalog.remember(look)
-        #expect(engine.registeredLooks.count == before + 1)
-        #expect(engine.registeredLooks.last == look)
+        #expect(engine.lookSources.count == before + 1)
+        #expect(engine.lookSources.last?.load() == look)
 
         let changed = try grey(0.25)
         catalog.remember(changed)
-        #expect(engine.registeredLooks.count == before + 2)
-        #expect(engine.registeredLooks.last == changed)
+        #expect(engine.lookSources.count == before + 2)
+        #expect(engine.lookSources.last?.load() == changed)
     }
 
     @Test func `previewing a recipe again registers its embedded look once`() throws {

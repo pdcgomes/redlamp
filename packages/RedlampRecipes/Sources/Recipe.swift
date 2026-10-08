@@ -407,32 +407,33 @@ public struct LookTableFile: Codable, Sendable, Hashable {
 
     private var contents: Contents
 
-    /// A table's data, or how to read it the first time it's needed.
+    /// A table's data, or how to read it each time it's needed: a bundled look's text isn't
+    /// kept once its table is decoded.
     private final class Contents: Sendable {
+        private let stored: String?
         private let read: (@Sendable () -> String)?
-        private let loaded: Mutex<String?>
+        private let readings = Mutex(0)
 
         init(_ data: String) {
+            stored = data
             read = nil
-            loaded = Mutex(data)
         }
 
         init(read: @escaping @Sendable () -> String) {
+            stored = nil
             self.read = read
-            loaded = Mutex(nil)
         }
 
-        var isRead: Bool {
-            loaded.withLock { $0 != nil }
+        var reads: Int {
+            readings.withLock { $0 }
         }
 
         var data: String {
-            if let data = loaded.withLock({ $0 }) {
-                return data
+            if let stored {
+                return stored
             }
-            let data = read?() ?? ""
-            loaded.withLock { $0 = data }
-            return data
+            readings.withLock { $0 += 1 }
+            return read?() ?? ""
         }
     }
 
@@ -447,7 +448,7 @@ public struct LookTableFile: Codable, Sendable, Hashable {
         contents = Contents(table.littleEndianBytes.base64EncodedString())
     }
 
-    /// A table whose data `read` returns the first time it's needed.
+    /// A table whose data `read` returns each time it's needed.
     init(size: Int, space: String, sha256: String, read: @escaping @Sendable () -> String) {
         self.size = size
         self.space = space
@@ -471,9 +472,9 @@ public struct LookTableFile: Codable, Sendable, Hashable {
         try container.encode(data, forKey: .data)
     }
 
-    /// Whether the data is in memory; a bundled look's is read when first used.
-    var isRead: Bool {
-        contents.isRead
+    /// How often the data has been read from its file; a bundled look's is read when used.
+    var reads: Int {
+        contents.reads
     }
 
     public static func == (a: LookTableFile, b: LookTableFile) -> Bool {

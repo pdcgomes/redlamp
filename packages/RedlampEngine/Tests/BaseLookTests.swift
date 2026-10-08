@@ -3,6 +3,7 @@ import Foundation
 import ImageIO
 import Metal
 import RedlampEngineAPI
+import Synchronization
 import Testing
 import UniformTypeIdentifiers
 @testable import RedlampEngine
@@ -191,20 +192,101 @@ struct BaseLookTests {
     }
 
     @Test(.enabled(if: canRender))
-    func `an edit rendered while its look is still being registered renders with it`() async throws {
+    func `a render waits for its look's table rather than drawing without it`() async throws {
         let url = try Self.chart()
         defer { try? FileManager.default.removeItem(at: url) }
         let engine = try RedlampEngine()
         _ = try await engine.open(url)
         let grey = try look(LookTable(size: 9) { _ in SIMD3(repeating: 0.5) }, id: "local/test/grey")
-        engine.registerBaseLooks {
-            Thread.sleep(forTimeInterval: 0.3)
-            return [grey]
-        }
+        engine.registerBaseLooks([source(grey, reads: Reads(), delay: 0.3)])
         var recipe = EditRecipe()
         recipe.baseLook = grey.reference
         let channels = try await Self.pixels(render(engine, recipe)).enumerated().filter { $0.offset % 4 != 3 }
         #expect(channels.allSatisfy { abs(Int($0.element) - 128) <= 3 })
+    }
+
+    /// Counts how often registered looks' tables are read.
+    private final class Reads: Sendable {
+        let count = Mutex(0)
+    }
+
+    private func source(_ look: BaseLookDefinition, reads: Reads, delay: Double = 0) -> BaseLookSource {
+        BaseLookSource(reference: look.reference, parameters: look.parameters) {
+            reads.count.withLock { $0 += 1 }
+            Thread.sleep(forTimeInterval: delay)
+            return look
+        }
+    }
+
+    @Test(.enabled(if: canRender))
+    func `registered looks read no table until a render uses one, and then only its own`() async throws {
+        let url = try Self.chart()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        let grey = try look(LookTable(size: 9) { _ in SIMD3(repeating: 0.5) }, id: "local/test/grey")
+        let dark = try look(LookTable(size: 9) { _ in SIMD3(repeating: 0.2) }, id: "local/test/dark")
+        let reads = Reads()
+        engine.registerBaseLooks([source(grey, reads: reads), source(dark, reads: reads)])
+        #expect(engine.canRender(grey.reference))
+        #expect(engine.canRender(dark.reference))
+        #expect(!engine.canRender(BaseLookReference(id: grey.id, version: 1, name: "Grey", contentHash: "other")))
+        #expect(reads.count.withLock { $0 } == 0)
+
+        var recipe = EditRecipe()
+        recipe.baseLook = grey.reference
+        let channels = try await Self.pixels(render(engine, recipe)).enumerated().filter { $0.offset % 4 != 3 }
+        #expect(channels.allSatisfy { abs(Int($0.element) - 128) <= 3 })
+        _ = try await render(engine, recipe)
+        #expect(reads.count.withLock { $0 } == 1)
+    }
+
+    private struct Damaged: Error {}
+
+    private static func damaged() throws -> BaseLookDefinition {
+        throw Damaged()
+    }
+
+    @Test(.enabled(if: canRender))
+    func `a look that can't be read renders as missing, and shows as missing from then on`() async throws {
+        let url = try Self.chart()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        let grey = try look(LookTable(size: 9) { _ in SIMD3(repeating: 0.5) }, id: "local/test/damaged")
+        engine.registerBaseLooks([BaseLookSource(reference: grey.reference, parameters: grey.parameters) {
+            try? Self.damaged()
+        }])
+        #expect(engine.canRender(grey.reference))
+
+        var recipe = EditRecipe()
+        recipe.baseLook = grey.reference
+        let missing = try await render(engine, recipe)
+        #expect(try await Self.maxDifference(missing, render(engine, EditRecipe())) <= 1)
+        #expect(!engine.canRender(grey.reference))
+
+        let registry = try BaseLookRegistry(device: #require(MTLCreateSystemDefaultDevice()))
+        registry
+            .register([BaseLookSource(reference: grey.reference, parameters: grey.parameters) { try? Self.damaged() }])
+        let registered = registry.generation
+        let resolved = registry.resolve(grey.reference)
+        #expect(!resolved.isAvailable)
+        #expect(resolved.parameters == .identity)
+        #expect(registry.generation == registered &+ 1)
+        _ = registry.resolve(grey.reference)
+        #expect(registry.generation == registered &+ 1)
+    }
+
+    @Test(.enabled(if: canRender))
+    func `reading a registered look's table leaves the generation alone`() throws {
+        let registry = try BaseLookRegistry(device: #require(MTLCreateSystemDefaultDevice()))
+        let grey = try look(LookTable(size: 9) { _ in SIMD3(repeating: 0.5) }, id: "local/test/grey")
+        registry.register([source(grey, reads: Reads())])
+        let registered = registry.generation
+        registry.register([source(grey, reads: Reads())])
+        #expect(registry.resolve(grey.reference).table != nil)
+        registry.register(grey)
+        #expect(registry.generation == registered)
     }
 
     @Test(.enabled(if: canRender))

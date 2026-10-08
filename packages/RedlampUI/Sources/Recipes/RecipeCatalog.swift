@@ -21,12 +21,17 @@ public final class RecipeCatalog {
     public init(engine: any EditingEngine, library: RecipeLibrary = RecipeLibrary()) {
         self.engine = engine
         self.library = library
-        engine.registerBaseLooks { BuiltInBaseLooks.all.compactMap { try? $0.definition() } }
+        engine.registerBaseLooks(BuiltInBaseLooks.all.map(Self.source))
         registerLooks()
     }
 
     private static func key(_ package: BaseLookPackage) -> String {
         "\(package.id)@\(package.version)#\(package.table?.sha256 ?? "")"
+    }
+
+    /// `package` for the engine to read when a render first uses it.
+    private static func source(_ package: BaseLookPackage) -> BaseLookSource {
+        BaseLookSource(reference: package.reference, parameters: package.parameters) { try? package.definition() }
     }
 
     /// Registers the installed and embedded looks the engine doesn't have yet; the bundled
@@ -35,7 +40,7 @@ public final class RecipeCatalog {
         let added = (library.storedLooks + library.all.flatMap(\.embeddedBaseLooks))
             .filter { registered.insert(Self.key($0)).inserted }
         guard !added.isEmpty else { return }
-        engine.registerBaseLooks { added.compactMap { try? $0.definition() } }
+        engine.registerBaseLooks(added.map(Self.source))
     }
 
     private func changed() {

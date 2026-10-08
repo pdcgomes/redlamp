@@ -113,9 +113,9 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// same look again is cheap. Edits whose look isn't registered render without it.
     func registerBaseLook(_ look: BaseLookDefinition)
 
-    /// Registers the looks `load` decodes, away from the caller's thread; a render that uses
-    /// one of them before they're registered waits for them.
-    func registerBaseLooks(_ load: @escaping @Sendable () -> [BaseLookDefinition])
+    /// Registers looks without reading their tables: `canRender` answers from their
+    /// references, and a render that uses one reads it first, from the render's thread.
+    func registerBaseLooks(_ looks: [BaseLookSource])
 
     /// Whether the engine can render `reference` exactly as pinned.
     func canRender(_ reference: BaseLookReference) -> Bool
@@ -180,9 +180,11 @@ public protocol EditingEngine: AnyObject, Sendable {
 }
 
 public extension EditingEngine {
-    func registerBaseLooks(_ load: @escaping @Sendable () -> [BaseLookDefinition]) {
-        for look in load() {
-            registerBaseLook(look)
+    func registerBaseLooks(_ looks: [BaseLookSource]) {
+        for look in looks {
+            if let definition = look.load() {
+                registerBaseLook(definition)
+            }
         }
     }
 

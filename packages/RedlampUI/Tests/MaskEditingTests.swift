@@ -317,6 +317,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         registeredLooks.append(look)
     }
 
+    /// Every look registered to be read when first used, in order; none is read here.
+    private(set) var lookSources: [BaseLookSource] = []
+
+    func registerBaseLooks(_ looks: [BaseLookSource]) {
+        lookSources += looks
+    }
+
     func canRender(_: BaseLookReference) -> Bool {
         true
     }
