@@ -437,7 +437,7 @@ struct MaskEditingTests {
         )]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0003.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
+        for _ in 0 ..< 200 where model.info == nil || model.availableAIMaskKinds.isEmpty {
             try await Task.sleep(for: .milliseconds(5))
         }
         #expect(model.canCreateMask(.landscape))
@@ -453,10 +453,17 @@ struct MaskEditingTests {
     }
 
     /// The People menus offer only the parts the engine can make, in Lightroom's order.
-    @Test func `people menus offer the parts there are`() {
+    @Test func `people menus offer the parts there are`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
         let engine = StubEngine()
         engine.personParts = [.hair, .clothes, .entirePerson, .lips]
         let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0004.ARW"))
+        for _ in 0 ..< 200 where model.info == nil || model.availableAIMaskKinds.isEmpty {
+            try await Task.sleep(for: .milliseconds(5))
+        }
         #expect(model.availablePersonParts == [.entirePerson, .lips, .hair, .clothes])
     }
 
@@ -631,7 +638,7 @@ struct MaskEditingTests {
         engine.computed = [person(0, sha: "a"), person(1, sha: "b")]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0002.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
+        for _ in 0 ..< 200 where model.info == nil || model.availableAIMaskKinds.isEmpty {
             try await Task.sleep(for: .milliseconds(5))
         }
         #expect(model.canCreateMask(.people))

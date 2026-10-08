@@ -54,8 +54,6 @@ struct AvailableMasksTests {
         try #require(model.info != nil)
         #expect(model.canCreateMask(.subject))
         #expect(model.canCreateMask(.sky))
-        withKnownIssue("RESP-15: the open asks for the AI masks on the main thread") {
-            #expect(heartbeat.longestGap < .milliseconds(1500), "the main actor was held for \(heartbeat.longestGap)")
-        }
+        #expect(heartbeat.longestGap < .milliseconds(1500), "the main actor was held for \(heartbeat.longestGap)")
     }
 }

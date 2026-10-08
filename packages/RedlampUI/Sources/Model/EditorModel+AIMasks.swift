@@ -12,8 +12,20 @@ public extension EditorModel {
 
     /// The People parts the menus offer, in Lightroom's order.
     var availablePersonParts: [PersonPart] {
-        let available = engine.availablePersonParts()
-        return PersonPart.allCases.filter(available.contains)
+        PersonPart.allCases.filter(offeredPersonParts.contains)
+    }
+
+    /// Asks the engine which AI masks and People parts it can make for the open photo, off the
+    /// main actor: the first ask builds the model catalogue, which can take seconds.
+    func refreshAvailableMasks() async {
+        guard let visit = currentVisit else { return }
+        let engine = engine
+        let (kinds, parts) = await Task.detached(priority: .userInitiated) {
+            (engine.availableMaskKinds(), engine.availablePersonParts())
+        }.value
+        guard currentVisit == visit else { return }
+        availableAIMaskKinds = kinds
+        offeredPersonParts = parts
     }
 
     /// Computes an AI mask: a new mask, or a component of `target` with `operation`. People
@@ -101,7 +113,7 @@ public extension EditorModel {
             try await engine.downloadModel(model.id) { fraction in
                 Task { @MainActor [weak self] in self?.modelDownloadProgress = fraction }
             }
-            availableAIMaskKinds = engine.availableMaskKinds()
+            await refreshAvailableMasks()
             modelDownloadProgress = nil
             guard currentVisit == visit else { return }
             if peoplePicker != nil {

@@ -493,6 +493,8 @@ public final class EditorModel {
     public var maskMessage: String?
     /// The AI mask kinds the engine can make for the open photo.
     public internal(set) var availableAIMaskKinds: Set<MaskKind> = []
+    /// The People parts the engine can make for the open photo.
+    var offeredPersonParts: Set<PersonPart> = []
     /// A model the chosen mask needs, waiting for the user to agree to download it.
     public internal(set) var pendingModel: (
         model: ModelInfo, kind: MaskKind, part: PersonPart, landscape: LandscapeClass,
@@ -970,7 +972,8 @@ public final class EditorModel {
         unsavedSessions = Self.sessions(in: unsaved)
         info = opened
         recordOpening(opened, edited: sidecar != nil)
-        availableAIMaskKinds = engine.availableMaskKinds()
+        availableAIMaskKinds = []
+        Task { await refreshAvailableMasks() }
         maskMessage = nil
         readOnlyReason = read.protection
         hasUnmergedEdits = read.hasUnmergedConflicts

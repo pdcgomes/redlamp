@@ -90,7 +90,8 @@
         /// The photo is open and rendered, nothing is loading, no dialog is up.
         public func settle(timeout: Double = 30) throws {
             try wait("the photo to open and render", timeout: timeout) { model in
-                model.info != nil && !model.isLoading && model.hasFrame && NSApp.modalWindow == nil
+                model.info != nil && !model.isLoading && model.hasFrame && !model.availableAIMaskKinds.isEmpty
+                    && NSApp.modalWindow == nil
             }
             pause(0.15)
         }

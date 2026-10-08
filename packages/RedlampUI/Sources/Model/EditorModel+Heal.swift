@@ -83,6 +83,9 @@ public extension EditorModel {
         let pick = spotPick
         let kind: MaskKind = pick == .person ? .people : .objects
         pickMessage = nil
+        if availableAIMaskKinds.isEmpty {
+            await refreshAvailableMasks()
+        }
         guard availableAIMaskKinds.contains(kind) else {
             pickMessage = "Picking \(pick.name.lowercased())s isn't available for this photo."
             return
