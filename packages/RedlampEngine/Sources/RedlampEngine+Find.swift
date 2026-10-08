@@ -8,12 +8,10 @@ public extension RedlampEngine {
     internal static let thingFinderID = "owlv2-base"
 
     func thingsToFind() async -> [String] {
-        if let loaded = thingFinder.withLock({ $0 }) {
+        if let loaded = thingFinder.model {
             return loaded.things
         }
-        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.thingFinderID }),
-              let directory = await ModelStore.shared.location(of: manifest)
-        else { return [] }
+        guard let (_, directory) = try? await Self.installed(Self.thingFinderID) else { return [] }
         return (try? OWLv2Detector.things(in: directory)) ?? []
     }
 
@@ -44,16 +42,11 @@ public extension RedlampEngine {
     }
 
     internal func loadedThingFinder() async throws -> OWLv2Detector {
-        if let loaded = thingFinder.withLock({ $0 }) {
-            return loaded
+        try await thingFinder.model {
+            let (manifest, directory) = try await Self.installed(
+                Self.thingFinderID, otherwise: MaskComputationError.unsupported(.objects),
+            )
+            return try OWLv2Detector(manifest: manifest, directory: directory)
         }
-        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.thingFinderID }),
-              let directory = await ModelStore.shared.location(of: manifest)
-        else { throw MaskComputationError.unsupported(.objects) }
-        let loaded = try await Task.detached(priority: .userInitiated) {
-            try OWLv2Detector(manifest: manifest, directory: directory)
-        }.value
-        thingFinder.withLock { $0 = loaded }
-        return loaded
     }
 }

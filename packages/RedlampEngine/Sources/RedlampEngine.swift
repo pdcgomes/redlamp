@@ -34,20 +34,20 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     /// The current photo's analysis render, for AI masks.
     let analysisCache = Mutex<AnalysisCache?>(nil)
     /// Segment Anything, once loaded, and the open photo's embedding.
-    let segmenter = Mutex<SAMSegmenter?>(nil)
-    let depthModel = Mutex<DepthEstimator?>(nil)
-    let depthAnything3Model = Mutex<DepthAnything3?>(nil)
+    let segmenter = ModelSlot<SAMSegmenter>()
+    let depthModel = ModelSlot<DepthEstimator>()
+    let depthAnything3Model = ModelSlot<DepthAnything3>()
     let depthAnything3Cache = Mutex<(hash: String, result: DepthAnything3.Result)?>(nil)
     let objectEmbeddingCache = Mutex<(hash: String, embedding: SAMSegmenter.Embedding)?>(nil)
     /// SAM 3 for Landscape and people parts, once loaded; the open photo's encoding, and its
     /// class and part masks.
-    let sam3Model = Mutex<SAM3Concepts?>(nil)
-    let vitMatteModel = Mutex<ViTMatte?>(nil)
+    let sam3Model = ModelSlot<SAM3Concepts>()
+    let vitMatteModel = ModelSlot<ViTMatte>()
     let sam3Features = Mutex<(hash: String, features: SAM3Concepts.Features)?>(nil)
     let landscapeCache = Mutex<(hash: String, classes: [LandscapeClass: GrayMask])?>(nil)
     let peoplePartsCache = Mutex<(hash: String, parts: SAM3Concepts.PeopleParts)?>(nil)
     /// OWLv2, for things found by name, once loaded.
-    let thingFinder = Mutex<OWLv2Detector?>(nil)
+    let thingFinder = ModelSlot<OWLv2Detector>()
     /// Each person's matte for the open photo, solved per pixel, which their parts' edges take.
     let personMatteCache = Mutex<(hash: String, mattes: [GrayMask])?>(nil)
     /// Who People finds in the open photo (`peopleFound`).
@@ -75,8 +75,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     /// How many AI mask models are loaded, for tests.
     var loadedMaskModels: Int {
         let loaded: [Any?] = [
-            segmenter.withLock { $0 }, depthModel.withLock { $0 }, depthAnything3Model.withLock { $0 },
-            sam3Model.withLock { $0 }, vitMatteModel.withLock { $0 }, thingFinder.withLock { $0 },
+            segmenter.model, depthModel.model, depthAnything3Model.model,
+            sam3Model.model, vitMatteModel.model, thingFinder.model,
         ]
         return loaded.compactMap(\.self).count
     }
@@ -181,6 +181,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         pressure.setEventHandler { [weak self, weak pressure] in
             guard let self, let pressure else { return }
             sessions.relieve(pressure.data)
+            unloadMaskModels()
             renderQueue.async { self.detailStage.keepOnly(nil) }
         }
         pressure.resume()
@@ -299,6 +300,8 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         }
         sessions.removeAll()
         release(keeping: nil)
+        unloadMaskModels()
+        await releaseGenerativeFill()
         await withCheckedContinuation { (released: CheckedContinuation<Void, Never>) in
             renderQueue.async { [self] in
                 for pool in [surfaces, overviews, comparisons, comparisonOverviews] {

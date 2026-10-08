@@ -322,6 +322,12 @@ public final class EditorModel {
             // Point Color's controls move between the edit's swatches and the mask's.
             if (activeTool == .masking) != (oldValue == .masking) {
                 leavePointColor()
+                if oldValue == .masking {
+                    Task { [weak self] in
+                        guard let self, activeTool != .masking else { return }
+                        await engine.releaseMaskModels()
+                    }
+                }
             }
             if activeTool != .heal {
                 dustMessage = nil

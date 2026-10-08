@@ -378,14 +378,10 @@ struct MaskEditingTests {
         for _ in 0 ..< 200 where engine.maskModelReleases == 0 {
             try await Task.sleep(for: .milliseconds(5))
         }
-        withKnownIssue {
-            #expect(engine.maskModelReleases == 1)
-        }
+        #expect(engine.maskModelReleases == 1)
         model.activeTool = .edit
         try await Task.sleep(for: .milliseconds(50))
-        withKnownIssue {
-            #expect(engine.maskModelReleases == 1, "only the Masking tool's closing")
-        }
+        #expect(engine.maskModelReleases == 1, "only the Masking tool's closing")
     }
 
     @Test func `strokes paint into one brush component`() async throws {

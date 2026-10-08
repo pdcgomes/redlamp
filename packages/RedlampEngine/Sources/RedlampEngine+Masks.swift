@@ -78,17 +78,21 @@ extension RedlampEngine {
 
     /// Depth Anything 3, when it's on this Mac and offered (it is evaluation only).
     func depthAnything3() async -> DepthAnything3? {
-        if let loaded = depthAnything3Model.withLock({ $0 }) {
-            return loaded
+        try? await depthAnything3Model.model {
+            let (manifest, directory) = try await Self.installed(Self.depthAnything3ID)
+            return try DepthAnything3(manifest: manifest, directory: directory)
         }
-        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.depthAnything3ID }),
-              let directory = await ModelStore.shared.location(of: manifest),
-              let loaded = try? await Task.detached(priority: .userInitiated, operation: {
-                  try DepthAnything3(manifest: manifest, directory: directory)
-              }).value
-        else { return nil }
-        depthAnything3Model.withLock { $0 = loaded }
-        return loaded
+    }
+
+    /// The offered model `id`'s manifest and folder, when it's on this Mac.
+    static func installed(
+        _ id: String?, from manifests: [ModelManifest] = ModelCatalog.offered,
+        otherwise unavailable: any Error = ModelNotInstalled(),
+    ) async throws -> (ModelManifest, URL) {
+        guard let manifest = manifests.first(where: { $0.id == id }),
+              let directory = await ModelStore.shared.location(of: manifest)
+        else { throw unavailable }
+        return (manifest, directory)
     }
 
     static let depthAnything3ID = "depth-anything-3-mono-large"
@@ -96,34 +100,20 @@ extension RedlampEngine {
     /// ViTMatte, when it's on this Mac and offered: Subject, Background and People edges then
     /// gain the strands it finds beyond closed-form matting's (MSK-32).
     func vitMatte() async -> ViTMatte? {
-        if let loaded = vitMatteModel.withLock({ $0 }) {
-            return loaded
+        try? await vitMatteModel.model {
+            let (manifest, directory) = try await Self.installed(Self.vitMatteID)
+            return try ViTMatte(manifest: manifest, directory: directory)
         }
-        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.vitMatteID }),
-              let directory = await ModelStore.shared.location(of: manifest),
-              let loaded = try? await Task.detached(priority: .userInitiated, operation: {
-                  try ViTMatte(manifest: manifest, directory: directory)
-              }).value
-        else { return nil }
-        vitMatteModel.withLock { $0 = loaded }
-        return loaded
     }
 
     static let vitMatteID = "vitmatte-base"
 
     /// SAM 3, when it's on this Mac and offered (it is evaluation only).
     func sam3() async -> SAM3Concepts? {
-        if let loaded = sam3Model.withLock({ $0 }) {
-            return loaded
+        try? await sam3Model.model {
+            let (manifest, directory) = try await Self.installed(Self.sam3ID)
+            return try SAM3Concepts(manifest: manifest, directory: directory)
         }
-        guard let manifest = ModelCatalog.offered.first(where: { $0.id == Self.sam3ID }),
-              let directory = await ModelStore.shared.location(of: manifest),
-              let loaded = try? await Task.detached(priority: .userInitiated, operation: {
-                  try SAM3Concepts(manifest: manifest, directory: directory)
-              }).value
-        else { return nil }
-        sam3Model.withLock { $0 = loaded }
-        return loaded
     }
 
     /// The open photo's SAM 3 encoding, which Landscape and people parts share.
@@ -710,32 +700,22 @@ extension RedlampEngine {
     }
 
     func depthEstimator() async throws -> DepthEstimator {
-        if let loaded = depthModel.withLock({ $0 }) {
-            return loaded
+        try await depthModel.model {
+            let (manifest, directory) = try await Self.installed(
+                Self.modelID(for: .depthRange), otherwise: MaskComputationError.unsupported(.depthRange),
+            )
+            return try DepthEstimator(manifest: manifest, directory: directory)
         }
-        guard let id = Self.modelID(for: .depthRange),
-              let manifest = ModelCatalog.offered.first(where: { $0.id == id }),
-              let directory = await ModelStore.shared.location(of: manifest)
-        else { throw MaskComputationError.unsupported(.depthRange) }
-        let loaded = try await Task.detached(priority: .userInitiated) {
-            try DepthEstimator(manifest: manifest, directory: directory)
-        }.value
-        depthModel.withLock { $0 = loaded }
-        return loaded
     }
 
     func objectSegmenter() async throws -> SAMSegmenter {
-        if let loaded = segmenter.withLock({ $0 }) {
-            return loaded
+        try await segmenter.model {
+            let (manifest, directory) = try await Self.installed(
+                Self.modelID(for: .objects), from: ModelCatalog.all,
+                otherwise: MaskComputationError.unsupported(.objects),
+            )
+            return try SAMSegmenter(manifest: manifest, directory: directory)
         }
-        guard let id = Self.modelID(for: .objects), let manifest = ModelCatalog.manifest(id),
-              let directory = await ModelStore.shared.location(of: manifest)
-        else { throw MaskComputationError.unsupported(.objects) }
-        let loaded = try await Task.detached(priority: .userInitiated) {
-            try SAMSegmenter(manifest: manifest, directory: directory)
-        }.value
-        segmenter.withLock { $0 = loaded }
-        return loaded
     }
 
     /// The photo's SAM embedding: in memory for the open photo, then the Caches directory.
@@ -849,6 +829,20 @@ extension RedlampEngine {
         }
     }
 
+    public func releaseMaskModels() async {
+        masksWanted.withLock { $0 = false }
+        unloadMaskModels()
+    }
+
+    func unloadMaskModels() {
+        segmenter.unload()
+        depthModel.unload()
+        depthAnything3Model.unload()
+        sam3Model.unload()
+        vitMatteModel.unload()
+        thingFinder.unload()
+    }
+
     func warmIfWanted(_ session: ImageSession) {
         if masksWanted.withLock({ $0 }) {
             warm(session)
@@ -856,13 +850,17 @@ extension RedlampEngine {
     }
 
     /// The renders, models and embeddings `session`'s AI masks need, each cached, at low priority
-    /// and after a moment, so the canvas's own frame goes first. Stops if another photo opens.
+    /// and after a moment, so the canvas's own frame goes first. Stops if another photo opens or
+    /// the Masking tool closes.
     func warm(_ session: ImageSession) {
         Task.detached(priority: .utility) { [self] in
+            func warming() -> Bool {
+                masksWanted.withLock { $0 } && currentSession() === session
+            }
             try? await Task.sleep(for: .milliseconds(400))
-            guard currentSession() === session, let analysis = try? await analysisImage(for: session) else { return }
-            guard currentSession() === session, await (try? matteImage(for: session)) != nil else { return }
-            if await isReady(Self.modelID(for: .objects)), currentSession() === session,
+            guard warming(), let analysis = try? await analysisImage(for: session) else { return }
+            guard warming(), await (try? matteImage(for: session)) != nil else { return }
+            if await isReady(Self.modelID(for: .objects)), warming(),
                let segmenter = try? await objectSegmenter(),
                let embedding = try? await objectEmbedding(analysis, segmenter: segmenter) {
                 // One throwaway decode: Core ML prepares the decoder's GPU work on its first.
@@ -871,15 +869,17 @@ extension RedlampEngine {
                     size: PixelSize(width: 64, height: 64),
                 )
             }
-            if currentSession() === session, let model = await depthAnything3() {
+            if warming(), let model = await depthAnything3() {
                 _ = try? await depthAnything3Result(analysis, model: model)
             }
-            if await isReady(Self.sam3ID), currentSession() === session, let model = await sam3() {
+            if await isReady(Self.sam3ID), warming(), let model = await sam3() {
                 _ = try? await landscapeClasses(analysis, model: model)
             }
         }
     }
 }
+
+struct ModelNotInstalled: Error {}
 
 struct AnalysisCache: @unchecked Sendable {
     let session: ImageSession

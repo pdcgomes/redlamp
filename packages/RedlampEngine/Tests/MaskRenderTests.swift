@@ -1098,10 +1098,8 @@ extension MaskRenderTests {
         async let first = slot.model(loading: made.load)
         async let second = slot.model(loading: made.load)
         let (one, other) = try await (first, second)
-        withKnownIssue {
-            #expect(made.count.withLock { $0 } == 1)
-            #expect(one === other)
-        }
+        #expect(made.count.withLock { $0 } == 1)
+        #expect(one === other)
     }
 
     @Test func `an unloaded model loads again when asked for`() async throws {
@@ -1109,13 +1107,9 @@ extension MaskRenderTests {
         let made = Made()
         _ = try await slot.model(loading: made.load)
         slot.unload()
-        withKnownIssue {
-            #expect(slot.model == nil)
-        }
+        #expect(slot.model == nil)
         _ = try await slot.model(loading: made.load)
-        withKnownIssue {
-            #expect(made.count.withLock { $0 } == 2)
-        }
+        #expect(made.count.withLock { $0 } == 2)
     }
 
     @Test func `a model unloads once it's been idle a while`() async throws {
@@ -1129,9 +1123,7 @@ extension MaskRenderTests {
         for _ in 0 ..< 100 where slot.model != nil {
             try await Task.sleep(for: .milliseconds(20))
         }
-        withKnownIssue {
-            #expect(slot.model == nil)
-        }
+        #expect(slot.model == nil)
         #expect(made.count.withLock { $0 } == 1)
     }
 
@@ -1144,23 +1136,17 @@ extension MaskRenderTests {
         #expect(engine.loadedMaskModels == 1)
         engine.warmUpMasks()
         await engine.releaseMaskModels()
-        withKnownIssue {
-            #expect(engine.loadedMaskModels == 0)
-        }
+        #expect(engine.loadedMaskModels == 0)
 
         _ = try await engine.open(EngineSmokeTests.fixtures[0])
         for _ in 0 ..< 50 where engine.analysisCache.withLock({ $0 == nil }) {
             try await Task.sleep(for: .milliseconds(100))
         }
-        withKnownIssue {
-            #expect(engine.analysisCache.withLock { $0 == nil }, "not warmed up")
-        }
+        #expect(engine.analysisCache.withLock { $0 == nil }, "not warmed up")
 
         _ = try await engine.objectSegmenter()
         await engine.releaseResources()
-        withKnownIssue {
-            #expect(engine.loadedMaskModels == 0, "the window closed")
-        }
+        #expect(engine.loadedMaskModels == 0, "the window closed")
     }
 
     /// With SAM 3 on this Mac: the Sony sample's trees are vegetation, named for the class, and
