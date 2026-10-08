@@ -409,11 +409,23 @@ public final class LibrarySources {
     private func received(_ change: LibrarySourceList.Change, generation: Int) {
         guard let model, generation == self.generation, model.library.showSource(change, generation: generation)
         else { return }
+        Self.release(ids)
         ids = change.ids
         if awaitingFirst {
             awaitingFirst = false
-            model.didList(model.library.items, select: nil)
+            model.didList(Array(model.library.items.prefix(Self.warmedAsShown)), select: nil)
         }
+    }
+
+    /// The photos a source warms the thumbnails of as it's shown, its first screens; the grid and the filmstrip
+    /// load the others' as they come into view. Asking the store for ten thousand at once holds the main thread
+    /// for milliseconds.
+    static let warmedAsShown = 1000
+
+    /// Frees `ids` off the main thread: tens of thousands of URLs take milliseconds.
+    private static func release(_ ids: [URL: Int64]) {
+        guard !ids.isEmpty else { return }
+        Task.detached(priority: .utility) { withExtendedLifetime(ids) {} }
     }
 
     /// Ends the source shown when another opening replaces it: a folder, Recently Trashed, or another source.
@@ -430,6 +442,7 @@ public final class LibrarySources {
         list = nil
         generation = nil
         shown = nil
+        Self.release(ids)
         ids = [:]
         awaitingFirst = false
     }

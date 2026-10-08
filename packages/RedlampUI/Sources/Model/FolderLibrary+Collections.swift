@@ -11,6 +11,9 @@ extension FolderLibrary {
     /// the one the next launch opens. Returns the opening's generation, which a later opening ends.
     func openSource() -> Int {
         let before = openFolder ?? trash.folderBefore
+        // Freeing tens of thousands of photos takes milliseconds: those shown go off the main thread.
+        let shown = (items, positions, fromLibrary.keys)
+        scheduler.submit(.background) { withExtendedLifetime(shown) {} }
         open(nil)
         trash.folderBefore = before
         saveSettings()
@@ -28,17 +31,22 @@ extension FolderLibrary {
     @discardableResult
     func showSource(_ change: LibrarySourceList.Change, generation: Int) -> Bool {
         guard showsSource(generation) else { return false }
-        fromLibrary.keys = change.keys
         let carried = change.previousCount >= 0 && change.previousCount == items.count
         var ids = ContiguousArray<Int64>()
-        ids.reserveCapacity(change.items.count)
-        for (index, item) in change.items.enumerated() {
-            let before = carried ? Int(change.previous[index]) : positions[item.url] ?? -1
-            ids.append(photoIDs.indices.contains(before) ? photoIDs[before] : newPhotoIDs(1).lowerBound)
+        if !carried, positions.isEmpty {
+            // Hashing tens of thousands of URLs to find none takes milliseconds.
+            ids = ContiguousArray(newPhotoIDs(change.items.count))
+        } else {
+            ids.reserveCapacity(change.items.count)
+            for (index, item) in change.items.enumerated() {
+                let before = carried ? Int(change.previous[index]) : positions[item.url] ?? -1
+                ids.append(photoIDs.indices.contains(before) ? photoIDs[before] : newPhotoIDs(1).lowerBound)
+            }
         }
         let unchanged = carried && change.diff.isEmpty
         // Freeing tens of thousands of photos takes milliseconds: the photos replaced go off the main thread.
-        let replaced = (items, positions)
+        let replaced = (items, positions, fromLibrary.keys)
+        fromLibrary.keys = change.keys
         items = change.items
         positions = change.positions
         photoIDs = ids
