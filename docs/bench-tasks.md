@@ -70,6 +70,23 @@ A complete task leaves the outbox when it reaches Done; a partial one sent early
 
 A bench folder as one file: a zip of the folder, made by the system's archiver (`NSFileCoordinator`'s upload form), so no package is needed. The phone sends a task to the hub as one, and it's the fallback by AirDrop when the phone and the Mac can't reach each other. Before anything is extracted, the Mac reads the zip's directory and refuses an entry outside the folder, a link, more than 200 files, or more than 1 GB expanded; then `ditto` extracts it into `Inbox/`, and the folder is checked as above before it moves to Done.
 
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `redlamp task new --title … --app … [--step "Title \| detail"]… <assets…>` | A task in the outbox. Without `--no-auto-steps` it starts with a step sharing the assets and ends with one waiting for the results. `--workstream`, `--tracker`, `--issue`, `--note`, `--question "id \| text \| a, b"`, `--manual` |
+| `redlamp task new --draft draft.json` | A task from a draft: `task.json`'s fields, with assets as `{"source": path, "id", "label", "counts"}` and step pictures in `"pictures"` |
+| `redlamp task check <ID or folder>` | The checks above; exit 1 on errors |
+| `redlamp task list`, `show <ID> [--json]` | The outbox and Done; a task's results and how each paired |
+| `redlamp task wait <ID> [--timeout S]` | Returns once the task is in Done and complete; exit 2 on timeout |
+| `redlamp task withdraw <ID>` | Takes a task back; the phone drops it unless it has results |
+| `redlamp task look --app … --filter … [--variant] [--settings] [--set quick\|standard\|full] [--in DIR]` | A look reference from the kit template, as New Look makes one on the phone |
+| `redlamp task add <folder> <files…>` | Files results into a folder and pairs them, as the share extension does |
+| `redlamp task serve [--port N]` | The hub without the Lab, until interrupted, printing the pairing code and what arrives; look references aren't fitted |
+| `redlamp recipe app-kit --task` | Publishes the capture kits already written as the `look-kit` template |
+
+Agents follow `.cursor/skills/redlamp-bench/SKILL.md`, which covers writing steps for the phone and making Lightroom's results measurable.
+
 ## The hub
 
 The hub runs in the harness's Recipe Lab, on the local network, advertised over Bonjour as `_redlamp-bench._tcp` (port 8765 when it's free). The phone pairs once with the six-digit code the Lab shows and keeps a token; five wrong codes renew the code. Its API, JSON over HTTP, every route but the first three needing `Authorization: Bearer <token>`:
@@ -84,8 +101,38 @@ The hub runs in the harness's Recipe Lab, on the local network, advertised over 
 | `GET /api/done`, `GET /api/done/<id>` | Receipts for what came back: title, summary ("12 results, all paired"), whether it's complete, and the digest of its `results.json` |
 | `POST /api/inbox` | A `.redtask` as the body; the receipt, or 422 with the reason it was refused |
 
-The server is Network.framework with a small HTTP/1.1 reader: one request per connection, bodies with a Content-Length only, bodies over 4 MB streamed to a scratch file.
+The server is Network.framework with a small HTTP/1.1 reader: one request per connection, bodies with a Content-Length only, bodies over 4 MB streamed to a scratch file. When another app has port 8765, it listens on any free port; the phone finds it over Bonjour either way.
 
-### On the phone
+### In the Recipe Lab
+
+The Lab's **Bench** tab turns the hub on (it stays on whenever the harness runs: `mise run harness -- --scene recipe-lab --lab-tab bench`), shows its address and the pairing code, the phones paired with it and when each was last in touch, what waits in the outbox and what came back, and what happened recently. A `.redtask` or a bench folder dropped on it, or a `.redtask` opened in the Finder, is filed as an arrival is. Look references go on to the **Looks** tab ([app-looks.md](recipes/app-looks.md#candidates-and-the-looks-tab)), which fits them as they arrive.
+
+![The Recipe Lab's Bench tab](images/bench/lab-bench.jpg)
+
+## The iPhone app
+
+`apps/RedlampBenchApp` (scheme `RedlampBenchApp`): a SwiftUI app and a share extension, with standard iOS screens and Redlamp's icon, installed from Xcode on the owner's phone (DEC-53). It links `RedlampBench`, and through it RedlampRecipes, for pairing; no engine, LibRaw or Metal.
+
+- **Home** lists the tasks pulled from the Lab, each with how many results are back and who asked, the look references, and New Look. The app checks the hub when it opens or comes to the front, and every few minutes while it's open; it finds the hub over Bonjour, or at an address typed when pairing.
+- **A task opens on its steps, one at a time:** "Step 2 of 7" with a progress bar, the title in large type, the detail, its picture, and its action (Share the photos to the app, Save them to Photos, a question's answers, or the results coming back). Next and Back move between steps, a step whose results are back ticks itself, the view remembers where it was after a trip to Lightroom, and All Steps lists them with ticks.
+- **Photos** shows the assets in a grid with Select, for sharing or saving any of them; each asset's result once it's paired, with pairing and unpairing by hand from its menu; the questions; a note for the agent; and Add Results from Photos.
+- **The share extension** takes up to 20 images from Lightroom, Prequel or Photos, keeps their bytes as they arrived, preselects the last task or reference used (or a new reference with the next variant, when the last is already complete), pairs each image, and sends the folder to the Lab when that completes it. What can't reach the Lab waits in the app's queue.
+
+<p>
+<img src="images/bench/phone-step1.jpg" width="240" alt="A task's first step">
+<img src="images/bench/phone-step7.jpg" width="240" alt="The step that waits for the results">
+<img src="images/bench/phone-home-pulled.jpg" width="240" alt="Home, with a task pulled from the Lab">
+</p>
+
+### The phone's library
 
 `BenchLibrary` keeps the phone's folders in the App Group container: `Tasks/` pulled from the hub, `Looks/` made on the phone, `Kit/` the capture kit. A pull fetches new tasks and those whose revision rose (unless they already have results), drops withdrawn tasks without results, and refreshes the kit when its manifest changes; every file is checked against its size and SHA-256 before it replaces anything. A folder is queued for the hub once it's complete, or when the owner sends it early; a send that fails stays queued with its error, and a folder whose results the hub already has (by the digest of `results.json`) isn't sent again.
+
+## What's been tried
+
+- **The hub and the phone's library over loopback,** in `RedlampBenchTests`: pairing, a wrong code, pulling a task, pairing results, sending it back, a withdrawn task, a damaged archive refused, and a second hub on a taken port.
+- **The iPhone app in the iOS 26.5 simulator,** against `redlamp task serve`: the steps one at a time, pulling a task over the network, and sending it back as one archive that the hub checked and filed in Done, after which it left the outbox.
+- **A look reference from the Cine Film 1 exports of 30 September:** the three charts paired by barcode and the bike photo by similarity (score 1.00), and the measured table byte for byte the one `app-import` made from the same files.
+- **Not yet tried:** the share extension (the simulator can't drive another app's share sheet), Bonjour discovery across a real network, and a device install, which needs the owner's signing.
+
+The harness's `--snapshot <path>` (with `--snapshot-delay S`) draws its window to a PNG without Screen Recording and quits, which is how the Lab's screenshots here were made.

@@ -63,7 +63,18 @@ The look-development set has no portraits, so the two portraits come from Wikime
 
 ## The phone workflow
 
-Each kit's `README.txt` has the full steps.
+### With Redlamp Bench (the usual way)
+
+[Redlamp Bench](../bench-tasks.md), the iPhone app, holds the kit and does the bookkeeping, so nothing is AirDropped, renamed or imported by hand:
+
+1. **New Look**, in the app: the app (Prequel, Lightroom mobile or any other), the filter's name as the app shows it, its variant, the settings used as free notes, an optional screenshot of the filter's settings, and the kit set: Quick (the one-image kit), Standard (the three charts and two photos) or Full (the three charts and all eight photos). The form is prefilled from the last reference with the variant counted up.
+2. **Save the kit images to Photos** from the reference's first step, apply the filter to each in the other app, and export at full size.
+3. **Share the exports to Redlamp Bench.** The last reference is already selected, and each export pairs with its kit image: charts by their barcode, photos by name or by look.
+4. Once every kit image of the set has its export, the phone sends the reference to the Recipe Lab's hub. The Lab fits it into candidate looks as it arrives and lists it under **Looks** (below).
+
+The kit reaches the phone from the hub: `redlamp recipe app-kit --task` publishes the kits already written (`build/app-looks/kit` and `kit-compact`, or `--kit` and `--compact-kit`) as the hub's `look-kit` template, and each new reference copies its images, so a reference always carries the exact originals it was captured against. `redlamp recipe app-import <reference folder> --name "…"` reads one from the CLI, and `redlamp task look` and `redlamp task add` make and fill one on the Mac, for a filter in a Mac app.
+
+The steps below are the same capture by hand.
 
 ### One-image kit
 
@@ -102,7 +113,7 @@ For a one-image export, each photo tile is then compared with the same region of
 - sharpness as the edge contrast ratio (below 1 is blur or softening);
 - glow as extra light beside bright areas.
 
-These feed Redlamp's vignette and grain settings now; glow is reported for a future halation or bloom stage.
+These feed Redlamp's vignette and grain settings; the film-effects candidate (below) fits grain, bloom and halation to them on the photos.
 
 ## What lands in Redlamp
 
@@ -116,13 +127,32 @@ These feed Redlamp's vignette and grain settings now; glow is reported for a fut
 
 **Names.** The recipe's name, the Base Look's name and the output folder use only `--name`, which is refused if it contains the app's or the filter's name. The app and filter names are kept only in `report.json` and in the recipe's private `source` payload (`dialect: redlamp.app-capture`, under `provenance`), which no Redlamp view shows. Strip that payload before a captured look is bundled into the app.
 
+## Candidates and the Looks tab
+
+One measurement can become more than one look. `LookCandidates` (in `RedlampRecipes/Sources/AppLooks/`) makes up to four, and `app-import --candidates` writes them into `candidates/` with `candidates.json`, best first:
+
+| Candidate | What it is |
+| --- | --- |
+| Measured | The table as the charts measured it, with their vignette and grain: what `app-import` writes without `--candidates` |
+| Smoothed | `LatticeFit` over the measured table at three smoothnesses, the best kept, so JPEG noise and patch spread don't become kinks |
+| Charts and photos | `LatticeFit` over the charts and 3,000 pixels from each photo (the export's colour less the measured vignette), with two photos or more. Each photo is scored by the fit that left it out |
+| With film effects | The best of the others with Grain, Bloom or Halation at a few amounts, kept only when one scores better |
+
+**The score.** Each kit photo's original is rendered with the candidate through the engine, as a bitmap: process 3 (TON-23) renders a bitmap at default settings as the file itself, so the candidate sees the input the app saw. The render is then measured against the app's export of the same photo with `PhotoPairAnalysis` and an identity table, which leaves only what the candidate gets wrong. For a one-image export, the kit image is rendered whole and each photo tile is cut from the render and the export through the marker transform. The score is 100 less 6 × the mean ΔE, 2 × its 90th percentile, 300 × the grain difference (signed, so too much grain counts as well as too little), 20 × the sharpness ratio's distance from 1, 200 × the glow difference, and the table's mean ΔE from the charts' measurement. Without photos it's the charts' alone, and says so. The weights are a first guess: the Looks tab records the owner's picks and pairwise choices with every candidate's score, to tune them once there are enough.
+
+On the Cine Film 1 capture of 30 September (three charts and the colours photo, at 2048 px), through a look reference: the measured table is byte for byte the one `app-import` made from the same files then. Measured scores 93.6 (ΔE 0.58 on the photo, rendered through the engine) and Smoothed 89.7 (ΔE 0.90), as expected of a clean PNG export; with one photo there's no charts-and-photos fit, and no grain or glow change scored better.
+
+**The Looks tab,** in the harness's Recipe Lab, lists every look reference in the bench's Done folder, grouped by filter so its variants sit together. A reference is fitted as it arrives (a notification says when its candidates are ready), and what the fit found is kept beside it in `lab/`: the candidates' recipes, their scores, and their renders of each photo. For each one it shows the summary and warnings (adaptive filter, local effects, clipping, a small export), any other capture whose measured table is within ΔE 1, the ranked candidates with the parts of their scores, the app's export against a candidate on each photo (Split, A | B or Flicker), and two candidates side by side for a close call. **Install** saves the chosen candidate into the library under a name and group (Captured by default); a name containing the app's or the filter's name is refused, and the next variant of a filter already installed is offered its name's stem.
+
+![The Looks tab on the Cine Film 1 reference](../images/bench/lab-looks.jpg)
+
 ## Limits
 
 - **Only global, fixed colour transforms become a table.** Per-image adaptive filters (auto tone, auto white balance, "smart" or AI filters, scene detection) give a different transform for every photo. The chart measures only what they did to the chart, and the photo residuals show it.
 - **Local effects can't be captured:** face- or subject-aware retouching, sky replacement, masks, portrait blur and texture overlays that follow content.
 - **Spatial effects are approximate.** The vignette is Redlamp's radial model; off-centre or shaped vignettes and light leaks show up as irregularity and are divided out of the table but not reproduced. A brightening vignette is corrected as a gain, which is wrong for its effect on dark colours. Random overlays that change on every export (dust, leaks) are measured on the charts only.
 - **Grain doesn't transfer exactly.** The app's grain is measured on export pixels; Redlamp's is anchored to sensor pixels (0.6–3.5 px), so the suggested amount and size match the export's look at its size only roughly. JPEG compression removes most colour grain before the importer sees it.
-- **Blur, glow and bloom** are reported, not applied: Redlamp has no halation stage yet.
+- **Glow is matched at a few amounts only.** The film-effects candidate tries Bloom and Halation at 15, 30 and 50 when the photos show glow; blur and softening are reported, not reproduced.
 - **Lightroom presets behave differently on JPEGs than on raws**: white balance becomes relative, and profiles meant for raws apply differently. The capture measures the preset as applied to a rendered image, which is where Redlamp's Base Look sits (after the tone map).
 - **Clipping is baked in.** Colours the app clipped come back clipped; the report flags it.
 - **Rotation isn't supported**, and a 9:16 crop of the square cuts the lattice (by design, the importer refuses it).
