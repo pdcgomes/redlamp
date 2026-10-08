@@ -349,3 +349,34 @@ struct HaldServiceImportTests {
         #expect(Self.same(decoded, local), "decoded in the service")
     }
 }
+
+/// A HaldCLUT whose table has more points than a look table holds is refused from its size,
+/// before its pixels are decoded.
+struct HaldSizeRefusalTests {
+    @Test(arguments: [12, 16])
+    func `a HaldCLUT past 65 points is refused from its header alone`(level: Int) throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let whole = try HaldServiceImportTests.hald(level: level, bits: 16, in: folder)
+        let header = folder.appending(path: "header-only.png")
+        let file = try Data(contentsOf: whole)
+        // Enough for ImageIO to read the size, and far from all the pixels.
+        try file.prefix(65536).write(to: header)
+        #expect(file.count > 4 * 65536)
+        let side = level * level * level
+
+        let listener = HaldServiceImportTests.Listener()
+        let readers: [(String, any FileInspecting)] = [
+            ("in this process", InProcessDecoder()),
+            ("in the service", DecodeServiceClient(endpoint: listener.listener.endpoint)),
+        ]
+        for (name, reader) in readers {
+            let image = reader.haldImage(of: header)
+            #expect(image == HaldImage(width: side, height: side, rgba16: Data()), "read \(name)")
+            #expect(throws: LookTableImportError.unsupportedSize(level * level), "read \(name)") {
+                try RecipeLibrary.lookTable(contentsOf: header, reading: reader)
+            }
+        }
+    }
+}

@@ -64,7 +64,8 @@ public struct UnreadableFiles: FileInspecting {
 
 /// An image's pixels as a HaldCLUT import reads them: drawn into 16-bit RGBA in sRGB, alpha
 /// premultiplied and last, each word little-endian, row after row. An image no HaldCLUT can be
-/// (not square, or a side that isn't a level cubed) has only its size.
+/// (not square, or a side that isn't a level cubed), or one whose table has more points than a
+/// look table holds (`LookTable.sizeRange`), has only its size.
 public struct HaldImage: Sendable, Equatable {
     public let width: Int
     public let height: Int

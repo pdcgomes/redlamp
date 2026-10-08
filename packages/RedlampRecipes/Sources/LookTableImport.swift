@@ -329,6 +329,9 @@ public enum LookTableImport {
         guard width == height, let level = HaldImage.level(side: width) else {
             throw LookTableImportError.notAHaldImage(width: width, height: height)
         }
+        guard LookTable.sizeRange.contains(level * level) else {
+            throw LookTableImportError.unsupportedSize(level * level)
+        }
         return level
     }
 
@@ -341,7 +344,6 @@ public enum LookTableImport {
             let c = pixels[i % side, i / side]
             floats.append(contentsOf: [c.x, c.y, c.z])
         }
-        guard cube <= LookTable.sizeRange.upperBound else { throw LookTableImportError.unsupportedSize(cube) }
         let native = try LookTable(size: cube, floats: floats)
         return try adapt({ native.sample($0) }, from: space, size: min(cube, storedSize))
     }

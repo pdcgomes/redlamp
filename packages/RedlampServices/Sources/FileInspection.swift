@@ -118,13 +118,21 @@ struct FocusThumbnail: Codable, Sendable {
 }
 
 extension FileInspection {
-    /// The first image drawn as `HaldImage` describes, or only its size when no HaldCLUT has it.
+    /// The first image drawn as `HaldImage` describes, or only its size, read from the header,
+    /// when no HaldCLUT a look table holds has it.
     static func haldImage(_ source: CGImageSource) -> HaldImage? {
-        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
-        let (width, height) = (image.width, image.height)
-        guard width == height, HaldImage.level(side: width) != nil else {
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        guard let width = properties?[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties?[kCGImagePropertyPixelHeight] as? Int
+        else { return nil }
+        guard width == height, let level = HaldImage.level(side: width),
+              LookTable.sizeRange.contains(level * level)
+        else {
             return HaldImage(width: width, height: height, rgba16: Data())
         }
+        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil), image.width == width,
+              image.height == height
+        else { return nil }
         let count = width * height * 8
         guard let buffer = calloc(count, 1) else { return nil }
         let rgba16 = Data(bytesNoCopy: buffer, count: count, deallocator: .free)
