@@ -422,6 +422,44 @@ struct EngineMemoryTests {
         #expect(scratch < 400 << 20, "\(scratch >> 20) MB of scratch after opening a 12 MP photo")
     }
 
+    /// An export of another photo between the editor's renders, as its tiles yield to them: once
+    /// each has sized the scratch, switching between the two allocates nothing. Closing the photo
+    /// lets go of everything.
+    @Test func `exporting another photo keeps the editor's scratch`() throws {
+        let edited = try helpers.makeSession(.bayer, width: 4000, height: 3000, signal: Self.smooth)
+        let exported = try helpers.makeSession(.bayer, width: 3000, height: 2000, signal: Self.smooth)
+        let stage = DetailStage(device: helpers.device, kernels: helpers.kernels)
+        var dragged = Self.everyPass
+        func round(_ index: Int) throws {
+            dragged[.noiseLuminance] = 40 + Double(index)
+            _ = try render(stage, edited, dragged, outputSize: PixelSize(width: 2000, height: 1500))
+            let x = index.isMultiple(of: 2) ? 0 : 2048
+            let size = PixelSize(width: min(2048, 3000 - x), height: 2000)
+            let region = ImageRect(x: Double(x) / 3000, y: 0, width: Double(size.width) / 3000, height: 1)
+            let commands = try #require(helpers.queue.makeCommandBuffer())
+            _ = try #require(try stage.process(
+                Self.everyPass, session: exported, region: region, outputSize: size, commands: commands, cache: false,
+            ))
+            commands.commit()
+            commands.waitUntilCompleted()
+        }
+        for index in 0 ..< 4 {
+            try round(index)
+        }
+        let before = stage.allocated.count
+        for index in 4 ..< 10 {
+            try round(index)
+        }
+        let switches = stage.allocated.count - before
+        withKnownIssue("PIPE-15: each switch of photo resets the scratch") {
+            #expect(switches == 0, "six rounds of switches made \(switches) textures")
+        }
+        stage.keepOnly(nil)
+        withKnownIssue("PIPE-15: closing the photo keeps the scratch") {
+            #expect(stage.heldTextures.isEmpty, "\(stage.heldTextures.count) textures held after closing")
+        }
+    }
+
     // MARK: - Tiles
 
     func passes(_ session: ImageSession, _ recipe: EditRecipe) throws -> DetailStage.Passes {
