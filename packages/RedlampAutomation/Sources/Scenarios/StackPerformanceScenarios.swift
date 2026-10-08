@@ -112,6 +112,28 @@
             describe("close-one", closing)
             note("toggle", toggling)
 
+            // The same beside a stack held open, so that whether any stack is open, which the menus follow, stays.
+            if tops.count > 1 {
+                try app.main { $0.gridStacks.toggle(tops[0]) }
+                app.pause(0.5)
+                let besideProfile = within.map { _ in StackCallProfile(thread: mainThread) }
+                let besideOpen = try watched("toggle-beside-open") {
+                    for top in tops.dropFirst().prefix(20) {
+                        try app.main { $0.gridStacks.toggle(top) }
+                        app.pause(0.03)
+                        try app.main { $0.gridStacks.toggle(top) }
+                        app.pause(0.03)
+                    }
+                }
+                besideProfile?.write(
+                    to: app.runDirectory.appending(path: "stack-profile-within-toggle-beside-open.txt"),
+                    inside: "LibraryStacks",
+                )
+                try app.main { $0.gridStacks.toggle(tops[0]) }
+                app.pause(0.5)
+                note("toggle-beside-open", besideOpen)
+            }
+
             // The same with the filmstrip out of sight, for the grid's part.
             try app.main { $0.filmstripVisible = false }
             app.pause(1)
@@ -190,7 +212,8 @@
 
         /// With `REDLAMP_STACK_PROFILE` set, the main thread's stacks sampled every half millisecond while stacks open
         /// and close, and what the calls named by a frame were busy in: the functions under it on the stack, by the
-        /// samples they're on, and the innermost of them alone. `DragPhaseProfile` keeps every busy sample.
+        /// samples they're on, and the innermost of them alone; then every busy sample's functions, as
+        /// `DragPhaseProfile` counts them.
         final class StackCallProfile: @unchecked Sendable {
             private let thread: thread_act_t
             private let running = Mutex(true)
@@ -224,10 +247,18 @@
                     names[address] = found ?? String(format: "0x%lx", address)
                     return names[address] ?? ""
                 }
-                var (inclusive, innermost) = ([String: Int](), [String: Int]())
-                var inside = 0
-                for stack in samples.withLock({ $0 }) {
+                var (inclusive, innermost, everywhere) = ([String: Int](), [String: Int](), [String: Int]())
+                var (inside, busy) = (0, 0)
+                let all = samples.withLock { $0 }
+                for stack in all {
                     let symbols = stack.map(name)
+                    // Waiting in the run loop for the next event isn't work.
+                    if !symbols.prefix(4).contains(where: { $0.contains("mach_msg") }) {
+                        busy += 1
+                        for symbol in Set(symbols) {
+                            everywhere[symbol, default: 0] += 1
+                        }
+                    }
                     guard let at = symbols.firstIndex(where: { $0.contains(marker) }) else { continue }
                     inside += 1
                     for symbol in Set(symbols[..<at]) {
@@ -237,10 +268,12 @@
                         innermost[leaf, default: 0] += 1
                     }
                 }
-                let lines = ["\(inside) samples inside \(marker)", "", "Under it, by samples:"]
-                    + inclusive.sorted { $0.value > $1.value }.prefix(150).map { "\($0.value)\t\($0.key)" }
-                    + ["", "Innermost:"] + innermost.sorted { $0.value > $1.value }.prefix(60)
-                    .map { "\($0.value)\t\($0.key)" }
+                func ranked(_ counts: [String: Int], _ count: Int) -> [String] {
+                    counts.sorted { $0.value > $1.value }.prefix(count).map { "\($0.value)\t\($0.key)" }
+                }
+                let lines = ["\(inside) samples inside \(marker)", "", "Under it, by samples:"] + ranked(inclusive, 150)
+                    + ["", "Innermost:"] + ranked(innermost, 60)
+                    + ["", "\(busy) busy samples of \(all.count), by the functions on them:"] + ranked(everywhere, 150)
                 try? (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
             }
 
@@ -248,6 +281,8 @@
                 var state = arm_thread_state64_t()
                 var count = mach_msg_type_number_t(MemoryLayout<arm_thread_state64_t>.size / MemoryLayout<UInt32>.size)
                 var addresses: [UInt] = []
+                // Nothing may allocate while the thread is suspended: it may hold the allocator's lock.
+                addresses.reserveCapacity(130)
                 guard thread_suspend(thread) == KERN_SUCCESS else { return [] }
                 let result = withUnsafeMutablePointer(to: &state) {
                     $0.withMemoryRebound(to: natural_t.self, capacity: Int(count)) {
