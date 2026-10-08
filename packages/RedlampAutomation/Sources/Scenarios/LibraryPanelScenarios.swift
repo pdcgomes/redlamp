@@ -10,7 +10,13 @@
     /// Library Health's checks (LIB-40), each appearing with its count once it holds photos and shown by a click on
     /// its row, ⌘B, the View menu and the palette.
     enum LibraryPanelScenarios {
-        static let all: [Scenario] = [libraryPanel, removedFolder, previousImportFollows, removeFolderPerformance]
+        static let all: [Scenario] = [
+            libraryPanel,
+            removedFolder,
+            previousImportFollows,
+            removeFolderPerformance,
+            removeFolderAllPerformance,
+        ]
 
         static let libraryPanel = Scenario(
             "library.library-panel",

@@ -153,16 +153,34 @@
 
     extension LibraryPanelScenarios {
         /// Removing a root of 150,000 photos, lib-1m's Clients, from a copy of its index split into a root per top
-        /// folder as Folders would hold them, with All Photographs shown: the time until the store and searches, All
-        /// Photographs and the Library panel's counts leave its photos out, the main thread meanwhile, and the sweep
-        /// of its rows behind them. Only the copy is written; the fixture is listed by change tracking, nothing more.
+        /// folder as Folders would hold them, with Rejected shown: the time until the store and searches, the source
+        /// shown and the Library panel's counts leave its photos out, the main thread meanwhile, and the sweep of its
+        /// rows behind them. Only the copy is written; the fixture is listed by change tracking, nothing more.
         /// Skipped where the fixture or its index isn't.
         static let removeFolderPerformance = Scenario(
             "performance.remove-folder",
-            "Removing a root of 150,000 photos from a copy of lib-1m's index: the views leaving them out, the main "
-                + "thread meanwhile, and the sweep",
+            "Removing a root of 150,000 photos from a copy of lib-1m's index, Rejected shown: the views leaving them "
+                + "out, the main thread meanwhile, and the sweep",
             tiers: [.performance], claims: [],
         ) { app in
+            try measureRemoval(app, showing: .rejected, named: "Rejected", within: "flag:reject", metric: "rejected")
+        }
+
+        /// The same with All Photographs shown, a million photos, where a change of 150,000 is the largest a source
+        /// shown takes.
+        static let removeFolderAllPerformance = Scenario(
+            "performance.remove-folder-all",
+            "Removing a root of 150,000 photos from a copy of lib-1m's index, All Photographs shown",
+            tiers: [.performance], claims: [],
+        ) { app in
+            try measureRemoval(app, showing: .allPhotographs, named: "All Photographs", within: "", metric: "all")
+        }
+
+        /// Removes Clients with `source` shown, whose photos `query` narrows to, and notes and judges what it took.
+        private static func measureRemoval(
+            _ app: RunningApp, showing source: LibrarySource, named name: String, within query: String,
+            metric: String,
+        ) throws {
             let fixture = URL(
                 fileURLWithPath: "/Volumes/SSD/redlamp-tmp/library-fixtures/lib-1m.noindex", isDirectory: true,
             )
@@ -206,13 +224,22 @@
             try app.run("change tracking's first pass over the fixture", timeout: 600) { _ in
                 await box.caughtUp(clients, fixture.appending(path: "2024", directoryHint: .isDirectory))
             }
-            try app.main { _ in _ = box.editor?.librarySources.show(.allPhotographs) }
-            try app.wait("All Photographs shown", timeout: 900) { _ in
-                guard let editor = box.editor else { return false }
-                return !editor.librarySources.isListing && editor.items.count > 900_000
+            let (total, holding) = try app.main { _ in
+                (
+                    box.editor?.librarySources.count(of: .allPhotographs) ?? 0,
+                    box.editor?.librarySources.count(of: source) ?? 0,
+                )
             }
-            let total = try app.main { _ in box.editor?.items.count ?? 0 }
-            let left = total - box.removing
+            let inClients = try app.photosFound(
+                in: box,
+                (query + " folder:Clients").trimmingCharacters(in: .whitespaces),
+            )
+            try app.main { _ in _ = box.editor?.librarySources.show(source) }
+            try app.wait("\(name) shown", timeout: 900) { _ in
+                guard let editor = box.editor else { return false }
+                return !editor.librarySources.isListing && editor.items.count == holding
+            }
+            let left = holding - inClients
 
             let views = try MainThread.run { () -> MainThreadMonitorBox in
                 let monitor = MainThreadMonitor()
@@ -221,13 +248,14 @@
             }
             let started = Date()
             try app.main { _ in
-                box.watch(leaving: left, since: started)
+                box.watch(leaving: left, of: total - box.removing, since: started)
                 box.remove(clients)
             }
-            try app.wait("All Photographs without Clients", timeout: 120) { _ in box.editor?.items.count == left }
+            try app.wait("\(name) without Clients", timeout: 120) { _ in box.editor?.items.count == left }
             let shown = try app.main { _ in box.shownAt } ?? Date().timeIntervalSince(started) * 1000
+            let call = try app.main { _ in box.removingTook } ?? 0
             try app.wait("the Library panel counting without Clients", timeout: 120) { _ in
-                box.editor?.librarySources.count(of: .allPhotographs) == left
+                box.editor?.librarySources.count(of: .allPhotographs) == total - box.removing
             }
             let counted = Date().timeIntervalSince(started) * 1000
             let viewing = try MainThread.run { () -> MainThreadMonitor.Summary? in
@@ -247,31 +275,33 @@
             }
             let store = box.storeLeft ?? .infinity
             let swept = box.swept ?? .infinity
-            app.record("e2e-remove-folder-store", store)
-            app.record("e2e-remove-folder-shown", shown)
-            app.record("e2e-remove-folder-counted", counted)
-            app.record("e2e-remove-folder-swept", swept)
+            app.record("e2e-remove-folder-\(metric)-store", store)
+            app.record("e2e-remove-folder-\(metric)-shown", shown)
+            app.record("e2e-remove-folder-\(metric)-counted", counted)
+            app.record("e2e-remove-folder-\(metric)-swept", swept)
             if let viewing {
-                app.record("e2e-remove-folder-p99", viewing.p99)
-                app.record("e2e-remove-folder-max", viewing.max)
+                app.record("e2e-remove-folder-\(metric)-p99", viewing.p99)
+                app.record("e2e-remove-folder-\(metric)-max", viewing.max)
             }
             if let sweep {
-                app.record("e2e-remove-folder-sweep-p99", sweep.p99)
+                app.record("e2e-remove-folder-\(metric)-sweep-p99", sweep.p99)
             }
             func turns(_ summary: MainThreadMonitor.Summary?) -> String {
                 summary.map { "p50 \($0.p50) ms, p95 \($0.p95) ms, p99 \($0.p99) ms, max \($0.max) ms" } ?? "-"
             }
             app.recorder.write("note", [
-                "remove-folder": "\(box.removing.formatted()) of \(total.formatted()) photos: out of the store and "
-                    + "searches in \(String(format: "%.0f", store)) ms, of All Photographs shown in "
+                "remove-folder-\(metric)": "\(box.removing.formatted()) of \(total.formatted()) photos, \(name) "
+                    + "shown (\(holding.formatted()), \(inClients.formatted()) of them in Clients): out of the store "
+                    + "and searches in \(String(format: "%.0f", store)) ms, of \(name) in "
                     + "\(String(format: "%.0f", shown)) ms, of the Library panel's counts in "
-                    + "\(String(format: "%.0f", counted)) ms, main thread \(turns(viewing)); swept in "
+                    + "\(String(format: "%.0f", counted)) ms, main thread \(turns(viewing)), Folders' own call "
+                    + "\(String(format: "%.1f", call)) ms; swept in "
                     + "\(String(format: "%.1f", swept / 1000)) s, main thread \(turns(sweep)); load "
                     + "\(ProcessInfo.processInfo.loadAverage)",
             ])
             try app.expect(found == 0, "a search for its folder finds \(found) photos")
             try app.expect((viewing?.p99 ?? 0) < 8.3, "The main thread's p99 was \(viewing?.p99 ?? 0) ms")
-            try app.expect(shown < 300, "All Photographs took \(shown) ms to leave Clients out")
+            try app.expect(shown < 300, "\(name) took \(shown) ms to leave Clients out")
         }
     }
 
@@ -347,21 +377,26 @@
             }
         }
 
+        /// How long `remove` held the main thread, in milliseconds.
+        private(set) var removingTook: Double?
+
         func remove(_ folder: URL) {
             guard let library, let root = library.root(containing: folder) else { return }
+            let started = Date()
             library.remove(root)
+            removingTook = Date().timeIntervalSince(started) * 1000
         }
 
-        /// Notes when the photos shown come to `leaving`, and, off the main thread, when the store has as many and
-        /// when no root is marked removed.
-        func watch(leaving: Int, since started: Date) {
+        /// Notes when the photos shown come to `leaving`, and, off the main thread, when the store holds `kept`
+        /// photos and when no root is marked removed.
+        func watch(leaving: Int, of kept: Int, since started: Date) {
             guard let library, let engine = service?.engine, let index = library.libraryIndex else { return }
             observation = library.observe { [weak self, weak library] _ in
                 guard let self, shownAt == nil, library?.count == leaving else { return }
                 shownAt = Date().timeIntervalSince(started) * 1000
             }
             Task.detached(priority: .userInitiated) { [self] in
-                while await (try? engine.list(.allPhotographs).count) != leaving {
+                while await (try? engine.list(.allPhotographs).count) != kept {
                     try? await Task.sleep(for: .milliseconds(1))
                 }
                 storeLeft = Date().timeIntervalSince(started) * 1000
