@@ -247,9 +247,12 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     }
 
     var availableKinds: Set<MaskKind> = [.subject, .background, .people, .sky, .objects]
+    /// Where `availableMaskKinds` waits while it's held, as the model catalogue's first build does.
+    let maskList = BlockingGate()
 
     func availableMaskKinds() -> Set<MaskKind> {
-        availableKinds
+        maskList.pass()
+        return availableKinds
     }
 
     var personParts = Set(PersonPart.allCases)

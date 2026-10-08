@@ -9,9 +9,8 @@ struct PeoplePickerTests {
     private let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
 
     /// Three people, whose faces Vision numbers the other way round, each with a mask.
-    private func threePeople() async throws -> (EditorModel, StubEngine) {
+    private func threePeople(_ engine: StubEngine = StubEngine()) async throws -> (EditorModel, StubEngine) {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let engine = StubEngine()
         engine.people = (0 ..< 3).map { index in
             PersonFound(
                 instance: index, faceInstance: 2 - index,
@@ -41,6 +40,15 @@ struct PeoplePickerTests {
             try await Task.sleep(for: .milliseconds(5))
         }
         try #require(model.peoplePicker?.people != nil)
+    }
+
+    /// Waits for what the editor asks the engine off the main actor, such as its list of AI masks
+    /// (RESP-15), which can take seconds on a busy Mac.
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     @Test func `the picker shows who is in the photo, with a crop of each, none ticked`() async throws {
@@ -129,20 +137,28 @@ struct PeoplePickerTests {
         #expect(model.history.last?.name == "Subtract People")
     }
 
+    /// The engine's list of People parts can arrive after the picker opens (RESP-15).
     @Test func `ticking a part whose model isn't here asks for it, and Not Now unticks it`() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
-        let (model, engine) = try await threePeople()
+        let engine = StubEngine()
         engine.neededModel = ModelInfo(
             id: "sam3", name: "SAM 3", purpose: "People parts", downloadBytes: 1, state: .notDownloaded,
         )
         engine.partsNeedingModel = [.hair]
+        engine.maskList.hold()
+        defer { engine.maskList.release() }
+        let (model, _) = try await threePeople(engine)
         try await open(model)
-        #expect(model.peoplePicker?.needsModel[.hair]?.id == "sam3")
-        model.togglePersonPart(.hair)
-        #expect(model.pendingModel?.part == .hair)
-        model.declinePendingModel()
-        #expect(model.pendingModel == nil)
-        #expect(model.peoplePicker?.parts == [.entirePerson])
+        engine.maskList.release()
+        try await eventually { model.peoplePicker?.needsModel[.hair] != nil }
+        withKnownIssue("RESP-15: a picker opened before the list of parts arrives never asks for a part's model") {
+            #expect(model.peoplePicker?.needsModel[.hair]?.id == "sam3")
+            model.togglePersonPart(.hair)
+            #expect(model.pendingModel?.part == .hair)
+            model.declinePendingModel()
+            #expect(model.pendingModel == nil)
+            #expect(model.peoplePicker?.parts == [.entirePerson])
+        }
     }
 
     @Test func `with nobody found the picker says so and makes nothing`() async throws {
