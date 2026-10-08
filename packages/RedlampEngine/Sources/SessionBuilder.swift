@@ -35,6 +35,9 @@ struct SessionBuilder {
     /// The user's lens profiles, for raws that carry no correction (LNS-04). Off unless the app or
     /// CLI turns them on, so tests and references never depend on a developer's own profiles.
     var lensProfiles: LCPProfileLibrary?
+    /// Where a photo's embedded mattes are found: the engine's decoder (the Mac app's decode
+    /// service). None are found by builders that only render.
+    var files: any FileInspecting = UnreadableFiles()
 
     static let analysisLongEdge = 1024
     /// A photosite counts as hot when it is this many noise sigmas above every neighbour...
@@ -45,7 +48,8 @@ struct SessionBuilder {
     func build(_ decoded: DecodedImage) throws -> ImageSession {
         try Self.checkGainMaps(decoded)
         let url = decoded.info.url
-        let mattes = Prefetch(on: .global(qos: .userInitiated)) { EmbeddedMattes.available(in: url) }
+        let files = files
+        let mattes = Prefetch(on: .global(qos: .userInitiated)) { files.embeddedMattes(in: url) }
         let width = decoded.width
         let height = decoded.height
         let levels = Int(log2(Double(max(width, height)))) + 1

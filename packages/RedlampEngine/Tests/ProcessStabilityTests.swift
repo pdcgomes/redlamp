@@ -207,7 +207,7 @@ struct ProcessStabilityTests {
         return recipe
     }
 
-    /// The sky matte `IMG_1361.DNG` carries, as `EmbeddedMattes` read it, kept here so the AI
+    /// The sky matte `IMG_1361.DNG` carries, as the decoder reads it, kept here so the AI
     /// mask never changes with the reader or the OS. Every fixture uses it, stretched to its frame.
     static let skyMatte = folder.appending(path: "IMG_1361.sky.png")
 

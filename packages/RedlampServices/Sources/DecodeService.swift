@@ -49,6 +49,14 @@ public struct InProcessDecoder: ImageDecoding {
     func cameraPreviews(
         _ files: [Data], paths: [String], maxLongEdge: Int, reply: @escaping @Sendable (Data?) -> Void,
     )
+
+    /// `FileInspecting.embeddedMattes`: the mattes' `EmbeddedMatte` raw values.
+    func embeddedMattes(_ file: Data, path: String, reply: @escaping @Sendable ([String]) -> Void)
+    /// `FileInspecting.embeddedMatte`: the coverage as raw `Float`s, the size and the orientation,
+    /// or nil and zeros.
+    func embeddedMatte(
+        _ file: Data, path: String, matte: String, reply: @escaping @Sendable (Data?, Int, Int, Int) -> Void,
+    )
 }
 
 /// The service side: decodes from the bytes it is sent (it has no file system access).
@@ -108,6 +116,20 @@ public final class DecodeService: NSObject, DecodeServiceProtocol {
         return FileInspection.map(Array(files.indices), concurrently: concurrently) { index in
             read(files[index], URL(fileURLWithPath: paths[index]))
         }
+    }
+
+    public func embeddedMattes(_ file: Data, path: String, reply: @escaping @Sendable ([String]) -> Void) {
+        let mattes = FileInspection.source(file, path: path).map(FileInspection.mattes) ?? []
+        reply(mattes.map(\.rawValue).sorted())
+    }
+
+    public func embeddedMatte(
+        _ file: Data, path: String, matte: String, reply: @escaping @Sendable (Data?, Int, Int, Int) -> Void,
+    ) {
+        guard let matte = EmbeddedMatte(rawValue: matte),
+              let image = FileInspection.source(file, path: path).flatMap({ FileInspection.matte(matte, $0) })
+        else { return reply(nil, 0, 0, 0) }
+        reply(image.coverage.withUnsafeBytes { Data($0) }, image.width, image.height, image.orientation)
     }
 
     private static func inspect<T: Sendable>(
@@ -355,12 +377,37 @@ public extension DecodedImage {
             }
         }
 
-        public func embeddedMattes(in _: URL) -> Set<EmbeddedMatte> {
-            []
+        public func embeddedMattes(in url: URL) -> Set<EmbeddedMatte> {
+            Self.checkOffMain()
+            guard let file = try? Data(contentsOf: url, options: .alwaysMapped) else { return [] }
+            let connection = connect()
+            defer { connection.invalidate() }
+            let answer = Mutex<Set<EmbeddedMatte>>([])
+            let proxy = connection.synchronousRemoteObjectProxyWithErrorHandler { _ in } as? DecodeServiceProtocol
+            proxy?.embeddedMattes(file, path: url.absoluteURL.path) { names in
+                answer.withLock { $0 = Set(names.compactMap(EmbeddedMatte.init(rawValue:))) }
+            }
+            return answer.withLock { $0 }
         }
 
-        public func embeddedMatte(_: EmbeddedMatte, in _: URL) -> EmbeddedMatteImage? {
-            nil
+        public func embeddedMatte(_ matte: EmbeddedMatte, in url: URL) -> EmbeddedMatteImage? {
+            Self.checkOffMain()
+            guard let file = try? Data(contentsOf: url, options: .alwaysMapped) else { return nil }
+            let connection = connect()
+            defer { connection.invalidate() }
+            let answer = Mutex<EmbeddedMatteImage?>(nil)
+            let proxy = connection.synchronousRemoteObjectProxyWithErrorHandler { _ in } as? DecodeServiceProtocol
+            proxy?.embeddedMatte(file, path: url.absoluteURL.path, matte: matte.rawValue) { data, width, height, turn in
+                let count = width.multipliedReportingOverflow(by: height)
+                guard let data, width > 0, height > 0, !count.overflow,
+                      data.count == count.partialValue * MemoryLayout<Float>.size
+                else { return }
+                let coverage = data.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+                answer.withLock {
+                    $0 = EmbeddedMatteImage(width: width, height: height, coverage: coverage, orientation: turn)
+                }
+            }
+            return answer.withLock { $0 }
         }
 
         public func haldImage(of url: URL) -> HaldImage? {

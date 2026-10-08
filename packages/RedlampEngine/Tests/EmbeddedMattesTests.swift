@@ -27,7 +27,7 @@ struct EmbeddedMattesTests {
         _ = try await engine.open(copy)
 
         try FileManager.default.removeItem(at: copy)
-        #expect(EmbeddedMattes.available(in: copy).isEmpty, "the file is gone")
+        #expect(InProcessDecoder().embeddedMattes(in: copy).isEmpty, "the file is gone")
         #expect(engine.currentSession()?.embeddedMattes == [.sky])
     }
 
@@ -40,7 +40,7 @@ struct EmbeddedMattesTests {
 }
 
 /// The mattes a file carries are found and read in the decode service, from the bytes it is sent,
-/// as the app read them itself.
+/// as they are in this process (which read them as the app once did itself).
 struct EmbeddedMatteServiceTests {
     /// A listener in this process that answers as the service does, through a real connection.
     final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
@@ -144,7 +144,7 @@ struct EmbeddedMatteServiceTests {
         return [disparity, depth, jpeg] + fixtures
     }
 
-    @Test func `the service finds and reads each file's mattes as the app did`() throws {
+    @Test func `the service finds and reads each file's mattes as this process does`() throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -153,28 +153,19 @@ struct EmbeddedMatteServiceTests {
         let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
         let inProcess = InProcessDecoder()
 
-        #expect(EmbeddedMattes.available(in: files[0]) == Set(EmbeddedMatte.allCases))
-        #expect(EmbeddedMattes.available(in: files[1]) == [.depth])
-        #expect(EmbeddedMattes.available(in: files[2]).isEmpty)
+        #expect(inProcess.embeddedMattes(in: files[0]) == Set(EmbeddedMatte.allCases))
+        #expect(inProcess.embeddedMattes(in: files[1]) == [.depth])
+        #expect(inProcess.embeddedMattes(in: files[2]).isEmpty)
         for file in files {
             let name = file.lastPathComponent
-            let kinds = EmbeddedMattes.available(in: file)
-            #expect(inProcess.embeddedMattes(in: file) == kinds, "\(name) in this process")
+            let kinds = inProcess.embeddedMattes(in: file)
+            #expect(service.embeddedMattes(in: file) == kinds, "\(name)")
             for matte in EmbeddedMatte.allCases {
-                let app = EmbeddedMattes.read(matte, from: file)
-                #expect((app != nil) == kinds.contains(matte), "\(name): \(matte)")
-                #expect(inProcess.embeddedMatte(matte, in: file).map(GrayMask.init) == app, "\(name): \(matte)")
-            }
-            guard !kinds.isEmpty else {
-                #expect(service.embeddedMattes(in: file).isEmpty, "\(name) in the service")
-                continue
-            }
-            withKnownIssue("The service reads no matte until it is asked to") {
-                #expect(service.embeddedMattes(in: file) == kinds, "\(name) in the service")
-                for matte in kinds {
-                    let app = EmbeddedMattes.read(matte, from: file)
-                    #expect(service.embeddedMatte(matte, in: file).map(GrayMask.init) == app, "\(name): \(matte)")
-                }
+                let local = inProcess.embeddedMatte(matte, in: file)
+                #expect((local != nil) == kinds.contains(matte), "\(name): \(matte)")
+                let decoded = service.embeddedMatte(matte, in: file)
+                #expect(decoded == local, "\(name): \(matte)")
+                #expect(decoded.map(GrayMask.init)?.pixels == local.map(GrayMask.init)?.pixels, "\(name): \(matte)")
             }
         }
     }
@@ -235,18 +226,13 @@ struct EmbeddedMatteDecoderTests {
         let engine = try RedlampEngine(decoder: decoder)
         _ = try await engine.open(#require(EngineSmokeTests.fixtures.first { $0.lastPathComponent == "DSC_0750.NEF" }))
 
-        withKnownIssue("The engine reads mattes itself until it asks its decoder") {
-            #expect(decoder.asked == ["mattes"])
-            #expect(engine.currentSession()?.embeddedMattes == [.sky, .hair])
-        }
+        #expect(decoder.asked == ["mattes"])
+        #expect(engine.currentSession()?.embeddedMattes == [.sky, .hair])
         let sky = try? await engine.computeMasks(MaskRequest(kind: .sky))
         let hair = try? await engine.computeMasks(MaskRequest(kind: .people, part: .hair))
-        withKnownIssue("The engine reads mattes itself until it asks its decoder") {
-            #expect(sky?.map(\.provider) == ["apple.embedded.sky"])
-            #expect(hair?.map(\.provider) == ["apple.embedded.hair"])
-            #expect(decoder.asked.filter { $0 != "mattes" }.allSatisfy { ["sky", "hair"].contains($0) })
-            #expect(decoder.asked.contains("sky") && decoder.asked.contains("hair"))
-        }
+        #expect(sky?.map(\.provider) == ["apple.embedded.sky"])
+        #expect(hair?.map(\.provider) == ["apple.embedded.hair"])
+        #expect(decoder.asked == ["mattes", "sky", "hair"])
         let before = decoder.asked
         _ = try? await engine.computeMasks(MaskRequest(kind: .subject))
         #expect(decoder.asked == before, "a Subject mask reads no matte")

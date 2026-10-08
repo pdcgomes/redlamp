@@ -118,6 +118,16 @@ struct CameraBenchTests {
             reads.withLock { $0 += files.count }
             service.cameraPreviews(files, paths: paths, maxLongEdge: maxLongEdge, reply: reply)
         }
+
+        func embeddedMattes(_ file: Data, path: String, reply: @escaping @Sendable ([String]) -> Void) {
+            service.embeddedMattes(file, path: path, reply: reply)
+        }
+
+        func embeddedMatte(
+            _ file: Data, path: String, matte: String, reply: @escaping @Sendable (Data?, Int, Int, Int) -> Void,
+        ) {
+            service.embeddedMatte(file, path: path, matte: matte, reply: reply)
+        }
     }
 
     /// Previews in sRGB, Display P3 and a colour space without a name, and a camera that embeds none

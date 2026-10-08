@@ -86,6 +86,18 @@ struct FileInspectionTests {
             recorded.withLock { $0.append(files.count) }
             service.cameraPreviews(files, paths: paths, maxLongEdge: maxLongEdge, reply: reply)
         }
+
+        func embeddedMattes(_ file: Data, path: String, reply: @escaping @Sendable ([String]) -> Void) {
+            recorded.withLock { $0.append(1) }
+            service.embeddedMattes(file, path: path, reply: reply)
+        }
+
+        func embeddedMatte(
+            _ file: Data, path: String, matte: String, reply: @escaping @Sendable (Data?, Int, Int, Int) -> Void,
+        ) {
+            recorded.withLock { $0.append(1) }
+            service.embeddedMatte(file, path: path, matte: matte, reply: reply)
+        }
     }
 
     @Test(.enabled(if: !series.isEmpty))

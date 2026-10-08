@@ -62,11 +62,11 @@ for package in "${UI_PACKAGES[@]}"; do
 done
 
 # The engine and the UI read files through an ImageDecoding (the Mac app's sandboxed decode
-# service), not with the decoders or thumbnail readers themselves. Only RedlampServices'
+# service), not with the decoders, thumbnail or matte readers themselves. Only RedlampServices'
 # InProcessDecoder calls them, for the CLI and tests, and these known exceptions (file, call,
 # reason), each allowing one call. DATA-17 lists them with the rest of the parsing the app
 # still does itself.
-DIRECT_READ='\b(ImageDecoder|RawDecoder|BitmapDecoder|Thumbnails)\.'
+DIRECT_READ='\b(ImageDecoder|RawDecoder|BitmapDecoder|Thumbnails|EmbeddedMattes)\.|\bCGImageSourceCopyAuxiliaryDataInfoAtIndex\('
 ALLOWED_READS=(
     "RedlampEngine/Sources/RedlampEngine.swift|Thumbnails.thumbnail(|filmstrip thumbnails; the service's lookup missed the first-visit budget"
     "RedlampEngine/Sources/RedlampEngine+Thumbnails.swift|Thumbnails.thumbnail(|filmstrip thumbnails, as above"

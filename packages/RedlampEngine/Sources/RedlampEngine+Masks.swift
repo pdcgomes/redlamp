@@ -286,7 +286,7 @@ extension RedlampEngine {
         guard let session = currentSession() else { throw EngineError.noImageOpen }
         let analysis = try await analysisImage(for: session)
         let url = session.info.url
-        if request.kind == .sky, EmbeddedMattes.read(.sky, from: url) == nil,
+        if request.kind == .sky, !session.embeddedMattes.contains(.sky),
            let sky = try await modelSky(analysis, session: session) {
             return [sky]
         }
@@ -314,7 +314,7 @@ extension RedlampEngine {
         }
         // An iPhone's own hair matte beats SAM 3's.
         if request.kind == .people, SAM3Concepts.partPrecedence.contains(request.part),
-           request.part != .hair || EmbeddedMattes.read(.hair, from: url) == nil,
+           request.part != .hair || !session.embeddedMattes.contains(.hair),
            await isReady(Self.sam3ID), let model = await sam3() {
             return try await personPartMasks(request, analysis: analysis, session: session, model: model)
         }
@@ -364,9 +364,10 @@ extension RedlampEngine {
         }
         let part = request.kind == .people && request.part != .entirePerson ? request.part : nil
         var provided: [ProvidedMask]
+        let files = files
         do {
             provided = try await Task.detached(priority: .userInitiated) {
-                try Self.provideMasks(request, image: analysis.image, url: url)
+                try Self.provideMasks(request, image: analysis.image, url: url, files: files)
             }.value
         } catch MaskComputationError.nothingFound(.people) where part != nil {
             // No face, so none of the part: say which part.
@@ -738,11 +739,14 @@ extension RedlampEngine {
         return embedding
     }
 
-    /// Embedded mattes win when the file has the one asked for; otherwise the providers.
-    static func provideMasks(_ request: MaskRequest, image: CGImage, url: URL) throws -> [ProvidedMask] {
+    /// Embedded mattes, which `files` reads, win when the file has the one asked for; otherwise
+    /// the providers.
+    static func provideMasks(
+        _ request: MaskRequest, image: CGImage, url: URL, files: any FileInspecting,
+    ) throws -> [ProvidedMask] {
         let size = PixelSize(width: image.width, height: image.height)
         func embedded(_ matte: EmbeddedMatte, kind: MaskKind, part: PersonPart? = nil) -> ProvidedMask? {
-            EmbeddedMattes.read(matte, from: url).map { mask in
+            files.embeddedMatte(matte, in: url).map(GrayMask.init).map { mask in
                 ProvidedMask(
                     kind: kind, provider: "apple.embedded.\(matte.rawValue)", revision: 1, part: part,
                     mask: mask.resized(to: size.fitted(within: PixelSize(
