@@ -59,6 +59,8 @@ struct RenameTests {
                 for: url("IMG_0001.JPG"),
             )
             try Data("xmp of IMG_0001".utf8).write(to: url("IMG_0001.xmp"))
+            // The folder's own photos: those moved into its subfolders leave it.
+            library.setIncludesSubfolders(false)
             library.add([root])
             service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
                 StoreThumbnailMaker.imageIO(url, nil, size)
