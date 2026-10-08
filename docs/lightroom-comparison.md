@@ -208,7 +208,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Reordering Develop panels | Yes (Classic) | Undecided | | | | |
 | Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
 | A value on every control, and values that scrub when dragged | Yes | Done | | | UX-28, UX-29 | Including the grading wheels, the curve's points, Base Look Amount and the Masks panel's sizes and ranges, each typed or scrubbed |
-| Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 98 actions on 96 key bindings |
+| Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 104 actions on 100 key bindings |
 | Your own keyboard shortcuts | No | Planned | | P4 | LIB-36 | Any action on the key you choose, with keymaps for people coming from Lightroom Classic, Photo Mechanic and Bridge |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |
@@ -256,7 +256,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Metadata shared with other apps (XMP) | Yes | In progress | | P4 | LIB-24 | Other apps' XMP is read, a corrected capture time included; standard `.xmp` sidecars are written only when you turn it on (Settings › Library, as Lightroom's Automatically write changes into XMP), after each change and its Undo, and originals are never changed |
 | Import from cards and cameras | Yes | In progress | | P4 | LIB-27 | A card's photos browsed and culled from their previews before copying, those already imported left out; folder and name templates with a live example; metadata presets applied on import; a backup copy; every copy verified before a card is said to be safe to erase; the window opening when a card is inserted |
 | Moving files and folders | Yes (Classic) | In progress | | P4 | LIB-26 | With a preview and Undo, and Recently Trashed to put photos back after Undo is gone |
-| Stacks | Yes | In progress | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks |
+| Stacks | Yes | In progress | | P4 | LIB-28 | Raw and JPEG pairs, bursts and focus stacks; in the grid and filmstrip, closed with their counts, on Lightroom Classic's keys |
 | Bringing a Lightroom Classic catalog | Yes | Planned | | P4 | LIB-29, LIB-30 | Ratings, flags, labels, keywords and collections, from a copy of the catalog, with a report; Capture One and darktable libraries too |
 | Library Health | Partly | In progress | | P4 | LIB-39, LIB-40 | Exact duplicates, damaged and misnamed files, and a rule for raw and JPEG pairs, each shown only while it has findings and moved to the Trash only from a list you confirm, with Undo |
 | Photos grouped into moments | No | In progress | | P4 | LIB-41 | In the grid, by pauses in shooting with one Tighter–Looser control, or by day, folder, camera, lens or orientation; each group with its count and picks, opened and closed, ⌥← and ⌥→ between them, and the moments that have no pick shown alone |
