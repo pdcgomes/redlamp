@@ -79,7 +79,7 @@ These apply to anyone directing agents on Redlamp. [AGENTS.md](../AGENTS.md#work
 4. **Two or three agents at a time.** Audits and waves that ran six or more agents at once run one or two at a time.
 5. **Small defaults:** a 300K context rather than 1M, and exploration subagents on a cheaper model.
 6. **Nothing on demand:** extra usage off on Claude, on-demand usage off on Cursor, and no API key in the environment, so the worst case is waiting for a limit to reset.
-7. **Keep what's cheap.** Canvases, including the [rooms](rooms.md) that releases, reports, the blog and press outreach are run from, the push gate and the tests cost little or nothing, and they carry the standard.
+7. **Keep what's cheap.** Canvases, including the [rooms](rooms.md) that releases, reports, the blog, press outreach and support are run from, the push gate and the tests cost little or nothing, and they carry the standard.
 
 ## Measuring
 

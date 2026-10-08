@@ -1,6 +1,6 @@
 # The rooms
 
-Redlamp is run from four rooms: canvases beside the chat in Cursor, each kept up to date by agents through a skill, where the owner sees where things stand and makes the decisions that are his. Releases, the reports people file, the blog and press outreach each have one. This document says what each room is for, what it shows and how it works; each room's skill has what an agent needs to keep it.
+Redlamp is run from five rooms: canvases beside the chat in Cursor, each kept up to date by agents through a skill, where the owner sees where things stand and makes the decisions that are his. Releases, the reports people file, the blog, press outreach and support each have one. This document says what each room is for, what it shows and how it works; each room's skill has what an agent needs to keep it.
 
 ## How a room works
 
@@ -46,6 +46,15 @@ Where every outlet Redlamp is pitched to (newsletters, Mac and photography sites
 - **What agents do:** find outlets and the address each publishes for tips, write and check the pitches, prepare Gmail drafts, and record replies and coverage through an outreach script that stays outside the repository.
 - **Its rule:** contacts, pitches and replies stay on the owner's Mac. The repository holds the room's template, with none of them.
 
+## The supporters room
+
+Where Redlamp's funding is run: the pages people join from, the tiers, what Redlamp costs and the funding ladder those figures make, what's posted to members, and what came in and where it went. [Skill](../.cursor/skills/redlamp-supporters/SKILL.md) and [template](../.cursor/skills/redlamp-supporters/template.tsx).
+
+- **What it shows:** what needs the owner and the launch plan; the Patreon page and redlamp.app/support, ready to copy; the owner's figures, the ladder they make and Patreon's fees on each tier; the letters, rankings and reports, each with its state; and the log and decisions. Its tabs are Overview, Pages, Money, Posts, Plan, Log and Decisions.
+- **What the owner does:** approves the tiers and the copy, enters the figures, and posts every letter, poll and report himself.
+- **What agents do:** draft the pages, gather each month's letter from what the repository records, propose each quarter's shortlist from the tracker, and write the quarterly report from the totals.
+- **Its rule:** nothing is held back for supporters, and supporters' details stay out of the repository: credits only as a member asks, money only in totals.
+
 ## Workstream canvases
 
 Work that spans sessions, such as a feature, a research thread or a fix, keeps a workstream canvas of its own: its goal, its plan, what needs the owner, its decisions and a log ([skill](../.cursor/skills/workstream-canvas/SKILL.md)). A room is for something that never finishes, and a workstream canvas ends with its work. The press room began as one.
@@ -53,3 +62,7 @@ Work that spans sessions, such as a feature, a research thread or a fix, keeps a
 ## Opening a room
 
 In Cursor, on a Mac set up for Redlamp, ask an agent for the room ("open the release room"); the skill's description tells it which. If the room doesn't exist yet, the agent makes it from the template and fills it from the commands the skill lists. Rooms cost little to keep: canvas edits were under 1% of the cost of the agent work measured in October 2026 ([docs/working-with-agents.md](working-with-agents.md)).
+
+## Moving to another Mac
+
+The rooms, with the owner's marks, are on his Mac rather than in the repository, so they move by hand: copy `~/.cursor/projects/<workspace>/canvases/` (each room's `.canvas.tsx` and its `.canvas.data.json`) and the press room's `~/src/redlamp-outreach/`. Cursor names the workspace folder after the checkout's path (`Users-pedrogomes-src-darkroom` for `/Users/pedrogomes/src/darkroom`), and the skills give it in full, so a checkout at another path needs those paths updated too.
