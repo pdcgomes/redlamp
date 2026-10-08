@@ -39,7 +39,10 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         progress.style = .bar
         progress.controlSize = .small
         progress.isIndeterminate = false
-        progress.isHidden = true
+        // Its row stays while no change is under way: one coming and going lays out the whole column, many
+        // milliseconds of the main thread for each change.
+        progress.alphaValue = 0
+        progress.setAccessibilityElement(false)
         keywords.orientation = .vertical
         keywords.alignment = .leading
         keywords.spacing = 2
@@ -173,13 +176,13 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
     }
 
     private func showProgress(_ shown: PanelProgress?) {
-        progress.isHidden = shown == nil
+        progress.alphaValue = shown == nil ? 0 : 1
+        progress.setAccessibilityElement(shown != nil)
         if let shown {
             progress.maxValue = Double(max(shown.total, 1))
             progress.doubleValue = Double(shown.done)
             progress.toolTip = "\(shown.title): \(shown.done) of \(shown.total)"
         }
-        rowsChanged()
     }
 
     @objc private func chooseSet() {

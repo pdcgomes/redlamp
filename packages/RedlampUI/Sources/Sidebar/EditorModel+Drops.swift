@@ -127,7 +127,7 @@ extension EditorModel {
     @_spi(Harness) public static let notCopied = "Photos can't be copied to a folder yet"
 
     /// A drop's move under way, for the grid's toolbar.
-    var moveProgress: LibraryMoveProgress {
+    @_spi(Harness) public var moveProgress: LibraryMoveProgress {
         if let progress = Self.moveProgresses.object(forKey: self) {
             return progress
         }
