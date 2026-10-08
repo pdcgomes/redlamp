@@ -57,11 +57,11 @@ struct RecipeLabImportTests {
         return url
     }
 
-    @Test func `a .3dl for log footage becomes the draft's scene-referred Base Look`() throws {
+    @Test func `a .3dl for log footage becomes the draft's scene-referred Base Look`() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let model = try lab()
         let space = ImportedTableSpace.cameraLog(.appleLog, output: .sRGB)
-        try model.importTable(write(Self.identity3DL, as: "Apple Log.3dl"), space: space)
+        try await model.importTable(write(Self.identity3DL, as: "Apple Log.3dl"), space: space).value
         let draft = try #require(model.draft)
         let table = try #require(try draft.embeddedBaseLooks.first?.definition().table)
         #expect(table.space == .sceneLog)
@@ -71,13 +71,13 @@ struct RecipeLabImportTests {
         #expect(model.creatorMessage == "Imported a 33-point table")
     }
 
-    @Test func `an sRGB .cube imports as before, and the draft keeps its name, list and settings`() throws {
+    @Test func `an sRGB .cube imports as before, and the draft keeps its name, list and settings`() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let model = try lab()
         model.draft?.name = "Warm Night"
         model.draft?.group = "Night"
         model.draft?.settings.values[.exposure] = 0.4
-        try model.importTable(write(Self.warmCube, as: "warm.cube"))
+        try await model.importTable(write(Self.warmCube, as: "warm.cube")).value
         let draft = try #require(model.draft)
         #expect(draft.name == "Warm Night" && draft.group == "Night" && draft.settings.values == [.exposure: 0.4])
         #expect(draft.includes == RecipeSettingGroup.captureDefaults.union([.baseLook]))
@@ -85,14 +85,14 @@ struct RecipeLabImportTests {
         #expect(model.creatorMessage == "Imported a 17-point table")
     }
 
-    @Test func `a file that isn't a readable look table leaves the draft and says why`() throws {
+    @Test func `a file that isn't a readable look table leaves the draft and says why`() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let model = try lab()
         let draft = model.draft
-        try model.importTable(write("{}", as: "notes.txt"))
+        try await model.importTable(write("{}", as: "notes.txt")).value
         #expect(model.draft == draft)
         #expect(model.creatorMessage == "Couldn't import: notes.txt isn't a .cube, .3dl or HaldCLUT file")
-        try model.importTable(write("0 512 1023\n0 0 0\n", as: "short.3dl"))
+        try await model.importTable(write("0 512 1023\n0 0 0\n", as: "short.3dl")).value
         #expect(model.draft == draft)
         #expect(model.creatorMessage == "Couldn't import: not a .3dl file: expected 27 rows, found 1")
     }

@@ -224,8 +224,9 @@ public final class RecipeLibrary {
     public func install(
         contentsOf url: URL,
         tableSpace: ImportedTableSpace = .sRGB,
+        reading files: any FileInspecting,
     ) throws -> (recipe: Recipe, issues: [RecipeIssue]) {
-        let installed = try install(Self.read(importing: url, tableSpace: tableSpace))
+        let installed = try install(Self.read(importing: url, tableSpace: tableSpace, reading: files))
         return (installed.recipe, installed.issues)
     }
 
@@ -260,8 +261,12 @@ public final class RecipeLibrary {
 
     /// Installs files, and the Lightroom presets in folders, as `install(_:)` does, reading
     /// the library again once at the end; what came in and what didn't.
-    public func install(contentsOf urls: [URL], tableSpace: ImportedTableSpace = .sRGB) -> RecipeImportSummary {
-        install(Self.read(importing: urls, tableSpace: tableSpace))
+    public func install(
+        contentsOf urls: [URL],
+        tableSpace: ImportedTableSpace = .sRGB,
+        reading files: any FileInspecting,
+    ) -> RecipeImportSummary {
+        install(Self.read(importing: urls, tableSpace: tableSpace, reading: files))
     }
 
     private func store(_ imported: RecipeImport) throws -> Recipe {
@@ -281,13 +286,14 @@ public final class RecipeLibrary {
     /// develop preset, or a `.cube`, `.3dl` or HaldCLUT look table made for `tableSpace`. A
     /// preset is recognised by its content (`LightroomPreset.isPreset`), so a photo's `.xmp`
     /// sidecar isn't taken for one. A look table or preset is named `name`, or by its own
-    /// name, or the file's.
+    /// name, or the file's. `files` decodes a HaldCLUT image.
     public static func read(
         importing url: URL,
         tableSpace: ImportedTableSpace = .sRGB,
         name: String? = nil,
+        reading files: any FileInspecting,
     ) throws -> RecipeImport {
-        if let imported = try lookTable(contentsOf: url, tableSpace: tableSpace) {
+        if let imported = try lookTable(contentsOf: url, tableSpace: tableSpace, reading: files) {
             let name = name ?? imported.title ?? url.deletingPathExtension().lastPathComponent
             return RecipeImport(recipe: LookTableImport.recipe(for: imported.table, name: name))
         }
@@ -308,21 +314,25 @@ public final class RecipeLibrary {
     /// Reads files, and the Lightroom presets in folders and their subfolders, as
     /// `read(importing:)` reads each. A file that can't be read, or a folder without presets,
     /// is listed with the reason.
-    public static func read(importing urls: [URL], tableSpace: ImportedTableSpace = .sRGB) -> RecipeImportSummary {
+    public static func read(
+        importing urls: [URL],
+        tableSpace: ImportedTableSpace = .sRGB,
+        reading files: any FileInspecting,
+    ) -> RecipeImportSummary {
         var items: [RecipeImportSummary.Item] = []
         var seen = Set<String>()
         for url in urls {
             var isFolder: ObjCBool = false
             FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder)
-            let files = isFolder.boolValue ? presets(in: url) : [url]
-            if files.isEmpty {
+            let found = isFolder.boolValue ? presets(in: url) : [url]
+            if found.isEmpty {
                 items.append(.init(file: url, outcome: .failed("There are no Lightroom presets in this folder")))
             }
-            for file in files where seen.insert(file.standardizedFileURL.path).inserted {
+            for file in found where seen.insert(file.standardizedFileURL.path).inserted {
                 do {
                     try items.append(.init(
                         file: file,
-                        outcome: .imported(read(importing: file, tableSpace: tableSpace)),
+                        outcome: .imported(read(importing: file, tableSpace: tableSpace, reading: files)),
                     ))
                 } catch {
                     items.append(.init(file: file, outcome: .failed(reason(error))))
@@ -366,10 +376,11 @@ public final class RecipeLibrary {
     }
 
     /// The look table in a `.cube` or `.3dl` file or a HaldCLUT image made for `tableSpace`,
-    /// with the title a `.cube` may give it; nil for any other file.
+    /// with the title a `.cube` may give it; nil for any other file. `files` decodes the image.
     public static func lookTable(
         contentsOf url: URL,
         tableSpace: ImportedTableSpace = .sRGB,
+        reading files: any FileInspecting,
     ) throws -> (table: LookTable, title: String?)? {
         switch url.pathExtension.lowercased() {
         case "cube":
@@ -378,7 +389,8 @@ public final class RecipeLibrary {
         case "3dl":
             return try (LookTableImport.parse3DL(String(contentsOf: url, encoding: .utf8), space: tableSpace), nil)
         case "png", "tif", "tiff":
-            return try (LookTableImport.parseHald(LookTableImport.readImage(url), space: tableSpace), nil)
+            guard let image = files.haldImage(of: url) else { throw LookTableImportError.unreadableImage }
+            return try (LookTableImport.parseHald(image, space: tableSpace), nil)
         default:
             return nil
         }

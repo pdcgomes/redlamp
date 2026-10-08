@@ -73,7 +73,9 @@ struct RecipeImportTests {
         let sidecar = try write(Self.sidecar, as: "Photos/DSC01234.xmp")
         let revision = catalog.revision
 
-        let summary = catalog.install(contentsOf: [cube, sidecar, sidecar.deletingLastPathComponent()])
+        let summary = catalog.install(RecipeLibrary.read(
+            importing: [cube, sidecar, sidecar.deletingLastPathComponent()], reading: UnreadableFiles(),
+        ))
         #expect(summary.imported.map(\.recipe.name) == ["Warm"])
         #expect(summary.failures == [
             "DSC01234.xmp: This isn't a Lightroom develop preset",
@@ -81,6 +83,19 @@ struct RecipeImportTests {
         ])
         #expect(catalog.all.map(\.name) == ["Warm"])
         #expect(catalog.revision == revision + 1 && catalog.lastError == nil)
+    }
+
+    @Test func `an import reads HaldCLUT images through the engine's reader, never on the main thread`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let hald = try write("", as: "hald.png")
+        let cube = try write(Self.warmCube, as: "warm.cube")
+        let files = ThreadRecordingFiles()
+
+        let summary = await RecipeActions.read([hald, cube], tableSpace: .sRGB, files: files)
+        #expect(files.asked == [hald])
+        #expect(files.mainThreadCalls.isEmpty)
+        #expect(summary.imported.map(\.recipe.name) == ["Warm"])
+        #expect(summary.failures.count == 1 && summary.failures.first?.hasPrefix("hald.png: ") == true)
     }
 
     @Test func `a drop takes folders and the files the import reads, and nothing else`() throws {
@@ -107,10 +122,10 @@ struct RecipeImportTests {
         let sidecar = try write(Self.sidecar, as: "DSC01234.xmp")
         #expect(catalog.takeImportedLists().isEmpty)
 
-        catalog.install(contentsOf: [sidecar])
+        catalog.install(RecipeLibrary.read(importing: [sidecar], reading: UnreadableFiles()))
         #expect(catalog.takeImportedLists().isEmpty)
 
-        let summary = catalog.install(contentsOf: [cube])
+        let summary = catalog.install(RecipeLibrary.read(importing: [cube], reading: UnreadableFiles()))
         #expect(!summary.lists.isEmpty)
         #expect(catalog.takeImportedLists() == Set(summary.lists))
         #expect(catalog.sections.map(\.name) == summary.lists)

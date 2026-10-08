@@ -1,6 +1,7 @@
 import Foundation
 import RedlampEngineAPI
 import RedlampRecipes
+import RedlampServices
 import simd
 import Testing
 
@@ -37,12 +38,12 @@ struct RecipeLibraryInstallTests {
         let text = LookTableFixtures.cube(size: 17, header: ["TITLE \"Teal and Orange\""], LookTableFixtures.grade)
         let url = try write(text, as: "teal-orange.cube")
         let parsed = try LookTableImport.parseCube(text).table
-        let (recipe, issues) = try library.install(contentsOf: url)
+        let (recipe, issues) = try library.install(contentsOf: url, reading: InProcessDecoder())
         #expect(issues.isEmpty)
         #expect(recipe.name == "Teal and Orange" && recipe.group == "Imported" && recipe.tags == ["lut"])
         #expect(recipe.baseLook?.contentHash == parsed.contentHash)
         #expect(try recipe.embeddedBaseLooks.first?.definition().table == parsed)
-        let explicit = try library.install(contentsOf: url, tableSpace: .sRGB).recipe
+        let explicit = try library.install(contentsOf: url, tableSpace: .sRGB, reading: InProcessDecoder()).recipe
         #expect(explicit.baseLook?.contentHash == parsed.contentHash)
     }
 
@@ -50,12 +51,13 @@ struct RecipeLibraryInstallTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let text = LookTableFixtures.threeDL(size: 17, LookTableFixtures.grade)
         let url = try write(text, as: "Lustre Grade.3dl")
-        let (recipe, issues) = try library.install(contentsOf: url)
+        let (recipe, issues) = try library.install(contentsOf: url, reading: InProcessDecoder())
         #expect(issues.isEmpty)
         #expect(recipe.name == "Lustre Grade" && recipe.group == "Imported" && recipe.tags == ["lut"])
         #expect(try recipe.baseLook?.contentHash == LookTableImport.parse3DL(text).contentHash)
         #expect(library.recipe(id: recipe.id) != nil)
-        let native = try library.install(contentsOf: url, tableSpace: .displayRec2020).recipe
+        let native = try library.install(contentsOf: url, tableSpace: .displayRec2020, reading: InProcessDecoder())
+            .recipe
         #expect(try native.baseLook?.contentHash == LookTableImport.parse3DL(text, space: .displayRec2020).contentHash)
     }
 
@@ -67,7 +69,11 @@ struct RecipeLibraryInstallTests {
             ? LookTableFixtures.cube(size: 33, Self.cameraToRec709(space))
             : LookTableFixtures.threeDL(size: 33, Self.cameraToRec709(space))
         let url = try write(text, as: "V-Log to Rec.709.\(format)")
-        let (recipe, issues) = try library.install(contentsOf: url, tableSpace: .cameraLog(space))
+        let (recipe, issues) = try library.install(
+            contentsOf: url,
+            tableSpace: .cameraLog(space),
+            reading: InProcessDecoder(),
+        )
         #expect(issues.isEmpty)
         #expect(recipe.name == "V-Log to Rec.709")
         let table = try #require(try recipe.embeddedBaseLooks.first?.definition().table)
@@ -85,7 +91,7 @@ struct RecipeLibraryInstallTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let url = root.appending(path: "graded.png")
         try LookTableImport.writePNG(LookTableFixtures.gradedHald(), to: url)
-        let (recipe, _) = try library.install(contentsOf: url)
+        let (recipe, _) = try library.install(contentsOf: url, reading: InProcessDecoder())
         #expect(recipe.name == "graded")
         #expect(try recipe.baseLook?.contentHash == LookTableImport.parseHald(LookTableImport.readImage(url))
             .contentHash)
@@ -99,7 +105,11 @@ struct RecipeLibraryInstallTests {
         )
         let url = root.appending(path: RecipeFile.fileName(for: shared))
         try RecipeFile.write(shared, to: url)
-        let (installed, issues) = try library.install(contentsOf: url, tableSpace: .cameraLog(.appleLog))
+        let (installed, issues) = try library.install(
+            contentsOf: url,
+            tableSpace: .cameraLog(.appleLog),
+            reading: InProcessDecoder(),
+        )
         #expect(issues.isEmpty)
         #expect(installed.id == shared.id && installed.settings == shared.settings && installed.baseLook == nil)
         #expect(library.installed.map(\.id) == [shared.id])
@@ -110,7 +120,7 @@ struct RecipeLibraryInstallTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let url = try write("0 512 1023\n0 0 0\n", as: "broken.3dl")
         #expect(throws: LookTableImportError.notA3DL("expected 27 rows, found 1")) {
-            try library.install(contentsOf: url)
+            try library.install(contentsOf: url, reading: InProcessDecoder())
         }
         #expect(library.all.isEmpty)
     }
@@ -214,7 +224,7 @@ struct RecipeLibraryPresetTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let url = try write(Self.preset(processVersion: "5.0"), as: "Old Matte.xmp")
         #expect(try LightroomPreset.isPreset(Data(contentsOf: url)))
-        #expect(throws: LightroomPresetError.self) { try library.install(contentsOf: url) }
+        #expect(throws: LightroomPresetError.self) { try library.install(contentsOf: url, reading: InProcessDecoder()) }
         #expect(library.all.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: library.locations.recipes.path))
     }
@@ -223,8 +233,14 @@ struct RecipeLibraryPresetTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let url = try write(Self.sidecar, as: "DSC01234.xmp")
         #expect(try !LightroomPreset.isPreset(Data(contentsOf: url)))
-        #expect(throws: LightroomPresetError.notAPreset) { try library.install(contentsOf: url) }
-        #expect(throws: LightroomPresetError.notAPreset) { try RecipeLibrary.read(importing: url) }
+        #expect(throws: LightroomPresetError.notAPreset) { try library.install(
+            contentsOf: url,
+            reading: InProcessDecoder(),
+        ) }
+        #expect(throws: LightroomPresetError.notAPreset) { try RecipeLibrary.read(
+            importing: url,
+            reading: InProcessDecoder(),
+        ) }
         #expect(library.all.isEmpty)
     }
 
@@ -279,7 +295,7 @@ struct RecipeLibraryPresetTests {
         let summary = library.install(contentsOf: [
             cube, root.appending(path: "Pack"), root.appending(path: "Photos"),
             root.appending(path: "missing.redrecipe"),
-        ])
+        ], reading: InProcessDecoder())
         #expect(summary.imported.map(\.recipe.name) == ["Teal"])
         #expect(summary.failures.prefix(2) == [
             "Old Matte.xmp: \(refusal)", "Photos: There are no Lightroom presets in this folder",
@@ -294,7 +310,7 @@ struct RecipeLibraryPresetTests {
         let text = Self.preset(processVersion: "11.0")
         let url = try write(text, as: "warm-fade.xmp")
         let converted = try LightroomPreset.convert(Data(text.utf8))
-        let installed = try library.install(RecipeLibrary.read(importing: url))
+        let installed = try library.install(RecipeLibrary.read(importing: url, reading: InProcessDecoder()))
         #expect(installed.report == converted.report)
         #expect(installed.recipe.name == "Warm Fade" && installed.recipe.group == "Film Looks")
         #expect(library.userRecipes.map(\.id) == [installed.recipe.id])

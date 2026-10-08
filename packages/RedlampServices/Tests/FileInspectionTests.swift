@@ -69,6 +69,11 @@ struct FileInspectionTests {
             recorded.withLock { $0.append(files.count) }
             service.imageProperties(files, paths: paths, reply: reply)
         }
+
+        func haldImage(_ file: Data, path: String, reply: @escaping @Sendable (Data?, Int, Int) -> Void) {
+            recorded.withLock { $0.append(1) }
+            service.haldImage(file, path: path, reply: reply)
+        }
     }
 
     @Test(.enabled(if: !series.isEmpty))

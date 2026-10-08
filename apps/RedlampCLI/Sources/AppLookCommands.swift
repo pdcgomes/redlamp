@@ -3,6 +3,7 @@ import CryptoKit
 import Foundation
 import RedlampEngineAPI
 import RedlampRecipes
+import RedlampServices
 
 /// One photo of the kit, as listed in research/app-looks/kit-photos.json.
 struct KitPhotoSpec: Decodable {
@@ -238,7 +239,7 @@ enum AppLookCommands {
         print(result.report.summary)
         print("wrote \(recipeURL.path), report.json, report.txt and contact-sheet.jpg")
         if arguments.has("--install") {
-            recipe = try context.library.install(contentsOf: recipeURL).recipe
+            recipe = try context.library.install(contentsOf: recipeURL, reading: InProcessDecoder()).recipe
             print("installed \(recipe.id) (\(recipe.name))")
         }
     }

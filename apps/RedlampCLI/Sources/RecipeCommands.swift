@@ -3,6 +3,7 @@ import Foundation
 import RedlampEngine
 import RedlampEngineAPI
 import RedlampRecipes
+import RedlampServices
 
 /// `redlamp recipe …`: look-development tools on the same engine and library as the app.
 enum RecipeCommands {
@@ -226,7 +227,9 @@ enum RecipeCommands {
     /// report goes to standard error.
     static func importFile(_ url: URL, space: ImportedTableSpace, _ context: Context) throws {
         let arguments = context.arguments
-        var imported = try RecipeLibrary.read(importing: url, tableSpace: space, name: arguments.value("--name"))
+        var imported = try RecipeLibrary.read(
+            importing: url, tableSpace: space, name: arguments.value("--name"), reading: InProcessDecoder(),
+        )
         let output = arguments.value("--output")
         guard output != nil || arguments.has("--install") else {
             if imported.report != nil || !imported.issues.isEmpty {
@@ -258,7 +261,7 @@ enum RecipeCommands {
         guard arguments.value("--name") == nil else {
             throw CLIError(description: "--name names the recipe of a single file")
         }
-        var summary = RecipeLibrary.read(importing: inputs, tableSpace: space)
+        var summary = RecipeLibrary.read(importing: inputs, tableSpace: space, reading: InProcessDecoder())
         if arguments.has("--install") {
             summary = context.library.install(summary)
         }

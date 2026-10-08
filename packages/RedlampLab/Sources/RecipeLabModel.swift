@@ -400,10 +400,22 @@ public final class RecipeLabModel {
     }
 
     /// Puts a `.cube`, `.3dl` or HaldCLUT look table, read as made for `space`, into the draft
-    /// as its Base Look; the draft keeps its name, list and settings.
-    public func importTable(_ url: URL, space: ImportedTableSpace = .sRGB) {
+    /// as its Base Look; the draft keeps its name, list and settings. The file is read off the
+    /// main thread, a HaldCLUT image by the editor's reader.
+    @discardableResult
+    public func importTable(_ url: URL, space: ImportedTableSpace = .sRGB) -> Task<Void, Never> {
+        let files = editor.engine.files
+        return Task {
+            let read = await Task.detached {
+                Result { try RecipeLibrary.lookTable(contentsOf: url, tableSpace: space, reading: files) }
+            }.value
+            useTable(read, from: url)
+        }
+    }
+
+    private func useTable(_ read: Result<(table: LookTable, title: String?)?, any Error>, from url: URL) {
         do {
-            guard let imported = try RecipeLibrary.lookTable(contentsOf: url, tableSpace: space) else {
+            guard let imported = try read.get() else {
                 creatorMessage = "Couldn't import: \(url.lastPathComponent) isn't a .cube, .3dl or HaldCLUT file"
                 return
             }

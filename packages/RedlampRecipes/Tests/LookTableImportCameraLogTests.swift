@@ -3,6 +3,7 @@ import Metal
 import RedlampEngine
 import RedlampEngineAPI
 import RedlampRecipes
+import RedlampServices
 import simd
 import Testing
 
@@ -233,7 +234,11 @@ struct CameraLogImportTests {
         let url = root.appendingPathComponent("S-Log3 to Rec.709.cube")
         try LookTableFixtures.cameraLUT(.sLog3SGamut3Cine).write(to: url, atomically: true, encoding: .utf8)
         let library = RecipeLibrary(root: root, includeBundled: false)
-        let (recipe, issues) = try library.install(contentsOf: url, tableSpace: .cameraLog(.sLog3SGamut3Cine))
+        let (recipe, issues) = try library.install(
+            contentsOf: url,
+            tableSpace: .cameraLog(.sLog3SGamut3Cine),
+            reading: InProcessDecoder(),
+        )
         #expect(issues.isEmpty)
         #expect(recipe.name == "S-Log3 to Rec.709")
         let table = try #require(try recipe.embeddedBaseLooks.first?.definition().table)

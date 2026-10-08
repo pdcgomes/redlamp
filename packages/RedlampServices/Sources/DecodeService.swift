@@ -39,6 +39,8 @@ public struct InProcessDecoder: ImageDecoding {
 
     /// `FileInspecting.imageProperties` likewise: a JSON array of `ImageProperties` or null.
     func imageProperties(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void)
+    /// `FileInspecting.haldImage`: the pixels as raw bytes and the size, or nil and zeros.
+    func haldImage(_ file: Data, path: String, reply: @escaping @Sendable (Data?, Int, Int) -> Void)
 }
 
 /// The service side: decodes from the bytes it is sent (it has no file system access).
@@ -68,6 +70,13 @@ public final class DecodeService: NSObject, DecodeServiceProtocol {
 
     public func imageProperties(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void) {
         reply(try? JSONEncoder().encode(Self.inspect(files, paths: paths, false, FileInspection.imageProperties)))
+    }
+
+    public func haldImage(_ file: Data, path: String, reply: @escaping @Sendable (Data?, Int, Int) -> Void) {
+        guard let image = FileInspection.source(file, path: path).flatMap(FileInspection.haldImage) else {
+            return reply(nil, 0, 0)
+        }
+        reply(image.rgba16, image.width, image.height)
     }
 
     private static func inspect<T: Sendable>(
@@ -312,8 +321,18 @@ public extension DecodedImage {
             }
         }
 
-        public func haldImage(of _: URL) -> HaldImage? {
-            nil
+        public func haldImage(of url: URL) -> HaldImage? {
+            Self.checkOffMain()
+            guard let file = try? Data(contentsOf: url, options: .alwaysMapped) else { return nil }
+            let connection = connect()
+            defer { connection.invalidate() }
+            let answer = Mutex<HaldImage?>(nil)
+            let proxy = connection.synchronousRemoteObjectProxyWithErrorHandler { _ in } as? DecodeServiceProtocol
+            proxy?.haldImage(file, path: url.absoluteURL.path) { pixels, width, height in
+                guard let pixels else { return }
+                answer.withLock { $0 = HaldImage(width: width, height: height, rgba16: pixels) }
+            }
+            return answer.withLock { $0 }
         }
 
         private func inspect<T: Decodable>(

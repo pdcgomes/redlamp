@@ -1,4 +1,5 @@
 import AppKit
+import RedlampEngineAPI
 import RedlampRecipes
 import SwiftUI
 import UniformTypeIdentifiers
@@ -73,8 +74,28 @@ public enum RecipeActions {
     /// Installs files, and the Lightroom presets in folders, as the Recipes panel's import
     /// does (files dropped on the panel too), then tells what came in: presets' reports in a
     /// sheet, or the files that didn't come in when no preset did.
-    public static func importFiles(_ urls: [URL], tableSpace: ImportedTableSpace = .sRGB, model: EditorModel) {
-        let summary = model.recipes.install(contentsOf: urls, tableSpace: tableSpace)
+    @discardableResult
+    public static func importFiles(
+        _ urls: [URL],
+        tableSpace: ImportedTableSpace = .sRGB,
+        model: EditorModel,
+    ) -> Task<Void, Never> {
+        let files = model.engine.files
+        return Task {
+            await tell(model.recipes.install(read(urls, tableSpace: tableSpace, files: files)))
+        }
+    }
+
+    /// The files as `RecipeLibrary.read(importing:)` reads them, off the main thread: `files`
+    /// decodes HaldCLUT images in the decode service, which the main thread mustn't wait on.
+    static func read(_ urls: [URL], tableSpace: ImportedTableSpace, files: any FileInspecting) async
+        -> RecipeImportSummary {
+        await Task.detached {
+            RecipeLibrary.read(importing: urls, tableSpace: tableSpace, reading: files)
+        }.value
+    }
+
+    private static func tell(_ summary: RecipeImportSummary) {
         switch message(for: summary) {
         case .none:
             break

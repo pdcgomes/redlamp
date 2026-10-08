@@ -345,9 +345,7 @@ struct HaldServiceImportTests {
 
         let listener = Listener()
         let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
-        withKnownIssue("The service decodes no HaldCLUT until it is asked to") {
-            let decoded = Result { try LookTableImport.parseHald(#require(service.haldImage(of: url))) }
-            #expect(Self.same(decoded, local), "decoded in the service")
-        }
+        let decoded = Result { try LookTableImport.parseHald(#require(service.haldImage(of: url))) }
+        #expect(Self.same(decoded, local), "decoded in the service")
     }
 }
