@@ -553,11 +553,14 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             place(header: item, header)
         }
         CATransaction.commit()
+        visibleRows = 0 ..< 0
         if let anchor, let item = item(of: anchor), item < shownCount {
+            // A scroll tiles as the clip view reports it (`scrolled`).
             scroll(toTop: gridLayout.frame(forItem: item).minY - anchor.offset)
         }
-        visibleRows = 0 ..< 0
-        tile()
+        if visibleRows.isEmpty {
+            tile()
+        }
     }
 
     private func scroll(toTop y: CGFloat) {
@@ -746,7 +749,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             }
         } else if cell.shownEdit != edit, let exact = thumbnails.cached(item, edge: edge) {
             cell.configure(item, row: row, image: exact, edge: edge, edit: edit)
-        } else {
+        } else if cell.item != item {
             cell.configure(item, row: row, image: nil, edge: cell.edge)
         }
         let ids = model.library.photoIDs

@@ -192,29 +192,20 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         return shownStacks.index(of: shownStacks.cell(for: id) ?? id)
     }
 
-    /// The stacks changed: the strip follows their diffs, or shows them afresh.
+    /// The stacks changed: the strip shows them afresh, or for stacks opened or closed, its cells on screen again where
+    /// they are, which its layout places a screenful at a time; a batch update's animations would cost more.
     private func stacksChanged(_ change: LibraryStacks.Change) {
         guard isInShownModule(model) else {
             isStale = true
             return
         }
-        guard case let .items(diff) = change, shownStacks != nil else {
+        followItems()
+        collectionView.reloadData()
+        guard case .items = change else {
             prefetching.values.forEach(model.thumbnailLoader.cancel)
             prefetching = [:]
-            followItems()
-            collectionView.reloadData()
             follow(model.selection, marking: model.photoSelection, animated: false)
             return
-        }
-        followItems()
-        collectionView.performBatchUpdates {
-            collectionView.deleteItems(at: Set(diff.removed.map { IndexPath(item: $0, section: 0) }))
-            collectionView.insertItems(at: Set(diff.inserted.map { IndexPath(item: $0, section: 0) }))
-        }
-        for index in diff.updated {
-            if let item = collectionView.item(at: IndexPath(item: index, section: 0)) as? FilmstripItem {
-                item.cell.stackBadges = stackBadges(ofItem: index)
-            }
         }
         follow(model.selection, marking: model.photoSelection)
     }

@@ -57,27 +57,38 @@ public extension EditorModel {
     /// Whether ⌘G would stack anything: two photos selected or more, not counting a raw's JPEG, which the library
     /// has, and not every photo of one stack already.
     var canStackSelection: Bool {
-        guard library.service?.isReady == true, library.isShownFromLibrary else { return false }
+        guard photoSelection.count > 1, library.service?.isReady == true, library.isShownFromLibrary else {
+            return false
+        }
         let selected = selectedOwnIDs
-        guard selected.count > 1 else { return false }
         let stacks = libraryViews.stacks?.list?.stacks ?? Stacks()
+        // A frame by its pair, or the photo alone; a stack by its index, or none.
         var frames = Set<Int64>()
-        var groups = Set<Stack>()
+        var groups = Set<Int>()
+        var alone = false
         for id in selected {
-            frames.insert(stacks.pair(containing: id)?.top ?? id)
-            groups.insert(stacks.stack(containing: id) ?? Stack(kind: .manual, photos: [id]))
+            frames.insert(stacks.pairIndex(containing: id).map { -1 - Int64($0) } ?? id)
+            if let group = stacks.stackIndex(containing: id) {
+                groups.insert(group)
+            } else {
+                alone = true
+            }
+            if frames.count > 1, alone || groups.count > 1 {
+                return true
+            }
         }
-        guard frames.count > 1, let only = groups.first, groups.count == 1, only.photos.count > 1 else {
-            return frames.count > 1
-        }
+        guard frames.count > 1, !alone, groups.count == 1, let group = groups.first else { return false }
         let shown = Set(selected)
-        return !stacks.allPhotos(of: only).allSatisfy { !library.photoList.contains($0) || shown.contains($0) }
+        return !stacks.allPhotos(of: stacks[group]).allSatisfy { !library.photoList.contains($0) || shown.contains($0) }
     }
 
     /// Whether ⇧⌘G would take anything out of a stack: a photo selected is in a burst or a stack made by hand.
     var canUnstackSelection: Bool {
         guard library.service?.isReady == true, let stacks = libraryViews.stacks?.list?.stacks else { return false }
-        return selectedOwnIDs.contains { stacks.stack(containing: $0) != nil }
+        guard photoSelection.count > 1 else {
+            return selection.flatMap(library.photoID(of:)).flatMap(stacks.stackIndex(containing:)) != nil
+        }
+        return selectedOwnIDs.contains { stacks.stackIndex(containing: $0) != nil }
     }
 
     /// Whether ⇧S would change a stack's top: the active photo is in a burst or a stack made by hand, not on top.
@@ -307,29 +318,25 @@ public extension EditorModel {
         return true
     }
 
-    /// Whether `performStackShortcut` would do something now; nil for the actions it leaves alone.
+    /// Whether `performStackShortcut` would do something now; nil for the actions it leaves alone. The stacks' outline
+    /// is read for the menus to follow the stacks as they're found again.
     internal func canPerformStackShortcut(_ action: ShortcutAction) -> Bool? {
+        let outline = action.category == .library ? libraryViews.stacks?.outline : nil
         switch action {
-        case .toggleStack: canToggleStack
-        case .openAllStacks: libraryViews.stacks?.list?.stacksShown.closed ?? 0 > 0
-        case .closeAllStacks: libraryViews.stacks?.list?.stacksShown.open ?? 0 > 0
-        case .stackPhotos: canStackSelection
-        case .unstackPhotos: canUnstackSelection
-        case .moveToStackTop: canMoveToTopOfStack
+        case .toggleStack: return canToggleStack
+        case .openAllStacks: return outline?.someClosed ?? false
+        case .closeAllStacks: return outline?.someOpen ?? false
+        case .stackPhotos: return canStackSelection
+        case .unstackPhotos: return canUnstackSelection
+        case .moveToStackTop: return canMoveToTopOfStack
         case .previousPhoto, .nextPhoto:
-            if libraryViews.groups?.list == nil, let stacked = libraryViews.stacks?.list {
-                cell(after: action == .nextPhoto ? 1 : -1, in: stacked) != nil
-            } else {
-                nil
-            }
+            guard libraryViews.groups?.list == nil, let stacked = libraryViews.stacks?.list else { return nil }
+            return cell(after: action == .nextPhoto ? 1 : -1, in: stacked) != nil
         case .deselectOtherPhotos:
-            if let stacked = libraryViews.stacks?.list {
-                photoSelection.count > (selection.flatMap(library.photoID(of:))
-                    .map { stacked.photos(of: stacked.cell(for: $0) ?? $0).count } ?? 1)
-            } else {
-                nil
-            }
-        default: nil
+            guard let stacked = libraryViews.stacks?.list else { return nil }
+            let active = selection.flatMap(library.photoID(of:))
+            return photoSelection.count > (active.map { stacked.photos(of: stacked.cell(for: $0) ?? $0).count } ?? 1)
+        default: return nil
         }
     }
 

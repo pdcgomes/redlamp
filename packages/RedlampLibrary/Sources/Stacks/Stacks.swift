@@ -103,6 +103,17 @@ public struct Stacks: Sendable, RandomAccessCollection {
         groupIndex(of: photo).map { self[$0] }
     }
 
+    /// The index of the burst or manual stack holding `photo` or its pair, without making the stack: for checks
+    /// over many photos.
+    public func stackIndex(containing photo: Int64) -> Int? {
+        groupIndex(of: photo)
+    }
+
+    /// The index of the pair `photo` is in, without making the stack.
+    public func pairIndex(containing photo: Int64) -> Int? {
+        pairIndex(of: photo)
+    }
+
     /// A focus suggestion holding `photo`.
     public func suggestion(containing photo: Int64) -> Stack? {
         guard photo >= 0, photo < suggestionOf.count, suggestionOf[Int(photo)] >= 0 else { return nil }
