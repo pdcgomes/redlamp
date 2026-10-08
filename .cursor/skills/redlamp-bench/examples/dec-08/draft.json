@@ -1,0 +1,80 @@
+{
+  "id": "dec-08-mask-intersect",
+  "title": "Lightroom's mask Intersect: product or minimum?",
+  "kind": "lightroom-check",
+  "app": "Lightroom",
+  "requestedBy": {
+    "workstream": "masking",
+    "tracker": "DEC-08"
+  },
+  "note": "Four flat grey frames, each labelled in its corner. Two crossing linear gradients darken them by a known amount, alone and intersected, so the masking agent can tell whether Lightroom intersects masks as a product or a minimum.",
+  "assets": [
+    {
+      "source": "0-baseline.tif",
+      "id": "0-baseline",
+      "label": "0 · Baseline"
+    },
+    {
+      "source": "1-gradient-a.tif",
+      "id": "1-gradient-a",
+      "label": "1 · Gradient A"
+    },
+    {
+      "source": "2-gradient-b.tif",
+      "id": "2-gradient-b",
+      "label": "2 · Gradient B"
+    },
+    {
+      "source": "3-intersect.tif",
+      "id": "3-intersect",
+      "label": "3 · A ∩ B"
+    }
+  ],
+  "pairing": [
+    "file-name",
+    "similarity"
+  ],
+  "steps": [
+    {
+      "id": "share",
+      "title": "Share the four frames to Lightroom",
+      "detail": "Each is a flat grey frame with its number in the top-left corner.",
+      "action": {
+        "type": "share"
+      }
+    },
+    {
+      "id": "baseline",
+      "title": "Frame 0: no edits",
+      "detail": "Leave frame 0 as it is. It shows what Lightroom does to the grey without any mask."
+    },
+    {
+      "id": "gradient-a",
+      "title": "Frame 1: gradient A",
+      "detail": "Masking › Create New Mask › Linear Gradient. Drag from the left edge to the right edge, level. Set the mask's Exposure to −2.00 and nothing else."
+    },
+    {
+      "id": "gradient-b",
+      "title": "Frame 2: gradient B",
+      "detail": "A Linear Gradient dragged from the top edge to the bottom edge, straight down. The mask's Exposure −2.00, nothing else."
+    },
+    {
+      "id": "intersect",
+      "title": "Frame 3: A intersected with B",
+      "detail": "Make gradient A as on frame 1. On that mask, Intersect with a Linear Gradient dragged as on frame 2. Exposure −2.00 on the combined mask."
+    },
+    {
+      "id": "export",
+      "title": "Export all four",
+      "detail": "TIF if Lightroom offers it, otherwise JPG at quality 100. Full size, sRGB, no output sharpening, and keep the original file names."
+    },
+    {
+      "id": "results",
+      "title": "Share the exports back",
+      "detail": "Share the four exports to Redlamp Bench. They pair with their frames by file name.",
+      "action": {
+        "type": "results"
+      }
+    }
+  ]
+}
