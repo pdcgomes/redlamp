@@ -94,6 +94,17 @@ struct AppCommands: Commands {
             Divider()
             item(.mergeFocusStack)
             item(.editFocusStack)
+            // Lightroom Classic's Photo ▸ Stacking (LIB-28).
+            Menu("Stacking") {
+                item(.stackPhotos)
+                item(.unstackPhotos)
+                mouseItem(.moveToStackTop)
+                Divider()
+                mouseItem(.toggleStack)
+                item(.openAllStacks)
+                item(.closeAllStacks)
+            }
+            .disabled(model.isModalDialogOpen)
             Divider()
             item(.previousPhoto)
             item(.nextPhoto)

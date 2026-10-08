@@ -46,16 +46,18 @@ extension LibraryGridView {
         lastPaint = point
         let step = max(min(gridLayout.cellSize.width, gridLayout.cellSize.height) / 4, 4)
         let steps = Int(hypot(point.x - from.x, point.y - from.y) / step)
-        let ids = model.library.photoIDs
         var painted: [Int] = []
         for sample in 0 ... steps {
             let t = steps == 0 ? 1 : CGFloat(sample) / CGFloat(steps)
             let at = CGPoint(x: from.x + (point.x - from.x) * t, y: from.y + (point.y - from.y) * t)
-            guard let index = gridLayout.item(at: at), index < shownCount, let row = row(ofItem: index),
-                  ids.indices.contains(row),
-                  model.keywordPainter.paint(ids[row], url: model.items[row].url)
-            else { continue }
-            painted.append(index)
+            guard let index = gridLayout.item(at: at), index < shownCount else { continue }
+            var paintedHere = false
+            for photo in photos(standingFor: index) where model.keywordPainter.paint(photo.id, url: photo.url) {
+                paintedHere = true
+            }
+            if paintedHere {
+                painted.append(index)
+            }
         }
         showPainted(painted)
     }

@@ -136,6 +136,12 @@
                     action: action,
                     unavailable: "needs Library's grid with the library open: checked by library.keyword-painter",
                 )
+            case .toggleStack, .stackPhotos, .unstackPhotos, .moveToStackTop, .openAllStacks, .closeAllStacks:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs stacks in a folder the library has: checked on a scratch folder by "
+                        + "library.stacks and library.stacks-changes",
+                )
             case .showInFinder:
                 ActionCheck(action: action, setUp: { app in
                     try app.main { $0.libraryViews.revealInFinder = { Revealed.photos.append(contentsOf: $0) } }

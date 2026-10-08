@@ -25,6 +25,7 @@ enum LibraryGridMenu {
             },
         ], to: menu)
         add(culling(for: photo, model: model), to: menu)
+        add([stacking(for: photo, model: model)] + focusStacking(for: photo, model: model), to: menu)
         if let photoMenu = FilmstripMenu.menu(for: photo, model: model) {
             menu.addItem(.separator())
             for item in photoMenu.items {
@@ -105,6 +106,50 @@ enum LibraryGridMenu {
         )
     }
 
+    // MARK: - Stacks
+
+    /// The Photo menu's Stacking (LIB-28), for `photo` or the selection it's in.
+    static func stacking(for photo: URL, model: EditorModel) -> NSMenuItem {
+        let stacking = NSMenu(title: "Stacking")
+        stacking.autoenablesItems = false
+        let actions: [ShortcutAction?] = [
+            .stackPhotos, .unstackPhotos, .moveToStackTop, nil, .toggleStack, .openAllStacks, .closeAllStacks,
+        ]
+        for action in actions {
+            guard let action else {
+                stacking.addItem(.separator())
+                continue
+            }
+            let item = item(
+                action.title,
+                key: action.combos.first,
+                enabled: model.canPerformStackAction(action, on: photo),
+            ) {
+                model.performStackAction(action, on: photo)
+            }
+            item.setAccessibilityIdentifier("library.menu.\(action.rawValue)")
+            stacking.addItem(item)
+        }
+        let item = NSMenuItem(title: "Stacking", action: nil, keyEquivalent: "")
+        item.submenu = stacking
+        item.setAccessibilityIdentifier("library.menu.stacking")
+        return item
+    }
+
+    /// For a frame of a focus stack the app suggests: merging it, as the filmstrip's suggestion does, or setting the
+    /// suggestion aside.
+    static func focusStacking(for photo: URL, model: EditorModel) -> [NSMenuItem] {
+        guard let suggestion = model.focusSuggestion(containing: photo), !model.isModalDialogOpen else { return [] }
+        let enabled = model.stackWorkspace == nil
+        let merge = item(ShortcutAction.mergeFocusStack.title, key: nil, enabled: enabled) {
+            model.mergeStack(suggestion)
+        }
+        merge.setAccessibilityIdentifier("library.menu.mergeFocusStack")
+        let dismiss = item("Not a Focus Stack", key: nil, enabled: true) { model.dismissStack(suggestion) }
+        dismiss.setAccessibilityIdentifier("library.menu.dismissFocusStack")
+        return [merge, dismiss]
+    }
+
     // MARK: - Culling
 
     /// Set Rating, Set Flag and Set Color Label, and the mark, for `photo` or the selection it's in, in the
@@ -156,7 +201,7 @@ enum LibraryGridMenu {
             menu.addItem(.separator())
             for name in model.customLabels {
                 let item = NSMenuItem(title: name, state: metadata.customLabel == name ? .on : .off) {
-                    model.cull(.toggleCustomLabel(name), from: photo)
+                    model.cull(.toggleCustomLabel(name), fromCell: photo)
                 }
                 item.setAccessibilityIdentifier("library.menu.customLabel.\(name)")
                 menu.addItem(item)
@@ -171,7 +216,7 @@ enum LibraryGridMenu {
     private static func cull(_ action: ShortcutAction, _ photo: URL, _ model: EditorModel) -> NSMenuItem {
         let item = item(action.title, key: action.combos.first, enabled: true) {
             if let change = CullingChange(action) {
-                model.cull(change, from: photo)
+                model.cull(change, fromCell: photo)
             }
         }
         item.setAccessibilityIdentifier("library.menu.\(action.rawValue)")

@@ -90,7 +90,7 @@ extension LibraryGridView {
         let panels = model.libraryPanels
         let photos = switch target {
         case .selection: model.selectedPhotos
-        case let .photo(_, url): [url]
+        case let .photo(_, url): model.photos(standingFor: url)
         }
         Task { await panels.change([keyword], on: photos) }
         return true

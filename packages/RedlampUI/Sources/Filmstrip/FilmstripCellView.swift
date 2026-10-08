@@ -35,6 +35,12 @@ final class FilmstripCellView: NSView {
         didSet { badges.uneditedPreview = showsUneditedPreview }
     }
 
+    /// What the cell shows of the stacks it's the first cell of (LIB-28), as the grid's cells do.
+    var stackBadges: (count: GridBadges.Kind?, pair: GridBadges.Kind?) {
+        get { badges.stackBadges }
+        set { badges.stackBadges = newValue }
+    }
+
     /// A click, with the modifier keys held (⌘ and ⇧ select several photos).
     var onClick: ((NSEvent.ModifierFlags) -> Void)?
     /// The photo's context menu (`FilmstripMenu`).
@@ -194,12 +200,19 @@ final class FilmstripCellView: NSView {
     }
 }
 
-/// The cell's badges: edited, flag or reject, stars, colour or custom label, the mark, focus stack, and a
-/// cloud for photos only in iCloud Drive.
+/// The cell's badges: edited, flag or reject, stars, colour or custom label, the mark, focus stack, a stack's
+/// count and a pair's extensions (LIB-28), and a cloud for photos only in iCloud Drive.
 final class FilmstripBadgesView: LayerDrawnView {
     var item: LibraryItem? {
         didSet {
             guard badges(item) != badges(oldValue) else { return }
+            setNeedsContentDisplay()
+        }
+    }
+
+    var stackBadges: (count: GridBadges.Kind?, pair: GridBadges.Kind?) = (nil, nil) {
+        didSet {
+            guard stackBadges.count != oldValue.count || stackBadges.pair != oldValue.pair else { return }
             setNeedsContentDisplay()
         }
     }
@@ -272,6 +285,17 @@ final class FilmstripBadgesView: LayerDrawnView {
                 centeredAt: CGPoint(x: rect.width - 25, y: 9), scale: scale,
             )
         }
+        if let count = stackBadges.count, let image = GridBadges.image(count, scale: scale) {
+            let right = rect.width - (badges.stack ? 34 : 18)
+            drawUpright(
+                image,
+                in: CGRect(origin: CGPoint(x: right - count.size.width, y: 2), size: count.size),
+                context,
+            )
+        }
+        if let pair = stackBadges.pair, let image = GridBadges.image(pair, scale: scale) {
+            drawUpright(image, in: CGRect(origin: CGPoint(x: 18, y: 2), size: pair.size), context)
+        }
         if badges.edited {
             let circle = CGRect(x: rect.width - 22, y: rect.height - 22, width: 16, height: 16)
             context.setFillColor(shade.cgColor)
@@ -301,6 +325,15 @@ final class FilmstripBadgesView: LayerDrawnView {
                 centeredAt: CGPoint(x: rect.midX, y: rect.midY), scale: scale,
             )
         }
+    }
+
+    /// Draws one of the grid's images, made right way up, in this flipped context.
+    private func drawUpright(_ image: CGImage, in frame: CGRect, _ context: CGContext) {
+        context.saveGState()
+        context.translateBy(x: 0, y: frame.minY + frame.maxY)
+        context.scaleBy(x: 1, y: -1)
+        context.draw(image, in: frame)
+        context.restoreGState()
     }
 }
 

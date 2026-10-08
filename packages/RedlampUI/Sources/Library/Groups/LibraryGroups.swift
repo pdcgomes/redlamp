@@ -8,11 +8,12 @@ import RedlampLibrary
 /// own photo IDs (`FolderLibrary.photoIDs`), so the grid's selection is `EditorModel.photoSelection`.
 ///
 /// Grouping reads the column store, so it needs the source shown from the library. It's worked out off the
-/// main thread when the photos, the key or the setting change, one grouping at a time, the last change
-/// grouped once the one before is in; a list grouped by the same key keeps what was open. A group opens or
-/// closes on the main thread in microseconds, with a diff of the grid's items. A closed group's photos are
+/// main thread when the photos, the key, the setting or the stacks change, one grouping at a time, the last
+/// change grouped once the one before is in; a list grouped by the same key keeps what was open. A group opens
+/// or closes on the main thread in microseconds, with a diff of the grid's items. A closed group's photos are
 /// never selected, so nothing out of sight is acted on. Each header's picks are the photos' badges, as the
-/// cells show them, ahead of the index while a culling change reaches it.
+/// cells show them, ahead of the index while a culling change reaches it. Stacks (LIB-28) stay whole in the
+/// group of the photo standing for them, closed inside it as the filmstrip has them (`LibraryStacks`).
 @MainActor
 @Observable
 @_spi(Harness) public final class LibraryGroups {
@@ -64,6 +65,8 @@ import RedlampLibrary
     /// Each photo's ID in the index, by its ID here, for the source they were found for.
     @ObservationIgnored private var indexIDs: [Int64: Int64] = [:]
     @ObservationIgnored private var indexedSource: PhotoSource?
+    /// The stacks' openings and closings counted when the grouping in progress took them.
+    @ObservationIgnored private var stackOpenings = 0
     /// How long the last grouping took off the main thread, for `--library-perf`, and its parts: the photos'
     /// IDs in the index, the engine's grouping handed over, the groups made, and the list of them.
     @ObservationIgnored @_spi(Harness) public private(set) var lastGrouping: Duration = .zero
@@ -130,9 +133,12 @@ import RedlampLibrary
             indexIDs = [:]
             indexedSource = wanted.source
         }
+        let stacks = model.gridStacks
+        stackOpenings = stacks.openings
         let request = Request(
             items: library.items, ids: library.photoIDs, known: indexIDs,
-            sort: library.filters?.sort.query ?? QuerySort(), grouping: wanted,
+            sort: library.filters?.sort.query ?? QuerySort(), grouping: wanted, finder: stacks.finder,
+            stacks: stacks.list, opensStacks: stacks.opensNew,
         )
         // Detached, so the grouping starts at once rather than once the main thread has drawn the change of Group
         // By that asked for it.
@@ -167,6 +173,10 @@ import RedlampLibrary
         var known: [Int64: Int64]
         var sort: QuerySort
         var grouping: Grouping
+        var finder: LibraryStackFinder
+        /// The stacks as the filmstrip shows them, open and closed, and whether stacks come open.
+        var stacks: StackedList?
+        var opensStacks: Bool
     }
 
     private struct Result: Sendable {
@@ -213,7 +223,8 @@ import RedlampLibrary
             own.append(id)
         }
         lap()
-        guard let grouping = try? await engine.grouping() else { return nil }
+        let stacks = await request.finder.stacks(in: index, engine: engine) ?? Stacks()
+        guard let grouping = try? await engine.grouping(stacks: stacks) else { return nil }
         lap()
         let (source, sort) = (request.grouping.source, request.sort)
         let groups = grouping.groups(
@@ -222,7 +233,17 @@ import RedlampLibrary
         )
         lap()
         let relabelled = groups.relabelled(as: PhotoList(source: source, sort: sort, ids: own))
-        let grouped = GroupedList(relabelled, stacks: Stacks())
+        var byIndex: [Int64: Int64] = [:]
+        byIndex.reserveCapacity(indexed.count)
+        for (place, id) in indexed.enumerated() {
+            byIndex[id] = own[place]
+        }
+        var grouped = GroupedList(relabelled, stacks: stacks.relabelled(above: ids.max() ?? -1) { byIndex[$0] })
+        if let shown = request.stacks {
+            grouped.openStacks(as: shown)
+        } else if request.opensStacks {
+            grouped.openAllStacks()
+        }
         lap()
         return Result(grouped: grouped, found: found, grouping: request.grouping, parts: parts)
     }
@@ -231,8 +252,13 @@ import RedlampLibrary
     /// value, or for moments, which keep none from one grouping to the next, by the first of their photos it
     /// had. The same photos in the same groups change only the headers whose names changed.
     private func adopt(_ made: GroupedList) {
+        var made = made
+        if let stacks = model?.libraryViews.stacks, stacks.openings != stackOpenings, let shown = stacks.list {
+            made.openStacks(as: shown)
+        }
         let groups = made.groups
-        if let old = list, old.groups.key == groups.key, let renamed = Self.renamed(old.groups, groups) {
+        if let old = list, old.groups.key == groups.key, let renamed = Self.renamed(old.groups, groups),
+           Self.sameCells(old, made) {
             guard !renamed.isEmpty || old.groups.setting != groups.setting else { return }
             var grouped = made
             Self.open(&grouped, as: old)
@@ -250,6 +276,11 @@ import RedlampLibrary
             showsUnpicked = false
         }
         set(grouped)
+    }
+
+    /// Whether two groupings show the same cells: their stacks are the same, opened alike.
+    private static func sameCells(_ old: GroupedList, _ new: GroupedList) -> Bool {
+        old.stacked.count == new.stacked.count && old.stacked.elementsEqual(new.stacked)
     }
 
     /// The groups whose names changed, when two groupings hold the same photos in the same groups, in the same
@@ -519,6 +550,53 @@ import RedlampLibrary
         changed(.regrouped)
     }
 
+    // MARK: - Stacks
+
+    /// The stacks were found again: the photos are grouped again with them.
+    func restacked() {
+        guard list != nil else { return }
+        regroup()
+    }
+
+    /// Opens the stack whose first cell is `cell` in its group, as `shown`, the filmstrip's stacks, now has it; a
+    /// stack in a closed group opens as its group does.
+    func openStack(_ cell: Int64, as shown: StackedList) {
+        guard var grouped = list else { return }
+        var diff = grouped.openStack(cell)
+        if diff.isEmpty {
+            diff = grouped.openStacks(as: shown)
+        }
+        apply(grouped, diff)
+    }
+
+    /// Closes the open stack `cell` is in, as `shown` now has it.
+    func closeStack(_ cell: Int64, as shown: StackedList) {
+        guard var grouped = list else { return }
+        var diff = grouped.closeStack(cell)
+        if diff.isEmpty {
+            diff = grouped.openStacks(as: shown)
+        }
+        apply(grouped, diff)
+    }
+
+    func openAllStacks() {
+        guard var grouped = list else { return }
+        let diff = grouped.openAllStacks()
+        apply(grouped, diff)
+    }
+
+    func closeAllStacks() {
+        guard var grouped = list else { return }
+        let diff = grouped.closeAllStacks()
+        apply(grouped, diff)
+    }
+
+    private func apply(_ grouped: GroupedList, _ diff: PhotoListDiff) {
+        guard !diff.isEmpty else { return }
+        list = grouped
+        changed(.items(diff))
+    }
+
     /// The active photo became one in a closed group, by a click in the filmstrip or a step that isn't the
     /// grid's: its group opens, so the grid shows it.
     private func revealActivePhoto() {
@@ -536,10 +614,10 @@ import RedlampLibrary
     }
 
     /// The photo on show `offset` (1 or -1) after `id` in the grid's order; from a photo of a closed group,
-    /// the first on show after its group, or the last before it.
+    /// the first on show after its group, or the last before it. A closed stack is its cell.
     func shownPhoto(_ offset: Int, from id: Int64) -> Int64? {
         guard let list, let group = list.groups.index(of: id) else { return nil }
-        if let item = list.index(of: id) {
+        if let item = list.index(of: list.stacked.cell(for: id) ?? id) {
             let next = item + offset
             if list.indices.contains(next), case let .photo(photo) = list[next] {
                 return photo
@@ -547,8 +625,7 @@ import RedlampLibrary
         }
         var next = group + offset
         while list.groups.indices.contains(next) {
-            if list.isOpen(next), let photo = offset > 0 ? list.groups.photos(ofGroup: next).first
-                : list.groups.photos(ofGroup: next).last {
+            if list.isOpen(next), let photo = Self.cell(atEdgeOf: next, first: offset > 0, in: list) {
                 return photo
             }
             next += offset
@@ -561,34 +638,45 @@ import RedlampLibrary
         guard let list else { return nil }
         let order = first ? Array(list.groups.indices) : Array(list.groups.indices.reversed())
         for group in order where list.isOpen(group) {
-            let photos = list.groups.photos(ofGroup: group)
-            if let photo = first ? photos.first : photos.last {
+            if let photo = Self.cell(atEdgeOf: group, first: first, in: list) {
                 return photo
             }
         }
         return nil
     }
 
-    /// The photos on show from `start` through `end`, in the grid's order, both on show.
+    /// Open group `group`'s first cell, or its last; nil when it has none.
+    private static func cell(atEdgeOf group: Int, first: Bool, in list: GroupedList) -> Int64? {
+        let cells = list.cellCount(of: group)
+        guard cells > 0 else { return nil }
+        let header = list.index(ofHeader: group)
+        if case let .photo(photo) = list[header + (first ? 1 : cells)] {
+            return photo
+        }
+        return nil
+    }
+
+    /// The photos on show from `start` through `end`, in the grid's order, both on show, and every photo of the
+    /// closed stacks among them.
     func shownPhotos(from start: Int64, through end: Int64) -> [Int64] {
         guard let list, let first = list.index(of: start), let last = list.index(of: end) else { return [] }
         var photos: [Int64] = []
         for item in min(first, last) ... max(first, last) {
             if case let .photo(photo) = list[item] {
-                photos.append(photo)
+                photos += list.stacked.photos(of: photo)
             }
         }
         return photos
     }
 
-    /// The photos on show, in the grid's order.
+    /// The photos on show, in the grid's order, with every photo of the closed stacks.
     @_spi(Harness) public var shownPhotos: [Int64] {
         guard let list else { return [] }
         var photos: [Int64] = []
         photos.reserveCapacity(list.count)
         for item in list {
             if case let .photo(photo) = item {
-                photos.append(photo)
+                photos += list.stacked.photos(of: photo)
             }
         }
         return photos

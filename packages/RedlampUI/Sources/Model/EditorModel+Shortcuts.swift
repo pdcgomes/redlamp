@@ -39,9 +39,10 @@ public extension EditorModel {
         guard action.isAvailable else { return false }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
-        if let performed = performPainterShortcut(action) ?? performSourceShortcut(action)
-            ?? performModuleShortcut(action) ?? performGridShortcut(action) ?? performPanelShortcut(action)
-            ?? performFileShortcut(action) ?? performCullingShortcut(action, shifted: shifted) {
+        if let performed = performStackShortcut(action, shifted: shifted) ?? performPainterShortcut(action)
+            ?? performSourceShortcut(action) ?? performModuleShortcut(action) ?? performGridShortcut(action)
+            ?? performPanelShortcut(action) ?? performFileShortcut(action)
+            ?? performCullingShortcut(action, shifted: shifted) {
             return performed
         }
         switch action {
@@ -205,9 +206,9 @@ public extension EditorModel {
         }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
-        if let available = canPerformPainterShortcut(action) ?? canPerformSourceShortcut(action)
-            ?? canPerformModuleShortcut(action) ?? canPerformGridShortcut(action) ?? canPerformPanelShortcut(action)
-            ?? canPerformFileShortcut(action) ?? canPerformCullingShortcut(action) {
+        if let available = canPerformStackShortcut(action) ?? canPerformPainterShortcut(action)
+            ?? canPerformSourceShortcut(action) ?? canPerformModuleShortcut(action) ?? canPerformGridShortcut(action)
+            ?? canPerformPanelShortcut(action) ?? canPerformFileShortcut(action) ?? canPerformCullingShortcut(action) {
             return available
         }
         let photo = info != nil

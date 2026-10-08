@@ -98,10 +98,18 @@ extension EditorModel {
     }
 
     /// ⇧ with a click or an arrow key while grouped: the photos on show from the photo last clicked or moved
-    /// to without ⇧ through `url`, in the grid's order, `url` active. Other clicks are `click`'s.
+    /// to without ⇧ through `url`, in the grid's order, `url` active, with every photo of the closed stacks
+    /// among them. Ungrouped among stacks, `clickInStacks`'s; other clicks are `click`'s.
     func clickInGrid(_ url: URL, toggling: Bool = false, extending: Bool = false) {
         let groups = gridGroups
+        guard groups.list != nil || libraryViews.stacks?.list == nil else {
+            return clickInStacks(url, toggling: toggling, extending: extending)
+        }
+        defer { coverClosedStacks() }
         guard extending, !toggling, groups.list != nil, let id = library.photoID(of: url) else {
+            if toggling, !extending, groups.list != nil, libraryViews.stacks?.list != nil {
+                return clickInStacks(url, toggling: true)
+            }
             return click(url, toggling: toggling, extending: extending)
         }
         let anchor = [selectionAnchor, selection].compactMap(\.self).first { library.index(of: $0) != nil }
@@ -250,7 +258,8 @@ extension EditorModel {
             return groups.shownPhoto(action == .nextPhoto ? 1 : -1, from: id) != nil
         case .selectAllPhotos:
             guard let list, outline.someClosed else { return nil }
-            return selection != nil && photoSelection.count < list.count - list.groups.count
+            let shown = list.groups.indices.reduce(0) { $0 + (list.isOpen($1) ? list.groups[$1].count : 0) }
+            return selection != nil && photoSelection.count < shown
         default:
             guard CullingChange(action) != nil, module == .library, photoSelection.isEmpty, activePhotoIsClosed else {
                 return nil

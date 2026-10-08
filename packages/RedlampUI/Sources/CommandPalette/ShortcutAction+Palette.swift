@@ -54,6 +54,12 @@ extension ShortcutAction {
         .openAllGroups: ["group", "open", "expand", "all", "library"],
         .closeAllGroups: ["group", "close", "collapse", "all", "library"],
         .unpickedMoments: ["moment", "unpicked", "coverage", "no pick", "missing", "cull", "library"],
+        .toggleStack: ["stack", "open", "close", "collapse", "expand", "burst", "raw and jpeg", "pair", "library"],
+        .stackPhotos: ["stack", "group into stack", "make stack", "bundle", "burst", "library"],
+        .unstackPhotos: ["stack", "unstack", "split", "take out", "remove from stack", "library"],
+        .moveToStackTop: ["stack", "top", "cover", "pick", "move to top", "library"],
+        .openAllStacks: ["stack", "open", "expand", "all", "every photo", "raw and jpeg", "library"],
+        .closeAllStacks: ["stack", "close", "collapse", "all", "library"],
         .previousGroup: ["group", "moment", "previous", "back", "jump"],
         .nextGroup: ["group", "moment", "next", "jump", "skip"],
         .keywordSet1: ["keyword", "tag", "keyword set", "apply", "library"],
@@ -214,6 +220,12 @@ extension ShortcutAction {
         case .openAllGroups: "rectangle.expand.vertical"
         case .closeAllGroups: "rectangle.compress.vertical"
         case .unpickedMoments: "flag.slash"
+        case .toggleStack: "square.stack"
+        case .stackPhotos: "square.stack.fill"
+        case .unstackPhotos: "square.on.square.dashed"
+        case .moveToStackTop: "arrow.up.square"
+        case .openAllStacks: "arrow.up.left.and.arrow.down.right"
+        case .closeAllStacks: "arrow.down.right.and.arrow.up.left"
         case .previousGroup: "chevron.left.2"
         case .nextGroup: "chevron.right.2"
         case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,

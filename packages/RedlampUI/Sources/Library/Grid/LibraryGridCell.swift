@@ -20,7 +20,26 @@ final class LibraryGridCell {
     private var badges: [Badge: CALayer] = [:]
 
     private enum Badge: Hashable {
-        case flag, stack, edited, rating, cloud, mark
+        case flag, stack, edited, rating, cloud, mark, stackCount, pairText
+    }
+
+    /// A frame of a focus stack the app suggests merging (LIB-28).
+    var isFocusSuggested = false {
+        didSet {
+            if isFocusSuggested != oldValue {
+                showBadges(of: item)
+            }
+        }
+    }
+
+    /// What the cell shows of the stacks it's the first cell of (LIB-28): a burst's or a stack made by hand's
+    /// count, and a raw and its JPEG's other extensions.
+    var stackBadges: (count: GridBadges.Kind?, pair: GridBadges.Kind?) = (nil, nil) {
+        didSet {
+            if stackBadges.count != oldValue.count || stackBadges.pair != oldValue.pair {
+                showBadges(of: item)
+            }
+        }
     }
 
     /// The row it shows.
@@ -169,6 +188,18 @@ final class LibraryGridCell {
         root.isHidden = true
         item = nil
         row = -1
+        stackBadges = (nil, nil)
+    }
+
+    /// The stack badge at `point`, in the cell: whether it's a raw and its JPEG's rather than a stack's count; nil
+    /// for none.
+    func stackBadge(at point: CGPoint) -> Bool? {
+        for (badge, pair) in [(Badge.stackCount, false), (.pairText, true)] {
+            if let layer = badges[badge], !layer.isHidden, layer.frame.insetBy(dx: -3, dy: -3).contains(point) {
+                return pair
+            }
+        }
+        return nil
     }
 
     private func updateBackground() {
@@ -195,9 +226,10 @@ final class LibraryGridCell {
         case nil: slots ? .flagSlot : nil
         }
         set(.flag, shows ? flag : nil, centre: geometry.flag)
+        let document = item.map { SupportedFormats.isStack($0.url) } == true
         set(
             .stack,
-            shows && item.map { SupportedFormats.isStack($0.url) } == true ? .stack : nil,
+            shows && document ? .stack : shows && isFocusSuggested ? .focusSuggestion : nil,
             centre: geometry.stack,
         )
         set(.mark, shows && metadata.mark ? .mark : slots ? .markSlot : nil, centre: geometry.mark)
@@ -209,6 +241,7 @@ final class LibraryGridCell {
         set(.cloud, item?.isLocal == false && thumbnail.contents == nil ? .cloud : nil, centre: CGPoint(
             x: geometry.image.midX, y: geometry.image.midY,
         ))
+        showStackBadges(besideDocument: shows && badges[.stack]?.isHidden == false)
         let colour = GridBadges.color(of: metadata)
         if shows, let colour {
             let layer = label ?? makeLayer { label = $0 }
@@ -231,6 +264,29 @@ final class LibraryGridCell {
             chip?.isHidden = true
         }
         text?.isHidden = geometry.style != .expanded || text?.contents == nil
+    }
+
+    /// A stack's count and a pair's extensions, shown in every style, since a cell standing for several photos
+    /// acts on them all: in a compact cell along its top, the count left of the mark (and of a focus stack's
+    /// badge, `besideDocument`) and the extensions right of the flag; over an expanded cell's thumbnail's top left
+    /// corner, side by side.
+    private func showStackBadges(besideDocument: Bool) {
+        let (count, pair) = stackBadges
+        guard item != nil else {
+            set(.stackCount, nil)
+            set(.pairText, nil)
+            return
+        }
+        if geometry.style == .expanded {
+            let image = geometry.image
+            let countWidth = count.map { $0.size.width + 3 } ?? 0
+            set(.stackCount, count, left: CGPoint(x: image.minX + 3, y: image.minY + 10))
+            set(.pairText, pair, left: CGPoint(x: image.minX + 3 + countWidth, y: image.minY + 10))
+        } else {
+            let right = geometry.size - (besideDocument ? 34 : 18)
+            set(.stackCount, count, left: CGPoint(x: right - (count?.size.width ?? 0), y: 9))
+            set(.pairText, pair, left: CGPoint(x: 18, y: 9))
+        }
     }
 
     private func set(_ badge: Badge, _ kind: GridBadges.Kind?, centre: CGPoint? = nil, left: CGPoint? = nil) {

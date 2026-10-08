@@ -77,8 +77,8 @@ public extension EditorModel {
     }
 
     /// The photos a rubber band covers in the grid, by row, alone or, with ⇧ or ⌘, added to `base`, the
-    /// selection when the band started. The active photo stays active while it's selected; a band that
-    /// covers nothing leaves it selected alone.
+    /// selection when the band started, with every photo of the closed stacks it covers. The active photo stays
+    /// active while it's selected; a band that covers nothing leaves it selected alone.
     internal func selectInBand(_ rows: [Int], adding base: PhotoSelection?) {
         let list = library.photoList
         let ids = library.photoIDs
@@ -91,6 +91,9 @@ public extension EditorModel {
         }
         if next.isEmpty, let activeID {
             next.select(activeID, in: list)
+        }
+        if let stacked = libraryViews.stacks?.list, let covered = next.covering(stacked, active: next.active) {
+            next = covered
         }
         guard next != photoSelection else { return }
         photoSelection = next

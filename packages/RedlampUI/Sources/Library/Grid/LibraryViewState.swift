@@ -75,6 +75,8 @@ public final class LibraryViewState {
     public internal(set) var looseness = 0
     /// The grid's groups, made as the grid or a group's action first asks for them.
     @ObservationIgnored var groups: LibraryGroups?
+    /// The stacks the grid and the filmstrip show (LIB-28), made as they or a stack's action first ask for them.
+    @ObservationIgnored var stacks: LibraryStacks?
     /// The photo at the top of the grid as it was last scrolled.
     @ObservationIgnored var topPhoto: URL?
     /// Where a source's grid goes back to when it's shown: set as the source's view is restored, and

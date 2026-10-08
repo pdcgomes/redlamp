@@ -287,6 +287,14 @@ public extension FeedbackArea {
                     "Filmstrip and Selecting Photos",
                     ["filmstrip", "select", "next photo", "previous photo"],
                 ),
+                FeedbackFeature(
+                    "stacks",
+                    "Stacks, Bursts and Raw and JPEG Pairs",
+                    [
+                        "stack", "stacks", "burst", "bursts", "raw and jpeg", "raw+jpeg", "pair", "unstack",
+                        "group into stack", "top of stack", "collapse", "expand",
+                    ],
+                ),
                 FeedbackFeature("thumbnails", "Thumbnails", ["thumbnail", "preview", "blank thumbnail"]),
                 FeedbackFeature(
                     "ratings",

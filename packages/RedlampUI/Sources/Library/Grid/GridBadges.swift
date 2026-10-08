@@ -8,6 +8,8 @@ import RedlampDocument
 enum GridBadges {
     enum Kind: Hashable {
         case pick, reject, stack, edited, cloud
+        /// A frame of a focus stack the app suggests merging, confirmed from the thumbnails (LIB-28).
+        case focusSuggestion
         /// Edited, shown from its embedded preview until the library has rendered the edit (LIB-17).
         case uneditedPreview
         case rating(Int)
@@ -16,17 +18,33 @@ enum GridBadges {
         /// An expanded cell's places to click: five stars with `stars` of them lit, a flag and a mark.
         case ratingSlots(Int)
         case flagSlot, markSlot
+        /// The first cell of a burst or a stack made by hand (LIB-28): its photos, a raw and its JPEG counting once,
+        /// filled while it's closed and outlined while it's open.
+        case stackCount(Int, open: Bool)
+        /// The first cell of a raw and its JPEG shown as one: the others' extensions (`+JPG`), filled while it's
+        /// closed and outlined while it's open.
+        case pairText(String, open: Bool)
 
         /// The badge's size in points.
         var size: CGSize {
             switch self {
-            case .pick, .reject, .stack, .edited, .uneditedPreview, .mark, .flagSlot, .markSlot:
+            case .pick, .reject, .stack, .edited, .uneditedPreview, .mark, .flagSlot, .markSlot, .focusSuggestion:
                 CGSize(width: 16, height: 16)
             case .cloud: CGSize(width: 24, height: 24)
             case let .rating(stars): CGSize(width: 8 + CGFloat(stars) * 7, height: 11)
             case .ratingSlots: CGSize(width: 8 + 5 * 7, height: 11)
+            case let .stackCount(count, _): CGSize(width: GridBadges.textWidth("\(count)") + 9, height: 14)
+            case let .pairText(text, _): CGSize(width: GridBadges.textWidth(text) + 9, height: 14)
             }
         }
+    }
+
+    private nonisolated static var textFont: NSFont {
+        NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .semibold)
+    }
+
+    nonisolated static func textWidth(_ text: String) -> CGFloat {
+        (text as NSString).size(withAttributes: [.font: textFont]).width.rounded(.up)
     }
 
     private struct Key: Hashable {
@@ -79,6 +97,13 @@ enum GridBadges {
         case .stack:
             Symbol.draw(
                 "square.stack.3d.down.right.fill", pointSize: 8, color: white.opacity(0.85), centeredAt: middle,
+                scale: scale,
+            )
+        case .focusSuggestion:
+            context.setFillColor(shade)
+            context.fillEllipse(in: CGRect(origin: .zero, size: size))
+            Symbol.draw(
+                "square.stack.3d.down.right", pointSize: 8, color: white.opacity(0.85), centeredAt: middle,
                 scale: scale,
             )
         case .edited:
@@ -134,8 +159,34 @@ enum GridBadges {
             Symbol.draw("flag", pointSize: 8, color: white.opacity(0.3), centeredAt: middle, scale: scale)
         case .markSlot:
             Symbol.draw("circle", pointSize: 8, color: white.opacity(0.3), centeredAt: middle, scale: scale)
+        case let .stackCount(count, open):
+            drawPill("\(count)", open: open, size: size, in: context)
+        case let .pairText(text, open):
+            drawPill(text, open: open, size: size, in: context)
         }
         return context.makeImage()
+    }
+
+    /// A stack's or a pair's badge: `text` in a pill, filled while closed and outlined while open.
+    private static func drawPill(_ text: String, open: Bool, size: CGSize, in context: CGContext) {
+        let pill = CGPath(
+            roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5), cornerWidth: 4,
+            cornerHeight: 4, transform: nil,
+        )
+        context.addPath(pill)
+        if open {
+            context.setStrokeColor(NSColor(white: 1, alpha: 0.55).cgColor)
+            context.setLineWidth(1)
+            context.strokePath()
+        } else {
+            context.setFillColor(NSColor(white: 0.08, alpha: 0.78).cgColor)
+            context.fillPath()
+        }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: textFont, .foregroundColor: NSColor(white: 1, alpha: open ? 0.75 : 0.9),
+        ]
+        let width = (text as NSString).size(withAttributes: attributes).width
+        (text as NSString).draw(at: CGPoint(x: (size.width - width) / 2, y: 1.5), withAttributes: attributes)
     }
 
     /// The colour a label's bar and chip are drawn in: a custom label's is neutral.

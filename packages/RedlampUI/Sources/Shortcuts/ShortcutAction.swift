@@ -118,6 +118,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case groupByNone, groupByMoment, groupByDay, groupByFolder, groupByCamera, groupByLens, groupByOrientation
     case groupByMomentCamera, tighterMoments, looserMoments, toggleGroup, openAllGroups, closeAllGroups
     case unpickedMoments
+    case toggleStack, stackPhotos, unstackPhotos, moveToStackTop, openAllStacks, closeAllStacks
     case keywordSet1, keywordSet2, keywordSet3, keywordSet4, keywordSet5, keywordSet6, keywordSet7, keywordSet8
     case keywordSet9
     case importKeywords, exportKeywords, editCaptureTime
@@ -181,6 +182,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
              .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
              .openAllGroups, .closeAllGroups, .unpickedMoments,
+             .toggleStack, .stackPhotos, .unstackPhotos, .moveToStackTop, .openAllStacks, .closeAllStacks,
              .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9, .importKeywords, .exportKeywords, .editCaptureTime, .renamePhotos,
              .moveToFolder, .keywordPainter:
@@ -271,6 +273,12 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openAllGroups: "Open All Groups"
         case .closeAllGroups: "Close All Groups"
         case .unpickedMoments: "Only Moments without a Pick"
+        case .toggleStack: "Open / Close Stack"
+        case .stackPhotos: "Group into Stack"
+        case .unstackPhotos: "Unstack"
+        case .moveToStackTop: "Move to Top of Stack"
+        case .openAllStacks: "Open All Stacks"
+        case .closeAllStacks: "Close All Stacks"
         case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9:
             "Keyword Set: Keyword \(keywordSetNumber ?? 0)"
@@ -427,6 +435,12 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
              .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup, .openAllGroups,
              .closeAllGroups, .unpickedMoments: []
+        // Lightroom Classic's Collapse / Expand Stack, Group into Stack, Unstack and Move to Top of Stack.
+        case .toggleStack: [.char("s")]
+        case .stackPhotos: [.char("g", command: true)]
+        case .unstackPhotos: [.char("g", shift: true, command: true)]
+        case .moveToStackTop: [.char("s", shift: true)]
+        case .openAllStacks, .closeAllStacks: []
         case .renamePhotos: [KeyCombo(.function(2))]
         case .moveToFolder: []
         // Lightroom Classic's Enable Painting.

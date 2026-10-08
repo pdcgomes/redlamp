@@ -10,9 +10,18 @@ enum PanelChange: Sendable, Hashable {
     case captureTime(CaptureTimeChange)
     /// The Collections section's changes (LIB-23), batches of the metadata journal.
     case collections(CollectionChange)
+    /// Stacks made, taken apart or given another top (LIB-28), batches of the metadata journal.
+    case stacks(StackChange)
 
     var isKeywords: Bool {
         if case .keywords = self {
+            return true
+        }
+        return false
+    }
+
+    var isStacks: Bool {
+        if case .stacks = self {
             return true
         }
         return false
@@ -55,6 +64,14 @@ extension LibraryService {
         LibraryMetadata(index: core.index, paths: core.paths, live: core.live)
     }
 
+    /// The library's stacks as its index has them now, which a stack's change is planned against.
+    private nonisolated static func stacks(_ core: LibraryCore) async throws -> Stacks {
+        if !core.engine.isLoaded {
+            try await core.engine.load()
+        }
+        return try await StackFinder.find(in: core.index, store: core.engine.store ?? ColumnStore())
+    }
+
     /// Makes `change` as one batch, off the main thread in the library's changes' turn, `progress` hearing how
     /// many sidecars are written of how many; its photos' lists hear of it as the index holds it. A keyword
     /// batch a forced quit left unfinished is finished first.
@@ -67,6 +84,7 @@ extension LibraryService {
                 case let .metadata(change): try await .metadata(metadata.plan(change))
                 case let .captureTime(change): try await .metadata(metadata.plan(change))
                 case let .collections(change): try await .metadata(metadata.collections.plan(change))
+                case let .stacks(change): try await .metadata(metadata.plan(change, in: Self.stacks(core)))
                 }
             }
             Self.collectionsChanged(by: change, in: core)
@@ -120,6 +138,11 @@ extension LibraryService {
                         return .metadata(plan)
                     }
                     return try await .metadata(metadata.collections.plan(change))
+                case let .stacks(change):
+                    if let undo, let plan = try? await metadata.planRedo(undo) {
+                        return .metadata(plan)
+                    }
+                    return try await .metadata(metadata.plan(change, in: Self.stacks(core)))
                 }
             }
             Self.collectionsChanged(by: change, in: core)

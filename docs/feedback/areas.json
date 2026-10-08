@@ -410,6 +410,10 @@
           "title" : "Filmstrip and Selecting Photos"
         },
         {
+          "id" : "library.stacks",
+          "title" : "Stacks, Bursts and Raw and JPEG Pairs"
+        },
+        {
           "id" : "library.thumbnails",
           "title" : "Thumbnails"
         },
