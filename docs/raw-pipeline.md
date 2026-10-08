@@ -119,6 +119,8 @@ The pyramid holds balanced camera RGB. `ImageSession` (`ImageSession.swift`) set
 
 Each render, `rl_develop` (`Develop.metal`) multiplies balanced camera RGB by `ImageSession.whiteBalanceRatio(for:)`, the gains from the as-shot balance to the requested one (Temperature and Tint through `CameraColorModel`, which still uses one matrix even for DNGs), then by `cameraToWorking(for:)`. A DNG profile's HueSatMap (process 4 on) and ProfileGainTableMap (process 5 on) apply after that; BaselineExposure is added to Exposure. Tone mapping and gamut mapping to the output follow; they aren't raw-specific and aren't described here.
 
+Temperature and Tint give the white's chromaticity by Robertson's method (`ColorTemperature`), Tint being a distance from the Planckian locus; the camera's matrix turns that white into a camera neutral, whose inverse gives the gains (`CameraColorModel.multipliers(for:)`). Low temperatures with a strong positive tint reach past x + y = 1, where Z would be negative and no light lies, so such a white is scaled back onto that line, keeping x : y.
+
 ## 10. Lens corrections
 
 `LensCorrection` (`packages/RedlampEngineAPI/Sources/LensCorrection.swift`) holds one radial model from any source: the file's own (DNG OpcodeList3, Sony, Fujifilm) or a user's LCP profile. Each source has the first process version that applies it (`Source.process`), enforced in `Geometry`: edits made before a source was supported keep rendering without it. Distortion and lateral chromatic aberration are applied as warps of source coordinates in the develop kernel (`outputToImage` in `Develop.metal`), red and blue each read from where the lens put them.
@@ -166,6 +168,7 @@ Each render, `rl_develop` (`Develop.metal`) multiplies balanced camera RGB by `I
 - Anything that decides not to unpack runs before `libraw_unpack`, which clears LibRaw's data when it fails.
 - Gain maps apply after hot-photosite repair and highlight reconstruction, not in the DNG specification's opcode order, so clipping is judged at the sensor's own levels.
 - Mosaic normalisation keeps values above 1; linear normalisation clamps to 1.
+- A white past x + y = 1 is scaled back onto that line in `ColorTemperature.xyz(for:)`. Without it, a low temperature with a strong positive tint takes a camera's blue neutral to zero or below, `CameraColorModel.multipliers(for:)` gives blue a gain in the hundreds of thousands, and the whole photo renders one blue (#342).
 - The decode service sees only bytes: anything that needs the file system (the user's lens profiles) runs in the app after decoding, and `Header.isValid` is the only check on what the service returns.
 - A missing decode service falls back to decoding in the app without saying so.
 - A throw while a Metal encoder is open aborts under the validation layer, which every test target turns on: validate before encoding.

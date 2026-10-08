@@ -115,8 +115,11 @@ public enum ColorTemperature {
         return WhiteBalanceValue(temperature: 5000, tint: 0)
     }
 
-    /// XYZ (Y = 1) for a chromaticity.
+    /// XYZ (Y = 1) for a chromaticity. Past x + y = 1, where low temperatures with a strong
+    /// positive tint reach, Z would be negative, a colour no light has: the chromaticity is scaled
+    /// back to that line, keeping x : y.
     public static func xyz(for xy: SIMD2<Double>) -> SIMD3<Double> {
-        SIMD3(xy.x / xy.y, 1, (1 - xy.x - xy.y) / xy.y)
+        let xy = xy / max(xy.x + xy.y, 1)
+        return SIMD3(xy.x / xy.y, 1, max(1 - xy.x - xy.y, 0) / xy.y)
     }
 }
