@@ -716,6 +716,72 @@ struct EngineMemoryTests {
         #expect(held == 0, "\(held >> 20) MB of textures held, \(masks >> 20) MB of them the masks'")
     }
 
+    /// The editor window closed while the Masking tool's warm-up rendered the photo's analysis and
+    /// a mask its matte, after another photo was visited: once the renders finish, nothing keeps
+    /// either photo, its renders, or Segment Anything's embedding of it.
+    @Test(.enabled(if: EngineSmokeTests.canRender && closed != nil && next != nil))
+    func `renders that finish after the window closed keep nothing of their photo`() async throws {
+        let engine = try RedlampEngine()
+        let (first, second) = try (#require(Self.closed), #require(Self.next))
+        weak var visited: ImageSession?
+        weak var photo: ImageSession?
+        // Holds the render queue, so the renders queued behind it finish after the release.
+        let gate = DispatchSemaphore(value: 0)
+        func queued() -> Bool {
+            engine.analysisWork.withLock { $0.analysisRenders == 2 && $0.matteRenders == 1 }
+        }
+        // The photo visited before keeps its analysis until the release has let go of it.
+        func released() -> Bool {
+            engine.keptAnalyses.withLock { $0.isEmpty }
+        }
+        do {
+            defer { gate.signal() }
+            _ = try await engine.open(first)
+            let earlier = try #require(engine.currentSession())
+            visited = earlier
+            _ = try await engine.analysisImage(for: earlier)
+            _ = try await engine.open(second)
+            let session = try #require(engine.currentSession())
+            photo = session
+            engine.renderQueue.async { gate.wait() }
+            engine.warmUpMasks()
+            let matte = Task { try await engine.matteImage(for: session) }
+            for _ in 0 ..< 500 where !queued() {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            try #require(queued())
+            let release = Task { await engine.releaseResources() }
+            for _ in 0 ..< 500 where !released() {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            try #require(released())
+            gate.signal()
+            await release.value
+            _ = try await matte.value
+            await engine.warmUp.withLock { $0 }?.value
+            // A mask that reaches Segment Anything after the release.
+            if MaskRenderTests.samIsInstalled {
+                let analysis = try await engine.analysisImage(for: session)
+                _ = try await engine.objectEmbedding(analysis, segmenter: engine.objectSegmenter())
+            }
+        }
+        for _ in 0 ..< 150 where visited != nil || photo != nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let photoBytes = photo?.allocatedBytes ?? 0
+        let renderBytes = [engine.analysisCache.withLock { $0?.image }, engine.matteCache.withLock { $0?.image }]
+            .compactMap(\.self).reduce(0) { $0 + $1.bytesPerRow * $1.height }
+        let keptAnalyses = engine.keptAnalyses.withLock { $0.count }
+        let embeddingBytes = engine.objectEmbeddingCache.withLock { $0?.embedding.data().count ?? 0 }
+        #expect(visited == nil)
+        withKnownIssue {
+            #expect(photo == nil, "\(photoBytes) bytes of the photo kept")
+            #expect(renderBytes == 0, "\(renderBytes) bytes of its analysis and matte renders kept")
+            #expect(keptAnalyses == 0, "\(keptAnalyses) kept analyses")
+            #expect(embeddingBytes == 0, "\(embeddingBytes) bytes of its embedding kept")
+        }
+    }
+
     /// The photo open now, fitted in a canvas.
     static func frame(_ engine: RedlampEngine, _ recipe: EditRecipe) async throws {
         var frames = engine.frames().makeAsyncIterator()
