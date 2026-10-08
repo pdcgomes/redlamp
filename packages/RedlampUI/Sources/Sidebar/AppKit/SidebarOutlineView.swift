@@ -21,6 +21,10 @@ final class SidebarNode: NSObject {
         case folder(FolderRow)
         /// Recently Trashed, after the folders (LIB-26).
         case recentlyTrashed(TrashRow)
+        /// A Library entry, a check of Library Health, or a place in the collection list (LIB-23).
+        case source(SourceRow)
+        /// Library Health's checks, inside it (LIB-40).
+        case libraryHealth
     }
 
     /// Updated in place by lists that reload one row at a time (the Folders panel).
@@ -229,12 +233,13 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         return row
     }
 
-    /// The current history step, and the open folder or Recently Trashed.
+    /// The current history step, and the open folder, Recently Trashed or the source shown.
     static func isHighlighted(_ node: SidebarNode?) -> Bool {
         switch node?.kind {
         case let .history(_, _, current, _): current
         case let .folder(folder): folder.isOpen
         case let .recentlyTrashed(trash): trash.isOpen
+        case let .source(source): source.isShown
         default: false
         }
     }
@@ -276,26 +281,31 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
             model.goToHistory(index)
         case let .earlierStep(step, session):
             model.restoreHistory(step, from: session)
-        case .group, .session:
+        case .group, .session, .libraryHealth:
             toggle(node)
         case let .folder(folder):
-            clicked(node, folder)
+            if !clickedChevron(of: node) {
+                open(folder)
+            }
         case .recentlyTrashed:
             model.showRecentlyTrashed()
+        case let .source(source):
+            if !clickedChevron(of: node) {
+                model.librarySources.show(source.source)
+            }
         default:
             break
         }
     }
 
-    /// The chevron expands a folder; the rest of its row opens it.
-    private func clicked(_ node: SidebarNode, _ folder: FolderRow) {
+    /// The chevron expands a folder or a set, and the rest of its row opens it: false when the click wasn't on
+    /// the chevron.
+    private func clickedChevron(of node: SidebarNode) -> Bool {
         let location = convert(window?.currentEvent?.locationInWindow ?? .zero, from: nil)
         let chevronEnd = frameOfCell(atColumn: 0, row: clickedRow).minX + SidebarCellView.Layout.chevronSize.width + 4
-        if isExpandable(node), location.x < chevronEnd {
-            toggle(node)
-        } else {
-            open(folder)
-        }
+        guard isExpandable(node), location.x < chevronEnd else { return false }
+        toggle(node)
+        return true
     }
 
     /// Shows the folder in the filmstrip, unless it's missing or has nothing to show.

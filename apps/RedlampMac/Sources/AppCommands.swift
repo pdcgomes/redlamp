@@ -228,6 +228,8 @@ struct AppCommands: Commands {
             commandItem(.toggleRightPanel)
             toggle(.showPhotosInSubfolders, isOn: model.library.includesSubfolders)
             item(.showRecentlyTrashed)
+            // The Library panel's entries (LIB-23).
+            ForEach([ShortcutAction.showAllPhotographs, .showPreviousImport, .showMarked, .showRejected]) { item($0) }
             Menu("Develop Panels") {
                 ForEach(ShortcutAction.allCases.filter { $0.category == .panels && $0.isMenuShortcut }) { item($0) }
             }

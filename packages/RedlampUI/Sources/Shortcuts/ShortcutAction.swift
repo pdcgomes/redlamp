@@ -109,6 +109,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     /// Library
     case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder, showPhotosInSubfolders
     case showRecentlyTrashed, putBack, putBackBatch
+    case showAllPhotographs, showPreviousImport, showMarked, showRejected
     case toggleFilterBar, toggleFilters, lockFilters
     case sortByFolder, sortByCaptureTime, sortByName, sortByRating, sortByEditTime, sortByModified, sortByFileSize
     case reverseSort
@@ -170,6 +171,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
             .modules
         case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder, .showPhotosInSubfolders,
              .showRecentlyTrashed, .putBack, .putBackBatch,
+             .showAllPhotographs, .showPreviousImport, .showMarked, .showRejected,
              .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
              .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort,
              .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
@@ -230,6 +232,10 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .showRecentlyTrashed: "Show Recently Trashed"
         case .putBack: "Put Back"
         case .putBackBatch: "Put Back Whole Batch"
+        case .showAllPhotographs: "Show All Photographs"
+        case .showPreviousImport: "Show Previous Import"
+        case .showMarked: "Show Marked"
+        case .showRejected: "Show Rejected"
         case .toggleFilterBar: "Show / Hide Filter Bar"
         case .toggleFilters: "Enable Filters"
         case .lockFilters: "Lock Filters"
@@ -392,7 +398,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .toggleFilters: [.char("l", command: true)]
         case .showPhotosInSubfolders, .showRecentlyTrashed, .putBackBatch, .lockFilters, .sortByFolder,
              .sortByCaptureTime, .sortByName, .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize,
-             .reverseSort: []
+             .reverseSort, .showAllPhotographs, .showPreviousImport, .showRejected: []
+        // Lightroom Classic's Show Quick Collection.
+        case .showMarked: [.char("b", command: true)]
         // Lightroom Classic's keys for the active keyword set's nine keywords.
         case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9:

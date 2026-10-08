@@ -103,6 +103,16 @@ final class SidebarCellView: NSTableCellView {
         case let .recentlyTrashed(row):
             setAccessibilityIdentifier("folders.recently-trashed")
             show(Self.trashDecoration(row))
+        case let .source(row):
+            setAccessibilityIdentifier(row.identifier)
+            if row.hasChildren {
+                showChevron()
+            }
+            show(Self.sourceDecoration(row))
+        case .libraryHealth:
+            setAccessibilityIdentifier("sources.health")
+            showChevron()
+            show(Self.healthDecoration)
         }
         if let symbol {
             showIcon(symbol)
@@ -133,6 +143,11 @@ final class SidebarCellView: NSTableCellView {
     /// Shows Recently Trashed's row as it is now, in place.
     func refreshTrash(_ row: TrashRow) {
         show(Self.trashDecoration(row))
+    }
+
+    /// Shows a source's row as it is now, in place: a count that changes sets its text and nothing else.
+    func refreshSource(_ row: SourceRow) {
+        show(Self.sourceDecoration(row))
     }
 
     /// Shows `shown` over what the row showed.
@@ -288,6 +303,10 @@ final class SidebarCellView: NSTableCellView {
             }
         case let .folder(row):
             return Self.folderMenu(row, model: model)
+        case let .source(row):
+            return Self.sourceMenu(row, model: model)
+        case .libraryHealth:
+            return Self.healthMenu(model: model)
         default:
             return nil
         }

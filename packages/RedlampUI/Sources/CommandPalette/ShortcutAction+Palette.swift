@@ -19,6 +19,10 @@ extension ShortcutAction {
         .showRecentlyTrashed: ["trash", "recently deleted", "deleted", "bin", "removed", "put back", "library"],
         .putBack: ["trash", "restore", "undelete", "recover", "deleted", "put back", "library"],
         .putBackBatch: ["trash", "restore", "undelete", "recover", "batch", "all", "put back", "library"],
+        .showAllPhotographs: ["all photos", "every photo", "catalog", "everything", "library"],
+        .showPreviousImport: ["import", "last import", "recent", "new photos", "card", "library"],
+        .showMarked: ["marked", "quick collection", "mark", "b", "library"],
+        .showRejected: ["rejects", "rejected", "flagged", "x", "library"],
         .toggleFilterBar: ["filter", "search", "find", "query", "library filter", "text", "attribute", "metadata"],
         .toggleFilters: ["filter", "filters off", "turn off", "library"],
         .lockFilters: ["filter", "lock", "keep", "every folder", "library"],
@@ -180,6 +184,10 @@ extension ShortcutAction {
         case .showRecentlyTrashed: "trash"
         case .putBack: "arrow.uturn.backward.square"
         case .putBackBatch: "arrow.uturn.backward.square.fill"
+        case .showAllPhotographs: "photo.on.rectangle"
+        case .showPreviousImport: "square.and.arrow.down"
+        case .showMarked: "circle.inset.filled"
+        case .showRejected: "xmark.circle"
         case .toggleFilterBar: "line.3.horizontal.decrease.circle"
         case .toggleFilters: "line.3.horizontal.decrease"
         case .lockFilters: "lock"

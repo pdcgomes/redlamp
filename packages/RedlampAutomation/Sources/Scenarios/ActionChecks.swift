@@ -156,6 +156,23 @@
                 })
             case .putBack, .putBackBatch:
                 ActionCheck(action: action, unavailable: "needs a photo in Recently Trashed: checked by its scenario")
+            case .showAllPhotographs:
+                ActionCheck(action: action, setUp: { app in
+                    try app.wait("the library to open", timeout: 60) { $0.librarySources.canShow(.allPhotographs) }
+                }, observe: { "\(String(describing: $0.librarySources.shown))" }, restore: { app in
+                    let photos = app.photos
+                    try app.main { model in
+                        model.showFolder(photos)
+                        model.showModule(.develop)
+                    }
+                    try app
+                        .wait("the photos folder again", timeout: 20) { $0.folder == photos && !$0.library.isListing }
+                })
+            case .showPreviousImport, .showMarked, .showRejected:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs imported, marked or rejected photos: checked by library.library-panel",
+                )
             case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
                  .keywordSet8, .keywordSet9:
                 ActionCheck(

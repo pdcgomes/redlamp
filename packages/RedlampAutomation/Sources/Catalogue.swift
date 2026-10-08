@@ -16,6 +16,7 @@
             + SyncScenarios.all + ExportScenarios.all
             + RecipeScenarios.all + StackScenarios.all + RawScenarios.all + FeedbackScenarios.all
             + ImportScenarios.all
+            + LibraryPanelScenarios.all
             + PanelScenarios.all
             + RenameScenarios.all
             + SoakScenarios.all + PerformanceScenarios.all + PanelPerformanceScenarios.all + SmokeScenarios.last
