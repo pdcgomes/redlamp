@@ -197,10 +197,15 @@ public final class CanvasMetalView: NSView {
         )
     }
 
+    /// Where the last scene published put each layer, in NDC.
+    private(set) var publishedRects: [SIMD4<Float>] = []
+
     /// Publishes the current textures, geometry and surround to the render thread.
     func setNeedsRedraw() {
         guard let renderer else { return }
-        renderer.publish(scene(scale: metalLayer.contentsScale))
+        let scene = scene(scale: metalLayer.contentsScale)
+        publishedRects = scene.layers.map(\.rect)
+        renderer.publish(scene)
     }
 
     /// The view's current contents (surround + image) as an sRGB image, for snapshots.

@@ -1,3 +1,4 @@
+import AppKit
 import IOSurface
 import RedlampEngineAPI
 import Testing
@@ -58,5 +59,21 @@ struct CanvasMetalViewTests {
         #expect(view.textures.count <= 8)
         view.display(nil)
         #expect(view.textures.isEmpty)
+    }
+
+    @Test func `panning a zoomed-in canvas redraws it without a SwiftUI update`() async throws {
+        let controller = CanvasController()
+        controller.imageSize = PixelSize(width: 6000, height: 4000)
+        let view = CanvasMetalView(controller: controller)
+        view.setFrameSize(NSSize(width: 1000, height: 800))
+        controller.zoom = .oneToOne
+        try view.display(frame(ring(1200, 800)[0]))
+        let before = try #require(view.publishedRects.first)
+        controller.pan(byPoints: CGSize(width: 50, height: 0))
+        try await Task.sleep(for: .milliseconds(50))
+        let after = try #require(view.publishedRects.first)
+        withKnownIssue("RESP-08: the canvas redraws for a pan only when SwiftUI updates it") {
+            #expect(after != before)
+        }
     }
 }
