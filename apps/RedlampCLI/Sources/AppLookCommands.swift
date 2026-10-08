@@ -304,7 +304,7 @@ enum AppLookCommands {
             try await writeCandidates(inputs, result: result, name: name, into: out, context: context)
         }
         if context.arguments.has("--install") {
-            recipe = try context.library.install(contentsOf: recipeURL).recipe
+            recipe = try context.library.install(contentsOf: recipeURL, reading: InProcessDecoder()).recipe
             print("installed \(recipe.id) (\(recipe.name))")
         }
     }
