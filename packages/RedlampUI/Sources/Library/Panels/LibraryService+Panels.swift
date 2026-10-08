@@ -205,37 +205,47 @@ extension LibraryService {
     }
 }
 
-/// The index's IDs of the photos the Library shows, by their places in its list (`FolderLibrary.photoIDs`),
-/// kept as they're found: a selection of thousands is looked up within a frame once its folders have been read.
-/// A photo's place in the list is never given to another while it's shown.
+/// The index's IDs of the photos the Library shows, by their IDs in its list (`FolderLibrary.photoIDs`), kept as
+/// they're found, with each folder read's names: a selection of thousands is looked up within a frame once its
+/// folders have been read. A photo's ID in the list is never given to another while it's shown.
 final class PanelPhotoIDs: Sendable {
-    private let found = Mutex<[Int64: Int64]>([:])
+    private struct Found {
+        var byList: [Int64: Int64] = [:]
+        /// Each folder read, by its path: its photos' IDs by their names, composed.
+        var folders: [String: [String: Int64]] = [:]
+    }
+
+    private let found = Mutex(Found())
 
     /// The index's IDs of `photos` (their IDs in the list and their URLs), by their IDs in the list, for those
     /// the index has; the folders of those not known yet are read, a folder at a time.
     func ids(of photos: [(list: Int64, url: URL)], in index: LibraryIndex) async -> [Int64: Int64] {
         var known: [Int64: Int64] = [:]
-        var missing: [(list: Int64, url: URL)] = []
+        var missing: [(list: Int64, folder: String, name: String)] = []
         found.withLock { found in
             for photo in photos {
-                if let id = found[photo.list] {
+                if let id = found.byList[photo.list] {
                     known[photo.list] = id
+                    continue
+                }
+                let folder = LibraryService.path(photo.url.deletingLastPathComponent())
+                let name = photo.url.lastPathComponent.precomposedStringWithCanonicalMapping
+                if let names = found.folders[folder] {
+                    if let id = names[name] {
+                        known[photo.list] = id
+                        found.byList[photo.list] = id
+                    }
                 } else {
-                    missing.append(photo)
+                    missing.append((photo.list, folder, name))
                 }
             }
         }
         guard !missing.isEmpty else { return known }
-        var byFolder: [String: [(list: Int64, name: String)]] = [:]
-        for photo in missing {
-            byFolder[LibraryService.path(photo.url.deletingLastPathComponent()), default: []]
-                .append((photo.list, photo.url.lastPathComponent.precomposedStringWithCanonicalMapping))
-        }
-        let folders = byFolder
-        let read = await (try? index.read { reader -> [Int64: Int64] in
-            var read: [Int64: Int64] = [:]
+        let folders = Set(missing.map(\.folder))
+        let read = await (try? index.read { reader -> [String: [String: Int64]] in
+            var read: [String: [String: Int64]] = [:]
             let statement = try reader.database.cached("SELECT id, name FROM photos WHERE folder = ?")
-            for (path, photos) in folders {
+            for path in folders {
                 guard let folder = try LibraryService.folder(at: path, in: reader) else { continue }
                 try statement.bind(folder.id, at: 1)
                 var named: [String: Int64] = [:]
@@ -244,18 +254,24 @@ final class PanelPhotoIDs: Sendable {
                         named[name.precomposedStringWithCanonicalMapping] = row.int64(at: 0)
                     }
                 }
-                for photo in photos {
-                    read[photo.list] = named[photo.name]
-                }
+                read[path] = named
             }
             return read
         }) ?? [:]
-        found.withLock { $0.merge(read) { _, new in new } }
-        return known.merging(read) { _, new in new }
+        found.withLock { found in
+            found.folders.merge(read) { _, new in new }
+            for photo in missing {
+                if let id = read[photo.folder]?[photo.name] {
+                    known[photo.list] = id
+                    found.byList[photo.list] = id
+                }
+            }
+        }
+        return known
     }
 
-    /// The list was made afresh, or another source shown.
+    /// The list was made afresh, or photos came or went: folders are read again.
     func forget() {
-        found.withLock { $0.removeAll() }
+        found.withLock { $0 = Found() }
     }
 }

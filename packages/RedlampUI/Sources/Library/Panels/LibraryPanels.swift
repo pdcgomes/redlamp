@@ -147,7 +147,7 @@ public final class LibraryPanels {
     public func follow() {
         guard tracker == nil, let model else { return }
         observation = model.library.observe { [weak self] diff in
-            if diff.reset {
+            if diff.reset || !diff.inserted.isEmpty || !diff.removed.isEmpty {
                 self?.photoIDs.forget()
             }
         }
