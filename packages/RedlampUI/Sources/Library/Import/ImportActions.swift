@@ -66,7 +66,8 @@ public enum ImportActions {
 extension EditorModel {
     /// Shows an import's photos at its destination in Library's grid, selected, the first active: their
     /// folder, or the folder holding all of theirs with Show Photos in Subfolders on, added to Folders
-    /// when no folder there holds it.
+    /// when no folder there holds it. While Previous Import is shown, it shows them, as Lightroom Classic's
+    /// does.
     func showImported(_ photos: [URL]) {
         guard let first = photos.first else { return }
         let folders = Set(photos.map { LibraryService.path($0.deletingLastPathComponent()) })
@@ -79,6 +80,11 @@ extension EditorModel {
         let folder = URL(fileURLWithPath: common, isDirectory: true)
         if library.root(containing: folder) == nil {
             library.add([folder])
+        }
+        if librarySources.shown == .previousImport {
+            showLibrary(.grid)
+            librarySources.showNewestImport(selecting: photos)
+            return
         }
         if folders.count > 1, !library.includesSubfolders {
             library.setIncludesSubfolders(true)

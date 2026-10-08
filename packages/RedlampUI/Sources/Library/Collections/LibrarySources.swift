@@ -78,6 +78,10 @@ public final class LibrarySources {
     @ObservationIgnored private var countAgain = false
     /// The previous import as the journal last had it, and the journal's files then.
     @ObservationIgnored private var previous: (stamp: [String], found: PreviousImport?)?
+    /// While Previous Import is shown: the import it shows, and its photos then.
+    @ObservationIgnored private var shownImport: (id: UUID, photos: Set<Int64>)?
+    /// The photos to select once Previous Import shows the newest import (`showNewestImport`).
+    @ObservationIgnored private var importSelection: [URL]?
     /// How long each count took to reach the panel, for the budgets.
     @ObservationIgnored @_spi(Harness) public private(set) var countsTook: [Duration] = []
 
@@ -264,6 +268,7 @@ public final class LibrarySources {
         let before = counts
         counts = read
         isCounted = true
+        followNewestImport()
         if !read.hasSameRows(as: before) {
             rows += 1
             return
@@ -384,7 +389,30 @@ public final class LibrarySources {
         shown = source
         awaitingFirst = true
         self.list = list
+        if source == .previousImport, let found = previous?.found {
+            shownImport = (found.id, Set(counts.previousImport))
+        }
         return true
+    }
+
+    /// Previous Import, shown, shows the newest import's photos once the library is counted again, with `photos`
+    /// selected: as an import finishes while it's shown, as Lightroom Classic's Previous Import does.
+    func showNewestImport(selecting photos: [URL]) {
+        importSelection = photos
+        recount()
+    }
+
+    /// Previous Import, shown, shows the newest import once a count finds one newer than it shows, or photos of it
+    /// the library hadn't indexed yet.
+    private func followNewestImport() {
+        guard shown == .previousImport, let found = previous?.found, !counts.previousImport.isEmpty else { return }
+        if let shownImport, shownImport.id == found.id, Set(counts.previousImport).isSubset(of: shownImport.photos) {
+            return
+        }
+        let selection = importSelection
+        importSelection = nil
+        guard show(.previousImport), let model, let selection, let active = selection.first else { return }
+        model.libraryViews.remember(LibrarySource.previousImport.key, selection: selection, active: active)
     }
 
     /// `source`'s photos as the library lists them: for Previous Import, its own, which its folders may hold others
@@ -445,6 +473,7 @@ public final class LibrarySources {
         list = nil
         generation = nil
         shown = nil
+        shownImport = nil
         Self.release(ids)
         ids = [:]
         awaitingFirst = false
