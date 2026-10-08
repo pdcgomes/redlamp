@@ -356,6 +356,15 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
 
 @MainActor
 struct MaskEditingTests {
+    /// Waits for what needs the engine's list of AI masks, which the editor asks for off the main
+    /// actor after the open and can take seconds on a busy Mac.
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
     /// An editor with a photo open, in a temporary folder its sidecar can be written to.
     private func openEditor() async throws -> (EditorModel, () -> Void) {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
@@ -487,9 +496,7 @@ struct MaskEditingTests {
         )]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0003.ARW"))
-        for _ in 0 ..< 200 where model.info == nil || model.availableAIMaskKinds.isEmpty {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil && model.canCreateMask(.landscape) }
         #expect(model.canCreateMask(.landscape))
         await model.createAIMask(.landscape, landscape: .water)
         #expect(engine.lastRequest?.landscape == .water)
@@ -511,9 +518,7 @@ struct MaskEditingTests {
         engine.personParts = [.hair, .clothes, .entirePerson, .lips]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0004.ARW"))
-        for _ in 0 ..< 200 where model.info == nil || model.availableAIMaskKinds.isEmpty {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil && !model.availablePersonParts.isEmpty }
         #expect(model.availablePersonParts == [.entirePerson, .lips, .hair, .clothes])
     }
 
@@ -759,9 +764,7 @@ struct MaskEditingTests {
         engine.computed = [person(0, sha: "a"), person(1, sha: "b")]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0002.ARW"))
-        for _ in 0 ..< 200 where model.info == nil || model.availableAIMaskKinds.isEmpty {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil && model.canCreateMask(.people) }
         #expect(model.canCreateMask(.people))
         #expect(!model.canCreateMask(.landscape))
 
@@ -941,10 +944,8 @@ struct MaskEditingTests {
         )]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0004.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
         let blueSky = try #require(MaskPreset.builtIn.first { $0.name == "Blue Sky" })
+        try await eventually { model.canApply(blueSky) }
         #expect(model.canApply(blueSky))
         await model.applyMaskPreset(blueSky)
         let mask = try #require(model.recipe.masks.first)
