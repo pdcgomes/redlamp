@@ -135,6 +135,28 @@ struct RootRemovalTests {
         #expect(try await mapped.list(.allPhotographs).ids == [home])
     }
 
+    @Test func `roots none followed is, holds or is inside leave, but an import's destination stays`() async throws {
+        let (sandbox, indexer) = try await Self.library()
+        defer { sandbox.remove() }
+        for path in ["Imports/IMG_0004.JPG", "Work/Client/IMG_0005.JPG"] {
+            try sandbox.photo(path)
+        }
+        let run = await IndexerRun.collect(indexer.index([sandbox.url("Imports"), sandbox.url("Work/Client")]))
+        #expect(run.failures.isEmpty, "\(run.failures)")
+        let engine = QueryEngine(index: sandbox.index)
+        try await engine.load()
+        let roots = LibraryRoots(index: sandbox.index, indexer: indexer, live: LibraryLive(engine: engine))
+
+        let removed = try await roots.removeUnfollowed(
+            [sandbox.url("Home"), sandbox.url("Work")], keeping: [sandbox.url("Imports")],
+        )
+        #expect(removed.map(\.path) == [LibraryIndexer.path(sandbox.url("Trip"))])
+        await roots.swept()
+        let left = try await sandbox.index.read { try $0.roots().map(\.path) }
+        #expect(Set(left) == Set(["Home", "Imports", "Work/Client"].map { LibraryIndexer.path(sandbox.url($0)) }))
+        #expect(try await engine.list(.allPhotographs).count == 3)
+    }
+
     @Test func `a root still followed inside one taken out keeps its photos, and one holding it takes its folders`(
     ) async throws {
         let sandbox = try await KeywordSandbox.make()

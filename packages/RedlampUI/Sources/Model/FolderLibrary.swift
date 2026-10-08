@@ -73,6 +73,8 @@ public struct FolderNode: Sendable, Equatable {
 public final class FolderLibrary {
     /// The folders the user added, in the order they were added.
     public internal(set) var roots: [WorkingFolder] = []
+    /// `roots` are the working set a launch kept, not one made afresh: the library may take out what they lost.
+    @ObservationIgnored var hasSavedRoots = false
     /// Roots that can't be found now (deleted, or on a volume that isn't mounted).
     public internal(set) var missing: Set<UUID> = []
     public internal(set) var openFolder: URL?

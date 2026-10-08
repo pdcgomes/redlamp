@@ -50,6 +50,27 @@ public final class LibraryRoots: Sendable {
         return removal
     }
 
+    /// Takes out the roots the index has that none of `followed` is, holds or is inside, but those at or inside a
+    /// folder of `kept`: roots Folders lost while the library was off, or before a folder removed from Folders left
+    /// the library. Returns what it took out.
+    @discardableResult
+    public func removeUnfollowed(_ followed: [URL], keeping kept: [URL]) async throws -> [RootRemoval] {
+        let (others, spared) = (followed.map(LibraryIndexer.path), kept.map(LibraryIndexer.path))
+        let roots = try await index.read { reader -> [String] in
+            let removed = try reader.removedRoots()
+            return try reader.roots().filter { removed[$0.id] == nil }.map(\.path)
+        }
+        let below = LibraryIndex.Writer.isBelow
+        var removals: [RootRemoval] = []
+        for root in roots where !others.contains(where: { $0 == root || below($0, root) || below(root, $0) })
+            && !spared.contains(where: { $0 == root || below(root, $0) }) {
+            if let removal = try await remove(URL(fileURLWithPath: root, isDirectory: true), keeping: followed) {
+                removals.append(removal)
+            }
+        }
+        return removals
+    }
+
     /// Sweeps what a removal a quit cut short left, after the indexer's runs asked for before: at launch.
     public func resume() async {
         if await (try? index.read { try !$0.removedRoots().isEmpty }) == true {

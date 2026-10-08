@@ -49,14 +49,15 @@ struct Counting {
 /// so the filmstrip doesn't jump.
 public extension FolderLibrary {
     /// Shows the folders `service` has indexed from its photo lists, starting it, and has it follow
-    /// the folders in Folders; the tree counts the folders it has indexed from it.
+    /// the folders in Folders; the tree counts the folders it has indexed from it. With a working set
+    /// a launch kept, the library takes out the folders Folders lost while it was off.
     func attach(_ service: LibraryService) {
         self.service = service
         counting.observation = service.observe { [weak self] in
             self?.countFolders()
             self?.followTrash()
         }
-        service.start(following: roots.map(\.url))
+        service.start(following: roots.map(\.url), removingOthers: hasSavedRoots)
     }
 
     /// Whether the photos shown are the library's: the open folder's from its photo list, or those of the Library

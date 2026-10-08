@@ -129,6 +129,61 @@ struct FolderRemovalTests {
         #expect(try await Self.ids("", service).count == 1, "only the sandbox's own photo")
     }
 
+    @Test func `a folder Folders lost while the library was off leaves it as it opens, unless Folders is new`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["A.jpg"])
+        let trip = try Self.trip(in: sandbox)
+        let first = try await sandbox.open()
+        try await Self.add(trip, to: first.library, service: #require(sandbox.service))
+        sandbox.service?.close()
+        let suite = "folder-removal-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { UserDefaults().removePersistentDomain(forName: suite) }
+        let paths = LibraryPaths(root: sandbox.base.appending(path: "Library", directoryHint: .isDirectory))
+        func launch(_ library: FolderLibrary) async throws -> LibraryService {
+            let service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
+                StoreThumbnailMaker.imageIO(url, nil, size)
+            }
+            library.attach(service)
+            for _ in 0 ..< 2000 where !service.isReady {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            try #require(service.isReady)
+            return service
+        }
+        let kept = Set([sandbox.root, trip].map(LibraryService.path))
+
+        // A working set no launch kept, holding Folders' own root alone: nothing leaves.
+        let fresh = FolderLibrary()
+        fresh.add([sandbox.root])
+        let unsaved = try await launch(fresh)
+        try await Task.sleep(for: .milliseconds(500))
+        let core = try #require(unsaved.core)
+        await core.roots.swept()
+        #expect(try await Set(core.index.read { try $0.roots().map(\.path) }) == kept)
+        unsaved.close()
+
+        // Folders kept without Trip, as the library was off when it lost it: Trip leaves as the library opens.
+        FolderLibrary(defaults: defaults).add([sandbox.root])
+        let saved = FolderLibrary(defaults: defaults)
+        #expect(saved.roots.map(\.url) == [sandbox.root])
+        let service = try await launch(saved)
+        defer { service.close() }
+        let opened = try #require(service.core)
+        var roots: Set<String> = []
+        for _ in 0 ..< 1000 {
+            roots = try await Set(opened.index.read { try $0.roots().map(\.path) })
+            if roots == [LibraryService.path(sandbox.root)] {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(roots == [LibraryService.path(sandbox.root)])
+        #expect(try await Self.ids("", service).count == 1)
+    }
+
     @Test func `a root that can't be found stays in Folders and in the library`() async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }

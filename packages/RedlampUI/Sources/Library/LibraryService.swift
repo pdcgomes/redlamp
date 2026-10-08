@@ -77,6 +77,8 @@ public final class LibraryService {
     @ObservationIgnored private var removal: Task<Void, Never>?
     /// Removals asked for before the library was open: done as it opens.
     @ObservationIgnored private var waitingRemovals: [(root: URL, kept: [URL])] = []
+    /// As it opens, the library takes out the roots Folders doesn't have (`start`).
+    @ObservationIgnored private var removesOthers = false
     @ObservationIgnored private var writingAllXMP: Task<Void, Never>?
     @ObservationIgnored private var memoryPressure: DispatchSourceMemoryPressure?
     /// Roots whose volumes change tracking has caught up with since launch, and that answer still.
@@ -136,9 +138,13 @@ public final class LibraryService {
 
     // MARK: - Launch and quit
 
-    /// Opens the library off the main thread, then follows `roots`; returns at once.
-    public func start(following roots: [URL]) {
+    /// Opens the library off the main thread, then follows `roots`; returns at once. With `removingOthers`, once
+    /// it's open it takes out the roots it has that `roots` neither are, hold nor are inside, but the destinations
+    /// of imports: those Folders lost while the library was off, or before removing a folder took it out of the
+    /// library. Pass it only for the folders Folders kept, not for a working set that wasn't there to load.
+    public func start(following roots: [URL], removingOthers: Bool = false) {
         self.roots = Self.paths(roots)
+        removesOthers = removingOthers
         guard opening == nil, core == nil else { return }
         let (paths, thumbnail) = (paths, thumbnail)
         let check = defaults?.bool(forKey: Self.damagedKey) ?? false
@@ -192,6 +198,9 @@ public final class LibraryService {
                 remove(waiting.root, keeping: waiting.kept)
             }
             waitingRemovals = []
+            if removesOthers {
+                removeUnfollowed(core)
+            }
             let roots = roots
             self.roots = []
             follow(roots.map { URL(fileURLWithPath: $0, isDirectory: true) })
@@ -330,6 +339,34 @@ public final class LibraryService {
         }
         removal = task
         return task
+    }
+
+    /// Takes out the roots the library has that none of the roots followed is, holds or is inside, but the
+    /// destinations and backups of the imports the journal keeps: an import adds its destination before Folders
+    /// has it, and one a forced quit cut short is resumed into it.
+    private func removeUnfollowed(_ core: LibraryCore) {
+        let followed = roots.map { URL(fileURLWithPath: $0, isDirectory: true) }
+        let previous = removal
+        removal = Task.detached(priority: .userInitiated) { [weak self] in
+            await previous?.value
+            await core.recovered()
+            do {
+                let imports = try ImportJournal(paths: core.paths).targets()
+                let removed = try await core.roots.removeUnfollowed(followed, keeping: imports)
+                for removal in removed {
+                    Self.log.notice(
+                        "A folder Folders doesn't have left the library, with \(removal.photos.count) photos",
+                    )
+                }
+            } catch {
+                let reason = String(describing: error)
+                Self.log.error("The folders Folders doesn't have weren't taken out: \(reason, privacy: .public)")
+            }
+            Task.detached(priority: .utility) { [weak self] in
+                await core.roots.swept()
+                await self?.placementsChanged()
+            }
+        }
     }
 
     /// The folders on screen, indexed before the others.

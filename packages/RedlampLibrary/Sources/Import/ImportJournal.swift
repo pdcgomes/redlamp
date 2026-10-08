@@ -191,6 +191,12 @@ public struct ImportJournal: Sendable {
         }
     }
 
+    /// The destinations and backups of every import it keeps, from their headers alone.
+    public func targets() throws -> [URL] {
+        try fileNames().values.compactMap { name in try? Self.header(of: folder.appending(path: name + ".import")) }
+            .flatMap { header in [header.settings.destination] + (header.settings.backup.map { [$0] } ?? []) }
+    }
+
     /// The import's plan, as far as the journal keeps it, and what its log says.
     func load(_ id: UUID) throws -> (plan: ImportPlan, progress: Progress) {
         guard let name = try fileNames()[id] else { throw ImportError.noSuchImport(id) }

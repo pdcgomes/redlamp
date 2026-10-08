@@ -256,6 +256,7 @@ extension FolderLibrary {
         if let data = defaults.data(forKey: Key.roots),
            let saved = try? JSONDecoder().decode([WorkingFolder].self, from: data) {
             roots = saved
+            hasSavedRoots = true
             openFolder = defaults.string(forKey: Key.open).map { URL(fileURLWithPath: $0, isDirectory: true) }
         } else if let legacy = defaults.string(forKey: Key.legacyFolder) {
             roots = [WorkingFolder(path: URL(fileURLWithPath: legacy).standardizedFileURL.path)]
