@@ -103,6 +103,37 @@
             pause(0.05)
         }
 
+        /// Clicks the view or grid element carrying `identifier` once it has stopped moving, as the grid scrolls
+        /// to a photo selected a turn before.
+        func clickStill(_ identifier: String, modifiers: NSEvent.ModifierFlags = []) throws {
+            var last = try frame(of: .identifier(identifier))
+            for _ in 0 ..< 40 {
+                pause(0.05)
+                let now = try frame(of: .identifier(identifier))
+                if now == last {
+                    break
+                }
+                last = now
+            }
+            try clickView(identifier, modifiers: modifiers)
+        }
+
+        /// Presses the button carrying `identifier` in the editor window, as a click on it does: a press sent to
+        /// a button's view would wait in its tracking loop for a release that never comes.
+        func press(_ identifier: String) throws {
+            try main { _ in
+                guard let window = Views.editorWindow,
+                      let button = Views.all(NSButton.self, in: window.contentView?.superview ?? NSView())
+                      .first(where: { $0.accessibilityIdentifier() == identifier })
+                else { throw ScenarioFailure("No \(identifier) button") }
+                guard !button.isHiddenOrHasHiddenAncestor, button.isEnabled else {
+                    throw ScenarioFailure("\(identifier) can't be pressed")
+                }
+                button.performClick(nil)
+            }
+            pause(0.05)
+        }
+
         /// How many times the editor window's grid has reloaded every cell.
         func gridReloads() throws -> Int {
             try main { _ in Views.editorWindow.flatMap(LibraryGridViews.reloads(in:)) ?? -1 }
@@ -111,6 +142,26 @@
 
     enum GroupScenarios {
         static let all: [Scenario] = [groupBy, openAndClose, moving, setting, unpicked]
+
+        /// The identifiers of the grid's elements whose middle is on show, not under a bar or kept just off screen.
+        @MainActor static func onScreen() -> [String] {
+            guard let window = Views.editorWindow, let root = window.contentView?.superview,
+                  let grid = Views.all(NSView.self, in: root)
+                  .first(where: { $0.accessibilityIdentifier() == "library.grid" })
+            else { return [] }
+            return (grid.accessibilityChildren() ?? []).compactMap { child -> String? in
+                guard let element = child as? NSAccessibilityElement, let id = element.accessibilityIdentifier() else {
+                    return nil
+                }
+                let frame = window.convertFromScreen(element.accessibilityFrame())
+                return root.hitTest(CGPoint(x: frame.midX, y: frame.midY)) === grid ? id : nil
+            }
+        }
+
+        /// The identifiers of the grid's group headers on show.
+        @MainActor static func headersOnScreen() -> [String] {
+            onScreen().filter { $0.hasPrefix("grid.group.") }
+        }
 
         /// What the group actions change, for their checks.
         @MainActor static func state(_ model: EditorModel) -> String {
@@ -139,9 +190,7 @@
                 try app.wait("the menu's \(key.title)") { $0.gridGroups.list?.groups.key == key }
                 let grouped = try app.main { $0.gridGroups.list?.groups.photos.count ?? 0 }
                 try app.expect(grouped == app.photoNames().count, "\(key.title)'s groups hold \(grouped) photos")
-                try app.wait("the first header on screen") { _ in
-                    Views.editorWindow.flatMap { Views.find("grid.group.0", in: $0) } != nil
-                }
+                try app.wait("a header on screen") { _ in !GroupScenarios.headersOnScreen().isEmpty }
             }
             app.covered(.feature("library.grid"), via: .menu)
             try app.choose("Camera", inPopUp: "library.toolbar.groupBy")
@@ -194,34 +243,45 @@
                 (model.gridGroups.list?.groups.compactMap(\.photos.first) ?? []).compactMap(model.library.url(ofPhoto:))
                     .map(\.lastPathComponent)
             }
-            guard firsts.count >= 3, let lastFirst = firsts.last else {
+            guard firsts.count >= 3 else {
                 throw ScenarioFailure("Grouped by camera, the folder has \(firsts.count) groups")
             }
-            // The first group's first photo active, and the last group's first selected with it.
+            // The first group's first photo active, and the first photo on show of a group past the second
+            // selected with it, so closing the second keeps the selection.
             try app.main { model in
                 if let url = model.items.first(where: { $0.url.lastPathComponent == firsts[0] })?.url {
                     model.select(url)
                 }
             }
-            try app.clickView("grid.\(lastFirst)", modifiers: .command)
+            app.pause(0.2)
+            let shown = try app.main { _ in GroupScenarios.onScreen() }
+            guard let lastFirst = firsts.dropFirst(2).first(where: { shown.contains("grid.\($0)") }) else {
+                throw ScenarioFailure("None of \(firsts.dropFirst(2)) on show with \(firsts[0]): \(shown)")
+            }
+            try app.clickStill("grid.\(lastFirst)", modifiers: .command)
             let before = try app.selectionState()
-            try app.expect(Set(before.photos) == [firsts[0], lastFirst], "⌘-click selected \(before)")
+            try app.expect(
+                Set(before.photos) == [firsts[0], lastFirst],
+                "⌘-click on \(lastFirst) selected \(before), the groups' firsts \(firsts)",
+            )
             let reloads = try app.gridReloads()
-            try app.clickView("grid.group.1")
+            try app.clickStill("grid.group.1")
             try app.wait("a click to close the second group") { $0.gridGroups.list.map { !$0.isOpen(1) } == true }
             var after = try app.selectionState()
             try app.expect(
                 after.photos == before.photos && after.active == before.active, "Closing a group selected \(after)",
             )
             app.covered(.feature("library.grid"), via: .mouse)
-            try app.clickView("grid.group.1")
+            try app.clickStill("grid.group.1")
             try app.wait("a click to open it again") { $0.gridGroups.list.map { $0.isOpen(1) } == true }
             after = try app.selectionState()
             try app.expect(
                 after.photos == before.photos && after.active == before.active, "Opening a group selected \(after)",
             )
             try app.expect(try app.gridReloads() == reloads, "Opening and closing reloaded the grid")
-            try app.clickView("grid.group.0", modifiers: .option)
+            let header = try app.main { _ in GroupScenarios.headersOnScreen().first }
+            guard let header else { throw ScenarioFailure("No group's header on show") }
+            try app.clickStill(header, modifiers: .option)
             try app.wait("⌥-click to close every group") { model in
                 model.gridGroups.list.map { list in list.groups.indices.allSatisfy { !list.isOpen($0) } } == true
             }
@@ -326,7 +386,7 @@
             try app.showGroups(by: .moment)
             try app.wait("the moments counted") { $0.gridGroups.coverage != nil }
             let coverage = try app.main { $0.gridGroups.coverage }
-            try app.clickView("library.toolbar.unpicked")
+            try app.press("library.toolbar.unpicked")
             try app.wait("only the moments without a pick open") { $0.gridGroups.showsUnpicked }
             let open = try app.main { model in
                 model.gridGroups.list.map { list in list.groups.indices.count(where: list.isOpen) } ?? 0

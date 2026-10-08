@@ -366,6 +366,62 @@ struct LibraryGroupsTests {
         #expect(!model.canPerform(.nextGroup) && !model.perform(.previousGroup))
     }
 
+    @Test func `a click on a photo in the grouped grid selects that photo, wherever the grid is scrolled`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, grid, window) = try await open()
+        defer { window.contentView = nil }
+        window.setContentSize(CGSize(width: 900, height: 300))
+        grid.layoutSubtreeIfNeeded()
+        try await group(model, by: .camera)
+        let firsts = (model.gridGroups.list?.groups.compactMap(\.photos.first) ?? [])
+            .compactMap(model.library.url(ofPhoto:)).map(\.lastPathComponent)
+        try #require(firsts.count >= 3)
+        try model.select(url(model, firsts[firsts.count - 1]))
+        try await Task.sleep(for: .milliseconds(100))
+        grid.layoutSubtreeIfNeeded()
+        let onScreen = elements(grid).filter { element in
+            guard let id = element.accessibilityIdentifier(), !id.hasPrefix("grid.group.") else { return false }
+            let frame = window.convertFromScreen(element.accessibilityFrame())
+            return window.contentView?.hitTest(CGPoint(x: frame.midX, y: frame.midY)) is LibraryGridContentView
+        }
+        .compactMap { $0.accessibilityIdentifier().map { String($0.dropFirst("grid.".count)) } }
+        try #require(onScreen.count > 2)
+        for name in onScreen {
+            try click(grid, name)
+            #expect(selected(model) == [name], "a click on \(name) selected \(selected(model))")
+        }
+    }
+
+    private func elements(_ grid: LibraryGridView) -> [NSAccessibilityElement] {
+        func views(_ view: NSView) -> [NSView] {
+            [view] + view.subviews.flatMap(views)
+        }
+        let content = views(grid).first { $0.accessibilityIdentifier() == "library.grid" }
+        return (content?.accessibilityChildren() ?? []).compactMap { $0 as? NSAccessibilityElement }
+    }
+
+    /// A click on the grid's element for photo `name`, at its middle, as the regression suite's driver makes it.
+    private func click(_ grid: LibraryGridView, _ name: String, modifiers: NSEvent.ModifierFlags = []) throws {
+        let window = try #require(grid.window)
+        let element = try #require(elements(grid).first { $0.accessibilityIdentifier() == "grid.\(name)" })
+        let frame = window.convertFromScreen(element.accessibilityFrame())
+        let location = NSPoint(x: frame.midX, y: frame.midY)
+        let root: NSView = window.contentView?.superview ?? grid
+        let view = try #require(root.hitTest(location))
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(
+                with: type, location: location, modifierFlags: modifiers, timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+            ))
+            if type == .leftMouseDown {
+                view.mouseDown(with: event)
+            } else {
+                view.mouseUp(with: event)
+            }
+        }
+    }
+
     @Test func `the menus are told as a grouping lands, and as the first group closes or the last opens`(
     ) async throws {
         defer { cleanUp() }
