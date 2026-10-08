@@ -66,7 +66,9 @@ struct LibraryCounts: Sendable, Equatable {
         }
         if let previous {
             let urls = previous.photos.map { URL(fileURLWithPath: $0, isDirectory: false) }
-            let ids = await Set(LibraryService.indexIDs(of: urls, in: core.index).values).subtracting(unreadable)
+            let found = await Set(LibraryService.indexIDs(of: urls, in: core.index).values)
+            // As its list has them: of the photos the index still has, those the store holds and can read.
+            let ids = try await engine.list(.photos(found)).ids
             counts.previousImport = ids.sorted()
             if !ids.isEmpty {
                 counts.entries[.previousImport] = ids.count

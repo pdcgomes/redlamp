@@ -17,6 +17,8 @@ final class LibraryCore: Sendable {
     let indexer: LibraryIndexer
     let tracker: ChangeTracker
     let live: LibraryLive
+    /// Roots taken out as Folders loses them: the sweeps a quit cut short are resumed with recovery.
+    let roots: LibraryRoots
     let sidecars: LibrarySidecars
     /// Renames, moves and the Trash (LIB-26): the batches a forced quit cut short are settled at launch.
     let files: FileOperations
@@ -75,6 +77,7 @@ final class LibraryCore: Sendable {
         indexer = LibraryIndexer(index: index, thumbnails: thumbnails.maker.thumbnails)
         tracker = ChangeTracker(indexer: indexer)
         live = LibraryLive(engine: engine)
+        roots = LibraryRoots(index: index, indexer: indexer, live: live)
         sidecars = LibrarySidecars(index: index, paths: paths)
         files = FileOperations(index: index, paths: paths, live: live)
         xmp = LibraryXMP(index: index, paths: paths)
@@ -202,9 +205,10 @@ final class LibraryCore: Sendable {
     }
 
     /// Finishes or rolls back the file operations, then the metadata batches, a forced quit cut short, and
-    /// sweeps the health rows and hashes of photos no batch can bring back: before any other change.
+    /// sweeps the health rows and hashes of photos no batch can bring back: before any other change. Then the
+    /// rows of roots a quit left marked removed are swept, before the indexer's other runs.
     func recover(_ metadata: LibraryMetadata) {
-        let recovery = enqueue(priority: .userInitiated) { [files] in
+        let recovery = enqueue(priority: .userInitiated) { [files, roots] in
             do {
                 for outcome in try await files.recover() {
                     let done = outcome.state == .rolledBack ? "rolled back" : "finished"
@@ -218,6 +222,7 @@ final class LibraryCore: Sendable {
             } catch {
                 Self.log.error("Metadata batches couldn't recover: \(String(describing: error), privacy: .public)")
             }
+            await roots.resume()
         }
         state.withLock { $0.recovery = recovery }
     }

@@ -14,8 +14,9 @@ import Synchronization
 /// damaged, migrating its schema first when an earlier Redlamp made it), the column store and the
 /// thumbnail store. Then, before any other change, it finishes or rolls back the file operations and
 /// metadata batches a forced quit cut short, and it finishes a sidecar move a quit interrupted. It
-/// indexes the folders in Folders and keeps them current, and `FolderLibrary` shows a folder it has
-/// indexed from a photo list. Until it's open, and for a folder it hasn't indexed, `FolderLibrary`
+/// indexes the folders in Folders and keeps them current, takes out those Folders loses (`remove`), and
+/// `FolderLibrary` shows a folder it has indexed from a photo list. Until it's open, and for a folder it hasn't
+/// indexed, `FolderLibrary`
 /// lists folders itself, as it does with the library off
 /// (`defaults write app.redlamp.mac LibraryEnabled -bool NO`) or when the index can't open.
 ///
@@ -72,6 +73,10 @@ public final class LibraryService {
     @ObservationIgnored private(set) var roots: [String] = []
     @ObservationIgnored private var opening: Task<Void, Never>?
     @ObservationIgnored private var following: Task<Void, Never>?
+    /// The last of the roots' removals asked for, which following the roots waits for (`remove`).
+    @ObservationIgnored private var removal: Task<Void, Never>?
+    /// Removals asked for before the library was open: done as it opens.
+    @ObservationIgnored private var waitingRemovals: [(root: URL, kept: [URL])] = []
     @ObservationIgnored private var writingAllXMP: Task<Void, Never>?
     @ObservationIgnored private var memoryPressure: DispatchSourceMemoryPressure?
     /// Roots whose volumes change tracking has caught up with since launch, and that answer still.
@@ -183,6 +188,10 @@ public final class LibraryService {
             placed(core.locator)
             state = .ready
             followActivity(core)
+            for waiting in waitingRemovals {
+                remove(waiting.root, keeping: waiting.kept)
+            }
+            waitingRemovals = []
             let roots = roots
             self.roots = []
             follow(roots.map { URL(fileURLWithPath: $0, isDirectory: true) })
@@ -213,6 +222,7 @@ public final class LibraryService {
         memoryPressure = nil
         guard let core else { return }
         core.tracker.stop()
+        core.roots.stop()
         core.engine.saveSnapshotAndWait()
         core.store.close()
         let waiting = core.waitingXMP
@@ -281,9 +291,45 @@ public final class LibraryService {
         let report: @Sendable (Progress) async -> Void = { [weak self] progress in
             await self?.progressed(progress)
         }
+        let removal = removal
         following = Task.detached(priority: .utility) {
+            await removal?.value
             await Self.follow(paths, core: core, report: report)
         }
+    }
+
+    /// Takes `root` out of the library as Folders loses it, keeping the folders of `roots`, those Folders keeps:
+    /// its photos leave every list, count and search at once and its rows go behind (`LibraryRoots`). Nothing on
+    /// disk changes, and following the folder again indexes it afresh, from its photos and their sidecars. Asked
+    /// for before the library is open, it's done as it opens. The task is over once the lists, and the counts
+    /// of keywords and collections, leave its photos out.
+    @discardableResult
+    func remove(_ root: URL, keeping roots: [URL]) -> Task<Void, Never> {
+        let path = Self.path(root)
+        let below = path == "/" ? "/" : path + "/"
+        currentRoots.remove(path)
+        indexedFolders = indexedFolders.filter { $0 != path && !$0.hasPrefix(below) }
+        guard let core else {
+            waitingRemovals.append((root, roots))
+            return Task {}
+        }
+        let previous = removal
+        let task = Task.detached(priority: .userInitiated) { [weak self] in
+            await previous?.value
+            await core.recovered()
+            do {
+                try await core.roots.remove(root, keeping: roots)
+            } catch {
+                let reason = String(describing: error)
+                Self.log.error("A folder wasn't taken out of the library: \(reason, privacy: .public)")
+            }
+            Task.detached(priority: .utility) { [weak self] in
+                await core.roots.swept()
+                await self?.placementsChanged()
+            }
+        }
+        removal = task
+        return task
     }
 
     /// The folders on screen, indexed before the others.
@@ -307,7 +353,10 @@ public final class LibraryService {
     ) async {
         await core.recovered()
         let roots = paths.filter { !isInICloudDrive($0) }
-        let known = await Set((try? core.index.read { try $0.roots().map(\.path) }) ?? [])
+        let known = await Set((try? core.index.read { reader -> [String] in
+            let removed = try Set(reader.removedRoots().values)
+            return try reader.roots().map(\.path).filter { !removed.contains($0) }
+        }) ?? [])
         let added = roots.filter { !known.contains($0) }
         if !added.isEmpty {
             for await event in core.indexer.index(added.map { URL(fileURLWithPath: $0, isDirectory: true) }) {

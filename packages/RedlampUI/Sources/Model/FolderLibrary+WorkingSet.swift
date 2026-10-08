@@ -34,8 +34,12 @@ public extension FolderLibrary {
         return added
     }
 
-    /// Takes a root out of the working set; nothing on disk changes. Closes it if it was open.
-    func remove(_ root: WorkingFolder) {
+    /// Takes a root out of the working set and, with the library on, out of the library: its photos leave every
+    /// list, count and search, and the index forgets them, as Lightroom Classic's Remove does
+    /// (`LibraryService.remove`); adding the folder again brings them back from their sidecars. Nothing on disk
+    /// changes. Closes it if it was open. The task returned is over once the library's lists leave its photos out.
+    @discardableResult
+    func remove(_ root: WorkingFolder) -> Task<Void, Never>? {
         roots.removeAll { $0.id == root.id }
         missing.remove(root.id)
         stopAccess(root)
@@ -43,16 +47,22 @@ public extension FolderLibrary {
             open(nil)
         }
         saveSettings()
+        let removal = service?.remove(root.url, keeping: roots.map(\.url))
         watchRoots()
+        return removal
     }
 
-    /// Points a missing root at the folder the user found it in.
+    /// Points a missing root at the folder the user found it in. The library forgets the photos it had where
+    /// the root was, and reads them where it is.
     func locate(_ root: WorkingFolder, at url: URL) {
         stopAccess(root)
         let moved = WorkingFolder(id: root.id, path: url.standardizedFileURL.path)
         replaceRoot(moved)
         missing.remove(root.id)
         startAccess(moved)
+        if moved.path != root.path {
+            service?.remove(root.url, keeping: roots.map(\.url))
+        }
         watchRoots()
         scheduler.submit(.lookAhead) {
             let made = WorkingFolder.make(for: url, id: root.id)

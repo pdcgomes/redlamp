@@ -110,7 +110,7 @@ extension SidebarCellView {
             if row.isMissing {
                 menu.addItem(NSMenuItem(title: "Locate…") { FolderActions.locate(row.root, model: model) })
             }
-            menu.addItem(NSMenuItem(title: "Remove from Folders") { model.library.remove(row.root) })
+            menu.addItem(NSMenuItem(title: "Remove from Folders") { FolderActions.remove(row.root, model: model) })
         }
         return menu
     }
@@ -129,6 +129,19 @@ enum FolderActions {
         panel.message = "Choose folders of photos to add to Folders. Nothing in them is moved or changed."
         if panel.runModal() == .OK {
             model.open(panel.urls)
+        }
+    }
+
+    /// Remove from Folders: the root leaves Folders and the library, with its photos, as Lightroom Classic's
+    /// Remove does; nothing on disk changes, and Add Folder… brings them back with what their sidecars hold.
+    /// Like Folders' other changes, it isn't on Undo. Once the library's lists leave its photos out, the Keyword
+    /// List and the Library panel count again, as they count from the index.
+    static func remove(_ root: WorkingFolder, model: EditorModel) {
+        guard let removal = model.library.remove(root) else { return }
+        Task { [weak model] in
+            await removal.value
+            model?.libraryPanels.refreshKeywords()
+            model?.librarySources.recount()
         }
     }
 
