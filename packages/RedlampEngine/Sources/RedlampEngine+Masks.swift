@@ -4,6 +4,7 @@ import Foundation
 import Metal
 import RedlampEngineAPI
 import RedlampMasking
+import Synchronization
 
 /// AI masks: computed on the analysis render (the photo with no edit, sRGB, 2048 px), so they
 /// don't move when the edit changes, and kept in the edit as bitmaps.
@@ -125,7 +126,7 @@ extension RedlampEngine {
         }
         let image = analysis.image
         let features = try await Task.detached(priority: .userInitiated) { try model.features(of: image) }.value
-        sam3Features.withLock { $0 = (analysis.hash, features) }
+        keep((analysis.hash, features), in: sam3Features, madeFrom: analysis.hash)
         return features
     }
 
@@ -138,7 +139,7 @@ extension RedlampEngine {
         }
         let features = try await sam3Encoding(analysis, model: model)
         let classes = try await Task.detached(priority: .userInitiated) { try model.classes(features) }.value
-        landscapeCache.withLock { $0 = (analysis.hash, classes) }
+        keep((analysis.hash, classes), in: landscapeCache, madeFrom: analysis.hash)
         return classes
     }
 
@@ -151,7 +152,7 @@ extension RedlampEngine {
         }
         let features = try await sam3Encoding(analysis, model: model)
         let parts = try await Task.detached(priority: .userInitiated) { try model.peopleParts(features) }.value
-        peoplePartsCache.withLock { $0 = (analysis.hash, parts) }
+        keep((analysis.hash, parts), in: peoplePartsCache, madeFrom: analysis.hash)
         return parts
     }
 
@@ -164,7 +165,7 @@ extension RedlampEngine {
         }
         let image = analysis.image
         let result = try await Task.detached(priority: .userInitiated) { try model.predict(image) }.value
-        depthAnything3Cache.withLock { $0 = (analysis.hash, result) }
+        keep((analysis.hash, result), in: depthAnything3Cache, madeFrom: analysis.hash)
         return result
     }
 
@@ -417,7 +418,7 @@ extension RedlampEngine {
         }
         if let subjectKey, provided.count == 1, provided[0].provider.contains("+closed-form") {
             let subject = provided[0].matte(as: .subject)
-            subjectMatte.withLock { $0 = (subjectKey, subject) }
+            keep((subjectKey, subject), in: subjectMatte, madeFrom: subjectKey.analysisHash)
         }
         return aiMasks(provided)
     }
@@ -538,7 +539,7 @@ extension RedlampEngine {
                     ?? closed
             }
         }.value
-        personMatteCache.withLock { $0 = (analysis.hash, mattes) }
+        keep((analysis.hash, mattes), in: personMatteCache, madeFrom: analysis.hash)
         return mattes
     }
 
@@ -553,7 +554,7 @@ extension RedlampEngine {
         let people = try await Task.detached(priority: .userInitiated) {
             try VisionMaskProvider().peopleFound(in: image)
         }.value
-        peopleFoundCache.withLock { $0 = (analysis.hash, people) }
+        keep((analysis.hash, people), in: peopleFoundCache, madeFrom: analysis.hash)
         return people
     }
 
@@ -735,7 +736,7 @@ extension RedlampEngine {
             embedding = try await Task.detached(priority: .userInitiated) { try segmenter.embedding(for: image) }.value
             await EmbeddingCache.shared.store(embedding.data(), for: key)
         }
-        objectEmbeddingCache.withLock { $0 = (analysis.hash, embedding) }
+        keep((analysis.hash, embedding), in: objectEmbeddingCache, madeFrom: analysis.hash)
         return embedding
     }
 
@@ -796,10 +797,11 @@ extension RedlampEngine {
     }
 
     /// The current photo with the default develop, as AI models see it, and a hash of its pixels;
-    /// rendered once for each of the photos visited last.
+    /// rendered once for each of the photos visited last. The render of a photo no longer open
+    /// (another photo opened, or the window closed, while it rendered) is the caller's alone.
     func analysisImage(for session: ImageSession) async throws -> (image: CGImage, hash: String) {
         if let kept = keptAnalysis(for: session) {
-            analysisCache.withLock { $0 = AnalysisCache(session: session, image: kept.image, hash: kept.hash) }
+            keep(AnalysisCache(session: session, image: kept.image, hash: kept.hash), in: analysisCache)
             keptAnalyses.withLock { kept in
                 if let index = kept.lastIndex(where: { $0.session === session }) {
                     kept.append(kept.remove(at: index))
@@ -820,8 +822,9 @@ extension RedlampEngine {
         }
         let bytes = image.dataProvider?.data as Data? ?? Data()
         let hash = SHA256.hash(data: bytes).prefix(16).map { String(format: "%02x", $0) }.joined()
-        analysisCache.withLock { $0 = AnalysisCache(session: session, image: image, hash: hash) }
+        keep(AnalysisCache(session: session, image: image, hash: hash), in: analysisCache)
         keptAnalyses.withLock { kept in
+            guard currentSession() === session else { return }
             kept.removeAll { $0.session == nil || $0.session === session }
             kept.append(KeptAnalysis(session: session, image: image, hash: hash))
             kept.removeFirst(max(0, kept.count - Self.keptAnalysesLimit))
@@ -829,7 +832,8 @@ extension RedlampEngine {
         return (image, hash)
     }
 
-    /// The analysis render at the size masks are stored at, for edges finer than the models see.
+    /// The analysis render at the size masks are stored at, for edges finer than the models see;
+    /// kept, as `analysisImage(for:)` keeps its render, only while the photo is open.
     func matteImage(for session: ImageSession) async throws -> CGImage {
         if let cached = matteCache.withLock({ $0 }), cached.session === session {
             return cached.image
@@ -849,8 +853,29 @@ extension RedlampEngine {
                 })
             }
         }
-        matteCache.withLock { $0 = AnalysisCache(session: session, image: image, hash: "") }
+        keep(AnalysisCache(session: session, image: image, hash: ""), in: matteCache)
         return image
+    }
+
+    /// Keeps `render` in `cache` while its photo is open. Decided under the cache's lock: a photo
+    /// stops being open before the engine lets go of what it keeps for it, so a photo let go of
+    /// while this rendered keeps nothing.
+    func keep(_ render: AnalysisCache, in cache: borrowing Mutex<AnalysisCache?>) {
+        cache.withLock { kept in
+            if currentSession() === render.session {
+                kept = render
+            }
+        }
+    }
+
+    /// Keeps `result`, made from the analysis render `hash`, in `cache` while that render is the
+    /// open photo's, decided as `keep(_:in:)` decides.
+    func keep<Value: Sendable>(_ result: Value, in cache: borrowing Mutex<Value?>, madeFrom hash: String) {
+        cache.withLock { kept in
+            if currentSession().flatMap(keptAnalysis(for:))?.hash == hash {
+                kept = result
+            }
+        }
     }
 
     // MARK: - Warming up

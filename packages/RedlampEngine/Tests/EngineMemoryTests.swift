@@ -774,12 +774,10 @@ struct EngineMemoryTests {
         let keptAnalyses = engine.keptAnalyses.withLock { $0.count }
         let embeddingBytes = engine.objectEmbeddingCache.withLock { $0?.embedding.data().count ?? 0 }
         #expect(visited == nil)
-        withKnownIssue {
-            #expect(photo == nil, "\(photoBytes) bytes of the photo kept")
-            #expect(renderBytes == 0, "\(renderBytes) bytes of its analysis and matte renders kept")
-            #expect(keptAnalyses == 0, "\(keptAnalyses) kept analyses")
-            #expect(embeddingBytes == 0, "\(embeddingBytes) bytes of its embedding kept")
-        }
+        #expect(photo == nil, "\(photoBytes) bytes of the photo kept")
+        #expect(renderBytes == 0, "\(renderBytes) bytes of its analysis and matte renders kept")
+        #expect(keptAnalyses == 0, "\(keptAnalyses) kept analyses")
+        #expect(embeddingBytes == 0, "\(embeddingBytes) bytes of its embedding kept")
     }
 
     /// The photo open now, fitted in a canvas.
