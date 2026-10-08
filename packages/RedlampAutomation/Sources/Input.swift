@@ -487,8 +487,13 @@
 
     public extension RunningApp {
         /// Right-clicks `target` at `point` (0...1 across and down its frame; beyond, beside it) through
-        /// the window, as the mouse does, and chooses `title` in the menu that opens, or closes it
-        /// unchosen. Returns the menu's items, and whether each is checked.
+        /// the window, as the mouse does, and chooses `title` in the menu that opens (a disabled item
+        /// fails), or closes it unchosen. Returns the menu's items, and whether each is checked.
+        ///
+        /// The menu tracks inside the press, and the main run loop answers nothing queued behind the
+        /// press until the menu has closed, which the driver closes: so the driver asks nothing until
+        /// the press has begun. The item chosen runs once the press is over, as a click on it runs it
+        /// once the menu has closed, and without the driver waiting: it may open a dialog.
         @discardableResult
         func rightClick(
             _ target: Target, at point: CGPoint = CGPoint(x: 0.5, y: 0.5), choosing title: String? = nil,
@@ -499,9 +504,16 @@
             let opened = OpenedMenu()
             try main { _ in opened.watch() }
             defer { try? main { _ in opened.stop() } }
-            // The menu tracks inside the press, so this doesn't return until it closes.
+            let began = Flag(), ended = Flag()
             post { _ in
+                began.set()
+                defer { ended.set() }
                 guard let window = Views.editorWindow else { return }
+                Views.lastPress = Views.Press(
+                    kind: "right-click", location: location, window: Views.describe(window),
+                    found: Views.ancestry(window.contentView?.superview?.hitTest(location)).joined(separator: " in "),
+                    sentTo: "the window", time: Date(),
+                )
                 for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
                     guard let event = NSEvent.mouseEvent(
                         with: type, location: location, modifierFlags: [],
@@ -511,8 +523,31 @@
                     window.sendEvent(event)
                 }
             }
+            let deadline = Date().addingTimeInterval(30)
+            while !began.isSet {
+                try expect(Date() < deadline, "The main thread didn't take the right-click on \(target) within 30 s")
+                pause(0.01)
+            }
             try wait("\(target)'s context menu to open") { _ in opened.menu != nil }
-            return try pick(title, in: opened, of: target)
+            let (items, chosen) = try main { _ -> ([(title: String, on: Bool)], Int?) in
+                guard let menu = opened.menu else { return ([], nil) }
+                defer { menu.cancelTracking() }
+                let items = menu.items.filter { !$0.isSeparatorItem }.map { (title: $0.title, on: $0.state == .on) }
+                guard let title else { return (items, nil) }
+                guard let index = menu.items.firstIndex(where: { $0.title == title }) else {
+                    throw ScenarioFailure("\(target)'s menu has no \(title): \(items.map(\.title))")
+                }
+                guard menu.items[index].isEnabled else {
+                    throw ScenarioFailure("\(title) is disabled in \(target)'s menu")
+                }
+                return (items, index)
+            }
+            try wait("\(target)'s context menu to close") { _ in opened.closed && ended.isSet }
+            if let chosen {
+                post { _ in opened.menu?.performActionForItem(at: chosen) }
+                pause(0.05)
+            }
+            return items
         }
 
         /// Clicks the menu button carrying `target`'s identifier (a SwiftUI menu, or a picker in
@@ -542,29 +577,6 @@
                 )
             }
             return items.map { (title: $0.title, on: $0.on) }
-        }
-
-        /// Chooses `title` (when given) in the menu that `opened` caught, and closes it.
-        private func pick(
-            _ title: String?, in opened: OpenedMenu, of target: Target,
-        ) throws -> [(title: String, on: Bool)] {
-            let items = try main { _ -> [(title: String, on: Bool)] in
-                guard let menu = opened.menu else { return [] }
-                defer { menu.cancelTracking() }
-                let items = menu.items.filter { !$0.isSeparatorItem }.map { (title: $0.title, on: $0.state == .on) }
-                if let title {
-                    guard let index = menu.items.firstIndex(where: { $0.title == title }) else {
-                        throw ScenarioFailure("\(target)'s menu has no \(title): \(items.map(\.title))")
-                    }
-                    guard menu.items[index].isEnabled else {
-                        throw ScenarioFailure("\(title) is disabled in \(target)'s menu")
-                    }
-                    menu.performActionForItem(at: index)
-                }
-                return items
-            }
-            try wait("\(target)'s menu to close") { _ in opened.closed }
-            return items
         }
 
         /// Holds `modifiers` down while `body` runs, as the keyboard does: the app's own handling
