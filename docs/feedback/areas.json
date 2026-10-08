@@ -418,6 +418,14 @@
           "title" : "Import Photos"
         },
         {
+          "id" : "library.keywords",
+          "title" : "Keywords and the Keyword List"
+        },
+        {
+          "id" : "library.metadata",
+          "title" : "Metadata, Presets and Capture Time"
+        },
+        {
           "id" : "library.other",
           "title" : "Something else in Library"
         }

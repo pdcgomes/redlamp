@@ -290,6 +290,22 @@ public extension FeedbackArea {
                     "Import Photos",
                     ["import", "card", "memory card", "backup", "destination", "eject", "safe to erase"],
                 ),
+                FeedbackFeature(
+                    "keywords",
+                    "Keywords and the Keyword List",
+                    [
+                        "keyword", "keywords", "tag", "tags", "keywording", "keyword list", "keyword set", "synonym",
+                        "merge keywords", "export keywords",
+                    ],
+                ),
+                FeedbackFeature(
+                    "metadata",
+                    "Metadata, Presets and Capture Time",
+                    [
+                        "metadata", "iptc", "title", "caption", "creator", "copyright", "location", "city",
+                        "metadata preset", "capture time", "time zone",
+                    ],
+                ),
             ],
         ),
         FeedbackArea(
