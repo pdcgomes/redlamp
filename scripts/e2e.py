@@ -881,6 +881,10 @@ def main() -> int:
     parser.add_argument("--passing-report", nargs="+", metavar="COMMIT",
                         help="print a passing report for one of these commits at --tier, if there is one, and exit 0")
     args = parser.parse_args()
+    # The app and its driver are handed paths in the run directory: a relative one becomes a URL relative to the
+    # working directory, which isn't equal to the absolute URL the app has elsewhere for the same folder or photo.
+    if args.out:
+        args.out = args.out.resolve()
 
     if args.passing_report:
         report = passing_report(args.passing_report, args.tier)
