@@ -924,6 +924,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [ ] The remaining film simulations (Eterna, Classic Negative, Nostalgic Negative, Pro Neg, Acros, Reala Ace), which need a shoot with one camera, a chart matrix solve, and a DCP writer <!-- tracker: TON-14, TON-20, TON-35 -->
 - [ ] **Analogue film stocks:** film and digital shot side by side with charts, scanned and fitted by the profiler, with halation, bloom and grain per stock <!-- tracker: TON-21 -->
 - [ ] **The agent recipe studio at scale:** many more recipes developed from briefs, once the critics agree with human picks (about 200 pairwise verdicts) <!-- internal -->
+- [ ] **Looks measured from other apps' filters at scale:** look references made on the iPhone with Redlamp Bench, fitted into ranked candidate looks in the Recipe Lab <!-- internal; tracker: TON-36, TON-37, TON-38 -->
 
 ### Phase 4: 1.0
 - [ ] Lightroom XMP sidecar import <!-- tracker: EDT-12 -->
