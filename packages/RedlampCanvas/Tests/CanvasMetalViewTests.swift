@@ -72,8 +72,6 @@ struct CanvasMetalViewTests {
         controller.pan(byPoints: CGSize(width: 50, height: 0))
         try await Task.sleep(for: .milliseconds(50))
         let after = try #require(view.publishedRects.first)
-        withKnownIssue("RESP-08: the canvas redraws for a pan only when SwiftUI updates it") {
-            #expect(after != before)
-        }
+        #expect(after != before)
     }
 }

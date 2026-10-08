@@ -57,7 +57,6 @@ public struct CanvasView: NSViewRepresentable {
 
     let feed: FrameFeed
     let controller: CanvasController
-    let revision: Int
     let clickAction: ClickAction
     let interactive: Bool
     /// Linear grey level around the photo (Lightroom's Lights Out dims it to black).
@@ -85,7 +84,6 @@ public struct CanvasView: NSViewRepresentable {
         self.forwardsCoveredEvents = forwardsCoveredEvents
         self.feed = feed
         self.controller = controller
-        revision = controller.revision
         self.clickAction = clickAction
         self.interactive = interactive
         self.onSample = onSample
@@ -98,8 +96,8 @@ public struct CanvasView: NSViewRepresentable {
         return view
     }
 
-    /// Runs only when the view's inputs change (geometry revision, tool, surround); new
-    /// frames arrive through the feed.
+    /// Runs only when the view's inputs change (tool, surround); the canvas redraws itself for
+    /// new frames, which arrive through the feed, and for pans and zooms.
     public func updateNSView(_ view: CanvasMetalView, context _: Context) {
         view.clickAction = clickAction
         view.interactive = interactive
@@ -108,6 +106,5 @@ public struct CanvasView: NSViewRepresentable {
         view.forwardsCoveredEvents = forwardsCoveredEvents
         view.onSample = onSample
         view.onCommandScroll = onCommandScroll
-        view.setNeedsRedraw()
     }
 }

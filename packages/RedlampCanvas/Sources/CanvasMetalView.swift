@@ -2,6 +2,7 @@ import AppKit
 import CoreImage
 import IOSurface
 import Metal
+import Observation
 import QuartzCore
 import RedlampEngineAPI
 
@@ -105,6 +106,19 @@ public final class CanvasMetalView: NSView {
         super.init(frame: .zero)
         setAccessibilityIdentifier("canvas")
         wantsLayer = true
+        trackController()
+    }
+
+    /// Redraws for each change to the controller (a pan, a zoom, the stage) without a SwiftUI
+    /// update. Observation reports a change before it is stored, so the redraw waits a turn, and
+    /// a burst of changes redraws once.
+    private func trackController() {
+        withObservationTracking { _ = controller.revision } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.setNeedsRedraw()
+                self?.trackController()
+            }
+        }
     }
 
     @available(*, unavailable)
