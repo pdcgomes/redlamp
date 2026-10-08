@@ -6,6 +6,7 @@ import ImageIO
 import RedlampDocument
 import RedlampEngineAPI
 import RedlampLibrary
+import Synchronization
 import Testing
 import UniformTypeIdentifiers
 @_spi(Harness) @testable import RedlampUI
@@ -363,6 +364,40 @@ struct LibraryGroupsTests {
 
         try await group(model, by: .ungrouped)
         #expect(!model.canPerform(.nextGroup) && !model.perform(.previousGroup))
+    }
+
+    @Test func `the menus are told as a grouping lands, and as the first group closes or the last opens`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await open()
+        defer { window.contentView = nil }
+        try model.select(url(model, "A04.JPG"))
+        let told = Mutex(false)
+        let watch = {
+            told.withLock { $0 = false }
+            withObservationTracking {
+                _ = [ShortcutAction.toggleGroup, .openAllGroups, .closeAllGroups].map(model.canPerform)
+            } onChange: {
+                told.withLock { $0 = true }
+            }
+        }
+        watch()
+        model.setGroupKey(.moment)
+        try await eventually { model.gridGroups.list?.groups.key == .moment }
+        #expect(told.withLock { $0 }, "the grouping landed")
+        #expect(model.canPerform(.toggleGroup) && model.canPerform(.closeAllGroups))
+        #expect(!model.canPerform(.openAllGroups))
+
+        watch()
+        model.gridGroups.close(1)
+        #expect(told.withLock { $0 }, "the first group closed")
+        #expect(model.canPerform(.openAllGroups))
+        watch()
+        model.gridGroups.close(2)
+        #expect(!told.withLock { $0 }, "another closed, others still open")
+        model.openAllGroups()
+        #expect(told.withLock { $0 }, "the last opened")
+        #expect(!model.canPerform(.openAllGroups))
     }
 
     // MARK: - Moments' setting and each source's view

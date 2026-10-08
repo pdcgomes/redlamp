@@ -33,10 +33,20 @@ import RedlampLibrary
         @_spi(Harness) public var moments: Int
     }
 
+    /// The groups as the menus and the palette follow them, the list itself not being observed: a new grouping,
+    /// and the first group opened or the last closed, not every group's change.
+    @_spi(Harness) public struct Outline: Equatable {
+        /// Counts the groupings the list has had.
+        var groupings = 0
+        var someOpen = false
+        var someClosed = false
+    }
+
     @ObservationIgnored private weak var model: EditorModel?
     /// The source's photos in their groups; nil while ungrouped, without the library, and until the first
     /// grouping is in.
     @ObservationIgnored @_spi(Harness) public private(set) var list: GroupedList?
+    @_spi(Harness) public private(set) var outline = Outline()
     /// Each group's picks, from the photos' badges.
     @ObservationIgnored @_spi(Harness) public private(set) var picks: [Int] = []
     @_spi(Harness) public private(set) var coverage: Coverage?
@@ -279,6 +289,15 @@ import RedlampLibrary
     }
 
     private func changed(_ change: Change) {
+        var next = outline
+        if change == .regrouped {
+            next.groupings += 1
+        }
+        next.someOpen = list.map { list in list.groups.indices.contains(where: list.isOpen) } ?? false
+        next.someClosed = list.map { list in list.groups.indices.contains { !list.isOpen($0) } } ?? false
+        if next != outline {
+            outline = next
+        }
         for observer in observers.values {
             observer(change)
         }

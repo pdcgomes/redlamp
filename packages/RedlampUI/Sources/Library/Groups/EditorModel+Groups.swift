@@ -229,6 +229,7 @@ extension EditorModel {
             return key == .ungrouped || canGroupPhotos
         }
         let groups = gridGroups
+        let outline = groups.outline
         let list = groups.list
         switch action {
         case .tighterMoments, .looserMoments:
@@ -236,8 +237,8 @@ extension EditorModel {
             return action == .looserMoments ? libraryViews.looseness < MomentSetting.loosest
                 : libraryViews.looseness > MomentSetting.tightest
         case .toggleGroup: return activeGroup != nil
-        case .openAllGroups: return list.map { list in list.groups.indices.contains { !list.isOpen($0) } } ?? false
-        case .closeAllGroups: return list.map { list in list.groups.indices.contains(where: list.isOpen) } ?? false
+        case .openAllGroups: return outline.someClosed
+        case .closeAllGroups: return outline.someOpen
         case .unpickedMoments: return groups.coverage != nil
         case .previousGroup, .nextGroup: return groupBeside(by: action == .nextGroup ? 1 : -1) != nil
         case .previousPhoto, .nextPhoto:
@@ -245,7 +246,7 @@ extension EditorModel {
             guard let id = (opening ?? selection).flatMap(library.photoID(of:)) else { return false }
             return groups.shownPhoto(action == .nextPhoto ? 1 : -1, from: id) != nil
         case .selectAllPhotos:
-            guard let list, list.groups.indices.contains(where: { !list.isOpen($0) }) else { return nil }
+            guard let list, outline.someClosed else { return nil }
             return selection != nil && photoSelection.count < list.count - list.groups.count
         default:
             guard CullingChange(action) != nil, module == .library, photoSelection.isEmpty, activePhotoIsClosed else {

@@ -18,17 +18,31 @@
                 try app.showGroups(by: key)
                 switch action {
                 case .previousGroup, .nextGroup:
-                    try app.main { model in
+                    // A photo selected in the grid opens in Develop, not here, so there's no render to settle.
+                    let url = try app.main { model -> URL? in
                         let group = action == .previousGroup ? 1 : 0
-                        if let list = model.gridGroups.list, list.groups.count > 1,
-                           let photo = list.groups[group].photos.first, let url = model.library.url(ofPhoto: photo) {
-                            model.select(url)
-                        }
+                        guard let list = model.gridGroups.list, list.groups.count > 1,
+                              let photo = list.groups[group].photos.first, let url = model.library.url(ofPhoto: photo)
+                        else { return nil }
+                        model.select(url)
+                        return url
                     }
-                case .openAllGroups: try app.main { $0.closeAllGroups() }
-                default: break
+                    if let url {
+                        try app.wait("the group's first photo selected") { $0.selection == url }
+                    }
+                case .openAllGroups:
+                    try app.main { $0.closeAllGroups() }
+                    try app.settle()
+                default:
+                    try app.settle()
                 }
-                try app.settle()
+                try app.main { model in
+                    guard model.canPerform(action) else {
+                        throw ScenarioFailure("\(action.title) isn't available: " + GroupScenarios.groups(model)
+                            .map { "\($0.name) \($0.count)" }.joined(separator: ", ")
+                            + " of \(model.items.count) photos; \(GroupScenarios.state(model))")
+                    }
+                }
             }, observe: GroupScenarios.state, restore: { app in
                 try app.main { model in
                     model.setLooseness(0)
@@ -106,7 +120,7 @@
                 + (model.selection?.lastPathComponent ?? "")
         }
 
-        @MainActor private static func groups(_ model: EditorModel) -> [(name: String, count: Int, picks: Int)] {
+        @MainActor static func groups(_ model: EditorModel) -> [(name: String, count: Int, picks: Int)] {
             guard let list = model.gridGroups.list else { return [] }
             return list.groups.indices.map { (list.groups[$0].name, list.groups[$0].count, model.gridGroups.picks[$0]) }
         }
