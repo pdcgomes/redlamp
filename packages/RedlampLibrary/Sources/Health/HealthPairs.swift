@@ -240,10 +240,13 @@ struct HealthPairs: Sendable {
 }
 
 extension IndexQueries {
-    /// Photos `ids` that can be in a pair as the index has them now, or every such photo when nil.
+    /// Photos `ids` that can be in a pair as the index has them now, or every such photo when nil, but those of
+    /// roots marked removed.
     func pairPhotos(of ids: [Int64]?) throws -> [HealthPairs.Photo] {
         var photos: [HealthPairs.Photo] = []
+        let leftOut = try removedFolders()
         func add(_ row: SQLiteStatement) {
+            guard !leftOut.contains(row.int64(at: 1)) else { return }
             photos.append(HealthPairs.Photo(
                 id: row.int64(at: 0), folder: row.int64(at: 1), name: row.string(at: 2) ?? "",
                 kind: UInt8(clamping: row.int(at: 3)),

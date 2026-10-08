@@ -242,6 +242,26 @@ public final class QueryEngine: Sendable {
         }
     }
 
+    /// Takes photos `ids` out of the column store without reading them, and reads the small tables again:
+    /// the photos of a root marked removed, which the index keeps until they're swept and every read of the
+    /// store leaves out meanwhile (`LibraryIndex.Writer.markRemoved`). Call it once the mark is committed.
+    public func remove(photos ids: [Int64]) async throws {
+        state.withLock { state in
+            for kind in [PostingKind.keywords, .collections]
+                where state.postings[kind] != nil || state.readingPostings[kind, default: 0] > 0 {
+                state.stalePostings[kind, default: []].formUnion(ids)
+            }
+        }
+        try await change(pairs: .drop) { [source] store, names, generation in
+            guard var store else { return nil }
+            store.apply(ColumnStore.Changes(removed: ids)) { _ in nil }
+            let caught = try await source.catchingUp([], in: store, names: names, since: generation, readingNames: true)
+            return Changed(
+                store: caught.store, names: caught.names, photos: ids + caught.photos, generation: caught.generation,
+            )
+        }
+    }
+
     /// Saves the store's snapshot beside the index (LIB-44), brought up to the index's generation
     /// first: what the app does at quit. Nothing is written when the snapshot there already reflects
     /// the index, and only its header when the store hasn't changed since it was saved; afterwards

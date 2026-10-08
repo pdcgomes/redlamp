@@ -295,15 +295,19 @@ struct IndexQuerySource: QuerySource {
     /// Read in parts, a range of photo IDs on each of the index's readers, the last open-ended, once
     /// the index file is in memory, then joined. Each part is read in a transaction of its own:
     /// what's written while they're read reaches the store through the updates that follow the load.
+    /// The photos of roots marked removed are left out.
     func columnStore() async throws -> ColumnStore {
         await index.readAhead()
-        guard let ids = try await index.read({ try $0.photoIDs() }) else { return ColumnStore() }
+        let (found, leftOut) = try await index.read { reader in try (reader.photoIDs(), reader.removedFolders()) }
+        guard let ids = found else { return ColumnStore() }
         let ranges = Self.ranges(ids, parts: index.readerCount)
         let capacity = Int(ids.upperBound - ids.lowerBound) / ranges.count + 1
         let parts = try await withThrowingTaskGroup(of: (Int, ColumnStore.Part).self) { [index] group in
             for (number, range) in ranges.enumerated() {
                 group.addTask {
-                    try await (number, index.read { try $0.columnStorePart(ids: range, capacity: capacity) })
+                    try await (number, index.read { reader in
+                        try reader.columnStorePart(ids: range, capacity: capacity, leavingOut: leftOut)
+                    })
                 }
             }
             var parts = [ColumnStore.Part](repeating: ColumnStore.Part(), count: ranges.count)
@@ -564,9 +568,16 @@ public extension IndexQueries {
 }
 
 extension IndexQueries {
+    /// The small tables, without the folders of roots marked removed.
     func queryNames() throws -> QueryNames {
         var folders: [Int64: String] = [:]
-        try database.cached("SELECT id, path FROM folders").forEachRow { folders[$0.int64(at: 0)] = $0.string(at: 1) }
+        let leftOut = try removedFolders()
+        try database.cached("SELECT id, path FROM folders").forEachRow { row in
+            let id = row.int64(at: 0)
+            if !leftOut.contains(id) {
+                folders[id] = row.string(at: 1)
+            }
+        }
         var collections: [Int64: String] = [:]
         try database.cached("SELECT id, path FROM collections WHERE path IS NOT NULL").forEachRow { row in
             collections[row.int64(at: 0)] = row.string(at: 1)

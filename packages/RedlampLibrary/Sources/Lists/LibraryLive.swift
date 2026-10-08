@@ -186,6 +186,27 @@ public final class LibraryLive: Sendable {
         gather { $0.changed.formUnion(ids) }
     }
 
+    /// Photos taken out of the library ahead of their rows, a root's removed from Folders
+    /// (`LibraryIndex.Writer.markRemoved`): the store drops them at once, without waiting for changes to
+    /// gather, and every open list that held them hands over its update. Returns once each has.
+    public func remove(_ ids: [Int64]) async {
+        guard !ids.isEmpty else { return }
+        await enqueue { [self] in
+            do {
+                try await engine.remove(photos: ids)
+            } catch {
+                return
+            }
+            let changed = Set(ids)
+            let lists = state.withLock { Array($0.lists.keys) }
+            await withTaskGroup(of: Void.self) { group in
+                for id in lists {
+                    group.addTask { await self.refresh(id, changed: changed) }
+                }
+            }
+        }.value
+    }
+
     /// The collections changed beyond their photos' rows: one made, renamed, moved or deleted, or a
     /// smart collection's query. Their names and queries are read again, and the lists made again.
     public func namesChanged() {

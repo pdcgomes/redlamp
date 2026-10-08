@@ -133,13 +133,21 @@ public final class LibraryIndexer: Sendable {
     }
 
     private func start(_ request: Request) -> AsyncStream<LibraryIndexerEvent> {
+        inTurn { [self] events in await Run(indexer: self, events: events).perform(request) }
+    }
+
+    /// Runs `body` once the runs asked for before it are over, unless it's cancelled meanwhile, and ends its
+    /// events after it. Cancelling the task iterating them cancels it.
+    func inTurn(
+        _ body: @escaping @Sendable (AsyncStream<LibraryIndexerEvent>.Continuation) async -> Void,
+    ) -> AsyncStream<LibraryIndexerEvent> {
         let (stream, continuation) = AsyncStream.makeStream(of: LibraryIndexerEvent.self)
         let task = state.withLock { state -> Task<Void, Never> in
             let previous = state.last
-            let task = Task { [self] in
+            let task = Task {
                 await previous?.value
                 if !Task.isCancelled {
-                    await Run(indexer: self, events: continuation).perform(request)
+                    await body(continuation)
                 }
                 continuation.finish()
             }

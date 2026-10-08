@@ -3,8 +3,10 @@ import Foundation
 extension IndexQueries {
     /// The part of the column store holding the photos with IDs in `ids`, for `ColumnStore.joining`:
     /// their columns in one pass over the photos in ID order, and whether each has keywords from a
-    /// pass beside it.
-    func columnStorePart(ids: ClosedRange<Int64>, capacity: Int = 0) throws -> ColumnStore.Part {
+    /// pass beside it. Photos in the folders of `leavingOut` (`removedFolders`) aren't in it.
+    func columnStorePart(
+        ids: ClosedRange<Int64>, capacity: Int = 0, leavingOut: Set<Int64> = [],
+    ) throws -> ColumnStore.Part {
         var part = ColumnStore.Part(capacity: capacity)
         let photos = try database.cached("""
         SELECT \(Self.columnRowSQL) FROM photos p WHERE p.id BETWEEN ?1 AND ?2 ORDER BY p.id
@@ -23,6 +25,9 @@ extension IndexQueries {
         var onKeywords = try keywords.step()
         while try photos.step() {
             var row = Self.columnRow(photos)
+            if !leavingOut.isEmpty, leavingOut.contains(row.hot.folder) {
+                continue
+            }
             while onKeywords, keywords.int64(at: 0) < row.hot.id {
                 onKeywords = try keywords.step()
             }
@@ -41,20 +46,23 @@ extension IndexQueries {
         } ?? nil
     }
 
-    /// The rows of photos `ids` the index holds, for `ColumnStore.apply`.
+    /// The rows of photos `ids` the index holds, for `ColumnStore.apply`, but those of roots marked
+    /// removed, which the store leaves out.
     func columnRows(ids: [Int64]) throws -> [ColumnStore.Row] {
         let statement = try database.cached("""
         SELECT \(Self.columnRowSQL), \(ColumnEncoding.keywordsSQL) FROM photos p WHERE p.id = ?
         """)
+        let leftOut = ids.isEmpty ? [] : try removedFolders()
         return try ids.compactMap { id in
             try statement.bind(id, at: 1)
-            return try statement.first { row in
+            let found = try statement.first { row in
                 var columns = Self.columnRow(row)
                 if row.bool(at: 34) {
                     columns.details.insert(.keywords)
                 }
                 return columns
             }
+            return found.flatMap { leftOut.contains($0.hot.folder) ? nil : $0 }
         }
     }
 
