@@ -62,6 +62,9 @@ struct RootRemovalTests {
         #expect(try await engine.ids("kw:Lisbon") == [home])
         #expect(try await engine.ids("rating>=3").isEmpty)
         #expect(try await engine.ids("folder:\"Day 2\"").isEmpty, "its folders leave the small tables")
+        #expect(try await engine.photos(named: "IMG_0001").count == 0, "the palette finds none of its photos")
+        let folders = try #require(engine.snapshot()).1.names.folders.values
+        #expect(!folders.contains { $0.hasPrefix(LibraryIndexer.path(sandbox.url("Trip"))) }, "nor its folders")
         #expect(try await Self.counts(sandbox) == (1, 1))
 
         await roots.swept()
