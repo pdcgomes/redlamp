@@ -182,10 +182,12 @@ final class LibrarySourceList: Sendable {
         /// Handed over whole with every change: merging a list's thousands on the main thread takes milliseconds.
         private var keys: [URL: ContentKey] = [:]
         private var indexIDs: [URL: Int64] = [:]
-        /// The photos changed or gone since the last change was handed over: only those can differ from its rows.
+        /// The photos whose rows changed or that went since the last change was handed over: only those can differ
+        /// from its rows. The rows handed over aren't kept: the main thread changes their badges in place, which
+        /// a copy kept here would make it copy whole.
         private var touched = Set<Int64>()
-        /// The IDs handed over last, in order, their photos, and each one's place among them; nil before the first.
-        private var handed: (ids: [Int64], items: [LibraryItem], places: [Int64: Int32])?
+        /// The IDs handed over last, in order, and each one's place among them; nil before the first.
+        private var handed: (ids: [Int64], places: [Int64: Int32])?
 
         /// Whether photo `id` is one of the source's.
         func holds(_ id: Int64) -> Bool {
@@ -224,7 +226,11 @@ final class LibrarySourceList: Sendable {
                 if let old = items[row.id]?.url, old != url {
                     forget(old)
                 }
-                items[row.id] = LibraryFolderList.Mapping.item(row, url: url)
+                let item = LibraryFolderList.Mapping.item(row, url: url)
+                if items[row.id] != item {
+                    items[row.id] = item
+                    touched.insert(row.id)
+                }
                 // Written only when they differ: the main thread holds the last change's, which a write copies.
                 let key = row.contentKey.flatMap(ContentKey.init(data:))
                 if keys[url] != key {
@@ -233,7 +239,6 @@ final class LibrarySourceList: Sendable {
                 if indexIDs[url] != row.id {
                     indexIDs[url] = row.id
                 }
-                touched.insert(row.id)
             }
             let kept = Set(ids)
             for (id, item) in items.filter({ !kept.contains($0.key) }) {
@@ -257,7 +262,7 @@ final class LibrarySourceList: Sendable {
         /// The change handing over the photos `ids` names, in its order, against those handed over before.
         mutating func change(handing ids: [Int64]) -> Change {
             let first = handed == nil
-            let before = handed ?? ([], [], [:])
+            let before = handed ?? ([], [:])
             var change = Change(
                 items: [], positions: [:], previous: [], previousCount: first ? -1 : before.ids.count,
                 diff: LibraryDiff(), keys: keys, ids: indexIDs, total: self.ids.count,
@@ -286,7 +291,7 @@ final class LibrarySourceList: Sendable {
                     carried.insert(Int(place))
                     inOrder = inOrder && place > lastCarried
                     lastCarried = place
-                    if touched.contains(id), before.items[Int(place)] != item {
+                    if touched.contains(id) {
                         updated.insert(index)
                     }
                 }
@@ -299,7 +304,7 @@ final class LibrarySourceList: Sendable {
             let inserted = IndexSet(change.previous.indices.filter { change.previous[$0] < 0 })
             change.diff = !first && inOrder && removed.count + inserted.count <= LibrarySourceList.largestDiff
                 ? LibraryDiff(removed: removed, inserted: inserted, updated: updated) : LibraryDiff(reset: true)
-            handed = (listed, change.items, places)
+            handed = (listed, places)
             touched = []
             return change
         }
