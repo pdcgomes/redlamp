@@ -25,6 +25,8 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .newItem) {
             item(.openFolder, perform: onOpen)
             item(.importPhotos)
+            item(.importKeywords)
+            item(.exportKeywords)
             Divider()
             item(.export, perform: onExport)
             item(.exportWithPrevious, perform: onExportWithPrevious)
@@ -107,6 +109,28 @@ struct AppCommands: Commands {
                 item(.clearLabel)
             }
             mouseItem(.toggleMark)
+            // Library's keyword set (LIB-21): its nine keywords on the selection, toggled, and the set chosen.
+            Menu("Keyword Set") {
+                Picker("Keyword Set", selection: Binding(
+                    get: { model.libraryPanels.activeSet?.name ?? "" },
+                    set: { model.libraryPanels.chooseKeywordSet($0) },
+                )) {
+                    ForEach(model.libraryPanels.keywordSets) { Text($0.name).tag($0.name) }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                .disabled(model.module != .library || model.isModalDialogOpen)
+                Divider()
+                ForEach(ShortcutAction.allCases.filter { $0.keywordSetNumber != nil }) { action in
+                    let keyword = action.keywordSetNumber
+                        .flatMap { model.libraryPanels.activeSet?.keyword(forShortcut: $0) }
+                    Button("\(keyword?.name ?? action.title)    \(action.combos.first?.display ?? "")") {
+                        model.perform(action)
+                    }
+                    .disabled(!model.canPerform(action))
+                }
+            }
+            item(.editCaptureTime)
             Toggle(ShortcutAction.autoAdvance.title, isOn: Binding(
                 get: { model.autoAdvance },
                 set: { _ in model.perform(.autoAdvance) },
@@ -195,6 +219,7 @@ struct AppCommands: Commands {
                 set: { _ in model.perform(.labReadout) },
             ))
             .disabled(!model.canPerform(.labReadout))
+            commandItem(.toggleRightPanel)
             toggle(.showPhotosInSubfolders, isOn: model.library.includesSubfolders)
             item(.showRecentlyTrashed)
             Menu("Develop Panels") {
@@ -240,6 +265,14 @@ struct AppCommands: Commands {
         }
         .keyboardShortcut(action.combos.first?.keyboardShortcut)
         .disabled(!action.isAvailable || !model.canPerform(action))
+    }
+
+    /// A menu item carrying the first of the action's keys with ⌘, which menus can: an action whose first
+    /// key is a single key, as F8 for the right panel is, and which has a ⌘ key besides.
+    private func commandItem(_ action: ShortcutAction) -> some View {
+        Button(action.title) { model.perform(action) }
+            .keyboardShortcut(action.combos.first(where: \.command)?.keyboardShortcut)
+            .disabled(!model.canPerform(action))
     }
 
     /// A menu item for a single-key shortcut: the key is shown in the title, because a

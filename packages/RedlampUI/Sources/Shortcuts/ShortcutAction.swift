@@ -115,6 +115,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case groupByNone, groupByMoment, groupByDay, groupByFolder, groupByCamera, groupByLens, groupByOrientation
     case groupByMomentCamera, tighterMoments, looserMoments, toggleGroup, openAllGroups, closeAllGroups
     case unpickedMoments
+    case keywordSet1, keywordSet2, keywordSet3, keywordSet4, keywordSet5, keywordSet6, keywordSet7, keywordSet8
+    case keywordSet9
+    case importKeywords, exportKeywords, editCaptureTime
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -170,7 +173,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort,
              .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
              .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
-             .openAllGroups, .closeAllGroups, .unpickedMoments:
+             .openAllGroups, .closeAllGroups, .unpickedMoments,
+             .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
+             .keywordSet8, .keywordSet9, .importKeywords, .exportKeywords, .editCaptureTime:
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
@@ -248,6 +253,12 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .openAllGroups: "Open All Groups"
         case .closeAllGroups: "Close All Groups"
         case .unpickedMoments: "Only Moments without a Pick"
+        case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
+             .keywordSet8, .keywordSet9:
+            "Keyword Set: Keyword \(keywordSetNumber ?? 0)"
+        case .importKeywords: "Import Keywords…"
+        case .exportKeywords: "Export Keywords…"
+        case .editCaptureTime: "Edit Capture Time…"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -378,6 +389,11 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .showPhotosInSubfolders, .showRecentlyTrashed, .putBackBatch, .lockFilters, .sortByFolder,
              .sortByCaptureTime, .sortByName, .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize,
              .reverseSort: []
+        // Lightroom Classic's keys for the active keyword set's nine keywords.
+        case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
+             .keywordSet8, .keywordSet9:
+            [.char(Character("\(keywordSetNumber ?? 0)"), option: true)]
+        case .importKeywords, .exportKeywords, .editCaptureTime: []
         // Finder's Put Back, in the Trash.
         case .putBack: [KeyCombo(.delete, command: true)]
         // Lightroom Classic has no Group By; its menus, the grid's toolbar and headers, and the palette have them.
@@ -402,7 +418,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .toggleAllPanels: [KeyCombo(.tab, shift: true)]
         case .toggleFilmstrip: [KeyCombo(.function(6))]
         case .toggleLeftPanel: [KeyCombo(.function(7))]
-        case .toggleRightPanel: [KeyCombo(.function(8))]
+        // ⌥⌘→ as Lightroom Classic has it on the Mac, its menu item's.
+        case .toggleRightPanel: [KeyCombo(.function(8)), KeyCombo(.right, option: true, command: true)]
         case .panelBasic: [.char("1", command: true)]
         case .panelToneCurve: [.char("2", command: true)]
         case .panelColorMixer: [.char("3", command: true)]
@@ -487,6 +504,22 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .findAdjustment: [.char("f", command: true)]
         case .commandPalette: [.char("k", command: true)]
         case .testCamera: []
+        }
+    }
+
+    /// The keyword ⌥1 to ⌥9 apply from the active keyword set (LIB-21); nil for every other action.
+    public var keywordSetNumber: Int? {
+        switch self {
+        case .keywordSet1: 1
+        case .keywordSet2: 2
+        case .keywordSet3: 3
+        case .keywordSet4: 4
+        case .keywordSet5: 5
+        case .keywordSet6: 6
+        case .keywordSet7: 7
+        case .keywordSet8: 8
+        case .keywordSet9: 9
+        default: nil
         }
     }
 

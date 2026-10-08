@@ -657,6 +657,8 @@ public final class EditorModel {
     @ObservationIgnored public let editRenders: EditRenders
     /// The grid's thumbnail size and cell style, the loupe's zoom, and each source's view as last left.
     @ObservationIgnored public private(set) lazy var libraryViews = LibraryViewState(defaults: library.defaults)
+    /// Library's right-hand panels: keywording, the keyword list and metadata (LIB-21, LIB-22).
+    @ObservationIgnored public private(set) lazy var libraryPanels = LibraryPanels(model: self)
     #if DEBUG || REDLAMP_PROFILING
         /// `filmstrip=shown` in a capture script: the floating filmstrip stays up with a photo
         /// selected, as it does while the pointer is over it.

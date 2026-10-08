@@ -151,6 +151,20 @@
                 })
             case .putBack, .putBackBatch:
                 ActionCheck(action: action, unavailable: "needs a photo in Recently Trashed: checked by its scenario")
+            case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
+                 .keywordSet8, .keywordSet9:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs Library's selection and a keyword set: checked by "
+                        + "library.keywording",
+                )
+            case .importKeywords, .exportKeywords:
+                ActionCheck(
+                    action: action,
+                    unavailable: "opens the Open or Save panel: checked by library.keyword-list",
+                )
+            case .editCaptureTime:
+                ActionCheck(action: action, unavailable: "needs Library's selection: checked by library.capture-time")
             // View
             case .beforeAfter: .toggle(action) { "\($0.showBefore)" }
             case .nextCompareLayout, .previousCompareLayout:

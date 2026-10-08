@@ -25,7 +25,9 @@ final class LibraryFoldersColumn: PanelColumnScrollView {
     }
 }
 
-/// The Library module's right column: the active photo's file and badges.
+/// The Library module's right column, as Lightroom Classic's: the active photo's file and badges, then the
+/// Keywording, Keyword List and Metadata panels (LIB-21, LIB-22), each collapsible, which are open kept between
+/// launches (`LibraryPanels`). F8 and ⌥⌘→ show and hide it.
 final class LibraryInfoColumn: PanelColumnScrollView {
     private let model: EditorModel
     private let rows: [InfoRow]
@@ -53,18 +55,26 @@ final class LibraryInfoColumn: PanelColumnScrollView {
         self.model = model
         let rows = Field.allCases.map { InfoRow(title: $0.title) }
         self.rows = rows
-        let panels = LibraryPanels()
-        let photo = PanelSectionView(
-            title: "Photo", symbol: "info.circle", rows: rows,
-            actions: PanelSectionView.Actions(
-                isExpanded: { panels.photoExpanded },
-                isEdited: { false },
-                toggle: { _ in panels.photoExpanded.toggle() },
-                reset: {},
-            ),
-        )
-        photo.identify(as: "library.photo")
-        super.init(views: [photo])
+        let panels = model.libraryPanels
+        func section(_ panel: LibraryPanels.Panel, _ rows: [NSView]) -> PanelSectionView {
+            let section = PanelSectionView(
+                title: panel.title, symbol: panel.symbol, rows: rows,
+                actions: PanelSectionView.Actions(
+                    isExpanded: { panels.isExpanded(panel) },
+                    isEdited: { false },
+                    toggle: { solo in panels.toggle(panel, solo: solo) },
+                    reset: {},
+                ),
+            )
+            section.identify(as: "library.\(panel.rawValue)")
+            return section
+        }
+        super.init(views: [
+            section(.photo, rows),
+            section(.keywording, [KeywordingPanelView(panels: panels)]),
+            section(.keywordList, [KeywordListPanelView(model: model, panels: panels)]),
+            section(.metadata, [MetadataPanelView(model: model, panels: panels)]),
+        ])
     }
 
     @available(*, unavailable)
@@ -77,6 +87,7 @@ final class LibraryInfoColumn: PanelColumnScrollView {
         tracker?.cancel()
         tracker = nil
         guard window != nil else { return }
+        model.libraryPanels.follow()
         tracker = Tracker { [weak self] in
             guard let self else { return }
             _ = model.library.revision
@@ -101,12 +112,6 @@ final class LibraryInfoColumn: PanelColumnScrollView {
         case .edited: return item.hasEdits ? "Yes" : "No"
         }
     }
-}
-
-/// Which of the Library module's panels are expanded.
-@Observable
-private final class LibraryPanels {
-    var photoExpanded = true
 }
 
 /// A field's name and value, as the Develop panels' rows are spaced.

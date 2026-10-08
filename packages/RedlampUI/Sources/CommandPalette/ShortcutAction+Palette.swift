@@ -46,6 +46,18 @@ extension ShortcutAction {
         .unpickedMoments: ["moment", "unpicked", "coverage", "no pick", "missing", "cull", "library"],
         .previousGroup: ["group", "moment", "previous", "back", "jump"],
         .nextGroup: ["group", "moment", "next", "jump", "skip"],
+        .keywordSet1: ["keyword", "tag", "keyword set", "apply", "library"],
+        .keywordSet2: ["keyword", "tag", "keyword set", "apply", "library"],
+        .keywordSet3: ["keyword", "tag", "keyword set", "apply", "library"],
+        .keywordSet4: ["keyword", "tag", "keyword set", "apply", "library"],
+        .keywordSet5: ["keyword", "tag", "keyword set", "apply", "library"],
+        .keywordSet6: ["keyword", "tag", "keyword set", "apply", "library"],
+        .keywordSet7: ["keyword", "tag", "keyword set", "apply", "library"],
+        .keywordSet8: ["keyword", "tag", "keyword set", "apply", "library"],
+        .keywordSet9: ["keyword", "tag", "keyword set", "apply", "library"],
+        .importKeywords: ["keywords", "keyword list", "import", "lightroom", "tags", "text file", "library"],
+        .exportKeywords: ["keywords", "keyword list", "export", "lightroom", "tags", "text file", "library"],
+        .editCaptureTime: ["capture time", "date", "time", "shift", "clock", "time zone", "taken", "library"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -180,6 +192,11 @@ extension ShortcutAction {
         case .unpickedMoments: "flag.slash"
         case .previousGroup: "chevron.left.2"
         case .nextGroup: "chevron.right.2"
+        case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
+             .keywordSet8, .keywordSet9: "tag"
+        case .importKeywords: "square.and.arrow.down"
+        case .exportKeywords: "square.and.arrow.up.on.square"
+        case .editCaptureTime: "clock.arrow.2.circlepath"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"
