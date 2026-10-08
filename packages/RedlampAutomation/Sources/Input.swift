@@ -605,7 +605,10 @@
         }
 
         /// Clicks the control carrying `identifier` in the window titled `title`, such as a switch
-        /// in Settings, through that window as the mouse does.
+        /// in Settings, through that window as the mouse does. While the app isn't active or the
+        /// window isn't key, the press goes nowhere, even on a switch that accepts first mouse
+        /// (the mouse's would activate them first), so there the control is clicked as the
+        /// keyboard clicks it.
         func click(_ identifier: String, inWindowTitled title: String) throws {
             let location = try main { _ -> NSPoint in
                 guard let window = Views.window(titled: title) else { throw ScenarioFailure("No \(title) window") }
@@ -625,6 +628,17 @@
                     )
                 }
                 guard events.count == 2 else { return }
+                let hit = window.contentView?.superview?.hitTest(location)
+                let control = NSApp.isActive && window.isKeyWindow ? nil : hit as? NSControl
+                Views.lastPress = Views.Press(
+                    kind: "click", location: location, window: Views.describe(window),
+                    found: Views.ancestry(hit).joined(separator: " in "),
+                    sentTo: control.map { "\(Views.describe($0)), as the keyboard" } ?? "the window", time: Date(),
+                )
+                if let control {
+                    control.performClick(nil)
+                    return
+                }
                 // A control that tracks the press takes the release from the queue, as the mouse's.
                 NSApp.postEvent(events[1], atStart: false)
                 window.sendEvent(events[0])
