@@ -15,6 +15,9 @@ clicks and drags; this script launches it, watches it, and judges the run.
 It exits 1 if a scenario fails (a pass on retry is flaky, reported, and doesn't fail the run), the
 app crashes or hangs, a feature the full tiers must cover isn't covered or exempted, or the
 owner's own Redlamp state changed. The report is build/e2e/<commit>-<time>/report.md.
+
+A failed scenario is retried once, in a launch that starts from the photos, home and defaults the
+first attempt started from; the run directory's attempt-1 keeps what the first attempt left.
 """
 
 from __future__ import annotations
@@ -151,6 +154,11 @@ def prepare_photos(photos: Path) -> list[str]:
     return names
 
 
+def copy_photos(originals: Path, photos: Path) -> None:
+    """The photos folder as an attempt first finds it: APFS clones of the run's originals, their dates kept."""
+    run(["cp", "-cR", str(originals), str(photos)])
+
+
 # Kept between runs on the checkout's volume, so each test home gets clones (no space, no
 # copying) of the models and their compiles, rather than a copy of every model compiled anew.
 CACHE = ROOT / "build/e2e/cache"
@@ -215,24 +223,20 @@ def free_bytes(path: Path) -> int:
     return shutil.disk_usage(path).free
 
 
-def storage_check(home: Path, compiles_before: set[str], free_before: int) -> dict:
-    """What the run left in the test home and the temporary folder, against the app's limits."""
+def left_behind(home: Path) -> list[str]:
+    """What the app left in `home` and in its defaults that it should have removed or kept within its limits."""
     problems: list[str] = []
-    sizes = {}
     for relative, limit in STORAGE_LIMITS.items():
-        sizes[relative] = tree_size(home / relative)
-        if sizes[relative] > limit * 1.1:
-            problems.append(f"{relative} is {sizes[relative] / 2**20:.0f} MB, over its {limit / 2**20:.0f} MB limit")
+        size = tree_size(home / relative)
+        if size > limit * 1.1:
+            problems.append(f"{relative} is {size / 2**20:.0f} MB, over its {limit / 2**20:.0f} MB limit")
     for relative, pattern in STAGING.items():
         left = sorted(p.name for p in (home / relative).glob(pattern)) if (home / relative).is_dir() else []
         if left:
             problems.append(f"staging left in {relative}: {', '.join(left[:5])}")
-    compiles = sorted(temporary_compiles() - compiles_before)
-    if compiles:
-        problems.append(f"compiled models left in the temporary folder: {', '.join(compiles[:5])}")
-    exports = subprocess.run(["defaults", "read", BUNDLE_ID, "export.staging"], capture_output=True, text=True)
-    if exports.returncode == 0 and exports.stdout.strip() not in ("", "{\n}", "{}"):
-        problems.append("an export's staging is still listed: " + " ".join(exports.stdout.split())[:200])
+    exports = read_default("export.staging")
+    if exports is not None and exports.strip() not in ("", "{\n}", "{}"):
+        problems.append("an export's staging is still listed: " + " ".join(exports.split())[:200])
     outbox = home / "Library/Application Support/Redlamp/Feedback/outbox.json"
     if outbox.exists():
         try:
@@ -241,8 +245,18 @@ def storage_check(home: Path, compiles_before: set[str], free_before: int) -> di
             queued = 0
         if queued > OUTBOX_LIMIT:
             problems.append(f"the feedback outbox holds {queued} reports, over its {OUTBOX_LIMIT}")
-    return {"problems": problems, "sizes": sizes, "home": tree_size(home),
-            "temporaryFreeChange": free_bytes(Path(tempfile.gettempdir())) - free_before}
+    return problems
+
+
+def storage_check(home: Path, compiles_before: set[str], free_before: int, earlier: list[str]) -> dict:
+    """What the run left in the test home and the temporary folder, against the app's limits, after what
+    `earlier` attempts left in homes of their own."""
+    problems = earlier + left_behind(home)
+    compiles = sorted(temporary_compiles() - compiles_before)
+    if compiles:
+        problems.append(f"compiled models left in the temporary folder: {', '.join(compiles[:5])}")
+    return {"problems": problems, "sizes": {relative: tree_size(home / relative) for relative in STORAGE_LIMITS},
+            "home": tree_size(home), "temporaryFreeChange": free_bytes(Path(tempfile.gettempdir())) - free_before}
 
 
 def prune_runs(keep: int = RUNS_KEPT) -> None:
@@ -255,6 +269,12 @@ def prune_runs(keep: int = RUNS_KEPT) -> None:
 
 def defaults(*arguments: str) -> None:
     subprocess.run(["defaults", *arguments], capture_output=True)
+
+
+def read_default(key: str) -> str | None:
+    """The test app's default `key` as `defaults read` prints it, or None when it isn't set."""
+    result = subprocess.run(["defaults", "read", BUNDLE_ID, key], capture_output=True, text=True)
+    return result.stdout if result.returncode == 0 else None
 
 
 def seed_defaults(relay: int) -> None:
@@ -270,6 +290,25 @@ def seed_defaults(relay: int) -> None:
     # Show Photos in Subfolders, on by default, off: the photos folder keeps a focus bracket and a damaged
     # raw in subfolders, which the scenarios that open every photo of the folder leave out.
     defaults("write", BUNDLE_ID, "folders.includesSubfolders", "-bool", "NO")
+
+
+def start_afresh(run_dir: Path, relay: int, attempt: int) -> list[str]:
+    """Puts back what the first attempt started from, for attempt `attempt`: the photos cloned again from the
+    originals, a home holding only the models, the defaults seeded again, and no left.json. The attempt before
+    keeps what it left in attempt-<n>; returns what it shouldn't have left there, for the storage check."""
+    home = run_dir / "home"
+    problems = [f"attempt {attempt - 1}: {problem}" for problem in left_behind(home)]
+    keep_compiled_models(home)
+    kept = run_dir / f"attempt-{attempt - 1}"
+    kept.mkdir()
+    for name in ["photos", "home", "left.json"]:
+        if (run_dir / name).exists():
+            (run_dir / name).rename(kept / name)
+    home.mkdir()
+    seed_models(home)
+    copy_photos(run_dir / "originals", run_dir / "photos")
+    seed_defaults(relay)
+    return problems
 
 
 # ---------------------------------------------------------------- the stub relay
@@ -469,13 +508,14 @@ def outcomes(run_dir: Path, group: str) -> tuple[dict[str, dict], list[dict], st
     return results, hangs, open_scenario
 
 
-def later_launches(main: list[str], relaunch: list[str], retry: list[str]) -> list[tuple[str, list[str]]]:
-    """The launches after the main group's: the relaunch group, and a fresh one retrying the main group's
-    failures. The relaunch group reopens what the main group's last scenario leaves (smoke.leave-an-edit's
-    photo and edit), so it follows the launch that last ran that scenario: the retry when that scenario
-    is retried, and otherwise the main group's own, before a retry changes what the relaunch would find."""
-    relaunched = [("relaunch", relaunch)] if relaunch else []
-    retried = [("main", retry)] if retry else []
+def later_launches(main: list[str], relaunch: list[str], retry: list[str]) -> list[tuple[str, list[str], bool]]:
+    """The launches after the main group's, and whether each starts afresh: the relaunch group, and a fresh one
+    retrying the main group's failures. The retry starts from what the first attempt started from
+    (`start_afresh`), not from what it left. The relaunch group reopens what the main group's last scenario
+    leaves (smoke.leave-an-edit's photo and edit), so it follows the launch that last ran that scenario: the
+    retry when that scenario is retried, and otherwise the main group's own, before the retry starts afresh."""
+    relaunched = [("relaunch", relaunch, False)] if relaunch else []
+    retried = [("main", retry, True)] if retry else []
     if main and main[-1] in retry:
         return retried + relaunched
     return relaunched + retried
@@ -793,7 +833,8 @@ def main() -> int:
     if args.replay:
         shutil.copy(args.replay, run_dir / "soak-replay.jsonl")
     seed_models(home)
-    photos = prepare_photos(run_dir / "photos")
+    photos = prepare_photos(run_dir / "originals")
+    copy_photos(run_dir / "originals", run_dir / "photos")
     relay = Relay(run_dir / "relay")
     threading.Thread(target=relay.serve_forever, daemon=True).start()
     seed_defaults(relay.server_address[1])
@@ -870,7 +911,11 @@ def main() -> int:
     if run_group("main", main_ids):
         # One retry, in a fresh app, for what failed (not the relaunch group, whose state is spent).
         retry = [i for i in main_ids if results.get(i, {}).get("status") == "failed" and attempts.get(i, 0) < 2]
-    for group, ids in later_launches(main_ids, relaunch_ids, retry):
+    earlier: list[str] = []
+    for group, ids, afresh in later_launches(main_ids, relaunch_ids, retry):
+        if afresh:
+            log("Starting the retry as the first attempt started: the photos, the home and the defaults afresh")
+            earlier += start_afresh(run_dir, relay.server_address[1], attempt=2)
         run_group(group, ids)
 
     performance = None
@@ -939,7 +984,7 @@ def main() -> int:
         problems.append(f"{len(cover['missing'])} claim(s) not covered")
     if isolation_failed:
         problems.append("the run changed the owner's state")
-    storage = storage_check(home, compiles_before, free_before)
+    storage = storage_check(home, compiles_before, free_before, earlier)
     if storage["problems"]:
         problems.append(f"{len(storage['problems'])} storage problem(s)")
     if performance and performance["judged"] and performance["over"]:
