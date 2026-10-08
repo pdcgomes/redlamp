@@ -146,7 +146,8 @@
         }
 
         static let toneCurve = Scenario(
-            "develop.tone-curve", "Tone Curve: the region sliders, the split points and a point curve",
+            "develop.tone-curve",
+            "Tone Curve: the region sliders, the split points, a point curve, and Reset Tone Curve from its header",
             claims: [
                 .feature("develop.tone-curve"),
                 .parameter(.curveSplitShadows),
@@ -172,6 +173,11 @@
                         CurvePoint(x: 1, y: 1),
                     ])
                 }
+            }
+            // The header's Reset Tone Curve resets the point curve with the sliders.
+            try app.rightClick(.panelHeader(.toneCurve), choosing: "Reset Tone Curve")
+            try app.wait("Reset Tone Curve to reset the point curve") {
+                $0.pointCurve == EditRecipe.linearPointCurve && !$0.isEdited(.toneCurve)
             }
             try app.choose(.resetAll)
             app.covered(.feature("develop.tone-curve"), via: .model)
