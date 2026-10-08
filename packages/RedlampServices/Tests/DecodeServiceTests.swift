@@ -308,17 +308,14 @@ extension DecodeServiceTests {
         let image = try #require(context.makeImage())
         let converted = try #require(RawDiagnosticsTests.inDisplayP3(image))
         let pixels = try #require(PreviewPixels(image))
-        withKnownIssue("the service sends an unnamed space's ICC profile") {
-            #expect(pixels.colorSpace == CGColorSpace.displayP3 as String && pixels.iccProfile == nil)
-            #expect(pixels.image(maxLongEdge: 8)?.colorSpace?.name == CGColorSpace.displayP3)
-            #expect(RawDiagnosticsTests.drawn(pixels.image(maxLongEdge: 8))?.pixels == RawDiagnosticsTests
-                .drawn(converted)?.pixels)
+        #expect(pixels.colorSpace == CGColorSpace.displayP3 as String && pixels.iccProfile == nil)
+        #expect(pixels.image(maxLongEdge: 8)?.colorSpace?.name == CGColorSpace.displayP3)
+        #expect(RawDiagnosticsTests.drawn(pixels.image(maxLongEdge: 8))?.pixels == RawDiagnosticsTests
+            .drawn(converted)?.pixels)
 
-            var profiled = pixels
-            profiled.colorSpace = CGColorSpace.displayP3 as String
-            profiled.iccProfile = profile as Data
-            #expect(profiled.image(maxLongEdge: 8) == nil)
-        }
+        var profiled = pixels
+        profiled.iccProfile = profile as Data
+        #expect(profiled.image(maxLongEdge: 8) == nil)
     }
 }
 

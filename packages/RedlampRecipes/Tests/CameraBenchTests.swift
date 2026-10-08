@@ -120,7 +120,7 @@ struct CameraBenchTests {
         }
     }
 
-    /// Previews in sRGB, Display P3 and an ICC profile of their own, and a camera that embeds none
+    /// Previews in sRGB, Display P3 and a colour space without a name, and a camera that embeds none
     /// the bench can read.
     static let serviceSamples = [
         "_DSC0009.ARW",
@@ -154,7 +154,7 @@ struct CameraBenchTests {
         let served = try CameraBench(engine: RedlampEngine(decoder: DecodeServiceClient(
             endpoint: service.listener.endpoint,
         )))
-        let local = try Self.bench()
+        let local = try CameraBench(engine: RedlampEngine(decoder: DisplayP3Previews()))
         let urls = Self.serviceSamples.compactMap(Self.sample)
         var reports: [[CameraBenchPhoto]] = [[], []]
         for url in urls {
@@ -411,6 +411,51 @@ extension FaultyDecoder: FileInspecting {
 
     func cameraPreviews(of urls: [URL], maxLongEdge: Int) -> [CGImage?] {
         InProcessDecoder().cameraPreviews(of: urls, maxLongEdge: maxLongEdge)
+    }
+}
+
+/// Reads files in this process, a camera preview in a colour space without a name drawn in
+/// Display P3 as the decode service sends it.
+struct DisplayP3Previews: ImageDecoding, FileInspecting {
+    let reader = InProcessDecoder()
+
+    func decode(_ url: URL) throws -> DecodedImage {
+        try reader.decode(url)
+    }
+
+    func captures(of urls: [URL], concurrently: Bool) -> [CaptureSettings?] {
+        reader.captures(of: urls, concurrently: concurrently)
+    }
+
+    func focusThumbnails(of urls: [URL], concurrently: Bool) -> [GreyThumbnail?] {
+        reader.focusThumbnails(of: urls, concurrently: concurrently)
+    }
+
+    func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+        reader.imageProperties(of: urls)
+    }
+
+    func haldImage(of url: URL) -> HaldImage? {
+        reader.haldImage(of: url)
+    }
+
+    func rawIdentities(of urls: [URL]) -> [RawFileIdentity?] {
+        reader.rawIdentities(of: urls)
+    }
+
+    func cameraPreviews(of urls: [URL], maxLongEdge: Int) -> [CGImage?] {
+        reader.cameraPreviews(of: urls, maxLongEdge: maxLongEdge).map { image in
+            guard let image, image.colorSpace?.name == nil else { return image }
+            guard let space = CGColorSpace(name: CGColorSpace.displayP3),
+                  let context = CGContext(
+                      data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                      bytesPerRow: image.width * 4, space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+                  )
+            else { return nil }
+            context.interpolationQuality = .none
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return context.makeImage()
+        }
     }
 }
 

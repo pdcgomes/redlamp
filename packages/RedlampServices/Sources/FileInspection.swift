@@ -142,19 +142,21 @@ extension FileInspection {
 }
 
 /// A camera preview as the decode service sends it: 8 bits a channel, red, green and blue then
-/// a byte unused, in the preview's own colour space, by its name or else by its ICC profile.
+/// a byte unused, in the preview's own colour space when it has a name, else drawn in Display P3,
+/// so the app parses no ICC profile from the service.
 struct PreviewPixels: Codable, Sendable {
     var width: Int
     var height: Int
-    var colorSpace: String?
+    var colorSpace: String
+    /// Never sent: a reply that carries one is refused.
     var iccProfile: Data?
     var bytes: Data
 
     init?(_ image: CGImage) {
-        guard let space = image.colorSpace, space.model == .rgb, image.width > 0, image.height > 0 else { return nil }
-        let name = space.name as String?
-        let profile = name == nil ? space.copyICCData() as Data? : nil
-        guard name != nil || profile != nil else { return nil }
+        guard let own = image.colorSpace, own.model == .rgb, image.width > 0, image.height > 0,
+              let space = own.name == nil ? CGColorSpace(name: CGColorSpace.displayP3) : own,
+              let name = space.name
+        else { return nil }
         let (width, height) = (image.width, image.height)
         var bytes = Data(count: width * height * 4)
         let drawn = bytes.withUnsafeMutableBytes { buffer in
@@ -169,19 +171,16 @@ struct PreviewPixels: Codable, Sendable {
         guard drawn else { return nil }
         self.width = width
         self.height = height
-        colorSpace = name
-        iccProfile = profile
+        colorSpace = name as String
         self.bytes = bytes
     }
 
-    /// Nil for a size over `maxLongEdge`, pixels that don't fill it, or a colour space that isn't
-    /// RGB, so a damaged reply can't be shown or measured.
+    /// Nil for a size over `maxLongEdge`, pixels that don't fill it, an ICC profile, or a colour
+    /// space that isn't a named RGB one, so a damaged reply can't be shown or measured.
     func image(maxLongEdge: Int) -> CGImage? {
         guard (1 ... maxLongEdge).contains(width), (1 ... maxLongEdge).contains(height),
-              bytes.count == width * height * 4,
-              let space = colorSpace.flatMap({ CGColorSpace(name: $0 as CFString) })
-              ?? iccProfile.flatMap({ CGColorSpace(iccData: $0 as CFData) }),
-              space.model == .rgb,
+              bytes.count == width * height * 4, iccProfile == nil,
+              let space = CGColorSpace(name: colorSpace as CFString), space.model == .rgb,
               let provider = CGDataProvider(data: bytes as CFData)
         else { return nil }
         return CGImage(

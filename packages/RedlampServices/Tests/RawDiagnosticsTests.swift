@@ -210,18 +210,11 @@ struct RawDiagnosticsTests {
         #expect(local.contains { $0 != nil && $0?.colorSpace?.name == nil })
         for (url, (served, local)) in zip(files, zip(served, local)) {
             let unnamed = local.map { $0.colorSpace?.name == nil } ?? false
-            let compare = {
-                let (theirs, ours) = (Self.drawn(served), Self.drawn(unnamed ? local.flatMap(Self.inDisplayP3) : local))
-                #expect(theirs?.profile == ours?.profile, "\(url.lastPathComponent)")
-                #expect(theirs?.width == ours?.width && theirs?.height == ours?.height, "\(url.lastPathComponent)")
-                #expect(theirs?.pixels == ours?.pixels, "\(url.lastPathComponent)")
-                #expect(served == nil || served?.colorSpace?.name != nil, "\(url.lastPathComponent)")
-            }
-            if unnamed {
-                withKnownIssue("the service sends an unnamed space's ICC profile") { compare() }
-            } else {
-                compare()
-            }
+            let (theirs, ours) = (Self.drawn(served), Self.drawn(unnamed ? local.flatMap(Self.inDisplayP3) : local))
+            #expect(theirs?.profile == ours?.profile, "\(url.lastPathComponent)")
+            #expect(theirs?.width == ours?.width && theirs?.height == ours?.height, "\(url.lastPathComponent)")
+            #expect(theirs?.pixels == ours?.pixels, "\(url.lastPathComponent)")
+            #expect(served == nil || served?.colorSpace?.name != nil, "\(url.lastPathComponent)")
         }
     }
 }
