@@ -363,6 +363,13 @@
             try app.press(.maskOverlayColor)
             try app.press(.maskOverlay)
             try app.press(.maskOverlay)
+            // A tool armed for a new mask leaves the selected mask's overlay off until it has made it (#354).
+            try app.press(.brushMask)
+            try app.wait("no overlay while a brush is armed for a new mask") { model in
+                model.isBrushing && model.maskOverlayShown == nil
+            }
+            try app.press(KeyCombo(.escape))
+            try app.wait("the selected mask's overlay back") { !$0.isBrushing && $0.maskOverlayShown == mask }
             try app.press(.maskPins)
             try app.press(.maskPins)
             try app.press(.deleteMask)
