@@ -59,7 +59,7 @@
             try app.wait("the folder's row in the Folders panel") { _ in
                 Views.editorWindow.flatMap { Views.find(row, in: $0) } != nil
             }
-            try app.rightClickFolderRow(row, choosing: "Remove from Folders")
+            try app.rightClickRow(row, choosing: "Remove from Folders")
             try app.waitForSource("All Photographs without the folder's photos", timeout: 30) { model in
                 model.librarySources.shown == .allPhotographs
                     && Set(model.items.map(\.name)).isDisjoint(with: Set(names))
@@ -119,6 +119,10 @@
             try app.main { _ in ImportWindowController.ignoresVolumes = true }
             try first.importThroughWindow(app)
             try app.main { _ in ImportWindowController.current?.close() }
+            try app.wait("the first import counted as Previous Import", timeout: 60) { model in
+                model.librarySources.recount()
+                return model.librarySources.count(of: .previousImport) == first.names.count
+            }
             try app.runFromPalette(.showPreviousImport)
             try app.waitForSource("Previous Import with the first import's photo", timeout: 30) { model in
                 model.librarySources.shown == .previousImport && model.items.map(\.name) == first.names
@@ -399,36 +403,42 @@
     }
 
     extension RunningApp {
-        /// Right-clicks the Folders panel's row carrying `identifier`, as the mouse does, and chooses `title` in the
-        /// menu that opens as a click on the item does: the menu closes, then the item's action is sent.
-        /// `rightClick(_:choosing:)` performs the item while the menu still tracks, which an item taking away the
-        /// row the menu belongs to holds up.
-        func rightClickFolderRow(_ identifier: String, choosing title: String) throws {
-            let items = try rightClick(.identifier(identifier))
-            try expect(
-                items.contains { $0.title == title },
-                "\(identifier)'s menu has no \(title): \(items.map(\.title))",
-            )
-            try main { _ in
-                guard let window = Views.editorWindow, let root = window.contentView?.superview,
-                      let cell = Views.all(NSView.self, in: root).first(where: {
-                          $0.accessibilityIdentifier() == identifier && !$0.isHiddenOrHasHiddenAncestor
-                      })
-                else { throw ScenarioFailure("\(identifier) isn't on screen") }
-                var outline = cell.superview
-                while let view = outline, !(view is NSOutlineView) {
-                    outline = view.superview
+        /// Right-clicks the row carrying `identifier` where `frame(of:)` finds it, as the mouse does, and chooses
+        /// `title` in the menu that opens. The menu tracks inside the press, so the main thread is asked nothing
+        /// until the press has begun: a question queued with it would wait behind the menu, which waits for it.
+        func rightClickRow(_ identifier: String, choosing title: String) throws {
+            step("right-clicking \(identifier)")
+            let frame = try frame(of: .identifier(identifier))
+            let location = NSPoint(x: frame.midX, y: frame.midY)
+            let opened = OpenedMenu()
+            try main { _ in opened.watch() }
+            defer { try? main { _ in opened.stop() } }
+            let pressed = Flag()
+            post { _ in
+                pressed.set()
+                guard let window = Views.editorWindow else { return }
+                for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
+                    guard let event = NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: [],
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .rightMouseUp ? 0 : 1,
+                    ) else { continue }
+                    window.sendEvent(event)
                 }
-                let location = cell.convert(NSPoint(x: cell.bounds.midX, y: cell.bounds.midY), to: nil)
-                guard let outline, let press = NSEvent.mouseEvent(
-                    with: .rightMouseDown, location: location, modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                    context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
-                ), let item = outline.menu(for: press)?.items.first(where: { $0.title == title }),
-                let action = item.action
-                else { throw ScenarioFailure("\(identifier)'s menu has no \(title) to choose") }
-                NSApp.sendAction(action, to: item.target, from: item)
             }
+            for _ in 0 ..< 1000 where !pressed.isSet {
+                pause(0.01)
+            }
+            try wait("\(identifier)'s context menu to open") { _ in opened.menu != nil }
+            try main { _ in
+                guard let menu = opened.menu else { return }
+                defer { menu.cancelTracking() }
+                guard let index = menu.items.firstIndex(where: { $0.title == title }) else {
+                    throw ScenarioFailure("\(identifier)'s menu has no \(title): \(menu.items.map(\.title))")
+                }
+                menu.performActionForItem(at: index)
+            }
+            try wait("\(identifier)'s context menu to close") { _ in opened.closed }
         }
 
         /// How many photos the library finds for `query`; -1 when it can't search.
@@ -444,7 +454,8 @@
         }
     }
 
-    /// A card of copies of the run's raws, each made its own by bytes after its end that depend on the card, so no
+    /// A card of copies of the run's raws, each made its own by bytes after its end of a length drawn for the card, so
+    /// no
     /// earlier import or card has it, imported into a destination of its own; taken out of Folders and removed after.
     struct FollowedImportScratch: Sendable {
         let root: URL
@@ -461,7 +472,8 @@
                 .filter { raws.contains(($0 as NSString).pathExtension.lowercased()) }.sorted()
             guard !originals.isEmpty else { throw ScenarioFailure("The run has no raws to copy") }
             try FileManager.default.createDirectory(at: card, withIntermediateDirectories: true)
-            let token = Data(root.lastPathComponent.utf8)
+            // A content key is the size and the first 64 KiB: each copy gets a length of its own.
+            let extra = Int.random(in: 1 ... 1 << 16)
             var names: [String] = []
             for number in 0 ..< count {
                 let original = originals[number % originals.count]
@@ -470,7 +482,7 @@
                 try FileManager.default.copyItem(at: app.photos.appending(path: original), to: copy)
                 let handle = try FileHandle(forWritingTo: copy)
                 try handle.seekToEnd()
-                try handle.write(contentsOf: token + Data([UInt8(number)]))
+                try handle.write(contentsOf: Data(count: extra + number))
                 try handle.close()
                 names.append(name)
             }
