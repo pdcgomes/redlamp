@@ -401,9 +401,16 @@ final class LibraryFileStep {
     }
 }
 
-/// A batch's progress for the main thread: the latest only, with at most one hop to it waiting.
+/// A batch's progress for the main thread: the latest only, at most ten times a second.
 final class FileProgressRelay: Sendable {
-    private let state = Mutex<(latest: FileProgress?, waiting: Bool)>((nil, false))
+    private struct State {
+        var latest: FileProgress?
+        var waiting = false
+        var shown: ContinuousClock.Instant?
+    }
+
+    static let interval = Duration.milliseconds(100)
+    private let state = Mutex(State())
     private let deliver: @MainActor @Sendable (FileProgress) -> Void
 
     init(_ deliver: @escaping @MainActor @Sendable (FileProgress) -> Void) {
@@ -411,15 +418,20 @@ final class FileProgressRelay: Sendable {
     }
 
     func send(_ progress: FileProgress) {
-        let hop = state.withLock { state -> Bool in
+        let delay = state.withLock { state -> Duration? in
             state.latest = progress
-            defer { state.waiting = true }
-            return !state.waiting
+            guard !state.waiting else { return nil }
+            state.waiting = true
+            return state.shown.map { max($0 + Self.interval - .now, .zero) } ?? .zero
         }
-        guard hop else { return }
+        guard let delay else { return }
         Task { @MainActor [self] in
+            if delay > .zero {
+                try? await Task.sleep(for: delay)
+            }
             let latest = state.withLock { state -> FileProgress? in
                 state.waiting = false
+                state.shown = .now
                 return state.latest
             }
             if let latest {

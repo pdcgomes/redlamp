@@ -6,7 +6,7 @@ import RedlampLibrary
 /// that flags the tokens that came out empty and the names numbered to tell them apart, in capture order, and
 /// Rename, which runs one batch with its progress here and closes once it's done.
 @MainActor
-final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
+final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTextFieldDelegate {
     /// The sheet on screen, for the regression suite.
     private(set) weak static var current: RenameSheetController?
 
@@ -22,9 +22,9 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
     private let start = NSTextField()
     private let extensions = NSPopUpButton()
     private let table = NSTableView()
-    private let summary = NSTextField(wrappingLabelWithString: "")
+    private let summary = NSTextField(labelWithString: "")
     private let progress = NSProgressIndicator()
-    private let status = NSTextField(wrappingLabelWithString: "")
+    private let status = NSTextField(labelWithString: "")
     private let cancel = NSButton(title: "Cancel", target: nil, action: nil)
     private let rename = NSButton(title: "Rename", target: nil, action: nil)
     private var isRenaming = false
@@ -96,6 +96,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
         options.orientation = .horizontal
         options.spacing = 8
 
+        // Cells drawn in the table's own layer: ten thousand names change at each key.
         for (identifier, title, width) in [
             ("now", "Name Now", 190.0),
             ("new", "New Name", 220.0),
@@ -104,10 +105,14 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(identifier))
             column.title = title
             column.width = width
+            column.isEditable = false
+            let cell = NSTextFieldCell()
+            cell.lineBreakMode = .byTruncatingMiddle
+            cell.isEditable = false
+            column.dataCell = cell
             table.addTableColumn(column)
         }
         table.dataSource = self
-        table.delegate = self
         table.usesAlternatingRowBackgroundColors = true
         table.allowsMultipleSelection = false
         table.setAccessibilityIdentifier("rename.preview")
@@ -120,6 +125,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
         scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
 
         summary.font = .systemFont(ofSize: 11)
+        summary.lineBreakMode = .byTruncatingTail
         summary.setAccessibilityIdentifier("rename.summary")
         progress.isIndeterminate = false
         progress.minValue = 0
@@ -127,6 +133,7 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
         progress.isHidden = true
         progress.setAccessibilityIdentifier("rename.progress")
         status.font = .systemFont(ofSize: 11)
+        status.lineBreakMode = .byTruncatingTail
         status.setAccessibilityIdentifier("rename.status")
 
         cancel.target = self
@@ -296,29 +303,25 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
         model.job?.ids.count ?? 0
     }
 
-    func tableView(_ tableView: NSTableView, viewFor column: NSTableColumn?, row: Int) -> NSView? {
+    func tableView(_: NSTableView, objectValueFor column: NSTableColumn?, row: Int) -> Any? {
         guard let column, let job = model.job, job.paths.indices.contains(row) else { return nil }
-        let identifier = column.identifier
-        let field = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTextField ?? {
-            let field = NSTextField(labelWithString: "")
-            field.identifier = identifier
-            field.lineBreakMode = .byTruncatingMiddle
-            return field
-        }()
-        field.textColor = .labelColor
-        switch identifier.rawValue {
+        switch column.identifier.rawValue {
         case "now":
-            field.stringValue = (job.paths[row] as NSString).lastPathComponent
+            return (job.paths[row] as NSString).lastPathComponent
         case "new":
-            let result = model.batch?.results.indices.contains(row) == true ? model.batch?.results[row] : nil
-            field.stringValue = result?.name ?? ""
-            field.textColor = result?.isUnchanged == true ? .secondaryLabelColor : .labelColor
+            guard let batch = model.batch, batch.results.indices.contains(row) else { return nil }
+            let result = batch.results[row]
+            return result.isUnchanged ? Self.styled(result.name, .secondaryLabelColor) : result.name
         default:
             let (text, warning) = model.notes(row)
-            field.stringValue = text
-            field.textColor = warning ? .systemOrange : .secondaryLabelColor
+            return Self.styled(text, warning ? .systemOrange : .secondaryLabelColor)
         }
-        return field
+    }
+
+    private static func styled(_ text: String, _ color: NSColor) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [
+            .foregroundColor: color, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+        ])
     }
 }
 

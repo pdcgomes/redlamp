@@ -210,8 +210,8 @@ struct RenameTests {
         let all = views(in: controller.view)
         let table = try #require(all.compactMap { $0 as? NSTableView }.first)
         #expect(table.numberOfRows == 1)
-        let name = table.view(atColumn: 1, row: 0, makeIfNecessary: true) as? NSTextField
-        #expect(name?.stringValue == "Party-01.JPG")
+        let name = controller.tableView(table, objectValueFor: table.tableColumns[1], row: 0) as? String
+        #expect(name == "Party-01.JPG")
         let rename = all.compactMap { $0 as? NSButton }.first { $0.accessibilityIdentifier() == "rename.rename" }
         #expect(rename?.isEnabled == true)
         let field = all.compactMap { $0 as? NSTextField }.first { $0.accessibilityIdentifier() == "rename.template" }

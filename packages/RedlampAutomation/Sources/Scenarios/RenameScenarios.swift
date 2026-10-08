@@ -1,6 +1,7 @@
 #if DEBUG || REDLAMP_PROFILING
     import AppKit
     import Carbon.HIToolbox
+    import RedlampDesign
     import RedlampDocument
     import RedlampEngineAPI
     @_spi(Harness) import RedlampUI
@@ -9,7 +10,7 @@
     /// which the scenarios add to Folders and take out again: F2 and the menus, the sheet's template typed with a
     /// token put in from its menu, the preview, Rename, Move to Folder, and ⌘Z and ⇧⌘Z.
     enum RenameScenarios {
-        static let all: [Scenario] = [renamePhotos, moveToFolder]
+        static let all: [Scenario] = [renamePhotos, moveToFolder, performance]
 
         static let renamePhotos = Scenario(
             "library.rename-photos",
@@ -101,6 +102,128 @@
                     && Set(model.selectedPhotos.map(\.lastPathComponent)) == Set(moving)
             }
         }
+
+        static let performance = Scenario(
+            "library.rename-performance",
+            "Rename Photos' preview of 10,000 photos following each key of a template typed, then 1,000 raws renamed, "
+                + "moved to a folder and each taken back, the main thread watched throughout",
+            tiers: [.performance], claims: [],
+        ) { app in
+            var started = Date()
+            let scratch = try RenamePerformanceScratch(app)
+            defer { scratch.remove(app) }
+            app.record("e2e-rename-copies-seconds", Date().timeIntervalSince(started))
+            started = Date()
+            try scratch.show(scratch.big, count: RenamePerformanceScratch.previewed, app)
+            app.record("e2e-rename-indexed-10000-seconds", Date().timeIntervalSince(started))
+            try app.choose(.selectAllPhotos)
+            try app.wait("every photo selected") { $0.selectedPhotos.count == RenamePerformanceScratch.previewed }
+            try app.pressF2()
+            try app.waitForSheet("Rename Photos")
+            try app.wait("10,000 photos read and named", timeout: 300) { $0.renameSheetFollows }
+            try app.selectSheetField()
+            let template = "Wedding-{date:yyyyMMdd}-{sequence:5}"
+            var latencies: [Double] = []
+            let typing = try app.watchingMainThread("typing") {
+                for end in template.indices {
+                    let typed = String(template[...end])
+                    let started = Date()
+                    try app.typeInSheet(String(template[end]))
+                    try app.wait("the names to follow \(typed)", timeout: 10) { model in
+                        model.renameSheetTemplate == typed && model.renameSheetFollows
+                    }
+                    latencies.append(Date().timeIntervalSince(started) * 1000)
+                    app.pause(0.05)
+                }
+            }
+            try app.pressInSheet(KeyCombo(.escape))
+            try app.waitForNoSheet("Rename Photos")
+
+            started = Date()
+            try scratch.show(scratch.thousand, count: RenamePerformanceScratch.renamed, app)
+            app.record("e2e-rename-indexed-1000-seconds", Date().timeIntervalSince(started))
+            try app.choose(.selectAllPhotos)
+            try app.wait("every photo selected") { $0.selectedPhotos.count == RenamePerformanceScratch.renamed }
+            try app.pressF2()
+            try app.waitForSheet("Rename Photos")
+            try app.wait("1,000 photos read and named", timeout: 120) { $0.renameSheetFollows }
+            try app.selectSheetField()
+            try app.typeInSheet("Trip-")
+            try app.chooseToken("{sequence:4:folder}")
+            try app.wait("the names to follow the template", timeout: 30) { model in
+                model.renameSheetTemplate == "Trip-{sequence:4:folder}" && model.renameSheetFollows
+            }
+            // From Rename to the batch made, its progress on screen; the sheet's closing is AppKit's.
+            let made = try app.main { $0.fileUndoCount }
+            let renaming = try app.watchingMainThread("rename") {
+                try app.clickInSheet("rename.rename")
+                try app.wait("the rename to be made", timeout: 900) { $0.fileUndoCount > made }
+            }
+            try app.waitForNoSheet("Rename Photos", timeout: 60)
+            try app.expect(
+                scratch.photos(in: scratch.thousand).allSatisfy { $0.hasPrefix("Trip-") },
+                "Not every photo renamed",
+            )
+            let undoRename = try app.watchingMainThread("rename-undo") {
+                try app.press(.undo)
+                try app.run("the rename's Undo", timeout: 900) { await $0.filesMade() }
+            }
+            try app.expect(
+                scratch.photos(in: scratch.thousand).allSatisfy { $0.hasPrefix("IMG_") },
+                "Not every name back",
+            )
+
+            if try app.main({ $0.selectedPhotos.count }) < RenamePerformanceScratch.renamed {
+                try app.choose(.selectAllPhotos)
+            }
+            try app.wait("every photo selected") { $0.selectedPhotos.count == RenamePerformanceScratch.renamed }
+            try app.main { _ in EditorModel.moveToFolderAnswer = scratch.moved }
+            let moves = try app.main { $0.fileUndoCount }
+            let mark = try app.mark()
+            let moving = try app.watchingMainThread("move") {
+                try app.choose(.moveToFolder)
+                try app.explainingFiles(since: mark) {
+                    try app.wait("the photos moved", timeout: 900) { $0.fileUndoCount > moves }
+                }
+            }
+            try app.waitForNoSheet("the move's progress", timeout: 60)
+            try app.expect(
+                scratch.photos(in: scratch.moved).count == RenamePerformanceScratch.renamed, "Not every photo moved",
+            )
+            let undoMove = try app.watchingMainThread("move-undo") {
+                try app.press(.undo)
+                try app.run("the move's Undo", timeout: 900) { await $0.filesMade() }
+            }
+            try app.expect(scratch.photos(in: scratch.moved).isEmpty, "Not every photo moved back")
+
+            latencies.sort()
+            let keyP95 = latencies.isEmpty ? -1 : latencies[min(latencies.count - 1, latencies.count * 95 / 100)]
+            let phases = [
+                ("typing", typing), ("rename", renaming), ("rename-undo", undoRename), ("move", moving),
+                ("move-undo", undoMove),
+            ]
+            for (name, phase) in phases {
+                if let summary = phase.summary {
+                    app.record("e2e-rename-\(name)-p99", summary.p99)
+                }
+                app.record("e2e-rename-\(name)-seconds", phase.seconds)
+            }
+            app.record("e2e-rename-typing-key-p95", keyP95)
+            var lines = [String(
+                format: "names following a key (10,000 photos, %d keys): p95 %.0f ms",
+                latencies.count,
+                keyP95,
+            )]
+            for (name, phase) in phases {
+                lines.append(String(
+                    format: "%@: %.1f s, main thread p99 %.2f ms, max %.1f ms, over a frame %d", name, phase.seconds,
+                    phase.summary?.p99 ?? -1, phase.summary?.max ?? -1, phase.summary?.overFrame ?? -1,
+                ))
+            }
+            try? (lines.joined(separator: "\n") + "\n").write(
+                to: app.runDirectory.appending(path: "rename-performance.txt"), atomically: true, encoding: .utf8,
+            )
+        }
     }
 
     /// A folder of copies of the run's photos below the run's folder: three raws as IMG_0001 to IMG_0003, the first
@@ -188,7 +311,140 @@
         }
     }
 
+    /// Copies for the performance tier, in a folder of their own where `REDLAMP_PERF_SCRATCH` says (the run's folder
+    /// by default): 10,000 of a JPEG in Big, and 1,000 raws in Thousand, with Moved, an empty folder, in it. Each copy
+    /// is a clone of one copied once to that volume, ending in bytes of its own so each has its own content key.
+    struct RenamePerformanceScratch: Sendable {
+        static let previewed = 10000
+        static let renamed = 1000
+
+        let root: URL
+        let big: URL
+        let thousand: URL
+        let moved: URL
+
+        init(_ app: RunningApp) throws {
+            let base = ProcessInfo.processInfo.environment["REDLAMP_PERF_SCRATCH"]
+                .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? app.runDirectory
+            root = base.appending(path: "rename-performance-\(UUID().uuidString)", directoryHint: .isDirectory)
+            big = root.appending(path: "Big", directoryHint: .isDirectory)
+            thousand = root.appending(path: "Thousand", directoryHint: .isDirectory)
+            moved = thousand.appending(path: "Moved", directoryHint: .isDirectory)
+            let sources = root.appending(path: "_sources", directoryHint: .isDirectory)
+            let manager = FileManager.default
+            for folder in [sources, big, moved] {
+                try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+            }
+            let raws = try manager.contentsOfDirectory(atPath: app.photos.path)
+                .filter { ["arw", "raf", "cr3", "nef", "dng"].contains(($0 as NSString).pathExtension.lowercased()) }
+                .sorted()
+            guard !raws.isEmpty else { throw ScenarioFailure("The run has no raws to copy") }
+            for name in raws + ["Bitmap.jpg"] {
+                try manager.copyItem(at: app.photos.appending(path: name), to: sources.appending(path: name))
+            }
+            for number in 0 ..< Self.previewed {
+                try Self.clone(
+                    sources.appending(path: "Bitmap.jpg"),
+                    to: big.appending(path: String(format: "IMG_%05d.JPG", number + 1)), ending: number,
+                )
+            }
+            for number in 0 ..< Self.renamed {
+                let raw = raws[number % raws.count]
+                try Self.clone(
+                    sources.appending(path: raw),
+                    to: thousand
+                        .appending(path: String(format: "IMG_%04d.", number + 1) + (raw as NSString).pathExtension),
+                    ending: number,
+                )
+            }
+        }
+
+        /// A clone of `source` at `copy`, ending in a box of its own length.
+        private static func clone(_ source: URL, to copy: URL, ending number: Int) throws {
+            try FileManager.default.copyItem(at: source, to: copy)
+            let handle = try FileHandle(forWritingTo: copy)
+            try handle.seekToEnd()
+            let length = 16 + number
+            var box = Data([
+                UInt8(length >> 24 & 0xFF), UInt8(length >> 16 & 0xFF), UInt8(length >> 8 & 0xFF), UInt8(length & 0xFF),
+            ])
+            box.append(contentsOf: Array("free".utf8))
+            box.append(Data(count: length - 8))
+            try handle.write(contentsOf: box)
+            try handle.close()
+        }
+
+        /// Adds `folder` to Folders and shows its `count` photos in Library's grid, from the library.
+        func show(_ folder: URL, count: Int, _ app: RunningApp) throws {
+            if try app.main({ $0.module != .develop }) {
+                try app.press(.developModule)
+            }
+            try app.main { $0.open([folder]) }
+            try app.wait("\(count) photos indexed and shown from the library", timeout: 1200) { model in
+                model.folder?.standardizedFileURL == folder.standardizedFileURL && model.library.isShownFromLibrary
+                    && model.items.count == count
+            }
+            try app.settle(timeout: 120)
+            try app.press(.gridView)
+            try app.wait("the grid to take the keyboard") { _ in
+                Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"
+            }
+        }
+
+        func photos(in folder: URL) -> [String] {
+            ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).filter { name in
+                !["redlamp", "xmp", ""].contains((name as NSString).pathExtension.lowercased())
+            }
+        }
+
+        /// Takes the folders out of Folders and away, and opens the run's working photo again.
+        func remove(_ app: RunningApp) {
+            let (big, thousand) = (big, thousand)
+            try? app.main { model in
+                EditorModel.moveToFolderAnswer = nil
+                ImportWindowController.forget(big, in: model)
+                ImportWindowController.forget(thousand, in: model)
+            }
+            try? FileManager.default.removeItem(at: root)
+            try? app.openWorking()
+        }
+    }
+
     extension RunningApp {
+        /// Runs `body` with the main thread watched: its run loop's turns, and how long `body` took.
+        func watchingMainThread(
+            _: String = "", _ body: () throws -> Void,
+        ) throws -> (summary: MainThreadMonitor.Summary?, seconds: Double) {
+            let monitor = try MainThread.run { () -> MainThreadMonitorBox in
+                let monitor = MainThreadMonitor()
+                monitor.start()
+                return MainThreadMonitorBox(monitor)
+            }
+            let started = Date()
+            defer { try? MainThread.run { monitor.monitor.stop() } }
+            try body()
+            let seconds = Date().timeIntervalSince(started)
+            let summary = try MainThread.run { () -> MainThreadMonitor.Summary? in
+                monitor.monitor.stop()
+                return monitor.monitor.summary(seconds: seconds)
+            }
+            return (summary, seconds)
+        }
+
+        /// Runs `body`, saying in its failure what the activity log reported since `mark` and how the file steps stood.
+        func explainingFiles(since mark: Mark, _ body: () throws -> Void) throws {
+            do {
+                try body()
+            } catch {
+                let logged = (try? activity(since: mark).map(\.text).suffix(8).joined(separator: "; ")) ?? ""
+                let state = try main { model in
+                    "\(model.fileUndoCount) on Undo, sheet \(Views.editorWindow?.attachedSheet?.title ?? "none"), "
+                        + "dialog \(model.isModalDialogOpen), \(model.selectedPhotos.count) selected"
+                }
+                throw ScenarioFailure("\(error) (\(state); logged: \(logged))")
+            }
+        }
+
         /// Runs `body`, saying in its failure how the editor stood for Rename Photos.
         func explaining(_ body: () throws -> Void) throws {
             do {
