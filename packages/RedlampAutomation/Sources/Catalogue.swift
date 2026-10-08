@@ -20,7 +20,8 @@
             + CollectionScenarios.all
             + PanelScenarios.all
             + RenameScenarios.all
-            + SoakScenarios.all + PerformanceScenarios.all + PanelPerformanceScenarios.all + SmokeScenarios.last
+            + SoakScenarios.all + PerformanceScenarios.all + PanelPerformanceScenarios.all
+            + LibrarySourcesPerformanceScenarios.all + SmokeScenarios.last
 
         /// What the app offers, from its own catalogues: every action, parameter, panel, left
         /// panel, tool, mask kind and Report a Bug feature.

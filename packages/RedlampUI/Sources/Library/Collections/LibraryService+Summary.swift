@@ -21,4 +21,11 @@ extension LibraryService {
             return try? grouping.summary(of: list)
         }.value
     }
+
+    // MARK: - For the regression suite
+
+    /// Tells the library's open lists that the rows of `ids` changed, as Redlamp's own writes do.
+    @_spi(Harness) public func rowsChanged(_ ids: [Int64]) {
+        photosChanged(ids)
+    }
 }
