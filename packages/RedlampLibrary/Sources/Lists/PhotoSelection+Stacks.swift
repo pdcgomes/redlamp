@@ -217,6 +217,14 @@ public extension PhotoSelection {
     /// that already. A pass over the closed stacks.
     func covering(_ stacked: StackedList, active: Int64?, anyPhoto: Bool = false) -> PhotoSelection? {
         let activeCell = active.flatMap { stacked.isShown($0) ? $0 : stacked.cell(for: $0) }
+        // The active photo alone, as a click or an arrow key leaves it: only its stack can change.
+        if count <= 1, count == 0 || self.active == active, let activeCell {
+            let photos = stacked.photos(of: activeCell)
+            guard photos.count > 1 || activeCell != active else { return nil }
+            var covered = PhotoSelection()
+            covered.select(photos.isEmpty ? [activeCell] : photos, active: activeCell, in: stacked.list)
+            return covered == self ? nil : covered
+        }
         var flipped: [Int64] = []
         stacked.forEachClosedStack { cell, photos in
             let selected = cell == activeCell || (anyPhoto ? photos.contains(where: contains) : contains(cell))
