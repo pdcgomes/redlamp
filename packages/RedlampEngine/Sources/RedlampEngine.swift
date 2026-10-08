@@ -655,6 +655,15 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     func renderStillNow(_ request: StillRequest, session: ImageSession) throws -> CGImage {
+        // A photo no longer open (the editor moved on, or let go of it, while this waited) or
+        // never open, as a focus stack's preview, is rendered without the detail stage keeping
+        // anything for it, nor evicting what it keeps for the photo open.
+        let isOpen = currentSession() === session
+        defer {
+            if !isOpen {
+                detailStage.keepOnly(currentSession())
+            }
+        }
         let developed = request.recipe.developedSize(imageSize: session.orientedSize)
         var size = developed
         if let limit = request.maxLongEdge, limit < size.longEdge {
@@ -669,12 +678,12 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         descriptor.storageMode = .shared
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
         if request.purpose == .export, size != developed, request.maskOverlay == nil {
-            try developDownscaled(request, session: session, into: texture, size: size)
+            try developDownscaled(request, session: session, into: texture, size: size, cacheDetail: isOpen)
         } else {
             let encoding: OutputEncoding = request.colorSpace == .sRGB ? .sRGB : .displayP3
             try developStill(
                 request.recipe, session: session, into: texture, size: size, encoding: encoding,
-                maskOverlay: request.maskOverlay, maskOverlayStyle: request.maskOverlayStyle,
+                maskOverlay: request.maskOverlay, maskOverlayStyle: request.maskOverlayStyle, cacheDetail: isOpen,
             )
         }
 
@@ -788,6 +797,7 @@ extension RedlampEngine {
         encoding: OutputEncoding,
         maskOverlay: UUID? = nil,
         maskOverlayStyle: MaskOverlayStyle = .colorOverlay,
+        cacheDetail: Bool,
     ) throws {
         if DetailStage.isActive(recipe) {
             try renderTiles(
@@ -800,7 +810,8 @@ extension RedlampEngine {
                 try encodeDevelop(
                     recipe, session: session, into: texture, size: size,
                     encoding: encoding, showClipping: false, maskOverlay: maskOverlay,
-                    maskOverlayStyle: maskOverlayStyle, commands: commands, retouchMaps: .fresh,
+                    maskOverlayStyle: maskOverlayStyle, commands: commands, cacheDetail: cacheDetail,
+                    retouchMaps: .fresh,
                 )
             }
             try finish(commands)
@@ -814,6 +825,7 @@ extension RedlampEngine {
         session: ImageSession,
         into texture: any MTLTexture,
         size: PixelSize,
+        cacheDetail: Bool,
     ) throws {
         let full = request.recipe.developedSize(imageSize: session.orientedSize)
         func linearTexture(_ size: PixelSize) throws -> any MTLTexture {
@@ -827,7 +839,10 @@ extension RedlampEngine {
         }
         let fullTexture = try linearTexture(full)
         let encoding: OutputEncoding = request.colorSpace == .sRGB ? .linearSRGB : .linear
-        try developStill(request.recipe, session: session, into: fullTexture, size: full, encoding: encoding)
+        try developStill(
+            request.recipe, session: session, into: fullTexture, size: full, encoding: encoding,
+            cacheDetail: cacheDetail,
+        )
         try yieldBetweenTiles()
         let scaled = try linearTexture(size)
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }

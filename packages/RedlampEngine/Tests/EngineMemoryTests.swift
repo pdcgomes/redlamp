@@ -713,9 +713,7 @@ struct EngineMemoryTests {
                 engine.masks.heldTextures.reduce(0) { $0 + $1.allocatedSize },
             )
         }
-        withKnownIssue {
-            #expect(held == 0, "\(held >> 20) MB of textures held, \(masks >> 20) MB of them the masks'")
-        }
+        #expect(held == 0, "\(held >> 20) MB of textures held, \(masks >> 20) MB of them the masks'")
     }
 
     /// The photo open now, fitted in a canvas.
