@@ -138,6 +138,10 @@ final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
         })
         presets.menu?
             .addItem(ClosureMenuItem(title: "Edit Presets…") { [weak self] in self?.editPresets(starting: nil) })
+        presets.menu?.addItem(ClosureMenuItem(title: "Edit Code Replacements…") { [weak self] in
+            guard let self else { return }
+            PanelSheets.editCodeReplacements(model: model)
+        })
     }
 
     /// A preset ticking the fields the photos share, replacing.
@@ -168,9 +172,34 @@ final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
     }
 }
 
-/// The sheets the Library's panels open: Edit Capture Time (the Photo menu's too) and the metadata presets.
+/// The sheets the Library's panels open: Edit Capture Time (the Photo menu's too), the metadata presets and the
+/// code replacements.
 @MainActor
 enum PanelSheets {
+    /// The library's code replacements, kept as Photo Mechanic keeps them: a line a code, a tab and its text, more
+    /// tabs giving it more texts, so `\code\` in a field or a preset becomes its text and `\code#2\` its second;
+    /// written in the library's definitions as they're typed, or taken from a file of them.
+    static func editCodeReplacements(model: EditorModel) {
+        let panels = model.libraryPanels
+        let sheet = PanelSheet(title: "Code Replacements", model: model)
+        let editor = CodeReplacementsEditor(text: panels.codeReplacementsText)
+        let importFile = PanelControls.button("Import File…", identifier: "codes.import") { [weak sheet] in
+            guard let window = sheet?.window else { return }
+            editor.importFile(over: window)
+        }
+        sheet.add(nil, NSTextField(labelWithString: "A line for each code: the code, a tab, then its text."))
+        sheet.add(nil, editor.scroll)
+        sheet.add(nil, editor.summary)
+        sheet.add("Try:", editor.trial)
+        sheet.add(nil, editor.expansion)
+        sheet.add(nil, importFile)
+        sheet.begin(button: "Save", first: editor.text, lines: true) {
+            let text = editor.text.string
+            Task { _ = await panels.saveCodeReplacements(text) }
+            return true
+        }
+    }
+
     /// Photo › Edit Capture Time…: the photos selected shifted by an amount, the active photo given a time and
     /// the others shifted by as much, or the camera's time zone given to them all, as one change with Undo. False
     /// when there's no window to show it on.
@@ -309,6 +338,112 @@ enum PanelSheets {
             let replacing = existing.contains { $0.name == editor.editing.name } ? editor.editing.name : nil
             Task { _ = await panels.save(saved, replacing: replacing) }
             return true
+        }
+    }
+}
+
+/// The code replacements sheet's text, as Photo Mechanic's tab-separated files hold it, with the codes it makes and
+/// the lines that aren't codes said as it's typed, and a text tried against them.
+@MainActor
+final class CodeReplacementsEditor: NSObject, NSTextViewDelegate, NSTextFieldDelegate {
+    private static let size = NSSize(width: 480, height: 220)
+    let text = NSTextView(frame: NSRect(origin: .zero, size: CodeReplacementsEditor.size))
+    let scroll = NSScrollView()
+    let summary = NSTextField(wrappingLabelWithString: "")
+    let trial = NSTextField()
+    let expansion = NSTextField(labelWithString: "")
+
+    init(text written: String) {
+        super.init()
+        let style = NSMutableParagraphStyle()
+        style.tabStops = []
+        style.defaultTabInterval = 112
+        let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        text.font = font
+        text.defaultParagraphStyle = style
+        text.typingAttributes = [.font: font, .paragraphStyle: style, .foregroundColor: NSColor.textColor]
+        text.isRichText = false
+        text.allowsUndo = true
+        text.isAutomaticQuoteSubstitutionEnabled = false
+        text.isAutomaticDashSubstitutionEnabled = false
+        text.isAutomaticTextReplacementEnabled = false
+        text.isAutomaticSpellingCorrectionEnabled = false
+        text.isContinuousSpellCheckingEnabled = false
+        text.minSize = NSSize(width: 0, height: Self.size.height)
+        text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        text.isVerticallyResizable = true
+        text.isHorizontallyResizable = false
+        text.autoresizingMask = [.width]
+        text.textContainer?.containerSize = NSSize(width: Self.size.width, height: .greatestFiniteMagnitude)
+        text.textContainer?.widthTracksTextView = true
+        text.string = written
+        text.delegate = self
+        text.setAccessibilityIdentifier("codes.text")
+        scroll.documentView = text
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        scroll.widthAnchor.constraint(equalToConstant: Self.size.width).isActive = true
+        scroll.heightAnchor.constraint(equalToConstant: Self.size.height).isActive = true
+        summary.preferredMaxLayoutWidth = Self.size.width
+        summary.textColor = .secondaryLabelColor
+        summary.setAccessibilityIdentifier("codes.summary")
+        trial.placeholderString = #"\code\, \code#2\"#
+        trial.delegate = self
+        trial.setAccessibilityIdentifier("codes.try")
+        trial.widthAnchor.constraint(equalToConstant: 300).isActive = true
+        expansion.textColor = .secondaryLabelColor
+        expansion.setAccessibilityIdentifier("codes.expansion")
+        update()
+    }
+
+    func textDidChange(_: Notification) {
+        update()
+    }
+
+    func controlTextDidChange(_: Notification) {
+        update()
+    }
+
+    private func update() {
+        summary.stringValue = Self.describe(text.string)
+        let tried = trial.stringValue
+        expansion.stringValue = tried.isEmpty ? "" : "Becomes: " + CodeReplacements(text: text.string).expanded(tried)
+    }
+
+    /// `12 codes; line 4 isn't one: a code, a tab and its text, each code once.`
+    static func describe(_ text: String) -> String {
+        let count = CodeReplacements(text: text).codes.count
+        var said = count == 0 ? "No codes yet" : count == 1 ? "1 code" : "\(count.formatted()) codes"
+        let ignored = CodeReplacements.ignoredLines(in: text)
+        if let first = ignored.first {
+            let lines = ignored.count == 1 ? "line \(first) isn't one"
+                : "lines " + ignored.dropLast().map(String.init).joined(separator: ", ") + " and \(ignored.last ?? first)"
+                + " aren't"
+            said += "; \(lines): a code, a tab and its text, each code once"
+        }
+        return said + "."
+    }
+
+    /// Puts a file of code replacements, Photo Mechanic's, in place of the text, which Undo gives back.
+    func importFile(over window: NSWindow) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.plainText, .tabSeparatedText]
+        panel.message = "Choose a file of code replacements: a code, a tab and its text on each line"
+        panel.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                guard response == .OK, let url = panel.url else { return }
+                Task { [weak self] in
+                    let read = await Task.detached { try? CodeReplacements.text(contentsOf: url) }.value
+                    guard let self, let read else { return }
+                    let whole = NSRange(location: 0, length: (text.string as NSString).length)
+                    if text.shouldChangeText(in: whole, replacementString: read) {
+                        text.replaceCharacters(in: whole, with: read)
+                        text.didChangeText()
+                    }
+                }
+            }
         }
     }
 }

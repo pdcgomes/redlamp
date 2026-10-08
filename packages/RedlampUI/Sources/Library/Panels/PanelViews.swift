@@ -163,9 +163,12 @@ final class PanelSheet: NSObject, NSWindowDelegate {
     }
 
     /// Shows the sheet over the editor window; `done` runs on the default button and says whether the sheet
-    /// may close. False when there's no window to show it over.
+    /// may close. With `lines`, the sheet holds text of many lines, where Return starts a new one, and ⌘Return
+    /// is the default button's. False when there's no window to show it over.
     @discardableResult
-    func begin(button: String, first: NSView? = nil, done: @escaping @MainActor () -> Bool) -> Bool {
+    func begin(
+        button: String, first: NSView? = nil, lines: Bool = false, done: @escaping @MainActor () -> Bool,
+    ) -> Bool {
         guard let parent = EditorWindowController.frontWindow, !model.isModalDialogOpen else { return false }
         self.done = done
         let content = NSView()
@@ -173,6 +176,9 @@ final class PanelSheet: NSObject, NSWindowDelegate {
         cancel.keyEquivalent = "\u{1B}"
         let ok = NSButton(title: button, target: self, action: #selector(confirm))
         ok.keyEquivalent = "\r"
+        if lines {
+            ok.keyEquivalentModifierMask = [.command]
+        }
         ok.setAccessibilityIdentifier("panelSheet.ok")
         let buttons = NSStackView(views: [cancel, ok])
         buttons.translatesAutoresizingMaskIntoConstraints = false

@@ -210,11 +210,11 @@ public extension LibraryPanels {
 
     // MARK: - Metadata (LIB-22)
 
-    /// Gives every photo selected `text` for `field`, an empty text clearing it.
+    /// Gives every photo selected `text` for `field`, its codes expanded, an empty text clearing it.
     @discardableResult
     func set(_ field: MetadataPreset.Field, to text: String) -> Bool {
         let ids = selection.ids
-        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = codes.expanded(text).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !ids.isEmpty, selection.fields[field] != (value.isEmpty ? .none : .same(value)) else { return false }
         let given = value.isEmpty ? nil : value
         let metadataField: MetadataField = switch field {
@@ -237,12 +237,28 @@ public extension LibraryPanels {
     }
 
     /// Gives every photo selected the fields `preset` ticks, each replacing, appending to or prefixing what
-    /// it has.
+    /// it has, its codes expanded.
     @discardableResult
     func apply(_ preset: MetadataPreset) -> Bool {
         let ids = selection.ids
         guard !ids.isEmpty, !preset.fields.isEmpty else { return false }
-        return make([.metadata(.preset(preset, to: ids))], title: "Apply “\(preset.name)” to \(Self.count(ids.count))")
+        return make(
+            [.metadata(.preset(preset, to: ids, codes: codes))],
+            title: "Apply “\(preset.name)” to \(Self.count(ids.count))",
+        )
+    }
+
+    /// Keeps `text` as the library's code replacements, Photo Mechanic's tab-separated text, as it's written.
+    func saveCodeReplacements(_ text: String) async -> Bool {
+        guard let service = model?.library.service else { return false }
+        let saved = await service.saveCodeReplacements(text)
+        if saved {
+            showCodeReplacements(text)
+        } else {
+            problem = "The code replacements weren't kept"
+            model?.activity.record(.error, problem ?? "")
+        }
+        return saved
     }
 
     /// Keeps `preset` in place of the one named `replacing` (or its own name).

@@ -226,6 +226,20 @@ extension LibraryService {
         return await (try? Self.metadata(core).removePreset(named: name)) != nil
     }
 
+    // MARK: - Code replacements
+
+    /// The library's code replacements file as it's written; empty when there's none or the library isn't open.
+    func codeReplacementsText() async -> String {
+        guard let core else { return "" }
+        return await (try? Self.metadata(core).codeReplacementsText()) ?? ""
+    }
+
+    /// Keeps `text` as the library's code replacements file; false when it couldn't be kept.
+    func saveCodeReplacements(_ text: String) async -> Bool {
+        guard let core else { return false }
+        return await (try? Self.metadata(core).saveCodeReplacements(text)) != nil
+    }
+
     // MARK: - Capture times
 
     /// The zone photo `id`'s camera was in, as the index shows it and as its file records it; nil when the index

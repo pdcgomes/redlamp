@@ -116,4 +116,25 @@ struct MetadataPresetTests {
         #expect(wedding?["fields"]?.objectValue?["keywords"] == JSONValue.object(["text": .string("Wedding")]))
         #expect(try await metadata.presets()["Studio"]?.fields[.creator]?.text == "Rui Lopes")
     }
+
+    @Test func `the library's code replacements are kept as they're written, and expanded`() async throws {
+        let sandbox = try await KeywordSandbox.make()
+        defer { sandbox.remove() }
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        #expect(try await metadata.codeReplacementsText() == "" && metadata.codesURL.lastPathComponent
+            == "Code Replacements.txt")
+        let text = "# Lisbon, 2026\r\nlx\tLisbon\tLisboa\r\n\r\nana\tAna Sousa\r\nlx\tLeixões\r\n\tno code\r\n"
+        try await metadata.saveCodeReplacements(text)
+        #expect(try Data(contentsOf: metadata.codesURL) == Data(text.utf8), "kept byte for byte")
+        #expect(try await metadata.codeReplacementsText() == text)
+        let codes = try await metadata.codeReplacements()
+        #expect(codes.expanded(#"\ana\ in \lx\ (\lx#2\)"#) == "Ana Sousa in Lisbon (Lisboa)")
+        #expect(CodeReplacements.ignoredLines(in: text) == [1, 5, 6], "no tab, a code an earlier line has, no code")
+
+        let macRoman = try #require("café\tCafé Nicola\n".data(using: .macOSRoman))
+        try macRoman.write(to: metadata.codesURL)
+        #expect(try await metadata.codeReplacements().expanded(#"\café\"#) == "Café Nicola", "as older files are")
+        try await metadata.saveCodeReplacements(" \n")
+        #expect(!FileManager.default.fileExists(atPath: metadata.codesURL.path), "no codes, no file")
+    }
 }

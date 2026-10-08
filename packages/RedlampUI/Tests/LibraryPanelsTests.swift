@@ -445,6 +445,41 @@ struct LibraryPanelsTests {
         try await folder.eventually { panels.presets.isEmpty }
     }
 
+    @Test func `code replacements are kept in the library, and expanded in the fields typed and the presets applied`(
+    ) async throws {
+        let folder = Folder()
+        defer { folder.close() }
+        try await folder.open(count: 3)
+        let panels = folder.panels
+        let text = "sm\tSam Miller\tSam\nch\tthe chapel\nno tab\n"
+        #expect(await panels.saveCodeReplacements(text))
+        #expect(panels.codeReplacementsText == text && panels.codes.codes.count == 2)
+        let url = CodeReplacements.url(in: folder.service.paths)
+        #expect(try String(contentsOf: url, encoding: .utf8) == text, "kept as it's written")
+        #expect(
+            CodeReplacementsEditor
+                .describe(text) == "2 codes; line 3 isn't one: a code, a tab and its text, each code once.",
+        )
+
+        try await folder.select([0, 1])
+        #expect(panels.set(.creator, to: #"\SM\"#))
+        try await folder.written()
+        #expect(folder.metadata(0)?.creator == "Sam Miller" && folder.metadata(1)?.creator == "Sam Miller")
+        #expect(panels.selection.fields[.creator] == .same("Sam Miller"))
+        #expect(!panels.set(.creator, to: #"\sm\"#), "the photos have it already")
+        #expect(panels.apply(MetadataPreset(name: "Chapel", fields: [.caption: .init(#"\sm#2\ at \ch\"#)])))
+        try await folder.written()
+        #expect(folder.metadata(0)?.caption == "Sam at the chapel" && folder.metadata(2) == nil)
+
+        // Read again as the panels are shown afresh.
+        let again = EditorModel(engine: StubEngine(), library: folder.library)
+        again.libraryPanels.refreshPresets()
+        try await folder.eventually { again.libraryPanels.codeReplacementsText == text }
+        #expect(again.libraryPanels.codes.expanded(#"\ch\"#) == "the chapel")
+        #expect(await panels.saveCodeReplacements(""))
+        #expect(!FileManager.default.fileExists(atPath: url.path) && panels.codes.codes.isEmpty)
+    }
+
     @Test func `capture times are shifted, or set on the active photo with the others alike, with Undo`() async throws {
         let folder = Folder()
         defer { folder.close() }

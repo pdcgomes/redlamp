@@ -91,6 +91,10 @@ public final class LibraryPanels {
     /// The keyword list with its counts, completion over it and the keyword sets, once read.
     var keywords: PanelKeywords?
     public internal(set) var presets: [MetadataPreset] = []
+    /// The library's code replacements as their file is written, and their codes, which the fields typed and
+    /// the presets applied expand.
+    public internal(set) var codeReplacementsText = ""
+    public internal(set) var codes = CodeReplacements()
     public internal(set) var progress: PanelProgress?
     /// What went wrong with the last change, in words, until the next one.
     public internal(set) var problem: String?
@@ -314,8 +318,15 @@ public final class LibraryPanels {
         presetsRead = true
         Task { [weak self] in
             let presets = await service.metadataPresets()
+            let codes = await service.codeReplacementsText()
             self?.presets = presets.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            self?.showCodeReplacements(codes)
         }
+    }
+
+    func showCodeReplacements(_ text: String) {
+        codeReplacementsText = text
+        codes = CodeReplacements(text: text)
     }
 
     /// The keyword list, once read.

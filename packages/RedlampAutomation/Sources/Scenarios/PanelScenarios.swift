@@ -479,7 +479,8 @@
             "library.metadata",
             "The Metadata panel shows the photos selected's IPTC Core fields, mixed where they differ; a field typed "
                 + "reaches every photo as one change kept in their sidecars, with Undo; a preset made in Metadata "
-                + "Presets… gives its ticked fields, appending or replacing",
+                + "Presets… gives its ticked fields, appending or replacing; a code typed in Code Replacements… "
+                + "expands in a field",
             claims: [.feature("library.metadata")],
         ) { app in
             try app.withPanels { names in
@@ -528,6 +529,29 @@
                 try app.waitForPanels()
                 try app.expect(try app.sidecarMetadata(names[0])?.caption == "E2E first", "⌘Z took the preset back")
                 try app.run("the preset removed") { _ = await $0.libraryPanels.deletePreset(named: "E2E Chapel") }
+
+                let codes = try app.main { $0.libraryPanels.codeReplacementsText }
+                try app.choose("Edit Code Replacements…", inMenuOf: "metadata.presets")
+                try app.waitForSheet("Code Replacements")
+                try app.replaceInSheet("codes.text", with: "e2ecity\tE2E Sintra", across: 0.5)
+                try app.confirmSheet("Code Replacements")
+                try app.wait("the code kept") { $0.libraryPanels.codes.codes["e2ecity"] == ["E2E Sintra"] }
+                let place = try app.sidecarMetadata(names[0])?.location
+                try app.typeInField("metadata.city", #"\e2ecity\"#)
+                try app.wait("the code expanded in the city") { model in
+                    model.libraryPanels.selection.fields[.city] == .same("E2E Sintra")
+                }
+                try app.waitForPanels()
+                try app.expect(
+                    try app.sidecarMetadata(names[0])?.location?.city == "E2E Sintra",
+                    "the city kept, its code expanded",
+                )
+                try app.press(.undo)
+                try app.waitForPanels()
+                try app.expect(try app.sidecarMetadata(names[0])?.location == place, "⌘Z took the city back")
+                try app.run("the code replacements as they were") {
+                    _ = await $0.libraryPanels.saveCodeReplacements(codes)
+                }
                 app.covered(.feature("library.metadata"), via: .key)
             }
         }
