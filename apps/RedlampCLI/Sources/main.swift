@@ -381,6 +381,8 @@ do {
         try await BenchCommand.run(Array(arguments.dropFirst()))
     case "camera-bench":
         try await CameraBenchCommand.run(Array(arguments.dropFirst()))
+    case "task":
+        try await TaskCommands.run(Array(arguments.dropFirst()))
     case "mcp":
         try await MCPServer().run()
     default:

@@ -236,12 +236,11 @@ public actor BenchHub {
     }
 
     static func receipt(_ folder: BenchFolder) -> BenchProtocol.Receipt {
-        let arrival = BenchStore.Arrival(folder: folder, replaced: false)
         let received = (try? folder.url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
             ?? folder.manifest.created
         return BenchProtocol.Receipt(
             id: folder.id, title: folder.manifest.look?.title ?? folder.manifest.title, kind: folder.manifest.kind,
-            summary: arrival.summary, complete: folder.isComplete, resultsDigest: folder.resultsDigest,
+            summary: folder.summary, complete: folder.isComplete, resultsDigest: folder.resultsDigest,
             received: received,
         )
     }

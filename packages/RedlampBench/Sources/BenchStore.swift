@@ -78,16 +78,8 @@ public struct BenchStore: Sendable {
         /// An earlier copy of the same task was replaced.
         public var replaced: Bool
 
-        /// "12 results, all paired", or for a look reference "Prequel · Cine Film 2: 11 of 11".
         public var summary: String {
-            let results = folder.results.results
-            let unpaired = folder.results.unpaired.count
-            if let look = folder.manifest.look {
-                let required = folder.manifest.requiredAssets.count
-                return "\(look.title): \(required - folder.missing.count) of \(required) kit images"
-            }
-            let count = "\(results.count) result\(results.count == 1 ? "" : "s")"
-            return unpaired == 0 ? "\(count), all paired" : "\(count), \(unpaired) unpaired"
+            folder.summary
         }
     }
 
