@@ -5,6 +5,7 @@ import ImageIO
 import RedlampDocument
 import RedlampEngineAPI
 import RedlampLibrary
+import Synchronization
 import Testing
 import UniformTypeIdentifiers
 @_spi(Harness) @testable import RedlampUI
@@ -539,6 +540,32 @@ struct CullingTests {
         #expect(model.selection == fixture.photos[8], "Develop moves on too")
         #expect(model.perform(.autoAdvance) && !model.autoAdvance)
         #expect(model.perform(.rating4) && model.selection == fixture.photos[8])
+    }
+
+    @Test func `the rows a key reaches are the selection's, and the menus' checks follow the selection`() async throws {
+        let fixture = ModuleFixture()
+        defer { fixture.cleanUp() }
+        try await fixture.open(count: 6)
+        let model = fixture.model
+        model.showModule(.library)
+        model.click(fixture.photos[1])
+        #expect(model.selectedRows == [1], "the active photo alone")
+        model.click(fixture.photos[4], toggling: true)
+        model.click(fixture.photos[2], toggling: true)
+        #expect(model.selectedRows == [1, 2, 4], "in the list's order")
+        let culling: [ShortcutAction] = [.rating3, .flagPick, .labelRed, .toggleMark]
+        let told = Mutex(false)
+        withObservationTracking {
+            _ = model.selectedRows
+            _ = culling.map(model.canPerform)
+        } onChange: {
+            told.withLock { $0 = true }
+        }
+        model.click(fixture.photos[5], toggling: true)
+        #expect(told.withLock { $0 }, "a change of the selection reaches what read it")
+        #expect(model.selectedRows == [1, 2, 4, 5] && culling.allSatisfy(model.canPerform))
+        model.selectAllPhotos()
+        #expect(model.selectedRows == Array(0 ..< 6))
     }
 
     @Test func `in Develop a key reaches the active photo alone, and isn't Library's to undo`() async throws {

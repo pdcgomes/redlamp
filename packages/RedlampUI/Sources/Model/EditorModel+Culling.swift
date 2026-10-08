@@ -121,13 +121,15 @@ public extension EditorModel {
         activity.record(.action, CullingChange.toggleCustomLabel(name).title)
     }
 
-    /// The rows of the photos selected, in order; the active photo's alone when nothing else is selected.
+    /// The rows of the photos selected, in order; the active photo's alone when nothing else is selected. The
+    /// selection is read once: each read is an observed access, and the menus' checks follow what they read.
     internal var selectedRows: [Int] {
-        guard !photoSelection.isEmpty else { return selection.flatMap(library.index(of:)).map { [$0] } ?? [] }
+        let selected = photoSelection
+        guard !selected.isEmpty else { return selection.flatMap(library.index(of:)).map { [$0] } ?? [] }
         let ids = library.photoIDs
         var rows: [Int] = []
-        rows.reserveCapacity(photoSelection.count)
-        for row in ids.indices where photoSelection.contains(ids[row]) {
+        rows.reserveCapacity(selected.count)
+        for row in ids.indices where selected.contains(ids[row]) {
             rows.append(row)
         }
         return rows
