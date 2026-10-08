@@ -230,6 +230,72 @@ public struct GroupedList: Sendable, RandomAccessCollection {
         return nil
     }
 
+    // MARK: - The cells on show
+
+    /// The cells on show in order, the open groups' one group after another and their headers left out, as a
+    /// filmstrip shows a grouped grid's photos. A pass over them.
+    public var cells: ContiguousArray<Int64> {
+        var cells = ContiguousArray<Int64>()
+        cells.reserveCapacity(Swift.max(count - groups.count, 0))
+        var before = 0
+        for group in groups.indices {
+            let after = stacked.cellCount(before: Int(groups.starts[group + 1]))
+            if opened.contains(group), after > before {
+                stacked.walk(from: before, through: after - 1) { cells.append($0) }
+            }
+            before = after
+        }
+        return cells
+    }
+
+    /// The place of photo `id`'s cell among `cells`; nil for a photo in a closed group or inside a closed stack,
+    /// or one the list doesn't have.
+    public func cellIndex(of id: Int64) -> Int? {
+        guard let group = groups.index(of: id), let item = index(of: id) else { return nil }
+        return item - group - 1
+    }
+
+    /// The cell on show `offset` (1 or -1) cells after or before photo `id`'s, past headers and closed groups, as
+    /// ← and → go; from a photo in a closed group or inside a closed stack, from where its group or its stack is.
+    /// Nil at either end.
+    public func cell(_ offset: Int, from id: Int64) -> Int64? {
+        guard let group = groups.index(of: id) else { return nil }
+        if let item = index(of: stacked.cell(for: id) ?? id) {
+            let next = item + offset
+            if indices.contains(next), case let .photo(photo) = self[next] {
+                return photo
+            }
+        }
+        var next = group + offset
+        while groups.indices.contains(next) {
+            let shown = cellCount(of: next)
+            if opened.contains(next), shown > 0,
+               case let .photo(photo) = self[index(ofHeader: next) + (offset > 0 ? 1 : shown)] {
+                return photo
+            }
+            next += offset
+        }
+        return nil
+    }
+
+    /// The cell on show after the last of `photos` in the list's order, as culling moves on past the photos it
+    /// changed; nil when none is after them.
+    public func cell(after photos: some Collection<Int64>) -> Int64? {
+        var lastGroup = -1
+        for id in photos {
+            lastGroup = Swift.max(lastGroup, groups.index(of: id) ?? -1)
+        }
+        guard lastGroup >= 0 else { return nil }
+        // `stacked` has the groups' cells group after group: the last group's photos alone are placed there.
+        var last: (place: Int, cell: Int64)?
+        for id in photos where groups.index(of: id) == lastGroup {
+            guard let cell = stacked.cell(for: id), let place = stacked.index(of: cell), place > last?.place ?? -1
+            else { continue }
+            last = (place, cell)
+        }
+        return last.flatMap { cell(1, from: $0.cell) }
+    }
+
     // MARK: - Opening and closing
 
     /// Opens group `group`: its cells are inserted after its header, which is updated. Nothing changes

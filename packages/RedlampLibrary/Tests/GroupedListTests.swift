@@ -264,6 +264,55 @@ struct GroupedListTests {
         #expect(selection.isEmpty && selection.active == nil)
     }
 
+    @Test func `the cells on show run group after group, and a step from a photo goes past headers and closed groups`() {
+        let (library, id) = Self.library()
+        var grouped = library.grouping().grouped(library.list, by: .moment)
+        func names(_ cells: some Sequence<Int64>) -> [String] {
+            let byID = Dictionary(uniqueKeysWithValues: [
+                "raw0",
+                "raw1",
+                "raw2",
+                "jpeg1",
+                "a1",
+                "a2",
+                "pRaw",
+                "pJPEG",
+                "b1",
+                "b2",
+                "c1",
+                "c2",
+                "scan",
+            ].map { (id($0), $0) })
+            return cells.map { byID[$0] ?? "?" }
+        }
+        #expect(names(grouped.cells) == ["raw0", "a1", "a2", "pRaw", "b1", "b2", "c1", "c2", "scan"])
+        #expect(grouped.cellIndex(of: id("b1")) == 4 && grouped.cellIndex(of: id("scan")) == 8)
+        #expect(grouped.cellIndex(of: id("jpeg1")) == nil, "a photo inside a closed stack has no cell of its own")
+
+        grouped.close(1)
+        #expect(names(grouped.cells) == ["raw0", "a1", "a2", "c1", "c2", "scan"])
+        #expect(grouped.cellIndex(of: id("c1")) == 3 && grouped.cellIndex(of: id("b1")) == nil)
+        #expect(grouped.cell(1, from: id("a2")) == id("c1"), "→ passes over a closed group")
+        #expect(grouped.cell(-1, from: id("c1")) == id("a2"))
+        #expect(grouped.cell(1, from: id("b1")) == id("c1") && grouped.cell(-1, from: id("b1")) == id("a2"))
+        #expect(grouped.cell(1, from: id("jpeg1")) == id("a1"), "from inside a closed stack, the cell after it")
+        #expect(grouped.cell(-1, from: id("raw0")) == nil && grouped.cell(1, from: id("scan")) == nil)
+
+        #expect(grouped.cell(after: [id("a1"), id("jpeg2")]) == id("a2"), "after the last of them in the grid's order")
+        #expect(grouped.cell(after: [id("c2"), id("raw0")]) == id("scan"))
+        #expect(grouped.cell(after: [id("a2")]) == id("c1") && grouped.cell(after: [id("b2")]) == id("c1"))
+        #expect(grouped.cell(after: [id("scan")]) == nil && grouped.cell(after: []) == nil)
+
+        grouped.open(1)
+        grouped.openStack(id("raw0"))
+        #expect(names(grouped.cells.prefix(5)) == ["raw0", "raw1", "raw2", "a1", "a2"])
+        #expect(grouped.cell(after: [id("raw0")]) == id("raw1") && grouped.cell(1, from: id("jpeg1")) == id("raw2"))
+        #expect(grouped.cellIndex(of: id("pRaw")) == 5)
+        grouped.closeAll()
+        #expect(grouped.cells.isEmpty && grouped.cell(1, from: id("a1")) == nil && grouped
+            .cell(after: [id("a1")]) == nil)
+    }
+
     @Test func `groups relabelled with a view's own IDs keep each photo's group, name, picks and filter`() throws {
         var (library, id) = Self.library()
         library.setFlag(.pick, of: id("b1"))
