@@ -1258,7 +1258,7 @@ Redlamp is at an early stage and moving quickly. Issues and discussion are very 
   - Run `mise run setup` once, so commits are linted and pushes to main are tested, and `mise run lint` and `mise run test` before sending changes.
   - Keep engine code free of UI imports.
   - New parameters go into the schema in `RedlampEngineAPI/Sources/ParameterSpec.swift`.
-- **Working with agents:** most of Redlamp is written by AI agents, and every change meets the same checks whoever writes it. [docs/working-with-agents.md](docs/working-with-agents.md) sets out the bar, what agent work costs and the habits that keep it within a budget.
+- **Working with agents:** most of Redlamp is written by AI agents, and every change meets the same checks whoever writes it. [docs/working-with-agents.md](docs/working-with-agents.md) sets out the bar, what agent work costs and the habits that keep it within a budget, and [docs/rooms.md](docs/rooms.md) describes the rooms that releases, reports, the blog and press outreach are run from.
 - **Fixtures:** `mise run fixtures` downloads CC0 samples. Please don't commit RAW files.
 
 ## Support Redlamp
