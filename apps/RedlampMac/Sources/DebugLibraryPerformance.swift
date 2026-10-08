@@ -86,6 +86,17 @@
                 ?? "/tmp/redlamp-stalls.txt"
         }
 
+        /// Writes the stall report, and with `--library-perf-profile-turns` the stacks sampled beside it
+        /// (stalls-folded.txt, or /tmp/redlamp-stalls-folded.txt).
+        private static func write(_ stalls: StallSampler) {
+            try? ((notes + [stalls.report()]).joined(separator: "\n") + "\n")
+                .write(toFile: stallsPath, atomically: true, encoding: .utf8)
+            if let folded = stalls.folded() {
+                let path = (stallsPath as NSString).deletingPathExtension + "-folded.txt"
+                try? folded.write(toFile: path, atomically: true, encoding: .utf8)
+            }
+        }
+
         /// What the stall report adds about each phase: what changed in it.
         private static var notes: [String] = []
 
@@ -276,8 +287,7 @@
                 service.close()
                 stalls.stop()
                 self.stalls = nil
-                try? ((notes + [stalls.report()]).joined(separator: "\n") + "\n")
-                    .write(toFile: Self.stallsPath, atomically: true, encoding: .utf8)
+                write(stalls)
                 return finish(lines, budgets: groupBudgets(measured), memory: memory, title: fixture.path)
             }
             if part("grid") {
@@ -370,8 +380,7 @@
             stalls.stop()
             self.stalls = nil
             lines.append((stalls.summary ?? "No main-thread turn over 500 ms") + " (\(Self.stallsPath))")
-            try? ((notes + [stalls.report()]).joined(separator: "\n") + "\n")
-                .write(toFile: Self.stallsPath, atomically: true, encoding: .utf8)
+            write(stalls)
 
             let arrows = measured.arrows.compactMap(\.summary?.p99).max() ?? .infinity
             let blank = measured.arrows.reduce(0) { $0 + $1.blank }
@@ -1634,6 +1643,37 @@
                 lines.append("(the sample buffer filled up: later turns have no samples)")
             }
             return lines.joined(separator: "\n")
+        }
+
+        /// With `--library-perf-profile-turns`, every stack sampled, a line each: its phase and its frames from
+        /// the outermost in, with `;` between them, then how many samples had it: the folded form flame graphs
+        /// read. Symbols are mangled. Nil without the flag.
+        func folded() -> String? {
+            guard profiling else { return nil }
+            let count = samples.count.load(ordering: .acquiring)
+            var names: [UInt: String] = [:]
+            var stacks: [String: Int] = [:]
+            for index in 0 ..< count {
+                let frames = samples.buffer + index * Samples.maxDepth
+                var symbols = [phases[samples.phases[index]].name]
+                for level in (0 ..< samples.depths[index]).reversed() where frames[level] > 1 {
+                    let address = level == 0 ? frames[level] : frames[level] - 1
+                    if let name = names[address] {
+                        symbols.append(name)
+                        continue
+                    }
+                    var info = Dl_info()
+                    var name = String(format: "0x%lx", address)
+                    if dladdr(UnsafeRawPointer(bitPattern: address), &info) != 0 {
+                        let image = info.dli_fname.map { URL(fileURLWithPath: String(cString: $0)).lastPathComponent }
+                        name = "\(info.dli_sname.map { String(cString: $0) } ?? "?") [\(image ?? "?")]"
+                    }
+                    names[address] = name
+                    symbols.append(name)
+                }
+                stacks[symbols.joined(separator: ";"), default: 0] += 1
+            }
+            return stacks.map { "\($0.key) \($0.value)\n" }.joined()
         }
     }
 #endif
