@@ -188,23 +188,36 @@ final class LibrarySourceList: Sendable {
         private var touched = Set<Int64>()
         /// The IDs handed over last, in order, and each one's place among them; nil before the first.
         private var handed: (ids: [Int64], places: [Int64: Int32])?
+        /// The last update was taken whole, so `ids` are the photos the next one's diff counts from.
+        private var inStep = false
+        /// Photos of the list whose rows weren't read when they came: read again with the next update.
+        private var unread: [Int64] = []
 
         /// Whether photo `id` is one of the source's.
         func holds(_ id: Int64) -> Bool {
             items[id] != nil
         }
 
-        /// The source's photos as `update` leaves them, reading the rows of those new or changed.
+        /// The source's photos as `update` leaves them, reading the rows of those new or changed. Once an update
+        /// has been taken whole, the next is taken from the photos its diff names alone: those that came, went or
+        /// changed, and any whose row wasn't read before. A reset is taken by looking at every photo.
         mutating func take(_ update: PhotoListUpdate, index: LibraryIndex) async throws {
             let list = update.list
             let ids = Array(list.ids)
-            var changed = Set<Int64>()
-            if !update.diff.reset {
-                changed.formUnion(update.diff.inserted.map { list[$0] })
-                changed.formUnion(update.diff.updated.map { list[$0] })
-                changed.formUnion(update.diff.moved.map { list[$0.to] })
+            let diff = update.diff
+            let stepped = inStep && !diff.reset && (diff.removed.last ?? -1) < self.ids.count
+            inStep = false
+            let named = diff.reset ? []
+                : diff.inserted.map { list[$0] } + diff.updated.map { list[$0] } + diff.moved.map { list[$0.to] }
+            let reading: [Int64]
+            var leaving: [Int64] = []
+            if stepped {
+                reading = named + unread
+                leaving = diff.removed.map { self.ids[$0] }
+            } else {
+                let changed = Set(named)
+                reading = ids.filter { items[$0] == nil || changed.contains($0) }
             }
-            let reading = ids.filter { items[$0] == nil || changed.contains($0) }
             let known = folders
             let read = try await index.read { reader -> ([PhotoRecord], [Int64: String]) in
                 var rows: [PhotoRecord] = []
@@ -240,23 +253,24 @@ final class LibrarySourceList: Sendable {
                     indexIDs[url] = row.id
                 }
             }
-            let kept = Set(ids)
-            for (id, item) in items.filter({ !kept.contains($0.key) }) {
-                items[id] = nil
+            if !stepped {
+                let kept = Set(ids)
+                leaving = items.keys.filter { !kept.contains($0) }
+            }
+            for id in leaving {
+                guard let item = items.removeValue(forKey: id) else { continue }
                 forget(item.url)
                 touched.insert(id)
             }
+            unread = reading.filter { items[$0] == nil }
             self.ids = ids
             hasList = true
+            inStep = true
         }
 
         private mutating func forget(_ url: URL) {
-            if keys[url] != nil {
-                keys[url] = nil
-            }
-            if indexIDs[url] != nil {
-                indexIDs[url] = nil
-            }
+            keys.removeValue(forKey: url)
+            indexIDs.removeValue(forKey: url)
         }
 
         /// The change handing over the photos `ids` names, in its order, against those handed over before.
