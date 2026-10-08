@@ -51,6 +51,8 @@
                 ],
                 "windows": NSApp.windows.filter(\.isVisible).map(window),
                 "develop": [
+                    "module": model.module.rawValue,
+                    "libraryView": model.libraryView.rawValue,
                     "photo": model.selection?.lastPathComponent ?? "none",
                     "photoOpen": model.info != nil,
                     "loading": model.isLoading,
@@ -63,6 +65,7 @@
                 "source": [
                     "folder": model.folder?.path ?? "none",
                     "includesSubfolders": model.library.includesSubfolders,
+                    "recentlyTrashed": model.library.showsRecentlyTrashed,
                     "listing": model.library.isListing,
                     "photos": model.items.count,
                 ],
