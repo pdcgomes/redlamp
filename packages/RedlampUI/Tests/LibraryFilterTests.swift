@@ -761,6 +761,21 @@ extension LibraryFilterTests {
         #expect(names(model) == ["IMG_0001.JPG"] && changes == 1)
     }
 
+    @Test func `every photo a filter shows has its content key, as the filter narrows and widens`() async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        let library = model.library
+        let keys = Dictionary(uniqueKeysWithValues: library.items.compactMap { item in
+            library.storeThumbnail(for: item).map { (item.url, $0.1) }
+        })
+        try #require(keys.count == library.items.count, "each photo has a key before any filter")
+        for text in ["IMG_0", "DSC", "IMG_0001", ""] {
+            try await filtered(model, text)
+            #expect(!library.items.isEmpty, "\(text)")
+            #expect(library.items.allSatisfy { library.storeThumbnail(for: $0)?.1 == keys[$0.url] }, "\(text)")
+        }
+    }
+
     @Test func `the selection keeps the photos that remain as the filter changes`() async throws {
         defer { cleanUp() }
         let (model, _) = try await open()

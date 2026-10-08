@@ -43,7 +43,7 @@ final class LibraryFolderList: Sendable {
         var previousCount: Int
         /// The rows removed, inserted and changed, or a reset when the photos that stayed moved.
         var diff: LibraryDiff
-        /// The content keys of the photos the list handed over before didn't have.
+        /// The content keys of every photo of the folder that has one, filtered or not, by URL.
         var keys: [URL: ContentKey]
         /// The folder's photos, filtered or not.
         var total: Int
@@ -192,6 +192,13 @@ final class LibraryFolderList: Sendable {
         /// Every photo of the folder, filtered or not, and their content keys, by ID.
         private(set) var items: [Int64: LibraryItem] = [:]
         private(set) var keys: [Int64: ContentKey] = [:]
+        /// The content keys by URL, for every filtered list to hand over whole: merging a list's thousands on
+        /// the main thread took milliseconds a key typed.
+        private(set) var urlKeys: [URL: ContentKey] = [:]
+        /// The photos changed or gone since the last filtered list was made (`untouch`), or all of them: only
+        /// those can differ from that list's.
+        private(set) var touched = Set<Int64>()
+        private(set) var touchedAll = true
         /// The photos' IDs in Folders' order, until photos come, go or move.
         private var order: [Int64]?
 
@@ -244,6 +251,9 @@ final class LibraryFolderList: Sendable {
             }
             folders.merge(read.1) { _, new in new }
             var change = Change()
+            var moved = !removed.isEmpty
+            touched.formUnion(removed)
+            touched.formUnion(changed)
             for id in removed {
                 if let url = shown.removeValue(forKey: id) {
                     change.removed.append(url)
@@ -259,13 +269,16 @@ final class LibraryFolderList: Sendable {
                         change.removed.append(before)
                     }
                     forget(id)
+                    moved = true
                     continue
                 }
                 // A photo shown under the same URL with the same content (a culling batch's thousands) sends no key.
                 if let key = row.contentKey.flatMap(ContentKey.init(data:)), before != item.url || keys[id] != key {
                     change.keys[item.url] = key
                     keys[id] = key
+                    urlKeys[item.url] = key
                 }
+                moved = moved || before.map { $0 != item.url } ?? false
                 shown[id] = item.url
                 if items[id]?.url != item.url {
                     order = nil
@@ -280,7 +293,21 @@ final class LibraryFolderList: Sendable {
                     change.inserted.append(item)
                 }
             }
+            if moved {
+                urlKeys = [:]
+                for (id, item) in items {
+                    if let key = keys[id] {
+                        urlKeys[item.url] = key
+                    }
+                }
+            }
             return change
+        }
+
+        /// A filtered list was made of the photos as they are now.
+        mutating func untouch() {
+            touched = []
+            touchedAll = false
         }
 
         private mutating func forget(_ id: Int64) {
@@ -307,6 +334,7 @@ final class LibraryFolderList: Sendable {
             items = [:]
             keys = [:]
             order = nil
+            touchedAll = true
             guard let (rows, folders) = read ?? nil else { return Change(all: ([], [:])) }
             self.folders = folders
             shown = [:]
@@ -327,6 +355,7 @@ final class LibraryFolderList: Sendable {
             }
             listed = Self.ordered(listed)
             order = listed.compactMap { ids[$0.url] }
+            urlKeys = change.keys
             var positions: [URL: Int] = [:]
             positions.reserveCapacity(listed.count)
             for (index, item) in listed.enumerated() where positions[item.url] == nil {
@@ -417,6 +446,7 @@ private extension LibraryFolderList {
             items = ids.compactMap { mapping.items[$0] }
             places = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, Int32($0)) })
             listed = nil
+            mapping.untouch()
         }
 
         /// The list `filter` makes of `mapping`'s photos, against the list handed over before; `changed` when
@@ -443,13 +473,16 @@ private extension LibraryFolderList {
                 ids.reverse()
             }
             let first = self.filter == nil
+            let (touched, touchedAll) = (mapping.touched, mapping.touchedAll)
+            mapping.untouch()
             // The photos the last list found, in its order and unchanged: that list again, at once at any count.
             if !first, !changed, let listed, listed.ids == ids {
                 self.filter = filter
                 isOrdered = !filter.isEmpty
                 var ordered = Ordered(
                     items: self.items, positions: listed.positions, previous: Array(0 ..< Int32(self.items.count)),
-                    previousCount: self.items.count, diff: LibraryDiff(), keys: [:], total: mapping.items.count,
+                    previousCount: self.items.count, diff: LibraryDiff(), keys: mapping.urlKeys,
+                    total: mapping.items.count,
                     filter: filter,
                 )
                 ordered.took = (queried, clock.now - started - queried)
@@ -465,7 +498,6 @@ private extension LibraryFolderList {
             previous.reserveCapacity(ids.count)
             var places: [Int64: Int32] = [:]
             places.reserveCapacity(ids.count)
-            var keys: [URL: ContentKey] = [:]
             var updated = IndexSet()
             var carried = IndexSet()
             var inOrder = true
@@ -483,11 +515,9 @@ private extension LibraryFolderList {
                     carried.insert(Int(before))
                     inOrder = inOrder && before > lastCarried
                     lastCarried = before
-                    if self.items[Int(before)] != item {
+                    if touchedAll || touched.contains(id), self.items[Int(before)] != item {
                         updated.insert(index)
                     }
-                } else if let key = mapping.keys[id] {
-                    keys[item.url] = key
                 }
                 items.append(item)
                 listedIDs.append(id)
@@ -500,7 +530,7 @@ private extension LibraryFolderList {
                 ? LibraryDiff(removed: removed, inserted: inserted, updated: updated) : LibraryDiff(reset: true)
             var ordered = Ordered(
                 items: items, positions: positions, previous: previous, previousCount: first ? -1 : self.items.count,
-                diff: diff, keys: keys, total: mapping.items.count, filter: filter,
+                diff: diff, keys: mapping.urlKeys, total: mapping.items.count, filter: filter,
             )
             ordered.took = (queried, clock.now - started - queried)
             self.items = items

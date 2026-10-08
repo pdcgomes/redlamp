@@ -23,20 +23,20 @@ extension FolderLibrary {
         let opened = fromLibrary.opened
         fromLibrary.opened = nil
         fromLibrary.awaitingFirst = false
-        fromLibrary.keys.merge(ordered.keys) { _, new in new }
         let carried = ordered.previousCount >= 0 && ordered.previousCount == items.count
         var ids = ContiguousArray<Int64>()
         ids.reserveCapacity(ordered.items.count)
-        for (index, item) in ordered.items.enumerated() {
-            let before = carried ? Int(ordered.previous[index]) : positions[item.url] ?? -1
+        for index in ordered.items.indices {
+            let before = carried ? Int(ordered.previous[index]) : positions[ordered.items[index].url] ?? -1
             ids.append(photoIDs.indices.contains(before) ? photoIDs[before] : newPhotoIDs(1).lowerBound)
         }
         let unchanged = carried && ordered.diff.isEmpty
         // Freeing tens of thousands of photos takes milliseconds: the list replaced goes off the main thread.
-        let replaced = (items, positions)
+        let replaced = (items, positions, fromLibrary.keys)
         items = ordered.items
         positions = ordered.positions
         photoIDs = ids
+        fromLibrary.keys = ordered.keys
         scheduler.submit(.background) { withExtendedLifetime(replaced) {} }
         isListing = false
         isOpenFolderUnavailable = false
