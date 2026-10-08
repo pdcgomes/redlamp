@@ -181,7 +181,8 @@ struct CollectionsPanelTests {
         #expect(sources.count(of: .marked) == 1 && model.items.last?.metadata.mark == true)
     }
 
-    @Test func `a smart collection given another query counts and shows the photos the new one finds`() async throws {
+    @Test func `a smart collection shown and given another query counts and shows the photos the new one finds`(
+    ) async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }
         try sandbox.photos(["Shoot/A.JPG", "Shoot/B.JPG"])
@@ -196,13 +197,17 @@ struct CollectionsPanelTests {
         #expect(sources.saveSmart("flag:pick", named: "Picked", inside: nil))
         try await made(sandbox) { $0.count(of: .collection(picked)) == 2 }
         #expect(sources.count(of: .collection(picked)) == 2)
+        #expect(sources.show(.collection(picked)))
+        try await sandbox.eventually { !sources.isListing && model.items.count == 2 }
 
+        // Nothing else changes in the library meanwhile, as a query is edited a while after the ratings.
+        try await Task.sleep(for: .seconds(2))
+        await sandbox.service?.settled()
         #expect(sources.saveSmart("flag:pick rating>=3", named: "Picked", inside: nil, editing: picked))
         try await made(sandbox) { $0.count(of: .collection(picked)) == 1 }
         #expect(sources.count(of: .collection(picked)) == 1, "its count follows its query")
-        #expect(sources.show(.collection(picked)))
-        try await sandbox.eventually { !sources.isListing && model.items.count == 1 }
-        #expect(model.items.map(\.url) == [a], "its photos follow its query")
+        try await sandbox.eventually { model.items.count == 1 }
+        #expect(sources.shown == .collection(picked) && model.items.map(\.url) == [a], "its photos follow its query")
     }
 
     @Test func `⌘N makes a collection in Library and a snapshot in Develop, and ⌫ takes photos out only in Library`() {

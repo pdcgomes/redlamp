@@ -54,7 +54,7 @@ extension LibraryService {
     func run(_ change: PanelChange, progress: @escaping @Sendable (Int, Int) -> Void) async -> PanelOutcome {
         guard let core else { return PanelOutcome(error: "the library isn't open") }
         return await core.change {
-            await Self.run(core, progress: progress) { keywords, metadata in
+            let outcome = await Self.run(core, progress: progress) { keywords, metadata in
                 switch change {
                 case let .keywords(change): try await .keywords(keywords.plan(change))
                 case let .metadata(change): try await .metadata(metadata.plan(change))
@@ -62,6 +62,16 @@ extension LibraryService {
                 case let .collections(change): try await .metadata(metadata.collections.plan(change))
                 }
             }
+            Self.collectionsChanged(by: change, in: core)
+            return outcome
+        }
+    }
+
+    /// A collection made, renamed, moved or deleted, or a smart collection's query, reaches the open lists, as
+    /// `LibraryCollections.apply` has it reach them: the definitions aren't in the index.
+    private nonisolated static func collectionsChanged(by change: PanelChange, in core: LibraryCore) {
+        if case .collections = change {
+            core.live.namesChanged()
         }
     }
 
@@ -69,12 +79,14 @@ extension LibraryService {
     func undo(_ change: PanelChange, batch: UUID) async -> PanelOutcome {
         guard let core else { return PanelOutcome(error: "the library isn't open") }
         return await core.change {
-            await Self.run(core, progress: { _, _ in }) { keywords, metadata in
+            let outcome = await Self.run(core, progress: { _, _ in }) { keywords, metadata in
                 if change.isKeywords {
                     return try await .keywords(keywords.planUndo(batch))
                 }
                 return try await .metadata(metadata.planUndo(batch))
             }
+            Self.collectionsChanged(by: change, in: core)
+            return outcome
         }
     }
 
@@ -83,7 +95,7 @@ extension LibraryService {
     func redo(_ change: PanelChange, undo: UUID?) async -> PanelOutcome {
         guard let core else { return PanelOutcome(error: "the library isn't open") }
         return await core.change {
-            await Self.run(core, progress: { _, _ in }) { keywords, metadata in
+            let outcome = await Self.run(core, progress: { _, _ in }) { keywords, metadata in
                 switch change {
                 case let .keywords(change): return try await .keywords(keywords.plan(change))
                 case let .metadata(change):
@@ -103,6 +115,8 @@ extension LibraryService {
                     return try await .metadata(metadata.collections.plan(change))
                 }
             }
+            Self.collectionsChanged(by: change, in: core)
+            return outcome
         }
     }
 
