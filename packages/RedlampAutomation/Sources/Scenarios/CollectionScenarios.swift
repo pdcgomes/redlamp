@@ -310,22 +310,32 @@
             pause(0.1)
         }
 
-        /// Runs `body` on a collection of a scratch folder's photos, `names`, made as its set-up and shown by a
-        /// click on its row in the Collections panel, in Library's grid; then shows the run's photos folder again,
-        /// and removes the collection and the scratch, also when `body` fails.
+        /// Runs `body` on a collection of a scratch folder's photos, `names` (a slash puts one in a subfolder), made
+        /// as its set-up and shown by a click on its row in the Collections panel, in Library's grid with the
+        /// keyboard; then shows the run's photos folder again, as the run had it, and removes the collection and
+        /// the scratch, also when `body` fails.
         func withCollection(of names: [String], _ body: (SourcesScratch, CollectionPath) throws -> Void) throws {
             let scratch = try SourcesScratch(self, photos: names)
-            let photos = photos
+            let (photos, subfolders) = try (self.photos, main { $0.library.includesSubfolders })
             defer {
                 removeCollectionsMade()
                 scratch.remove(self)
                 try? main { model in
                     model.showFolder(photos)
+                    if model.library.includesSubfolders != subfolders {
+                        model.setIncludesSubfolders(subfolders)
+                    }
                     model.showModule(.develop)
                 }
                 try? wait("the photos folder again", timeout: 20) { $0.folder == photos && !$0.library.isListing }
             }
             try scratch.index(self)
+            if !subfolders {
+                try main { $0.setIncludesSubfolders(true) }
+            }
+            try wait("every photo of the scratch", timeout: 30) { model in
+                model.folder == scratch.folder && !model.library.isListing && model.items.count == names.count
+            }
             let name = "Views \(scratch.folder.lastPathComponent.suffix(8))"
             guard let path = CollectionPath(name) else { throw ScenarioFailure("No collection path for \(name)") }
             try main { model in
@@ -339,7 +349,10 @@
                 model.librarySources.shown == .collection(path) && !model.librarySources.isListing
                     && model.items.count == names.count && model.library.isShownFromLibrary
             }
-            try main { $0.showLibrary(.grid) }
+            try press(.gridView)
+            try wait("the collection's grid to take the keyboard") { _ in
+                Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"
+            }
             try wait("its grid's cells") { _ in
                 Views.editorWindow.flatMap { Views.find("grid.\(scratch.photo(names[0]).lastPathComponent)", in: $0) }
                     != nil

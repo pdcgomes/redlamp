@@ -267,7 +267,10 @@ struct LibraryFilterTests {
         #expect(counts(2) == ["0": 1, "1": 1, "3": 1, "4": 1, "5": 1])
 
         filters.choose([.text("Fujifilm X-T5")], inColumn: 0)
-        try await eventually { filters.columns[1]?.total == 2 && model.items.count == 2 }
+        // The columns are handed over one at a time, as each is counted.
+        try await eventually {
+            filters.columns[1]?.total == 2 && filters.columns[2]?.total == 2 && model.items.count == 2
+        }
         #expect(filters.columns[0]?.total == 5, "a column counts the photos of the choices before it alone")
         #expect(counts(1) == ["2024-06-14": 1, "2024-06-15": 1])
         #expect(counts(2) == ["3": 1, "5": 1])
