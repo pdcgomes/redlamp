@@ -89,9 +89,12 @@ final class EditorSplitViewController: NSSplitViewController {
         }
     }
 
+    /// Slides the panel only while the window can be seen: behind other windows or on a display that
+    /// sleeps, the slide doesn't advance, and a panel shown again stays where it slides in from, off the
+    /// window, while the item and the model say it's showing.
     private func setCollapsed(_ item: NSSplitViewItem, _ collapsed: Bool) {
         guard item.isCollapsed != collapsed else { return }
-        if view.window?.isVisible == true {
+        if view.window?.occlusionState.contains(.visible) == true {
             item.animator().isCollapsed = collapsed
         } else {
             item.isCollapsed = collapsed
