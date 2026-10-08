@@ -27,6 +27,7 @@ When the work is a feature with milestones, each made of tracker rows (the libra
 - A row's state is `done` (merged where it ships, its done-when met), `built` (merged and tested, with a check at scale or a small part left, which its note names), `doing`, `you` (waiting on the owner) or `todo`. Never call a row done that the tracker doesn't.
 - Everything below applies to boards too: the owner's marks first, one step per todo, updates in the same turn, and only what was verified.
 - For a post or a report, [capture.py](capture.py) renders a canvas outside Cursor with Cursor's own canvas runtime and captures its sections (its docstring has the commands); the blog post How I manage a large feature across AI agents was illustrated with it.
+- A feature with a UI to design also keeps a wireframes canvas (`.cursor/skills/screen-wireframes/SKILL.md`): the board links it, and its open questions are Needs you items too.
 
 ## A plan's todos are its steps
 
