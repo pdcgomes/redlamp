@@ -309,11 +309,10 @@ public extension EditorModel {
                   sizedBrush == nil || ![.decreaseRating, .increaseRating].contains(action),
                   !(action == .flagReject && module == .develop && activeTool == .crop)
             else { return nil }
-            let culled = module == .library ? selectedRows
-                : (opening ?? selection).flatMap(library.index(of:)).map { [$0] } ?? []
-            let ids = library.photoIDs
+            let culled = module == .library ? selectedOwnIDs
+                : (opening ?? selection).flatMap(library.photoID(of:)).map { [$0] } ?? []
             guard cull(change, advance: false) else { return false }
-            advance(past: culled.compactMap { ids.indices.contains($0) ? ids[$0] : nil }, in: stacked)
+            advance(past: culled, in: stacked)
         }
         return true
     }
@@ -370,10 +369,12 @@ public extension EditorModel {
 
     // MARK: - Making a change
 
-    /// The IDs here of the photos selected, or the active photo's when none is.
+    /// The IDs here of the photos selected, in the list's order, or the active photo's when none is. The selection is
+    /// read once: the menus ask for this after every change they follow, and each read is an observed access.
     private var selectedOwnIDs: [Int64] {
-        let ids = library.photoIDs
-        return selectedRows.compactMap { ids.indices.contains($0) ? ids[$0] : nil }
+        let selected = photoSelection
+        guard !selected.isEmpty else { return selection.flatMap(library.photoID(of:)).map { [$0] } ?? [] }
+        return Array(selected.ids(in: library.photoList))
     }
 
     /// The photos selected, and the raw or JPEG beside each in a pair, as their URLs and their IDs in the index, for
