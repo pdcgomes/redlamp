@@ -283,6 +283,26 @@ public extension LibraryPanels {
         )
     }
 
+    /// Says the camera's clock was in the zone `offset` seconds east of UTC for every photo selected, its time
+    /// left as it is; nil gives them back the zones their files record.
+    @discardableResult
+    func setCaptureZone(_ offset: Int?) -> Bool {
+        let ids = selection.ids
+        guard !ids.isEmpty, offset.map(PhotoMetadata.captureOffsets.contains) ?? true else { return false }
+        let photos = Self.count(ids.count)
+        let title = offset.map { "Set the camera's zone of \(photos) to \(CaptureTimeChange.describe(zone: $0))" }
+            ?? "Give \(photos) the zones their files record"
+        return make([.captureTime(.zone(ids, offset: offset))], title: title)
+    }
+
+    /// The zone the active photo's camera was in, as the library shows it and as its file records it.
+    internal func activeCaptureZone() async -> PanelCaptureZone? {
+        guard let id = selection.activeID ?? selection.ids.first, let service = model?.library.service else {
+            return nil
+        }
+        return await service.captureZone(ofPhoto: id)
+    }
+
     // MARK: - Undo and Redo
 
     /// Library's Undo: the panels' last change when it came after culling's last; nil when culling's goes

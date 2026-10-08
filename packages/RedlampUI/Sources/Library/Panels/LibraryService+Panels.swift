@@ -29,6 +29,13 @@ struct PanelOutcome: Sendable {
     var error: String?
 }
 
+/// The zone a photo's camera was in (LIB-22), in seconds east of UTC: as the library shows it, and as its file
+/// records it; nil where there's none.
+struct PanelCaptureZone: Sendable, Equatable {
+    var shown: Int?
+    var file: Int?
+}
+
 /// The keyword list as the panels show it, read off the main thread.
 struct PanelKeywords: Sendable {
     var list: KeywordList
@@ -217,6 +224,16 @@ extension LibraryService {
     func removePreset(named name: String) async -> Bool {
         guard let core else { return false }
         return await (try? Self.metadata(core).removePreset(named: name)) != nil
+    }
+
+    // MARK: - Capture times
+
+    /// The zone photo `id`'s camera was in, as the index shows it and as its file records it; nil when the index
+    /// doesn't have it.
+    func captureZone(ofPhoto id: Int64) async -> PanelCaptureZone? {
+        guard let core else { return nil }
+        let row = try? await core.index.read { try $0.photo(id: id) }
+        return row.map { PanelCaptureZone(shown: $0.capturedOffset, file: $0.cameraZone) }
     }
 
     // MARK: - The photos shown

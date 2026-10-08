@@ -1,5 +1,6 @@
 import AppKit
 import RedlampDesign
+import RedlampDocument
 import RedlampLibrary
 import UniformTypeIdentifiers
 
@@ -170,8 +171,9 @@ final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
 /// The sheets the Library's panels open: Edit Capture Time (the Photo menu's too) and the metadata presets.
 @MainActor
 enum PanelSheets {
-    /// Photo › Edit Capture Time…: the photos selected shifted by an amount, or the active photo given a time
-    /// and the others shifted by as much, as one change with Undo. False when there's no window to show it on.
+    /// Photo › Edit Capture Time…: the photos selected shifted by an amount, the active photo given a time and
+    /// the others shifted by as much, or the camera's time zone given to them all, as one change with Undo. False
+    /// when there's no window to show it on.
     @discardableResult
     static func editCaptureTime(model: EditorModel) -> Bool {
         let panels = model.libraryPanels
@@ -186,7 +188,13 @@ enum PanelSheets {
             action: nil,
         )
         set.setAccessibilityIdentifier("captureTime.set")
-        let radios = RadioGroup([shift, set])
+        let zone = NSButton(
+            radioButtonWithTitle: "Set the camera's time zone of every photo to",
+            target: nil,
+            action: nil,
+        )
+        zone.setAccessibilityIdentifier("captureTime.zone")
+        let radios = RadioGroup([shift, set, zone])
         let sign = NSPopUpButton()
         sign.addItems(withTitles: ["+", "−"])
         sign.setAccessibilityIdentifier("captureTime.sign")
@@ -207,15 +215,42 @@ enum PanelSheets {
         picker.timeZone = TimeZone(secondsFromGMT: 0)
         picker.dateValue = panels.selection.fields.captured?.lowerBound ?? Date()
         picker.setAccessibilityIdentifier("captureTime.date")
+        let zones = NSPopUpButton()
+        zones.setAccessibilityIdentifier("captureTime.zones")
+        let filesZone = NSMenuItem(title: "As Each Photo's File Records", action: nil, keyEquivalent: "")
+        zones.menu?.addItem(filesZone)
+        zones.menu?.addItem(.separator())
+        for offset in CaptureZones.inUse {
+            let item = NSMenuItem(title: CaptureTimeChange.describe(zone: offset), action: nil, keyEquivalent: "")
+            item.representedObject = offset
+            zones.menu?.addItem(item)
+        }
+        CaptureZones.select(TimeZone.current.secondsFromGMT(), in: zones)
+        let zoneNote = NSTextField(labelWithString: "")
+        zoneNote.textColor = .secondaryLabelColor
+        zoneNote.setAccessibilityIdentifier("captureTime.zoneNote")
+        Task {
+            guard let shown = await panels.activeCaptureZone() else { return }
+            zoneNote.stringValue = CaptureZones.describe(shown)
+            if let offset = shown.shown {
+                CaptureZones.select(offset, in: zones)
+            }
+        }
         sheet.add(nil, shift)
         sheet.add("By:", amount)
         sheet.add(nil, set)
         sheet.add("To:", picker)
+        sheet.add(nil, zone)
+        sheet.add("Zone:", zones)
+        sheet.add(nil, zoneNote)
         sheet.add(nil, NSTextField(labelWithString: "Times are the camera's clock. Photos' files are never changed."))
         return sheet.begin(button: "Change", first: parts[0]) {
             _ = radios
             if set.state == .on {
                 return panels.setCaptureTime(picker.dateValue)
+            }
+            if zone.state == .on {
+                return panels.setCaptureZone(zones.selectedItem?.representedObject as? Int)
             }
             let values = parts.map { Int($0.stringValue.trimmingCharacters(in: .whitespaces)) ?? 0 }
             let seconds = (values[0] * 3600 + values[1] * 60 + values[2]) * (sign.indexOfSelectedItem == 1 ? -1 : 1)
@@ -275,6 +310,47 @@ enum PanelSheets {
             Task { _ = await panels.save(saved, replacing: replacing) }
             return true
         }
+    }
+}
+
+/// The time zones Edit Capture Time offers the camera's clock (LIB-22).
+@MainActor
+enum CaptureZones {
+    /// Every zone a clock is set to somewhere, at standard time or at daylight time this year: from −12:00 to
+    /// +14:00, half and quarter hours among them.
+    static let inUse: [Int] = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? calendar.timeZone
+        let year = calendar.component(.year, from: Date())
+        let days = [1, 7].compactMap { calendar.date(from: DateComponents(year: year, month: $0, day: 15)) }
+        var offsets = Set<Int>()
+        for identifier in TimeZone.knownTimeZoneIdentifiers {
+            guard let zone = TimeZone(identifier: identifier) else { continue }
+            for day in days {
+                offsets.insert(zone.secondsFromGMT(for: day))
+            }
+        }
+        return offsets.filter(PhotoMetadata.captureOffsets.contains).sorted()
+    }()
+
+    /// Chooses `offset` in `menu`, the zones the sheet offers, or the nearest it offers.
+    static func select(_ offset: Int, in menu: NSPopUpButton) {
+        let items = menu.itemArray.filter { $0.representedObject is Int }
+        let nearest = items.min { first, second in
+            abs((first.representedObject as? Int ?? 0) - offset) < abs((second.representedObject as? Int ?? 0) - offset)
+        }
+        if let nearest {
+            menu.select(nearest)
+        }
+    }
+
+    /// `The active photo's camera: UTC+09:00, given in Redlamp; its file records UTC+01:00.`
+    static func describe(_ zone: PanelCaptureZone) -> String {
+        guard let shown = zone.shown else { return "The active photo's file records no zone." }
+        let camera = "The active photo's camera: \(CaptureTimeChange.describe(zone: shown))"
+        guard shown != zone.file else { return camera + ", as its file records." }
+        return camera + ", given in Redlamp; its file records "
+            + (zone.file.map { CaptureTimeChange.describe(zone: $0) + "." } ?? "none.")
     }
 }
 

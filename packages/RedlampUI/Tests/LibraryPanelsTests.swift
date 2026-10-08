@@ -475,6 +475,37 @@ struct LibraryPanelsTests {
         #expect(shown() == "2008-01-02 03:03:05 2008-01-02 03:04:05", "the active photo set, the other shifted as much")
     }
 
+    @Test func `the camera's zone is given to the photos selected, and given back as their files record it, with Undo`(
+    ) async throws {
+        let folder = Folder()
+        defer { folder.close() }
+        try await folder.open(count: 3)
+        let panels = folder.panels
+        try await folder.select([0, 1])
+        #expect(await panels.activeCaptureZone() == PanelCaptureZone(shown: nil, file: nil), "the JPEGs record none")
+        #expect(!panels.setCaptureZone(15 * 3600), "beyond +14:00")
+        #expect(panels.setCaptureZone(5 * 3600 + 45 * 60))
+        try await folder.written()
+        #expect(folder.metadata(0)?.captureOffset == 20700 && folder.metadata(1)?.captureOffset == 20700)
+        #expect(folder.metadata(0)?.captureShift == 0 && folder.metadata(2) == nil)
+        #expect(await panels.activeCaptureZone() == PanelCaptureZone(shown: 20700, file: nil))
+        #expect(
+            CaptureZones.describe(PanelCaptureZone(shown: 20700, file: nil))
+                == "The active photo's camera: UTC+05:45, given in Redlamp; its file records none.",
+        )
+        #expect(CaptureZones.inUse.contains(20700) && CaptureZones.inUse.contains(-9 * 3600 - 30 * 60))
+        #expect(folder.model.perform(.undo))
+        try await folder.written()
+        #expect(folder.metadata(0) == nil && folder.metadata(1) == nil, "⌘Z took it back")
+        #expect(await panels.activeCaptureZone() == PanelCaptureZone(shown: nil, file: nil))
+        #expect(folder.model.perform(.redo))
+        try await folder.written()
+        #expect(folder.metadata(1)?.captureOffset == 20700, "⇧⌘Z gave it again")
+        #expect(panels.setCaptureZone(nil))
+        try await folder.written()
+        #expect(folder.metadata(0) == nil && folder.metadata(1) == nil, "the zones their files record")
+    }
+
     @Test func `Undo of a capture-time change on Develop's open photo leaves its sidecar's metadata as it was`(
     ) async throws {
         let folder = Folder()

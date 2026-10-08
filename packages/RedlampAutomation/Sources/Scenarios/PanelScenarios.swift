@@ -158,6 +158,23 @@
             pause(0.1)
         }
 
+        /// Chooses `title` in the sheet's pop-up button `identifier`, as a click in its menu does.
+        func chooseInSheet(_ title: String, inPopUp identifier: String) throws {
+            try main { _ in
+                guard let sheet = NSApp.modalWindow ?? Views.editorWindow?.attachedSheet,
+                      let content = sheet.contentView,
+                      let button = Views.all(NSPopUpButton.self, in: content)
+                      .first(where: { $0.accessibilityIdentifier() == identifier })
+                else { throw ScenarioFailure("\(identifier) isn't in the sheet") }
+                guard let index = button.menu?.items.firstIndex(where: { $0.title == title }) else {
+                    throw ScenarioFailure("\(identifier) has no \(title)")
+                }
+                button.menu?.performActionForItem(at: index)
+                button.selectItem(at: index)
+            }
+            pause(0.1)
+        }
+
         /// The sheet's default button, pressed.
         func confirmSheet(_ title: String) throws {
             step("confirming \(title)")
@@ -517,8 +534,8 @@
 
         static let captureTime = Scenario(
             "library.capture-time",
-            "Photo ▸ Edit Capture Time… shifts the capture times of the photos selected, kept in their sidecars and "
-                + "shown in the Metadata panel, with Undo",
+            "Photo ▸ Edit Capture Time… shifts the capture times of the photos selected and gives their camera a time "
+                + "zone, kept in their sidecars and shown in the Metadata panel, each with Undo",
             claims: [.action(.editCaptureTime), .feature("library.metadata")],
         ) { app in
             try app.withPanels { names in
@@ -555,6 +572,21 @@
                     "⌘Z left \(names[dated])'s sidecar as it was: \(String(describing: written)) became "
                         + "\(String(describing: undone)), \(left) left to undo; " + app.panelErrors(),
                 )
+
+                try app.choose(.editCaptureTime)
+                try app.waitForSheet("Edit Capture Time")
+                try app.pressInSheet("captureTime.zone")
+                try app.chooseInSheet("UTC+05:45", inPopUp: "captureTime.zones")
+                try app.confirmSheet("Edit Capture Time")
+                try app.waitForPanels()
+                let zoned = try app.writtenMetadata(names[dated])
+                try app.expect(
+                    zoned?["captureOffset"] == .number(20700), "the camera's zone given: \(String(describing: zoned))",
+                )
+                try app.press(.undo)
+                try app.waitForPanels()
+                try app.main { _ = $0.saveBeforeQuitting(within: .seconds(10)) }
+                try app.expect(try app.writtenMetadata(names[dated]) == written, "⌘Z took the zone back")
                 app.covered([.action(.editCaptureTime), .feature("library.metadata")], via: .menu)
             }
         }
