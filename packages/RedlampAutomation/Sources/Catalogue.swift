@@ -25,6 +25,7 @@
             + SoakScenarios.all + PerformanceScenarios.all + PanelPerformanceScenarios.all
             + LibrarySourcesPerformanceScenarios.all
             + DragPerformanceScenarios.all
+            + StackPerformanceScenarios.all
             + SmokeScenarios.last
 
         /// What the app offers, from its own catalogues: every action, parameter, panel, left
