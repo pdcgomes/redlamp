@@ -47,13 +47,14 @@ extension FolderLibrary {
 
     static let pollInterval: TimeInterval = 15
 
-    /// Watches the roots that can be found; called whenever they change.
+    /// Watches the roots that can be found; called whenever they change. The stream that follows them starts
+    /// before the one it replaces stops, both off the main thread (`FolderWatcher`).
     func watchRoots() {
         observeMounts()
         service?.follow(roots.map(\.url))
         let paths = roots.filter { !missing.contains($0.id) }.map(\.path)
         guard paths != watching.paths else { return }
-        watching.watcher?.stop()
+        let replaced = watching.watcher
         watching.paths = paths
         watching.watcher = paths.isEmpty ? nil : FolderWatcher(paths: paths) { [weak self] directories in
             Task { @MainActor in
@@ -61,6 +62,7 @@ extension FolderLibrary {
                 library.changed(directories.map(library.watching.translate))
             }
         }
+        replaced?.stop()
         scheduler.submit(.lookAhead) {
             // `realpath`, not `resolvingSymlinksInPath`, which strips `/private` back off.
             let aliases = paths.map { path in
