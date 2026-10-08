@@ -34,10 +34,12 @@ import RedlampLibrary
         @_spi(Harness) public var moments: Int
     }
 
-    /// The groups as the menus and the palette follow them, the list itself not being observed: a new grouping,
-    /// and the first group opened or the last closed, not every group's change.
+    /// The groups as the menus and the palette follow them, the list itself not being observed: a new grouping in
+    /// which their checks find something else, and the first group opened or the last closed, not every group's
+    /// change. Rebuilding the menus costs milliseconds, so a grouping in which the checks find the same doesn't.
     @_spi(Harness) public struct Outline: Equatable {
-        /// Counts the groupings the list has had.
+        /// Counts the groupings in which the checks that look at the list found something else
+        /// (`EditorModel.groupChecks`).
         var groupings = 0
         var someOpen = false
         var someClosed = false
@@ -328,7 +330,9 @@ import RedlampLibrary
             Self.open(&grouped, as: old, opensNew: opensNew)
         } else {
             opensNew = true
-            showsUnpicked = false
+            if showsUnpicked {
+                showsUnpicked = false
+            }
         }
         set(grouped, picks: picks)
     }
@@ -397,17 +401,19 @@ import RedlampLibrary
     }
 
     private func set(_ grouped: GroupedList?, picks: [Int]? = nil) {
+        let checked = model?.groupChecks()
         list = grouped
         countPicks(picks)
         if let grouped {
             model?.deselectClosed(in: grouped)
         }
-        changed(.regrouped)
+        changed(.regrouped, checked: checked)
     }
 
-    private func changed(_ change: Change) {
+    /// `checked` is what the menus' checks found in the list before a regrouping.
+    private func changed(_ change: Change, checked: [Int]? = nil) {
         var next = outline
-        if change == .regrouped {
+        if change == .regrouped, model?.groupChecks() != checked {
             next.groupings += 1
         }
         (next.someOpen, next.someClosed) = (false, false)
@@ -453,7 +459,9 @@ import RedlampLibrary
     private func countPicks(_ counted: [Int]? = nil) {
         guard let list, let model else {
             picks = []
-            coverage = nil
+            if coverage != nil {
+                coverage = nil
+            }
             return
         }
         picks = counted ?? Self.picks(of: list.groups, in: model.library)
@@ -494,7 +502,9 @@ import RedlampLibrary
 
     private func updateCoverage() {
         guard let list, let moments = momentOfGroup(list.groups) else {
-            coverage = nil
+            if coverage != nil {
+                coverage = nil
+            }
             return
         }
         var last = -1
@@ -606,10 +616,11 @@ import RedlampLibrary
         for (group, moment) in moments.enumerated() where picked[moment] == true {
             grouped.close(group)
         }
+        let checked = model?.groupChecks()
         list = grouped
         showsUnpicked = true
         model?.deselectClosed(in: grouped)
-        changed(.regrouped)
+        changed(.regrouped, checked: checked)
     }
 
     // MARK: - Stacks

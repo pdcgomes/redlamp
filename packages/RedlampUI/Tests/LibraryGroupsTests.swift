@@ -566,6 +566,42 @@ struct LibraryGroupsTests {
         #expect(!model.canPerform(.openAllGroups))
     }
 
+    @Test func `a new grouping tells the menus only when their checks find something else in it`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await open()
+        defer { window.contentView = nil }
+        try await group(model, by: .day)
+        try model.select(url(model, "A04.JPG"))
+        try await Task.sleep(for: .milliseconds(30))
+        let told = Mutex(false)
+        let watch = {
+            told.withLock { $0 = false }
+            withObservationTracking {
+                _ = [ShortcutAction.previousGroup, .nextGroup, .previousPhoto, .nextPhoto, .toggleGroup]
+                    .map(model.canPerform)
+            } onChange: {
+                told.withLock { $0 = true }
+            }
+        }
+        #expect(!model.canPerform(.previousGroup) && model.canPerform(.nextGroup))
+
+        // A04 is in the first group by day and by moment, between A03 and A05: the menus find the same.
+        model.setGroupKey(.moment)
+        watch()
+        try await eventually { model.gridGroups.list?.groups.key == .moment }
+        #expect(!told.withLock { $0 }, "the same checks in the moments")
+        #expect(!model.canPerform(.previousGroup) && model.canPerform(.nextGroup))
+
+        // The tightest moments split A03 from A04, whose moment is then the second.
+        model.setLooseness(MomentSetting.tightest)
+        watch()
+        try await eventually {
+            model.gridGroups.list?.groups.setting == MomentSetting(looseness: MomentSetting.tightest)
+        }
+        #expect(told.withLock { $0 }, "a group before A04's")
+        #expect(model.canPerform(.previousGroup))
+    }
+
     // MARK: - Moments' setting and each source's view
 
     @Test func `the Tighter–Looser setting finds moments again as it moves, and each source keeps it`() async throws {

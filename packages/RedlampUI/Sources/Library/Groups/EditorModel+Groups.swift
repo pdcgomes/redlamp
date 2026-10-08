@@ -235,6 +235,20 @@ extension EditorModel {
         return true
     }
 
+    /// What `canPerformGroupShortcut`'s checks that look at the groups' list find there now: a list replacing
+    /// another in which they find the same is the same to the menus.
+    func groupChecks() -> [Int] {
+        guard let list = gridGroups.list else { return [] }
+        let id = (opening ?? selection).flatMap(library.photoID(of:))
+        let found = [
+            activeGroup != nil, activePhotoIsClosed, groupBeside(by: 1) != nil, groupBeside(by: -1) != nil,
+            id.flatMap { gridGroups.shownPhoto(1, from: $0) } != nil,
+            id.flatMap { gridGroups.shownPhoto(-1, from: $0) } != nil,
+        ]
+        let shown = list.groups.indices.reduce(0) { $0 + (list.isOpen($1) ? list.groups.count(ofGroup: $1) : 0) }
+        return [shown] + found.map { $0 ? 1 : 0 }
+    }
+
     /// Whether `performGroupShortcut` would do something now; nil for the actions it leaves alone.
     func canPerformGroupShortcut(_ action: ShortcutAction) -> Bool? {
         if let key = action.groupKey {
