@@ -51,6 +51,7 @@
             }
 
             // A press on Marked's row shows its photos.
+            app.step("pressing Marked's row")
             try app.clickSourceRow("sources.marked")
             try app.waitForSource("Marked's photos") { model in
                 model.librarySources.shown == .marked && !model.librarySources.isListing
@@ -59,7 +60,7 @@
             }
 
             // Marked's summary, and the folder's, from their rows' menus.
-            try app.rightClick(.identifier("sources.marked"), choosing: "Show Summary…")
+            try app.rightClickSourceRow("sources.marked", choosing: "Show Summary…")
             try app.wait("Marked's summary", timeout: 20) { _ in
                 SourceSummaryPopover.shownLines.prefix(2).first == "Marked"
                     && SourceSummaryPopover.shownLines.dropFirst().first?
@@ -67,10 +68,7 @@
                     == true
             }
             try app.main { _ in SourceSummaryPopover.close() }
-            try app.rightClick(
-                .identifier("folders." + scratch.folder.standardizedFileURL.path),
-                choosing: "Show Summary…",
-            )
+            try app.rightClickSourceRow("folders." + scratch.folder.standardizedFileURL.path, choosing: "Show Summary…")
             try app.wait("the folder's summary", timeout: 20) { _ in
                 let lines = SourceSummaryPopover.shownLines
                 return lines.first == scratch.folder.lastPathComponent && lines.count > 2
@@ -79,6 +77,7 @@
             try app.main { _ in SourceSummaryPopover.close() }
 
             // ⌘B from the folder.
+            app.step("⌘B from the folder")
             try app.main { $0.showFolder(scratch.folder) }
             try app.wait("the folder again", timeout: 20) { $0.folder == scratch.folder && !$0.library.isListing }
             try app.press(.showMarked)
@@ -97,6 +96,7 @@
             }
 
             // Library Health: the empty file under Damaged Files, from its row.
+            app.step("Library Health's Damaged Files")
             try app.wait("Library Health's Damaged Files", timeout: 30) { _ in
                 app.sourceRowLabel("sources.health.damaged")?.hasPrefix("Damaged Files, ") == true
             }
@@ -106,6 +106,7 @@
             }
 
             // Previous Import, from the palette, once an import has copied a photo.
+            app.step("an import for Previous Import")
             let imported = try ImportScratch(app, photos: 1)
             defer { imported.remove(app) }
             try app.main { _ in ImportWindowController.ignoresVolumes = true }
@@ -281,6 +282,75 @@
                 }
             }
             pause(0.2)
+        }
+
+        /// Right-clicks the left panel's row carrying `identifier`, as the mouse does, and chooses the item `path`
+        /// names in the menu that opens, a submenu's title first ("Move To", then the set). The menu tracks inside
+        /// the press, so the driver asks the main thread nothing until the press has begun: a question queued with
+        /// it would wait behind the menu, which waits for the question.
+        func rightClickSourceRow(_ identifier: String, choosing path: String...) throws {
+            step("right-clicking \(identifier)")
+            let location = try main { _ -> NSPoint in
+                guard let window = Views.editorWindow, let root = window.contentView?.superview,
+                      let row = Views.all(NSView.self, in: root).first(where: {
+                          $0.accessibilityIdentifier() == identifier && !$0.isHiddenOrHasHiddenAncestor
+                      })
+                else { throw ScenarioFailure("\(identifier) isn't on screen") }
+                row.scrollToVisible(row.bounds)
+                window.contentView?.layoutSubtreeIfNeeded()
+                let frame = row.convert(row.bounds, to: nil)
+                return NSPoint(x: frame.midX, y: frame.midY)
+            }
+            let opened = OpenedMenu()
+            try main { _ in opened.watch() }
+            defer { try? main { _ in opened.stop() } }
+            let pressed = Flag()
+            post { _ in
+                pressed.set()
+                guard let window = Views.editorWindow else { return }
+                for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
+                    guard let event = NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: [],
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .rightMouseUp ? 0 : 1,
+                    ) else { continue }
+                    window.sendEvent(event)
+                }
+            }
+            for _ in 0 ..< 1000 where !pressed.isSet {
+                pause(0.01)
+            }
+            do {
+                try wait("\(identifier)'s context menu to open") { _ in opened.menu != nil }
+            } catch {
+                let state = try main { _ -> String in
+                    let window = Views.editorWindow
+                    let hit = window?.contentView?.superview?.hitTest(location)
+                    let menus = NSApp.windows.filter { $0.isVisible && "\(Swift.type(of: $0))".contains("Menu") }.count
+                    return "pressed \(pressed.isSet), \(hit.map { "\(Swift.type(of: $0))" } ?? "nothing") at \(location), "
+                        + "\(menus) menus open, key \(window?.isKeyWindow == true), sheet \(window?.attachedSheet != nil)"
+                }
+                throw ScenarioFailure("\(error) (\(state))")
+            }
+            try main { _ in
+                guard let menu = opened.menu else { return }
+                defer { menu.cancelTracking() }
+                var current = menu
+                for (depth, title) in path.enumerated() {
+                    guard let index = current.items.firstIndex(where: { $0.title == title }) else {
+                        throw ScenarioFailure(
+                            "\(identifier)'s menu has no \(path.prefix(depth + 1).joined(separator: " › ")): "
+                                + "\(current.items.map(\.title))",
+                        )
+                    }
+                    if depth == path.count - 1 {
+                        current.performActionForItem(at: index)
+                    } else if let submenu = current.items[index].submenu {
+                        current = submenu
+                    }
+                }
+            }
+            try wait("\(identifier)'s context menu to close") { _ in opened.closed }
         }
 
         /// What VoiceOver says of the Library or Collections section's row carrying `identifier`: its name and

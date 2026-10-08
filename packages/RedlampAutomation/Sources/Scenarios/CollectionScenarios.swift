@@ -43,7 +43,7 @@
                 model.select(a)
                 model.click(b, toggling: true)
             }
-            try app.rightClick(.identifier("collections.\(clients)"), choosing: "New Collection Inside…")
+            try app.rightClickSourceRow("collections.\(clients)", choosing: "New Collection Inside…")
             try app.waitForSheet("New Collection")
             try app.replaceInSheet("collections.name", with: "Selects")
             try app.confirmCollectionSheet("New Collection")
@@ -93,7 +93,7 @@
             try app.wait("A back in Selects", timeout: 30) { $0.items.count == 2 }
 
             // Its menu renames Portfolio, moves it into the set, and deletes the set; ⌘Z brings the set back.
-            try app.rightClick(.identifier("collections.\(portfolio)"), choosing: "Rename…")
+            try app.rightClickSourceRow("collections.\(portfolio)", choosing: "Rename…")
             try app.waitForSheet("Rename")
             let best = "Best \(tag)"
             try app.replaceInSheet("collections.name", with: best)
@@ -101,11 +101,11 @@
             try app.wait("Portfolio renamed", timeout: 30) { _ in
                 app.sourceRowLabel("collections.\(best)") == "\(best), 2 photos"
             }
-            try app.rightClickCollection("collections.\(best)", choosing: ["Move To", clients])
+            try app.rightClickSourceRow("collections.\(best)", choosing: "Move To", clients)
             try app.wait("Best inside the set", timeout: 30) { _ in
                 app.sourceRowLabel("collections.\(clients)/\(best)") == "\(best), 2 photos"
             }
-            try app.rightClick(.identifier("collections.\(clients)"), choosing: "Delete")
+            try app.rightClickSourceRow("collections.\(clients)", choosing: "Delete")
             try app.wait("the set deleted", timeout: 30) { _ in app.sourceRowLabel("collections.\(clients)") == nil }
             try app.press(.undo)
             try app.wait("the set back, with what was inside it", timeout: 30) { _ in
@@ -154,7 +154,7 @@
             }
 
             // Marked's menu makes it the target: the next photo is marked.
-            try app.rightClick(.identifier("sources.marked"), choosing: "Set as Target Collection")
+            try app.rightClickSourceRow("sources.marked", choosing: "Set as Target Collection")
             try app.wait("Marked the target", timeout: 30) { model in
                 model.librarySources.target == nil
                     && app.sourceRowLabel("collections.\(picks)") == "\(picks), 2 photos"
@@ -223,7 +223,7 @@
             )
 
             // Edited: its rules read from its query; the text typed makes them again.
-            try app.rightClick(.identifier("collections.\(picked)"), choosing: "Edit Smart Collection…")
+            try app.rightClickSourceRow("collections.\(picked)", choosing: "Edit Smart Collection…")
             try app.waitForSheet("Edit Smart Collection")
             try app.expect(try app.smartSheetValue("smart.rule.1.field") == "Edited", "its second rule is on Edited")
             try app.replaceInSheet("smart.text", with: "flag:pick rating>=3 folder:\(folder)")
@@ -303,46 +303,6 @@
                 }
             }
             pause(0.1)
-        }
-
-        /// Right-clicks the row carrying `identifier` and chooses the item `path` names in its menu, a submenu's
-        /// title first ("Move To", then the set).
-        func rightClickCollection(_ identifier: String, choosing path: [String]) throws {
-            let frame = try frame(of: .identifier(identifier))
-            let location = NSPoint(x: frame.midX, y: frame.midY)
-            let opened = OpenedMenu()
-            try main { _ in opened.watch() }
-            defer { try? main { _ in opened.stop() } }
-            post { _ in
-                guard let window = Views.editorWindow else { return }
-                for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
-                    guard let event = NSEvent.mouseEvent(
-                        with: type, location: location, modifierFlags: [],
-                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .rightMouseUp ? 0 : 1,
-                    ) else { continue }
-                    window.sendEvent(event)
-                }
-            }
-            try wait("\(identifier)'s context menu to open") { _ in opened.menu != nil }
-            try main { _ in
-                guard let menu = opened.menu else { return }
-                defer { menu.cancelTracking() }
-                var current = menu
-                for (step, title) in path.enumerated() {
-                    guard let index = current.items.firstIndex(where: { $0.title == title }) else {
-                        throw ScenarioFailure(
-                            "\(identifier)'s menu has no \(path.prefix(step + 1).joined(separator: " › "))",
-                        )
-                    }
-                    if step == path.count - 1 {
-                        current.performActionForItem(at: index)
-                    } else if let submenu = current.items[index].submenu {
-                        current = submenu
-                    }
-                }
-            }
-            try wait("\(identifier)'s context menu to close") { _ in opened.closed }
         }
 
         /// Deletes every collection and set the scenarios made, which their names end with the scratch's tag.
