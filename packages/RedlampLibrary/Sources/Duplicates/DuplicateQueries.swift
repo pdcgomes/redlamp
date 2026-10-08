@@ -17,24 +17,27 @@ struct DuplicateRow: Sendable, Hashable {
 }
 
 extension IndexQueries {
-    /// Every photo with a content key, grouped by it and its size in one pass over the photos.
+    /// Every photo of the library with a content key, grouped by it and its size in one pass over the photos;
+    /// those of roots marked removed have left it.
     func groupContentKeys() throws -> DuplicateGrouper {
         var grouper = try DuplicateGrouper(capacity: photoCount())
-        try database.cached("SELECT id, size, content_key FROM photos WHERE content_key IS NOT NULL")
-            .forEachRow { row in
-                guard let (high, low) = row.contentKeyHalves(at: 2) else { return }
-                grouper.add(photo: row.int64(at: 0), high: high, low: low, size: row.int64(at: 1))
-            }
+        try database.cached("""
+        SELECT id, size, content_key FROM photos WHERE content_key IS NOT NULL AND \(inLibrary())
+        """)
+        .forEachRow { row in
+            guard let (high, low) = row.contentKeyHalves(at: 2) else { return }
+            grouper.add(photo: row.int64(at: 0), high: high, low: low, size: row.int64(at: 1))
+        }
         return grouper
     }
 
-    /// The candidates the index still has, by ID.
+    /// The candidates the library still has, by ID: not those of roots marked removed.
     func duplicateRows(_ photos: [Int64]) throws -> [Int64: DuplicateRow] {
         let extra = Int32(IndexColumns.photoFields.count + 1)
         let statement = try database.cached("""
         SELECT \(IndexColumns.photo(prefix: "p.")), f.path, r.path, v.uuid FROM photos p
         JOIN folders f ON f.id = p.folder JOIN roots r ON r.id = f.root JOIN volumes v ON v.id = r.volume
-        WHERE p.id = ?
+        WHERE p.id = ? AND \(inLibrary(folder: "p.folder"))
         """)
         var rows: [Int64: DuplicateRow] = [:]
         for photo in photos {

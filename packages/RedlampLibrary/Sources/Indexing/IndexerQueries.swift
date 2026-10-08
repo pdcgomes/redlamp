@@ -23,11 +23,11 @@ public extension IndexQueries {
         return try statement.first { $0.int(at: 0) } ?? 0
     }
 
-    /// How many photos are on `volume`.
+    /// How many photos the library has on `volume`: not those of roots marked removed.
     func photoCount(onVolume volume: Int64) throws -> Int {
         let statement = try database.cached("""
         SELECT count(*) FROM photos WHERE folder IN
-          (SELECT f.id FROM folders f JOIN roots r ON r.id = f.root WHERE r.volume = ?)
+          (SELECT f.id FROM folders f JOIN roots r ON r.id = f.root WHERE r.volume = ?) AND \(inLibrary())
         """)
         try statement.bind(volume, at: 1)
         return try statement.first { $0.int(at: 0) } ?? 0

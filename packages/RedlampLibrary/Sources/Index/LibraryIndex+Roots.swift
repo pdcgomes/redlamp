@@ -173,6 +173,18 @@ public extension IndexQueries {
         return roots
     }
 
+    /// A condition on photos, by their folder column `folder`, that leaves out those of the roots marked removed,
+    /// for a query of photos the column store doesn't answer: `1` while nothing is being removed, at the cost of
+    /// one lookup.
+    func inLibrary(folder column: String = "folder") throws -> String {
+        guard try !removedRoots().isEmpty else { return "1" }
+        let prefix = LibraryIndex.Writer.removingPrefix
+        return """
+        \(column) NOT IN (SELECT id FROM folders WHERE root IN (SELECT CAST(substr(key, \(prefix.utf8.count + 1)) \
+        AS INTEGER) FROM settings WHERE key > '\(prefix)' AND key < '\(prefix.dropLast())/'))
+        """
+    }
+
     /// The folders of the roots marked removed: the column store's reads leave out their photos. Empty, at the
     /// cost of one lookup, while nothing is being removed.
     func removedFolders() throws -> Set<Int64> {

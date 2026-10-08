@@ -80,6 +80,49 @@ struct RootRemovalTests {
         #expect(FileManager.default.fileExists(atPath: sandbox.url("Trip/IMG_0001.JPG.redlamp").path))
     }
 
+    @Test func `until its rows are swept, a root taken out is in no duplicate, label, statistic, sync or import's skip`(
+    ) async throws {
+        let sandbox = try await KeywordSandbox.make()
+        defer { sandbox.remove() }
+        // Home's photo and Trip's first are copies of each other; Trip's second has a custom label.
+        for path in ["Home/IMG_0001.JPG", "Trip/IMG_0001.JPG", "Trip/IMG_0002.JPG"] {
+            try sandbox.photo(path)
+        }
+        try Data(contentsOf: sandbox.url("Home/IMG_0001.JPG")).write(to: sandbox.url("Trip/IMG_0001.JPG"))
+        try sandbox.sidecar("Trip/IMG_0002.JPG", PhotoMetadata(customLabel: "Hero"))
+        try sandbox.sidecar("Home/IMG_0001.JPG", PhotoMetadata(rating: 1))
+        let indexer = LibraryIndexer(index: sandbox.index, configuration: .testing())
+        let run = await IndexerRun.collect(indexer.index([sandbox.url("Trip"), sandbox.url("Home")]))
+        #expect(run.failures.isEmpty, "\(run.failures)")
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        let duplicates = DuplicateFinder(index: sandbox.index)
+        let imports = ImportLibrary(paths: sandbox.paths, index: sandbox.index)
+        let xmp = LibraryXMP(index: sandbox.index, paths: sandbox.paths)
+        let trip = try await sandbox.ids(["Trip/IMG_0001.JPG", "Trip/IMG_0002.JPG"])
+        let home = try await sandbox.id("Home/IMG_0001.JPG")
+        #expect(try await metadata.customLabels().map(\.name) == ["Hero"])
+        #expect(try await duplicates.candidates().groups.map { Set($0.photos) } == [Set([home, trip[0]])])
+        #expect(try await imports.contentKeys().count == 3)
+        #expect(try await LibraryStatistics.read(index: sandbox.index, paths: sandbox.paths).photos == 3)
+
+        // Marked removed, none of its rows swept yet.
+        let (tripPath, homePath) = (LibraryIndexer.path(sandbox.url("Trip")), LibraryIndexer.path(sandbox.url("Home")))
+        try #require(try await sandbox.index.write { try $0.markRemoved(tripPath, keeping: [homePath]) } != nil)
+        #expect(try await sandbox.index.read { try $0.photoCount() } == 3)
+        #expect(try await metadata.customLabels().isEmpty)
+        #expect(try await duplicates.candidates().groups.isEmpty)
+        #expect(
+            try await sandbox.index.read { try $0.duplicateRows(trip) }.isEmpty,
+            "a confirmation or review made before finds its photos gone",
+        )
+        #expect(try await imports.contentKeys().count == 1, "an import brings its photos in again")
+        let statistics = try await LibraryStatistics.read(index: sandbox.index, paths: sandbox.paths)
+        #expect(statistics.photos == 1 && statistics.folders == 1)
+        #expect(statistics.roots.map(\.path) == [homePath] && statistics.volumes.map(\.photos) == [1])
+        #expect(try await xmp.sync(trip, writing: true).photos.isEmpty, "Write .xmp for All Photos leaves it alone")
+        #expect(try await xmp.sync([home], writing: true, dryRun: true).photos.count == 1)
+    }
+
     @Test func `indexing a folder taken out again brings back its ratings, keywords and collections`() async throws {
         let (sandbox, indexer) = try await Self.library()
         defer { sandbox.remove() }

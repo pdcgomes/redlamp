@@ -37,14 +37,15 @@ public struct LibraryStatistics: Sendable, Hashable {
 
     public init() {}
 
-    /// The statistics of the library whose index is `index`, with its store at `paths.store`.
+    /// The statistics of the library whose index is `index`, with its store at `paths.store`. The roots marked
+    /// removed, which the index keeps until they're swept, aren't counted.
     public static func read(index: LibraryIndex, paths: LibraryPaths) async throws -> LibraryStatistics {
         var statistics = try await index.read { reader in
             var statistics = LibraryStatistics()
             try reader.database.cached("""
             SELECT count(*), coalesce(sum(edited != 0), 0), coalesce(sum(rating > 0), 0), coalesce(sum(flag = 1), 0),
               coalesce(sum(flag = 2), 0), coalesce(sum(label != 0), 0)
-            FROM photos
+            FROM photos WHERE \(reader.inLibrary())
             """).forEachRow { row in
                 statistics.photos = row.int(at: 0)
                 statistics.edited = row.int(at: 1)
@@ -53,8 +54,9 @@ public struct LibraryStatistics: Sendable, Hashable {
                 statistics.rejected = row.int(at: 4)
                 statistics.labelled = row.int(at: 5)
             }
-            statistics.folders = try reader.folderCount()
-            statistics.roots = try reader.roots().map { root in
+            let removed = try reader.removedRoots()
+            statistics.folders = try reader.folderCount() - reader.removedFolders().count
+            statistics.roots = try reader.roots().filter { removed[$0.id] == nil }.map { root in
                 try Root(path: root.path, sidecars: root.sidecars, photos: reader.photoCount(inRoot: root.id))
             }
             statistics.volumes = try reader.volumes().map { volume in

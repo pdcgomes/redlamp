@@ -40,7 +40,7 @@ public struct LibraryXMP: Sendable {
     /// takes only what changed since and doesn't take Redlamp's own `.xmp` for another app's, and brings
     /// the index's rows up to date: the organising fields and `.redlamp` dates of photos whose `.redlamp`
     /// changed, those fields its own now, and the `.xmp` date of those whose `.xmp` Redlamp wrote, so the
-    /// indexer reads neither again.
+    /// indexer reads neither again. Photos of roots marked removed have left the library, and are left alone.
     public func sync(
         _ ids: [Int64], writing: Bool? = nil, dryRun: Bool = false, filling: Bool = true,
     ) async throws -> XMPReport {
@@ -52,8 +52,9 @@ public struct LibraryXMP: Sendable {
         let selected = Set(ids)
         let folders = try await index.read { reader -> [(path: String, rows: [PhotoRecord])] in
             var folderIDs = Set<Int64>()
+            let leftOut = try reader.removedFolders()
             for id in selected {
-                if let photo = try reader.photo(id: id) {
+                if let photo = try reader.photo(id: id), !leftOut.contains(photo.folder) {
                     folderIDs.insert(photo.folder)
                 }
             }

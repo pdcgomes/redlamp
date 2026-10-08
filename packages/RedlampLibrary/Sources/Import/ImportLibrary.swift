@@ -32,20 +32,23 @@ public struct ImportLibrary: Sendable {
         return ImportLibrary(paths: paths, index: index, store: store, indexer: indexer, live: live)
     }
 
-    /// The content keys of every photo in the index, read in one pass: the index keeps no index of
-    /// them, so they're loaded once and looked up in memory.
+    /// The content keys of every photo in the library, read in one pass: the index keeps no index of
+    /// them, so they're loaded once and looked up in memory. A root marked removed has left the library:
+    /// its photos are imported again.
     func contentKeys() async throws -> ImportKeys {
         guard let index else { return ImportKeys() }
         return try await index.read { reader in
             var halves: [ImportKeys.Key] = []
             var sizes: [Int64] = []
-            try reader.database.cached("SELECT content_key, size FROM photos WHERE content_key IS NOT NULL")
-                .forEachRow { row in
-                    if let (high, low) = row.contentKeyHalves(at: 0) {
-                        halves.append(ImportKeys.Key(high: high, low: low))
-                        sizes.append(row.int64(at: 1))
-                    }
+            try reader.database.cached("""
+            SELECT content_key, size FROM photos WHERE content_key IS NOT NULL AND \(reader.inLibrary())
+            """)
+            .forEachRow { row in
+                if let (high, low) = row.contentKeyHalves(at: 0) {
+                    halves.append(ImportKeys.Key(high: high, low: low))
+                    sizes.append(row.int64(at: 1))
                 }
+            }
             return ImportKeys(halves, sizes: sizes)
         }
     }

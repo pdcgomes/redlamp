@@ -14,11 +14,12 @@ public struct CustomLabelCount: Sendable, Hashable {
 }
 
 extension IndexQueries {
-    /// Each custom label the photos have, with how many have it, in Finder's order of their names.
+    /// Each custom label the library's photos have, with how many have it, in Finder's order of their names;
+    /// those of roots marked removed don't count.
     func customLabelCounts() throws -> [CustomLabelCount] {
         let statement = try database.cached("""
         SELECT custom_label, COUNT(*) FROM photos WHERE custom_label IS NOT NULL AND custom_label != ''
-        GROUP BY custom_label
+          AND \(inLibrary()) GROUP BY custom_label
         """)
         return try statement.map { CustomLabelCount(name: $0.string(at: 0) ?? "", photos: $0.int(at: 1)) }
             .sorted { FinderOrder.compare($0.name, $1.name) < 0 }

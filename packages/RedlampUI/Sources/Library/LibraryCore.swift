@@ -348,10 +348,12 @@ final class LibraryCore: Sendable {
         return batch
     }
 
-    /// Every photo in the index, by ID.
+    /// Every photo in the library, by ID: not those of roots marked removed, which the index keeps until they're
+    /// swept.
     func allPhotoIDs() async -> [Int64] {
         await (try? index.read { reader in
-            try reader.database.prepare("SELECT id FROM photos ORDER BY folder, name").map { $0.int64(at: 0) }
+            try reader.database.prepare("SELECT id FROM photos WHERE \(reader.inLibrary()) ORDER BY folder, name")
+                .map { $0.int64(at: 0) }
         }) ?? []
     }
 
