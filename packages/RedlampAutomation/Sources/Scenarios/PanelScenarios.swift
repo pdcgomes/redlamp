@@ -214,7 +214,7 @@
         }
 
         /// Chooses `title` in the pop-up or pull-down button `identifier`, as a click in its menu does.
-        func choose(_ title: String, inPopUp identifier: String) throws {
+        func choose(_ title: String, inMenuOf identifier: String) throws {
             try main { _ in
                 guard let window = Views.editorWindow, let root = window.contentView?.superview,
                       let button = Views.all(NSPopUpButton.self, in: root)
@@ -399,7 +399,7 @@
 
                 app.step("editing")
                 try app.chooseKeywordRow("E2E Animals/E2E Birds")
-                try app.choose("Edit Keyword…", inPopUp: "keywordList.more")
+                try app.choose("Edit Keyword…", inMenuOf: "keywordList.more")
                 app.step("the menu chosen")
                 try app.waitForSheet("Edit Keyword")
                 app.step("the sheet up")
@@ -416,7 +416,7 @@
 
                 app.step("merging")
                 try app.chooseKeywordRow("E2E Animals/E2E Sparrows")
-                try app.choose("Merge Into…", inPopUp: "keywordList.more")
+                try app.choose("Merge Into…", inMenuOf: "keywordList.more")
                 try app.waitForSheet("Merge Keyword")
                 try app.replaceInSheet("mergeKeyword.target", with: "E2E Animals/E2E Cats")
                 try app.confirmSheet("Merge Keyword")
@@ -431,7 +431,7 @@
                     (try? String(contentsOf: exported, encoding: .utf8))?.contains("E2E Animals\n\tE2E Cats\n") == true
                 }
                 try app.chooseKeywordRow("E2E Animals")
-                try app.choose("Delete Keyword", inPopUp: "keywordList.more")
+                try app.choose("Delete Keyword", inMenuOf: "keywordList.more")
                 try app.waitForPanels()
                 try app.expect(
                     try !app.sidecarKeywords(names[1]).contains("E2E Animals/E2E Cats"),
@@ -473,7 +473,7 @@
                 try app.waitForPanels()
                 try app.expect(try app.sidecarMetadata(names[1])?.title == nil, "⌘Z took it back")
 
-                try app.choose("Edit Presets…", inPopUp: "metadata.presets")
+                try app.choose("Edit Presets…", inMenuOf: "metadata.presets")
                 try app.waitForSheet("Metadata Presets")
                 try app.replaceInSheet("presets.name", with: "E2E Chapel")
                 try app.pressInSheet("presets.caption.tick")
@@ -486,7 +486,7 @@
                 }
                 try app.confirmSheet("Metadata Presets")
                 try app.wait("the preset kept") { $0.libraryPanels.presets.contains { $0.name == "E2E Chapel" } }
-                try app.choose("E2E Chapel", inPopUp: "metadata.presets")
+                try app.choose("E2E Chapel", inMenuOf: "metadata.presets")
                 try app.waitForPanels()
                 try app.expect(
                     try app.sidecarMetadata(names[0])?.caption == "E2E first at the chapel", "the caption appended to",
