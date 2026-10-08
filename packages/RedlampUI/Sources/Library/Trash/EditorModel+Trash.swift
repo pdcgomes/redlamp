@@ -4,7 +4,8 @@ import RedlampLibrary
 
 /// Recently Trashed in the editor (LIB-26): showing it, from the Folders panel, the View menu and the palette,
 /// and Put Back for a photo, the selection or a whole batch, from a photo's context menu, the Photo menu, the
-/// palette and ⌘⌫, Finder's key for it.
+/// palette and ⌘⌫, Finder's key for it; Library's ⌘Z and ⇧⌘Z take a Put Back back and make it again
+/// (`EditorModel+PutBackUndo`).
 ///
 /// Its photos are in the Trash, and don't open in Develop: Recently Trashed is shown in the Library module,
 /// and from it Develop, culling and everything else that would write to a photo is off, leaving Library's
@@ -32,12 +33,13 @@ public extension EditorModel {
     }
 
     /// Put Back: the photos `trashedPhotos(for:)` gives back where they were, as one batch of the library's
-    /// file operations. Nil when there's nothing to put back.
+    /// file operations, which Library's Undo takes back. Nil when there's nothing to put back.
     @discardableResult
     func putBack(_ photo: URL? = nil) -> Task<Void, Never>? {
         let photos = trashedPhotos(for: photo)
         guard !photos.isEmpty, let service = library.service else { return nil }
-        return runPutBack { try await service.putBack(photos.map(\.id)) }
+        let ids = photos.map(\.id)
+        return makePutBack(originals: originals(of: photos)) { try await service.putBack(ids) }
     }
 
     /// Put Back Whole Batch: every photo still in the Trash of the batch that moved `photo` there, or the
@@ -47,33 +49,26 @@ public extension EditorModel {
         guard let target = photo ?? selection, let batch = library.trashedPhoto(at: target)?.id.batch,
               let service = library.service
         else { return nil }
-        return runPutBack { try await service.putBack([], batch: batch) }
+        let photos = library.trash.photos.filter { $0.id.batch == batch }
+        return makePutBack(originals: originals(of: photos)) { try await service.putBack([], batch: batch) }
     }
 
-    /// Runs a Put Back, then counts the folders the photos went back to; what stopped it is said in an alert.
-    private func runPutBack(_ run: @escaping @MainActor () async throws -> FileOutcome) -> Task<Void, Never> {
-        Task { [weak self] in
-            do {
-                let outcome = try await run()
-                guard let self else { return }
-                library.countFolders()
-                if !outcome.gone.isEmpty {
-                    activity.record(
-                        .error,
-                        "\(outcome.title): \(outcome.gone.count) of its files weren't in the Trash any more",
-                    )
-                }
-            } catch {
-                guard let self else { return }
-                let message = Self.putBackFailure(error)
-                activity.record(.error, message)
-                guard let window = NSApp.keyWindow else { return }
-                let alert = NSAlert()
-                alert.messageText = "The photos weren't put back"
-                alert.informativeText = message
-                alert.beginSheetModal(for: window) { _ in }
-            }
-        }
+    /// Where `photos` and their pairs go back to.
+    private func originals(of photos: [TrashedPhoto]) -> [URL] {
+        let pairs = Set(photos.flatMap(\.pair))
+        let paired = library.trash.photos.filter { pairs.contains($0.id) }
+        return Array(Set((photos + paired).map { URL(fileURLWithPath: $0.original) }))
+    }
+
+    /// What stopped a Put Back, said in the activity log and an alert.
+    internal func putBackFailed(_ error: any Error) {
+        let message = Self.putBackFailure(error)
+        activity.record(.error, message)
+        guard let window = NSApp.keyWindow else { return }
+        let alert = NSAlert()
+        alert.messageText = "The photos weren't put back"
+        alert.informativeText = message
+        alert.beginSheetModal(for: window) { _ in }
     }
 
     /// Why a Put Back stopped, in a sentence.
@@ -106,7 +101,8 @@ public extension EditorModel {
         .openFolder, .showShortcuts, .commandPalette, .sendFeedback, .testCamera, .filmLooks, .cancel,
     ]
 
-    /// Recently Trashed's actions, and in it every action it leaves off; nil for every other.
+    /// Recently Trashed's actions, Library's Undo and Redo when a Put Back is the newest change, and in Recently
+    /// Trashed every action it leaves off; nil for every other.
     internal func performTrashShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .showRecentlyTrashed:
@@ -116,6 +112,10 @@ public extension EditorModel {
             return putBack() != nil
         case .putBackBatch:
             return putBackBatch() != nil
+        case .undo where putBackUndoIsNewest:
+            return undoPutBack()
+        case .redo where putBackRedoIsNewest:
+            return redoPutBack()
         default:
             guard library.showsRecentlyTrashed, !Self.actionsInRecentlyTrashed.contains(action) else { return nil }
             return false
@@ -132,6 +132,8 @@ public extension EditorModel {
             library.showsRecentlyTrashed && !trashedPhotos().isEmpty
         case .putBackBatch:
             library.showsRecentlyTrashed && selection.flatMap(library.trashedPhoto(at:)) != nil
+        case .undo where putBackUndoIsNewest, .redo where putBackRedoIsNewest:
+            true
         default:
             library.showsRecentlyTrashed && !Self.actionsInRecentlyTrashed.contains(action) ? false : nil
         }

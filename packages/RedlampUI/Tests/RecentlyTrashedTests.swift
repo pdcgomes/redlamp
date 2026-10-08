@@ -227,6 +227,109 @@ struct RecentlyTrashedTests {
         }
     }
 
+    @Test func `⌘Z after Put Back moves the photos to the Trash again and ⇧⌘Z puts them back, in turn with culling's changes`(
+    ) async throws {
+        let names = ["A", "B", "C"].map { "Shoot/\($0).JPG" }
+        try photos(names)
+        try SidecarStore().save(Self.edited(rating: 2), for: photo(names[0]))
+        let edit = SidecarLocator.besidePhoto(photo(names[0])).appending(path: "edit.json")
+        let sidecar = try Data(contentsOf: edit)
+        try await withLibrary { model, service in
+            let library = model.library
+            let before = try await rows(names, in: service)
+            try #require(before.count == 3)
+            let shoot = root.appending(path: "Shoot", directoryHint: .isDirectory)
+            @MainActor func inTrash() -> Bool {
+                [names[0], names[1]].allSatisfy { !FileManager.default.fileExists(atPath: photo($0).path) }
+                    && !FileManager.default.fileExists(atPath: edit.path) && library.trashedCount == 2
+            }
+            @MainActor func back() -> Bool {
+                names.allSatisfy { FileManager.default.fileExists(atPath: photo($0).path) }
+                    && library.trashedCount == 0
+            }
+            try await service.moveToTrash([photo(names[0]), photo(names[1])])
+            model.showRecentlyTrashed()
+            try await eventually { library.showsRecentlyTrashed && library.count == 2 }
+            try model.select(place(of: names[0], in: library))
+            #expect(!model.canPerform(.undo), "nothing to take back yet")
+            await model.putBackBatch()?.value
+            try await eventually { back() && library.count == 0 }
+            #expect(try Data(contentsOf: edit) == sidecar && model.canPerform(.undo))
+
+            // In Recently Trashed, ⌘Z and ⇧⌘Z, each way with the photos' sidecars and rows.
+            #expect(model.perform(.undo))
+            await model.putBackSteps.made()
+            try await eventually { inTrash() && library.count == 2 }
+            #expect(inTrash(), "⌘Z moved them to the Trash again, A's sidecar with it")
+            let staying = try #require(before[names[2]])
+            #expect(try await rows(names, in: service) == [names[2]: staying], "their rows out of the index")
+            #expect(model.canPerform(.redo) && model.perform(.redo))
+            await model.putBackSteps.made()
+            try await eventually { back() && library.count == 0 }
+            #expect(back() && (try? Data(contentsOf: edit)) == sidecar, "⇧⌘Z put them back, A's sidecar as it was")
+            #expect(try await rows(names, in: service) == before, "every row back under its ID")
+
+            // In their folder, after a culling change: ⌘Z takes back the rating first, then the Put Back.
+            model.showFolder(shoot)
+            try await eventually { !library.showsRecentlyTrashed && library.count == 3 }
+            model.select(photo(names[2]))
+            model.cull(.rating(4), from: photo(names[2]))
+            try await eventually { !model.isWritingCulling && library.item(for: photo(names[2]))?.metadata.rating == 4 }
+            #expect(model.perform(.undo))
+            try await eventually { !model.isWritingCulling && library.item(for: photo(names[2]))?.metadata.rating == 0 }
+            #expect(back(), "the rating went first")
+            #expect(model.perform(.undo))
+            await model.putBackSteps.made()
+            try await eventually { inTrash() && library.count == 1 }
+            #expect(inTrash() && library.items.map(\.name) == ["C.JPG"], "then the Put Back")
+            // ⇧⌘Z makes them again newest first: the Put Back, then the rating.
+            #expect(model.perform(.redo))
+            await model.putBackSteps.made()
+            try await eventually { back() && library.count == 3 }
+            #expect(back() && library.item(for: photo(names[2]))?.metadata.rating == 0)
+            #expect(model.perform(.redo))
+            try await eventually { !model.isWritingCulling && library.item(for: photo(names[2]))?.metadata.rating == 4 }
+            #expect(library.item(for: photo(names[2]))?.metadata.rating == 4)
+            #expect(try await rows(names, in: service).keys.sorted() == names)
+        }
+    }
+
+    @Test func `a Put Back whose photos have moved since isn't taken back, and ⌘Z goes on to the change before it`(
+    ) async throws {
+        let names = ["A", "B"].map { "Shoot/\($0).JPG" }
+        try photos(names)
+        try await withLibrary { model, service in
+            let library = model.library
+            let shoot = root.appending(path: "Shoot", directoryHint: .isDirectory)
+            model.showModule(.library)
+            model.showFolder(shoot)
+            try await eventually { library.count == 2 }
+            model.select(photo(names[1]))
+            model.cull(.rating(3), from: photo(names[1]))
+            try await eventually { !model.isWritingCulling && library.item(for: photo(names[1]))?.metadata.rating == 3 }
+            #expect(library.item(for: photo(names[1]))?.metadata.rating == 3)
+            try await service.moveToTrash([photo(names[0])])
+            model.showRecentlyTrashed()
+            try await eventually { library.showsRecentlyTrashed && library.count == 1 }
+            try await model.putBack(#require(library.items.first?.url))?.value
+            try #require(FileManager.default.fileExists(atPath: photo(names[0]).path))
+
+            let elsewhere = base.appending(path: "Elsewhere.JPG", directoryHint: .notDirectory)
+            try FileManager.default.moveItem(at: photo(names[0]), to: elsewhere)
+            let logged = model.activity.events.count
+            #expect(model.perform(.undo))
+            await model.putBackSteps.made()
+            #expect(model.activity.events.dropFirst(logged).contains { $0.kind == .error && $0.text.hasPrefix("Undo") })
+            #expect(FileManager.default.fileExists(atPath: elsewhere.path), "what moved away stays where it is")
+            #expect(model.putBackSteps.undo.isEmpty && model.putBackSteps.redo.isEmpty)
+            model.showFolder(shoot)
+            try await eventually { !library.showsRecentlyTrashed && library.item(for: photo(names[1])) != nil }
+            #expect(model.module == .library && model.perform(.undo))
+            try await eventually { !model.isWritingCulling && library.item(for: photo(names[1]))?.metadata.rating == 0 }
+            #expect(library.item(for: photo(names[1]))?.metadata.rating == 0, "⌘Z took back the rating before it")
+        }
+    }
+
     @Test func `photos in Recently Trashed don't open in Develop, and culling leaves them and their sidecars as they are`(
     ) async throws {
         try photos(["Shoot/A.JPG"])

@@ -38,6 +38,21 @@ extension LibraryService {
         return try outcome.get()
     }
 
+    /// Takes back Put Back `batch`: its photos to the Trash again, with their sidecars and other apps' `.xmp`, their
+    /// rows out of the index, as one batch of the file operations whose photos Recently Trashed lists and Put Back
+    /// puts back.
+    func undoPutBack(_ batch: UUID) async throws -> FileOutcome {
+        guard let core else { throw PutBackError.libraryClosed }
+        let outcome = await core.change { () -> Result<FileOutcome, any Error> in
+            do {
+                return try await .success(core.files.run(core.files.planUndo(batch)))
+            } catch {
+                return .failure(error)
+            }
+        }
+        return try outcome.get()
+    }
+
     /// Whether `url` is in a Trash: the home folder's, or a volume's. No photo's sidecar is written there.
     nonisolated static func isInTrash(_ url: URL) -> Bool {
         let components = url.standardizedFileURL.pathComponents

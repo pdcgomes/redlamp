@@ -11,16 +11,20 @@
         static let all: [Scenario] = [subfolders, recentlyTrashed, folderCounts]
 
         /// Photos a batch of the library's moved to the Trash: Recently Trashed from the palette, the photos put
-        /// back from the grid's menu, by ⌘⌫, from the Photo menu and the palette, Develop off for them, and the
-        /// Folders panel's line saying what it holds once it's empty. The photos are copies made on the
+        /// back from the grid's menu, by ⌘⌫, from the Photo menu and the palette, Develop off for them, the
+        /// Folders panel's line saying what it holds once it's empty, and the last Put Back taken back by ⌘Z and
+        /// made again by ⇧⌘Z. The photos are copies made on the
         /// external disk's scratch folder, which the Trash there holds while they're in it; none is left there.
         static let recentlyTrashed = Scenario(
             "library.recently-trashed",
-            "Recently Trashed from the palette, and Put Back from the grid's menu, ⌘⌫, the Photo menu and the palette",
+            "Recently Trashed from the palette, and Put Back from the grid's menu, ⌘⌫, the Photo menu and the palette, "
+                + "taken back by ⌘Z and made again by ⇧⌘Z",
             claims: [
                 .action(.showRecentlyTrashed),
                 .action(.putBack),
                 .action(.putBackBatch),
+                .action(.undo),
+                .action(.redo),
                 .feature("library.folders"),
             ],
         ) { app in
@@ -35,6 +39,7 @@
             }
             let service = try app.main { model -> LibraryService? in model.library.service }
             guard let service else { throw ScenarioSkip("the library is off") }
+            let folders = app.photos
             defer {
                 try? app.run("emptying what's left in the Trash", timeout: 30) { model in
                     for place in await service.trashedPlaces() {
@@ -45,6 +50,14 @@
                     }
                 }
                 try? FileManager.default.removeItem(at: folder)
+                // Stopped partway, it leaves the next scenarios the run's photos folder, not Recently Trashed.
+                if (try? app.main { $0.library.showsRecentlyTrashed }) == true {
+                    try? app.main { model in
+                        model.showFolder(folders)
+                        model.showModule(.develop)
+                    }
+                    try? app.openWorking()
+                }
             }
             try app.main { $0.open([folder]) }
             let indexed = Flag()
@@ -133,8 +146,23 @@
                 photos.allSatisfy { FileManager.default.fileExists(atPath: $0.path) } && model.items.isEmpty
             }
 
+            // ⌘Z moves them to the Trash again, through the Put Back's Undo, and ⇧⌘Z puts them back.
+            try app.wait("the Put Back on Library's Undo") { $0.canPerform(.undo) }
+            try app.press(.undo)
+            try app.wait("the three in the Trash again", timeout: 20) { model in
+                photos.allSatisfy { !FileManager.default.fileExists(atPath: $0.path) } && model.items.count == 3
+            }
+            // ⇧⌘Z: synthetic events don't reach SwiftUI's handling of ⇧⌘ keys, so its item runs from the menu.
+            try app.expectKeyBinding(.redo)
+            try app.choose(.redo)
+            try app.wait("every photo back again", timeout: 20) { model in
+                photos.allSatisfy { FileManager.default.fileExists(atPath: $0.path) } && model.items.isEmpty
+                    && model.library.trashedCount == 0
+            }
+            app.covered(.action(.undo), via: .key)
+            app.covered(.action(.redo), via: .menu)
+
             // As the run had it.
-            let folders = app.photos
             try app.main { model in
                 model.showFolder(folders)
                 model.showModule(.develop)
