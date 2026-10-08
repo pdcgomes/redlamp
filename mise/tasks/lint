@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Run the engine purity gate, the model licence gate, the roadmap and camera list checks, SwiftFormat (lint mode) and SwiftLint"
+#MISE description="Run the engine purity gate, the model licence gate, the roadmap and camera list checks, rl check, SwiftFormat (lint mode) and SwiftLint"
 #MISE alias="l"
 set -euo pipefail
 
@@ -9,5 +9,6 @@ scripts/check-engine-purity.sh
 scripts/check-model-licenses.py
 scripts/roadmap-sync.py --check
 scripts/camera-list.py --check
+python3 tools/rl/rl.py check
 swiftformat --lint .
 swiftlint --quiet

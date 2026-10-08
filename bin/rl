@@ -1,0 +1,4 @@
+#!/bin/sh
+# Redlamp's launcher (tools/rl): the checkout's tools, from a menu or as commands.
+here="$(cd "$(dirname "$0")/.." && pwd)"
+exec python3 "$here/tools/rl/rl.py" "$@"

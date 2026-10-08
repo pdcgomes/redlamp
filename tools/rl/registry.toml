@@ -1,0 +1,411 @@
+# The tools `rl` offers (tools/rl/rl.py). Each [[tool]] is a menu item and a command,
+# `rl <id words>`; `run` is its shell command, with `{name}` for an answer, `{name*}` for a
+# list's items, `[name?--flag]` for an option given only when answered, and `{redlamp}`,
+# `{root}` and `{bench}` for the CLI, the checkout and the bench's folders. `needs` builds what
+# the command uses first: "cli" (the redlamp CLI) or "workspace". `rl check` fails when a mise
+# task or redlamp subcommand is in neither a tool nor `later`.
+
+[[group]]
+id = "bench"
+title = "Bench tasks"
+summary = "Steps for the owner in Lightroom or another app, through the iPhone app and the Recipe Lab's hub (docs/bench-tasks.md)."
+
+[[group]]
+id = "looks"
+title = "Looks"
+summary = "Looks captured from other apps: the kit, references, fitting and evaluating (docs/bench-and-looks.md)."
+
+[[group]]
+id = "app"
+title = "The apps"
+summary = "Redlamp, the harness and the Recipe Lab, built from this checkout."
+
+[[group]]
+id = "iphone"
+title = "iPhone"
+summary = "Redlamp Bench, the iPhone app."
+
+[[group]]
+id = "test"
+title = "Tests and checks"
+summary = "Tests, lint, the push gate and the tracker's sync."
+
+# ---------------------------------------------------------------- bench
+
+[[tool]]
+id = "bench.lab"
+group = "bench"
+title = "Open the Lab's Bench tab"
+summary = "The harness at the Recipe Lab's Bench tab: the hub, pairing requests, phones nearby, what waits and what came back."
+run = "mise run harness -- --scene recipe-lab --lab-tab bench"
+doc = "docs/bench-tasks.md#in-the-recipe-lab"
+
+[[tool]]
+id = "bench.list"
+group = "bench"
+title = "List tasks"
+summary = "What waits in the outbox and what came back to Done."
+run = "{redlamp} task list"
+needs = ["cli"]
+
+[[tool]]
+id = "bench.show"
+group = "bench"
+title = "Show a task"
+summary = "A task's results and how each one paired."
+run = "{redlamp} task show {task}"
+needs = ["cli"]
+
+[[tool.ask]]
+name = "task"
+prompt = "Which task?"
+kind = "choice"
+source = "bench.tasks"
+
+[[tool]]
+id = "bench.new"
+group = "bench"
+title = "New task from a draft"
+summary = "A task in the outbox from a draft.json, for the phone to pull."
+run = "{redlamp} task new --draft {draft}"
+needs = ["cli"]
+doc = ".cursor/skills/redlamp-bench/SKILL.md"
+
+[[tool.ask]]
+name = "draft"
+prompt = "The draft.json"
+kind = "path"
+
+[[tool]]
+id = "bench.check"
+group = "bench"
+title = "Check a task"
+summary = "What's wrong with a task in the outbox, as the hub sees it."
+run = "{redlamp} task check {task}"
+needs = ["cli"]
+
+[[tool.ask]]
+name = "task"
+prompt = "Which task?"
+kind = "choice"
+source = "bench.outbox"
+
+[[tool]]
+id = "bench.wait"
+group = "bench"
+title = "Wait for a task"
+summary = "Returns once the task is back in Done and complete."
+run = "{redlamp} task wait {task} --timeout {timeout}"
+needs = ["cli"]
+
+[[tool.ask]]
+name = "task"
+prompt = "Which task?"
+kind = "choice"
+source = "bench.outbox"
+
+[[tool.ask]]
+name = "timeout"
+prompt = "Seconds to wait"
+default = "3600"
+
+[[tool]]
+id = "bench.withdraw"
+group = "bench"
+title = "Withdraw a task"
+summary = "Takes a task back; the phone drops it unless it has results."
+run = "{redlamp} task withdraw {task}"
+needs = ["cli"]
+confirm = true
+
+[[tool.ask]]
+name = "task"
+prompt = "Which task?"
+kind = "choice"
+source = "bench.outbox"
+
+[[tool]]
+id = "bench.serve"
+group = "bench"
+title = "Run the hub without the Lab"
+summary = "The hub in the terminal, until interrupted: y or n for pairing requests, and what arrives."
+run = "{redlamp} task serve"
+needs = ["cli"]
+
+[[tool]]
+id = "bench.folders"
+group = "bench"
+title = "Open the bench folders"
+summary = "Outbox, Done and Templates in the Finder."
+run = "open {bench}"
+
+# ---------------------------------------------------------------- looks
+
+[[tool]]
+id = "looks.lab"
+group = "looks"
+title = "Open the Looks tab"
+summary = "The harness at the Recipe Lab's Looks tab, where references are fitted as they arrive and evaluated."
+run = "mise run harness -- --scene recipe-lab --lab-tab looks"
+doc = "docs/recipes/app-looks.md#candidates-and-the-looks-tab"
+
+[[tool]]
+id = "looks.show"
+group = "looks"
+title = "Show a look reference"
+summary = "A reference that came back: its filter, settings and how each export paired."
+run = "{redlamp} task show {reference}"
+needs = ["cli"]
+
+[[tool.ask]]
+name = "reference"
+prompt = "Which reference?"
+kind = "choice"
+source = "bench.looks"
+
+[[tool]]
+id = "looks.fit"
+group = "looks"
+title = "Fit a reference on the command line"
+summary = "app-import with its candidates, report and contact sheet, into build/app-looks/out/<name>/."
+run = "{redlamp} recipe app-import {bench}/Done/{reference} --name {name} --candidates"
+needs = ["cli"]
+doc = "docs/recipes/app-looks.md#the-importer"
+
+[[tool.ask]]
+name = "reference"
+prompt = "Which reference?"
+kind = "choice"
+source = "bench.looks"
+
+[[tool.ask]]
+name = "name"
+prompt = "A Redlamp name for the look (not the app's or the filter's)"
+
+[[tool]]
+id = "looks.new"
+group = "looks"
+title = "New look reference on the Mac"
+summary = "A reference from the kit, as New Look makes on the phone, for a filter in a Mac app."
+run = "{redlamp} task look --app {app} --filter {filter} [variant?--variant] [settings?--settings] --set {set} [folder?--in]"
+needs = ["cli"]
+
+[[tool.ask]]
+name = "app"
+prompt = "The app"
+
+[[tool.ask]]
+name = "filter"
+prompt = "The filter, as the app names it"
+
+[[tool.ask]]
+name = "variant"
+prompt = "Its variant"
+optional = true
+
+[[tool.ask]]
+name = "settings"
+prompt = "Settings used, as notes"
+optional = true
+
+[[tool.ask]]
+name = "set"
+prompt = "How many kit images?"
+kind = "choice"
+options = ["quick", "standard", "full"]
+default = "standard"
+
+[[tool.ask]]
+name = "folder"
+prompt = "Where to make it (empty: here)"
+kind = "path"
+optional = true
+
+[[tool]]
+id = "looks.add"
+group = "looks"
+title = "Add exports to a reference"
+summary = "Files exports into a task or reference and pairs them, as the share sheet does."
+run = "{redlamp} task add {folder} {files*}"
+needs = ["cli"]
+
+[[tool.ask]]
+name = "folder"
+prompt = "The task or reference folder"
+kind = "path"
+
+[[tool.ask]]
+name = "files"
+prompt = "The exports"
+kind = "list"
+
+[[tool]]
+id = "looks.kit"
+group = "looks"
+title = "Make and publish the capture kit"
+summary = "Writes both kits and publishes them as the template new references start from."
+detail = "The kit photos are rendered from the look-development raws: run rl looks raws first on a new checkout."
+run = "{redlamp} recipe app-kit && {redlamp} recipe app-kit --compact && {redlamp} recipe app-kit --task"
+needs = ["cli"]
+doc = "docs/recipes/app-looks.md#the-full-kit"
+
+[[tool]]
+id = "looks.raws"
+group = "looks"
+title = "Fetch the look-development raws"
+summary = "The CC0 raws the kit photos and look development use."
+run = "mise run lookdev"
+
+# ---------------------------------------------------------------- the apps
+
+[[tool]]
+id = "app.run"
+group = "app"
+title = "Run Redlamp"
+summary = "Builds and opens the Mac app."
+run = "mise run run"
+
+[[tool]]
+id = "app.harness"
+group = "app"
+title = "Open the harness"
+summary = "The component harness, at a scene if you pick one."
+run = "mise run harness -- [scene?--scene]"
+
+[[tool.ask]]
+name = "scene"
+prompt = "Which scene?"
+kind = "choice"
+source = "harness.scenes"
+optional = true
+
+[[tool]]
+id = "app.build"
+group = "app"
+title = "Build a scheme"
+summary = "One scheme, into build/DerivedData."
+run = "SCHEME={scheme} mise run build"
+needs = ["workspace"]
+
+[[tool.ask]]
+name = "scheme"
+prompt = "Which scheme?"
+kind = "choice"
+source = "schemes"
+default = "Redlamp"
+
+[[tool]]
+id = "app.generate"
+group = "app"
+title = "Generate the workspace"
+summary = "Tuist, after adding or removing source files."
+run = "mise run generate"
+
+# ---------------------------------------------------------------- iPhone
+
+[[tool]]
+id = "iphone.install"
+group = "iphone"
+title = "Install Redlamp Bench on an iPhone"
+summary = "Builds the app for a connected iPhone and installs it."
+detail = "Uses your signing team (REDLAMP_TEAM_ID); the iPhone needs Developer Mode on."
+run = "xcodebuild build -workspace Redlamp.xcworkspace -scheme RedlampBenchApp -destination id={device} -derivedDataPath build/DerivedData-ios -allowProvisioningUpdates -quiet && xcrun devicectl device install app --device {device} build/DerivedData-ios/Build/Products/Debug-iphoneos/RedlampBenchApp.app"
+needs = ["workspace"]
+
+[[tool.ask]]
+name = "device"
+prompt = "Which iPhone?"
+kind = "choice"
+source = "ios.devices"
+
+[[tool]]
+id = "iphone.simulator"
+group = "iphone"
+title = "Run Redlamp Bench in the simulator"
+summary = "Builds the app for the simulator, then installs and opens it there."
+run = 'xcodebuild build -workspace Redlamp.xcworkspace -scheme RedlampBenchApp -destination "platform=iOS Simulator,name="{simulator} -derivedDataPath build/DerivedData-ios-sim -quiet && (xcrun simctl boot {simulator} 2>/dev/null; true) && open -a Simulator && xcrun simctl install booted build/DerivedData-ios-sim/Build/Products/Debug-iphonesimulator/RedlampBenchApp.app && xcrun simctl launch booted app.redlamp.bench'
+needs = ["workspace"]
+
+[[tool.ask]]
+name = "simulator"
+prompt = "Which simulator?"
+default = "iPhone 17 Pro"
+
+# ---------------------------------------------------------------- checks
+
+[[tool]]
+id = "test.scheme"
+group = "test"
+title = "Test a scheme"
+summary = "One scheme's tests, with Swift Testing's results."
+run = "xcodebuild test -workspace Redlamp.xcworkspace -scheme {scheme} -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData 2>&1 | grep -E ' error:|✘|Test run with'"
+needs = ["workspace"]
+
+[[tool.ask]]
+name = "scheme"
+prompt = "Which scheme?"
+kind = "choice"
+source = "schemes"
+
+[[tool]]
+id = "test.all"
+group = "test"
+title = "Run every test"
+summary = "The purity gate and all unit tests, as mise run test does."
+run = "mise run test"
+
+[[tool]]
+id = "test.lint"
+group = "test"
+title = "Lint"
+summary = "Purity, licences, the roadmap and camera checks, SwiftFormat, SwiftLint and rl check."
+run = "mise run lint"
+
+[[tool]]
+id = "test.gate"
+group = "test"
+title = "Run the push gate"
+summary = "CI's checks and the build's tests on a commit, as the push to main runs them."
+run = "mise run gate -- {commit}"
+
+[[tool.ask]]
+name = "commit"
+prompt = "Which commit?"
+default = "HEAD"
+
+[[tool]]
+id = "test.suite"
+group = "test"
+title = "Run the whole suite on a commit"
+summary = "The push gate with every test, as CI runs it; for work that spans packages."
+run = "mise run gate -- --suite {commit}"
+
+[[tool.ask]]
+name = "commit"
+prompt = "Which commit?"
+default = "HEAD"
+
+[[tool]]
+id = "test.e2e"
+group = "test"
+title = "Run the end-to-end suite"
+summary = "The smoke tier by default, in a home of its own."
+run = "mise run e2e -- [tier?--tier]"
+
+[[tool.ask]]
+name = "tier"
+prompt = "Which tier? (empty: smoke)"
+kind = "choice"
+options = ["smoke", "full", "release", "performance", "soak"]
+optional = true
+
+[[tool]]
+id = "test.tracker"
+group = "test"
+title = "Tracker, roadmap and issues: what a sync would do"
+summary = "The roadmap and Lightroom comparison against the tracker, then the issue sync's dry run."
+run = "scripts/roadmap-sync.py && scripts/tracker-issues.py"
+
+[later]
+mise = ["fixtures", "fixtures-shoots", "maskeval", "notarize", "profile-data", "release", "render", "screenshots", "setup", "site", "vendor", "video"]
+redlamp = ["stack", "mask", "noise", "bench", "camera-bench", "mcp"]
