@@ -1111,6 +1111,11 @@ Notes:
   (`:1046-1054`).
 - The overlay also disappears while the before/original is shown (`!isShowingOriginal`, `:988`), and
   only ever shows the **selected** mask (`:989`).
+- It steps aside too while a tool is armed for a new mask, until the tool's first stroke, click or
+  sample has made it; the new mask is overlaid from then on, and a tool adding to the selected mask
+  keeps its overlay (`isArmedForNewMask`,
+  `packages/RedlampUI/Sources/Model/EditorModel+Masking.swift:28-32`; `maskOverlayShown`,
+  `packages/RedlampUI/Sources/Model/EditorModel.swift:1288-1299`).
 - README's list of modes: "a mask overlay (`O`) in Lightroom's modes (Color Overlay, on B&W, Image on
   Black or White, B&W, Image on B&W), colors and opacity" — `README.md:116`.
 

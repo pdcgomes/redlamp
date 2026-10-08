@@ -1287,14 +1287,15 @@ public final class EditorModel {
 
     /// The mask the canvas overlays: the selected one in the Masking tool, except while one of
     /// its adjustments is being dragged, so the edit itself shows (Lightroom's automatic overlay
-    /// toggle). Sliders that shape the mask (Feather, Detail, Refine) keep it. The mask under the
-    /// pointer in the list shows instead, overlay on or off.
+    /// toggle), and while a tool is armed for a new mask, so what it selects shows alone. Sliders
+    /// that shape the mask (Feather, Detail, Refine) keep it. The mask under the pointer in the
+    /// list shows instead, overlay on or off.
     public var maskOverlayShown: UUID? {
         guard activeTool == .masking, !isShowingOriginal, !isAdjustingMask else { return nil }
         if let hoveredMaskID {
             return hoveredMaskID
         }
-        return showMaskOverlay ? selectedMaskID : nil
+        return showMaskOverlay && !isArmedForNewMask ? selectedMaskID : nil
     }
 
     /// Whether a mask's adjustment or Amount is being dragged.

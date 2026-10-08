@@ -109,12 +109,9 @@ public extension EditorModel {
         guard info != nil, let shape = recipe.mask(maskID)?.components.first(where: { $0.id == componentID })?.shape,
               let kind = shape.kind, kind == .colorRange || kind == .luminanceRange
         else { return }
-        activeTool = .masking
         selectedMaskID = maskID
         selectedComponentID = componentID
-        drawingKind = kind
-        drawingTarget = nil
-        drawingComponentID = componentID
+        arm(kind, component: componentID)
     }
 
     internal func locateComponent(_ componentID: UUID, in recipe: EditRecipe) -> (mask: Int, component: Int)? {

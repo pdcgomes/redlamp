@@ -22,11 +22,7 @@ public enum ObjectSelection: String, CaseIterable, Sendable {
 public extension EditorModel {
     func armObjectSelection(operation: MaskOperation = .add, addingTo target: UUID? = nil) {
         guard info != nil else { return }
-        activeTool = .masking
-        drawingKind = .objects
-        drawingOperation = operation
-        drawingTarget = target
-        drawingComponentID = nil
+        arm(.objects, operation: operation, target: target)
         objectPreview = nil
     }
 

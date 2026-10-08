@@ -12,12 +12,9 @@ public extension EditorModel {
         guard info != nil, case .brush = recipe.mask(maskID)?.components.first(where: { $0.id == componentID })?.shape
         else { return }
         edgeBrushTarget = nil
-        activeTool = .masking
         selectedMaskID = maskID
         selectedComponentID = componentID
-        drawingKind = .brush
-        drawingTarget = nil
-        drawingComponentID = componentID
+        arm(.brush, component: componentID)
     }
 
     /// The brush a stroke would use now: Erase while Option is held or Erase is chosen.

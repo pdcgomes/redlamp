@@ -25,6 +25,12 @@ public extension EditorModel {
 
     // MARK: - Drawing
 
+    /// Whether a tool is armed for a new mask that its first stroke, click or sample hasn't made
+    /// yet.
+    var isArmedForNewMask: Bool {
+        drawingKind != nil && drawingTarget == nil && drawingComponentID == nil
+    }
+
     /// Arms the canvas: the next drag draws a shape of `kind`.
     func startDrawing(_ kind: MaskKind, operation: MaskOperation = .add, addingTo target: UUID? = nil) {
         guard canCreateMask(kind), info != nil else { return }
@@ -32,19 +38,30 @@ public extension EditorModel {
             Task { await startAIMask(kind, operation: operation, addingTo: target) }
             return
         }
-        activeTool = .masking
         edgeBrushTarget = nil
+        arm(kind, operation: operation, target: target)
+    }
+
+    /// Arms `kind` in the Masking tool: for a new mask, a component of `target`, or more of
+    /// `component`. The tool comes last: choosing it renders, and what the canvas overlays depends
+    /// on what's armed.
+    internal func arm(_ kind: MaskKind, operation: MaskOperation = .add, target: UUID? = nil, component: UUID? = nil) {
         drawingKind = kind
         drawingOperation = operation
         drawingTarget = target
-        drawingComponentID = nil
+        drawingComponentID = component
+        activeTool = .masking
     }
 
     func cancelDrawing() {
+        let armedForNewMask = isArmedForNewMask
         drawingKind = nil
         drawingTarget = nil
         drawingComponentID = nil
         edgeBrushTarget = nil
+        if armedForNewMask, activeTool == .masking, showMaskOverlay {
+            requestRender()
+        }
     }
 
     /// Creates the armed shape and starts a live edit; call `updateComponent` while
@@ -66,9 +83,10 @@ public extension EditorModel {
         selectedComponentID = component.id
         pendingDrawingName = drawingTarget == nil ? "New \(kind.name)" : "Add \(kind.name)"
         pendingDrawingKind = kind
-        applyLive(next)
+        // Disarmed before applying, so its render overlays the new mask.
         drawingKind = nil
         drawingTarget = nil
+        applyLive(next)
     }
 
     func finishDrawing() {

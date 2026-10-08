@@ -548,6 +548,77 @@ struct MaskEditingTests {
         model.endEdit()
     }
 
+    /// A tool armed for a new mask takes the selected mask's overlay off the canvas until it has
+    /// made the new one, so what it selects isn't seen through the other's (#354). Adding to the
+    /// selected mask keeps it.
+    @Test func `the overlay leaves the selected mask while a tool is armed for a new one`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        engine.computed = [AIMask(
+            kind: .objects, provider: "stub", revision: 1, analysisHash: "h", center: ImagePoint(x: 0.5, y: 0.5),
+            bitmap: MaskBitmap(sha256: "o", width: 4, height: 4),
+        )]
+        let model = EditorModel(engine: engine)
+        model.select(folder.appending(path: "IMG_0010.ARW"))
+        for _ in 0 ..< 200 where model.info == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        await model.refreshAvailableMasks()
+        let disc = MaskShape.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2))
+        model.startDrawing(.radial)
+        model.beginDrawing(disc)
+        model.finishDrawing()
+        let first = try #require(model.selectedMaskID)
+        #expect(engine.lastRender?.maskOverlay == first)
+
+        model.startDrawing(.objects)
+        for _ in 0 ..< 200 where model.drawingKind != .objects {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.maskOverlayShown == nil)
+        #expect(engine.lastRender?.maskOverlay == nil, "the canvas drops the overlay as the tool is armed")
+        await model.selectObject(at: ImagePoint(x: 0.5, y: 0.5))
+        let object = try #require(model.selectedMaskID)
+        #expect(object != first)
+        #expect(engine.lastRender?.maskOverlay == object, "the new mask is overlaid once it's made")
+        model.cancelDrawing()
+        #expect(engine.lastRender?.maskOverlay == object)
+
+        model.startDrawing(.brush)
+        #expect(engine.lastRender?.maskOverlay == nil)
+        model.cancelDrawing()
+        #expect(engine.lastRender?.maskOverlay == object, "put down: the selected mask's overlay is back")
+
+        model.startDrawing(.radial)
+        model.beginDrawing(disc)
+        let radial = try #require(model.selectedMaskID)
+        #expect(engine.lastRender?.maskOverlay == radial, "a drawn shape is overlaid from its first frame")
+        model.finishDrawing()
+
+        model.startDrawing(.brush, addingTo: radial)
+        #expect(model.maskOverlayShown == radial, "adding to the selected mask keeps its overlay")
+        model.beginStroke(at: ImagePoint(x: 0.3, y: 0.3))
+        model.endStroke()
+        #expect(engine.lastRender?.maskOverlay == radial)
+        let brush = try #require(model.recipe.mask(radial)?.components.last?.id)
+        model.cancelDrawing()
+
+        model.startDrawing(.brush)
+        model.editBrush(brush, in: radial)
+        #expect(engine.lastRender?.maskOverlay == radial, "painting into its brush shows the mask again")
+
+        model.activeTool = .edit
+        let rendered = engine.renders.count
+        model.startDrawing(.brush)
+        #expect(engine.renders.count > rendered)
+        #expect(
+            engine.renders.dropFirst(rendered).allSatisfy { $0.maskOverlay == nil },
+            "armed from another tool, no frame overlays the selected mask on the way",
+        )
+    }
+
     /// The new panel's thumbnails (UX-23): each mask's black and white overlay, small, a hidden
     /// mask's as if shown; drawn again only when the mask's coverage may have changed.
     @Test func `a mask's thumbnail is drawn once, and again only when its coverage may change`() async throws {

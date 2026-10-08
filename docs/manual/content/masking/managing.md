@@ -43,7 +43,7 @@ Every mask but the selected one shows as a white pin on the photo, at the centre
 
 ## The overlay
 
-Show Overlay, at the top of the panel, shows what the selected mask covers, in red at 55% to start; [[O]] does the same. Only the selected mask is shown. The overlay steps aside while you drag one of the mask's adjustments, and while you look at Before. The button beside Show Overlay chooses how the overlay looks, with three settings:
+Show Overlay, at the top of the panel, shows what the selected mask covers, in red at 55% to start; [[O]] does the same. Only the selected mask is shown. The overlay steps aside while you drag one of the mask's adjustments, and while you look at Before. It also steps aside when you choose a tool to make a new mask, so you see only what the new mask selects, and shows the new mask once your first click or stroke has made it. The button beside Show Overlay chooses how the overlay looks, with three settings:
 
 Mode
 : One of six ways of showing the mask, in the table below.
