@@ -142,6 +142,31 @@ struct PointColorRenderTests: PointColorRendering {
         let wide = try engine.samplePointColorInput(at: spot, radius: 0.1, recipe: EditRecipe(), session: session)
         #expect(abs(wide.chroma - plain.chroma) < 0.003, "a wider disc of one colour averages to it")
     }
+
+    @Test func `on a turned, cropped, straightened and transformed photo the eyedropper reads what's clicked`() throws {
+        let size = PixelSize(width: 160, height: 120)
+        let session = try makeSession(width: size.width, height: size.height) { x, y in
+            SIMD3(0.05 + 0.6 * Float(x) / Float(size.width), 0.05 + 0.6 * Float(y) / Float(size.height), 0.2)
+        }
+        let engine = try RedlampEngine()
+        var reframed = EditRecipe()
+        reframed.orientation = ImageOrientation(quarterTurns: 1)
+        reframed.crop = CropRect(left: 0.15, top: 0.1, right: 0.8, bottom: 0.85)
+        reframed[.cropAngle] = 6
+        reframed[.transformVertical] = 15
+        reframed[.transformRotate] = 3
+        let map = GeometryMap(recipe: reframed, imageSize: size, lens: nil)
+        for click in [SIMD2(0.25, 0.3), SIMD2(0.7, 0.6), SIMD2(0.5, 0.85)] {
+            let photo = try #require(map.imagePoint(click))
+            let point = CGPoint(x: photo.x, y: photo.y)
+            let picked = try engine.samplePointColorInput(at: point, radius: 0, recipe: reframed, session: session)
+            let plain = try engine.samplePointColorInput(at: point, radius: 0, recipe: EditRecipe(), session: session)
+            let difference = simd_abs(picked.clippedLinearSRGB - plain.clippedLinearSRGB).max()
+            withKnownIssue("PIPE-18: the eyedropper samples the framed render at the photo point") {
+                #expect(difference < 0.005, "click \(click): \(picked) against \(plain)")
+            }
+        }
+    }
 }
 
 /// Point Color's sliders in the kernel's units.
