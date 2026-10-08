@@ -291,6 +291,8 @@ struct LibraryPanelsTests {
         try await folder.written()
         #expect(folder.keywords(2) == ["Family", "Places/Portugal/Porto"] && folder
             .keywords(3) == ["Places/Portugal/Porto"])
+        // The list is counted again after the batch, apart from its sidecars' writes.
+        try await folder.eventually { panels.keywordList?[Self.path("Places/Portugal/Porto")]?.count == 3 }
         #expect(panels.keywordList?[Self.path("Places/Portugal/Porto")]?.count == 3)
         #expect(panels.toggle(Self.path("Family")), "a checkbox some photos have puts it on them all")
         try await folder.written()
