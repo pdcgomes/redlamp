@@ -192,37 +192,66 @@ public extension EditorModel {
         let sequence = cullingQueue.request(step.photos)
         show(step.after, field: change.field, rows: step.rows, photoIDs: step.photoIDs, sequence: sequence)
         cullingUndo.append(step)
+        var dropped = cullingRedo
         if cullingUndo.count > Self.cullingUndoLimit {
+            dropped += cullingUndo.prefix(cullingUndo.count - Self.cullingUndoLimit)
             cullingUndo.removeFirst(cullingUndo.count - Self.cullingUndoLimit)
         }
         cullingRedo.removeAll()
-        remember(step.after.compactMap(\.customLabel))
+        if !dropped.isEmpty {
+            let freed = DroppedSteps(dropped)
+            dropped = []
+            library.scheduler.submit(.background) { freed.steps = [] }
+        }
+        var labels: Set<String> = []
+        for values in step.after {
+            if let label = values.customLabel {
+                labels.insert(label)
+            }
+        }
+        remember(Array(labels))
         make(step, sequence: sequence, as: .change)
     }
 
     /// What `change` makes of the photos of `rows` that it changes, or nil when it changes none. It reads the
-    /// library's photos and lets go of them before they change: holding them would copy them all.
+    /// library's photos and lets go of them before they change: holding them would copy them all. Loops rather
+    /// than closures: a closure formed here checks it's on the main actor each time it's called, a photo at a
+    /// time.
     private func cullingStep(_ change: CullingChange, rows: [Int]) -> CullingStep? {
         let items = library.items
         let ids = library.photoIDs
         let readOnly = isReadOnly ? selection.flatMap(library.index(of:)) : nil
-        let rows = rows.filter { items.indices.contains($0) && $0 != readOnly }
-        let current = rows.map { CullingValues(items[$0].metadata) }
+        var shown: [Int] = []
+        var current: [CullingValues] = []
+        shown.reserveCapacity(rows.count)
+        current.reserveCapacity(rows.count)
+        for row in rows where items.indices.contains(row) && row != readOnly {
+            shown.append(row)
+            current.append(CullingValues(items[row].metadata))
+        }
         let wanted = change.resolved(current)
         var changed: [Int] = []
+        var photoIDs: [Int64] = []
         var photos: [URL] = []
         var before: [CullingValues] = []
         var after: [CullingValues] = []
-        for (place, row) in rows.enumerated() where !wanted[place].matches(current[place], in: change.field) {
+        changed.reserveCapacity(shown.count)
+        photoIDs.reserveCapacity(shown.count)
+        photos.reserveCapacity(shown.count)
+        before.reserveCapacity(shown.count)
+        after.reserveCapacity(shown.count)
+        for place in shown.indices where !wanted[place].matches(current[place], in: change.field) {
+            let row = shown[place]
             changed.append(row)
+            photoIDs.append(ids[row])
             photos.append(items[row].url)
             before.append(current[place])
             after.append(wanted[place])
         }
         guard !changed.isEmpty else { return nil }
         return CullingStep(
-            title: change.title, field: change.field, photos: photos, rows: changed,
-            photoIDs: changed.map { ids[$0] }, before: before, after: after,
+            title: change.title, field: change.field, photos: photos, rows: changed, photoIDs: photoIDs,
+            before: before, after: after,
         )
     }
 
@@ -721,6 +750,17 @@ final class CullingStep {
         self.photoIDs = photoIDs
         self.before = before
         self.after = after
+    }
+}
+
+/// The steps a change drops from Undo and Redo, freed in the background: a step of a whole selection holds
+/// thousands of URLs, which take milliseconds to free. Only the background job lets go of them, so the main
+/// thread is never the last to.
+private final class DroppedSteps: @unchecked Sendable {
+    var steps: [CullingStep]
+
+    init(_ steps: [CullingStep]) {
+        self.steps = steps
     }
 }
 
