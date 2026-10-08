@@ -166,6 +166,22 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         responder is NSSlider || super.validateProposedFirstResponder(responder, for: event)
     }
 
+    /// A source's row shows its source as it's pressed, as the Finder's sidebar shows a place, and a set's chevron
+    /// opens or closes it; every other row is the table's, which acts as the click ends.
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let index = row(at: point)
+        guard index >= 0, let node = item(atRow: index) as? SidebarNode, case let .source(source) = node.kind else {
+            return super.mouseDown(with: event)
+        }
+        let chevronEnd = frameOfCell(atColumn: 0, row: index).minX + SidebarCellView.Layout.chevronSize.width + 4
+        if isExpandable(node), point.x < chevronEnd {
+            toggle(node)
+        } else {
+            model.librarySources.show(source.source)
+        }
+    }
+
     override func menu(for event: NSEvent) -> NSMenu? {
         let row = row(at: convert(event.locationInWindow, from: nil))
         guard row >= 0,
@@ -289,17 +305,12 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
             }
         case .recentlyTrashed:
             model.showRecentlyTrashed()
-        case let .source(source):
-            if !clickedChevron(of: node) {
-                model.librarySources.show(source.source)
-            }
         default:
             break
         }
     }
 
-    /// The chevron expands a folder or a set, and the rest of its row opens it: false when the click wasn't on
-    /// the chevron.
+    /// The chevron expands a folder, and the rest of its row opens it: false when the click wasn't on the chevron.
     private func clickedChevron(of node: SidebarNode) -> Bool {
         let location = convert(window?.currentEvent?.locationInWindow ?? .zero, from: nil)
         let chevronEnd = frameOfCell(atColumn: 0, row: clickedRow).minX + SidebarCellView.Layout.chevronSize.width + 4

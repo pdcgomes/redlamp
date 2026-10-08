@@ -26,7 +26,14 @@
             try scratch.index(app)
             let names = scratch.names
 
-            // B on two photos and X on a third, from the grid.
+            // B on two photos and X on a third, from the grid: the run's other photos may be marked or rejected too.
+            try app.run("the library counted") { model in
+                model.librarySources.recount()
+                await model.librarySources.counted()
+            }
+            let (marked, rejected) = try app.main { model in
+                (model.librarySources.count(of: .marked) ?? 0, model.librarySources.count(of: .rejected) ?? 0)
+            }
             try app.main { model in
                 model.showLibrary(.grid)
                 model.select(scratch.photo(names[0]))
@@ -35,22 +42,29 @@
             try app.press(.toggleMark)
             try app.main { $0.select(scratch.photo(names[2])) }
             try app.press(.flagReject)
-            try app.wait("the Library panel counting two marked photos and a rejected one", timeout: 30) { _ in
-                app.sourceRowLabel("sources.marked")?.hasPrefix("Marked, 2 photos") == true
-                    && app.sourceRowLabel("sources.rejected") == "Rejected, 1 photo"
+            let markedLabel = "Marked, \((marked + 2).formatted()) photos"
+            try app.wait("the Library panel counting two more marked photos and a rejected one", timeout: 30) { _ in
+                app.sourceRowLabel("sources.marked")?.hasPrefix(markedLabel) == true
+                    && app.sourceRowLabel("sources.rejected")?
+                    .hasPrefix("Rejected, \((rejected + 1).formatted()) photo")
+                    == true
             }
 
-            // A click on Marked's row shows its photos.
+            // A press on Marked's row shows its photos.
             try app.clickSourceRow("sources.marked")
-            try app.waitForSource("Marked's two photos") { model in
+            try app.waitForSource("Marked's photos") { model in
                 model.librarySources.shown == .marked && !model.librarySources.isListing
-                    && Set(model.items.map(\.name)) == Set(names.prefix(2))
+                    && Set(names.prefix(2)).isSubset(of: Set(model.items.map(\.name)))
+                    && !model.items.map(\.name).contains(names[2])
             }
 
             // Marked's summary, and the folder's, from their rows' menus.
             try app.rightClick(.identifier("sources.marked"), choosing: "Show Summary…")
             try app.wait("Marked's summary", timeout: 20) { _ in
-                SourceSummaryPopover.shownLines.prefix(2) == ["Marked", "2 photos"]
+                SourceSummaryPopover.shownLines.prefix(2).first == "Marked"
+                    && SourceSummaryPopover.shownLines.dropFirst().first?
+                    .hasPrefix("\((marked + 2).formatted()) photos")
+                    == true
             }
             try app.main { _ in SourceSummaryPopover.close() }
             try app.rightClick(
@@ -73,7 +87,8 @@
             // The View menu, then the palette.
             try app.choose(.showRejected)
             try app.waitForSource("Rejected's photo", timeout: 20) { model in
-                model.librarySources.shown == .rejected && model.items.map(\.name) == [names[2]]
+                model.librarySources.shown == .rejected && model.items.map(\.name).contains(names[2])
+                    && !model.items.map(\.name).contains(names[0])
             }
             try app.runFromPalette(.showAllPhotographs)
             try app.waitForSource("All Photographs", timeout: 20) { model in
@@ -231,9 +246,9 @@
             }
         }
 
-        /// Clicks the Library or Collections section's row carrying `identifier`, as the mouse does: the press goes
-        /// to its list, which tracks it, and the release waits in the queue, where the list takes it from. A list
-        /// in a window that isn't key takes the press as the click after activation would.
+        /// Presses the Library or Collections section's row carrying `identifier`, as the mouse does: the list shows
+        /// its source as it's pressed. A list in a window that isn't key takes the press as the click after
+        /// activation would.
         func clickSourceRow(_ identifier: String) throws {
             let location = try main { _ -> NSPoint in
                 guard let window = Views.editorWindow, let root = window.contentView?.superview,
@@ -248,25 +263,21 @@
             post { _ in
                 guard let window = Views.editorWindow, let root = window.contentView?.superview,
                       let row = Views.all(NSView.self, in: root)
-                      .first(where: { $0.accessibilityIdentifier() == identifier })
+                      .first(where: { $0.accessibilityIdentifier() == identifier }),
+                      let press = NSEvent.mouseEvent(
+                          with: .leftMouseDown, location: location, modifierFlags: [],
+                          timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                          context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+                      )
                 else { return }
                 var list = row.superview
                 while let view = list, !(view is NSOutlineView) {
                     list = view.superview
                 }
-                let events = [NSEvent.EventType.leftMouseDown, .leftMouseUp].compactMap { type in
-                    NSEvent.mouseEvent(
-                        with: type, location: location, modifierFlags: [],
-                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1,
-                    )
-                }
-                guard events.count == 2, let list else { return }
-                NSApp.postEvent(events[1], atStart: false)
                 if window.isKeyWindow {
-                    window.sendEvent(events[0])
+                    window.sendEvent(press)
                 } else {
-                    list.mouseDown(with: events[0])
+                    list?.mouseDown(with: press)
                 }
             }
             pause(0.2)

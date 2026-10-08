@@ -209,5 +209,17 @@ struct LibrarySourcesTests {
         #expect(sources.show(.marked))
         try await sandbox.eventually { rows().last?.isShown == true }
         #expect(rows().map(\.isShown) == [false, true], "the source shown is the row highlighted")
+
+        // A press on a row shows its source, as the list takes it.
+        let first = try #require(list.view(atColumn: 0, row: 0, makeIfNecessary: false))
+        let frame = first.convert(first.bounds, to: nil)
+        let press = try #require(NSEvent.mouseEvent(
+            with: .leftMouseDown, location: NSPoint(x: frame.midX, y: frame.midY), modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+            eventNumber: 0, clickCount: 1, pressure: 1,
+        ))
+        list.mouseDown(with: press)
+        try await sandbox.eventually { rows().map(\.isShown) == [true, false] }
+        #expect(sources.shown == .allPhotographs && rows().map(\.isShown) == [true, false])
     }
 }
