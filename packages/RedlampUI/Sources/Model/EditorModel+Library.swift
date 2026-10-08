@@ -127,11 +127,16 @@ public extension EditorModel {
         select(items[next].url)
     }
 
-    /// The photo being opened, then its neighbours, the direction of travel first.
+    /// The photo being opened, then its neighbours in the grid's order (`GridOrder`), where ← and → go, the
+    /// direction of travel first.
     internal func workingSet(around url: URL, comingFrom previous: URL?) -> [URL] {
-        guard let index = library.index(of: url) else { return [url] }
-        let backward = previous.flatMap(library.index(of:)).map { $0 > index }
-        let offsets = backward == true ? [-1, 1, -2] : [1, -1, 2]
-        return [url] + offsets.map { index + $0 }.filter(items.indices.contains).map { items[$0].url }
+        guard let id = library.photoID(of: url) else { return [url] }
+        let order = gridOrder
+        let place = order.place(of: id) ?? .max
+        let backward = previous.flatMap(library.photoID(of:)).flatMap(order.place(of:)).map { $0 > place } ?? false
+        let step = backward ? -1 : 1
+        let ahead = order.cell(step, from: id)
+        let neighbours = [ahead, order.cell(-step, from: id), ahead.flatMap { order.cell(step, from: $0) }]
+        return [url] + neighbours.compactMap { $0.flatMap(library.url(ofPhoto:)) }
     }
 }

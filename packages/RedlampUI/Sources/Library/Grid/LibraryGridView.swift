@@ -628,7 +628,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     /// `rows` as runs of rows one after another, for the library's probes, which are in rows' order.
-    private static func runs(of rows: [Int]) -> [Range<Int>] {
+    static func runs(of rows: [Int]) -> [Range<Int>] {
         var runs: [Range<Int>] = []
         for row in rows.sorted() {
             if let last = runs.last, last.upperBound == row {

@@ -89,12 +89,13 @@ extension EditorModel {
         return list.groups.indices.contains(target) ? target : nil
     }
 
-    /// ← and → while grouped: the photo on show after or before the active one, alone.
+    /// ← and → while grouped: the photo on show after or before the active one, alone, or a closed stack's photos.
     private func stepInGroups(by offset: Int) {
         guard let from = opening ?? selection, let id = library.photoID(of: from),
               let next = gridGroups.shownPhoto(offset, from: id), let url = library.url(ofPhoto: next)
         else { return }
         select(url)
+        coverClosedStacks()
     }
 
     /// ⇧ with a click or an arrow key while grouped: the photos on show from the photo last clicked or moved

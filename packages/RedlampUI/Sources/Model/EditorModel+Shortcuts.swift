@@ -39,7 +39,7 @@ public extension EditorModel {
         guard action.isAvailable else { return false }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
-        if let performed = performStackShortcut(action, shifted: shifted) ?? performPainterShortcut(action)
+        if let performed = performStackShortcut(action) ?? performPainterShortcut(action)
             ?? performSourceShortcut(action) ?? performModuleShortcut(action) ?? performGridShortcut(action)
             ?? performPanelShortcut(action) ?? performFileShortcut(action)
             ?? performCullingShortcut(action, shifted: shifted) {

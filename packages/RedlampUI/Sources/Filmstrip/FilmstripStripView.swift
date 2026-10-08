@@ -11,10 +11,12 @@ import SwiftUI
 ///   view's prefetching asks for the next ones at look-ahead priority and cancels them when the
 ///   strip turns back. A thumbnail arriving sets only its own cell.
 /// - Changes: the library's row diffs become inserts and deletes; a badge redraws its cell.
-/// - Stacks (LIB-28, `LibraryStacks`) are closed, each one cell with its count, as the grid has them; the
-///   strip follows their diffs, and while it shows them, the photos that come or go wait for the stacks.
+/// - The cells are the grid's, in its order (`GridOrder`): grouped (LIB-41, `LibraryGroups`), the groups' cells one
+///   group after another without their headers, a closed group's left out; stacks (LIB-28, `LibraryStacks`)
+///   closed, each one cell with its count. The strip shows them afresh as they change, and while it shows them,
+///   the photos that come or go wait for the groups or the stacks.
 /// - The selection is followed: the active photo's cell is highlighted and scrolled to the middle,
-///   and the others selected with it (⌘- and ⇧-click) are marked.
+///   and the others selected with it (⌘- and ⇧-click, in the grid's order) are marked.
 final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate,
     NSCollectionViewPrefetching {
     static let height: CGFloat = 82
@@ -27,10 +29,12 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var observation: LibraryObservation?
     private var editObservation: LibraryObservation?
     private var stacksObservation: LibraryObservation?
+    private var groupsObservation: LibraryObservation?
     private var tracker: Tracker?
-    /// The stacks as last followed; nil for a source without them, when the items are the photos' rows.
-    private var shownStacks: StackedList?
-    /// Each cell's photo, while the stacks are followed.
+    /// The grid's groups or stacks as last followed; nil while it shows the list as it is, when the items are the
+    /// photos' rows.
+    private var shownOrder: GridOrder?
+    /// Each cell's photo, while the groups or the stacks are followed.
     private var itemPhotos = ContiguousArray<Int64>()
     /// The selection and marks as last followed. Cells are drawn from these, not from the model,
     /// which can be a turn ahead, so `follow` knows every cell it has to change.
@@ -91,6 +95,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         observation = nil
         editObservation = nil
         stacksObservation = nil
+        groupsObservation = nil
         tracker?.cancel()
         tracker = nil
         guard window != nil else { return }
@@ -98,6 +103,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
         editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
         stacksObservation = model.gridStacks.observe { [weak self] change in self?.stacksChanged(change) }
+        groupsObservation = model.gridGroups.observe { [weak self] change in self?.groupsChanged(change) }
         selected = model.selection
         wasInSight = isInShownModule(model)
         tracker = Tracker { [weak self] in
@@ -161,50 +167,62 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         collectionView.layoutSubtreeIfNeeded()
     }
 
-    /// The stacks as the model has them now, while they're the source's, and each cell's photo.
+    /// The grid's order as the model has it now (`EditorModel.gridOrder`), and each cell's photo.
     private func followItems() {
-        let source = model.library.photoList.source
-        shownStacks = model.gridStacks.list.flatMap { $0.list.source == source ? $0 : nil }
-        var photos = ContiguousArray<Int64>()
-        if let shownStacks {
-            photos.reserveCapacity(shownStacks.count)
-            for cell in shownStacks {
-                photos.append(cell)
-            }
+        let order = model.gridOrder
+        if case .listed = order {
+            shownOrder = nil
+            itemPhotos = []
+        } else {
+            shownOrder = order
+            itemPhotos = order.cells
         }
-        itemPhotos = photos
     }
 
     /// The row of item `index`'s photo; nil for one the photos no longer have.
-    private func row(ofItem index: Int) -> Int? {
-        guard shownStacks != nil else { return model.items.indices.contains(index) ? index : nil }
+    func row(ofItem index: Int) -> Int? {
+        guard shownOrder != nil else { return model.items.indices.contains(index) ? index : nil }
         return itemPhotos.indices.contains(index) ? model.library.photoList.index(of: itemPhotos[index]) : nil
     }
 
-    /// The item showing row `row`'s photo; nil inside a closed stack.
+    /// The item showing row `row`'s photo; nil inside a closed stack or a closed group.
     private func item(ofRow row: Int) -> Int? {
-        guard let shownStacks else { return row }
+        guard let shownOrder else { return row }
         let ids = model.library.photoIDs
-        return ids.indices.contains(row) ? shownStacks.index(of: ids[row]) : nil
+        return ids.indices.contains(row) ? shownOrder.index(of: ids[row]) : nil
     }
 
-    /// The item showing `url`'s photo, or the closed stack's it's in.
+    /// The item showing `url`'s photo, or the closed stack's it's in; nil in a closed group.
     private func item(of url: URL) -> Int? {
         guard let row = model.library.index(of: url) else { return nil }
-        guard let shownStacks else { return row }
-        let id = model.library.photoIDs[row]
-        return shownStacks.index(of: shownStacks.cell(for: id) ?? id)
+        guard let shownOrder else { return row }
+        return shownOrder.cell(for: model.library.photoIDs[row]).flatMap(shownOrder.index(of:))
     }
 
-    /// The stacks changed: the strip shows them afresh, or for stacks opened or closed, its cells on screen again where
-    /// they are, which its layout places a screenful at a time; a batch update's animations would cost more.
+    /// The stacks changed: the strip shows them afresh, unless it shows the groups, which follow the stacks.
     private func stacksChanged(_ change: LibraryStacks.Change) {
+        guard model.libraryViews.groups?.list == nil else { return }
+        cellsChanged(afresh: change == .restacked)
+    }
+
+    /// The groups changed: grouped afresh, or opened and closed. Their headers aren't in the strip.
+    private func groupsChanged(_ change: LibraryGroups.Change) {
+        switch change {
+        case .regrouped: cellsChanged(afresh: true)
+        case .items: cellsChanged(afresh: false)
+        case .headers: break
+        }
+    }
+
+    /// The strip shows the grid's cells afresh, or for groups and stacks opened or closed, its cells on screen again
+    /// where they are, which its layout places a screenful at a time; a batch update's animations would cost more.
+    private func cellsChanged(afresh: Bool) {
         guard isInShownModule(model) else {
             isStale = true
             return
         }
         reload()
-        guard case .items = change else {
+        guard !afresh else {
             prefetching.values.forEach(model.thumbnailLoader.cancel)
             prefetching = [:]
             follow(model.selection, marking: model.photoSelection, animated: false)
@@ -215,8 +233,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
 
     /// What item `index`'s cell shows of its stacks.
     private func stackBadges(ofItem index: Int) -> (count: GridBadges.Kind?, pair: GridBadges.Kind?) {
-        guard let shownStacks, itemPhotos.indices.contains(index) else { return (nil, nil) }
-        return model.stackBadges(of: itemPhotos[index], in: shownStacks)
+        guard let stacks = shownOrder?.stacks, itemPhotos.indices.contains(index) else { return (nil, nil) }
+        return model.stackBadges(of: itemPhotos[index], in: stacks)
     }
 
     /// Scrolls the photo at `row` to the strip's middle, by its clip view: `scrollToItems` doesn't move a
@@ -246,7 +264,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     // MARK: - Data source
 
     func collectionView(_: NSCollectionView, numberOfItemsInSection _: Int) -> Int {
-        shownStacks == nil ? model.items.count : itemPhotos.count
+        shownOrder == nil ? model.items.count : itemPhotos.count
     }
 
     func collectionView(
@@ -262,7 +280,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         item.cell.isSelected = photo.url == selected
         item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[row])
         item.cell.onClick = { [weak self] modifiers in
-            self?.model.clickInStacks(
+            self?.model.clickInGrid(
                 photo.url, toggling: modifiers.contains(.command), extending: modifiers.contains(.shift),
             )
         }
@@ -342,7 +360,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         let rows = collectionView.indexPathsForVisibleItems().compactMap { row(ofItem: $0.item) }
         guard let first = rows.min(), let last = rows.max() else { return }
         model.thumbnailLoader.protected = Set(rows.map { model.items[$0].url })
-        model.library.prioritize(first ..< last + 1)
+        for run in LibraryGridView.runs(of: rows) {
+            model.library.prioritize(run)
+        }
         model.editRenders.show(first ..< last + 1, in: .filmstrip)
         let middle = CGPoint(x: scrollView.contentView.bounds.midX, y: collectionView.bounds.midY)
         if let item = collectionView.indexPathForItem(at: middle)?.item, let row = row(ofItem: item) {
@@ -364,8 +384,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             follow(model.selection, marking: model.photoSelection, animated: false)
             return
         }
-        // While stacks are shown, the photos that came or went wait for them (`stacksChanged`).
-        if shownStacks == nil, !diff.removed.isEmpty || !diff.inserted.isEmpty {
+        // While groups or stacks are shown, the photos that came or went wait for them (`cellsChanged`).
+        if shownOrder == nil, !diff.removed.isEmpty || !diff.inserted.isEmpty {
             collectionView.performBatchUpdates {
                 collectionView.deleteItems(at: Set(diff.removed.map { IndexPath(item: $0, section: 0) }))
                 collectionView.insertItems(at: Set(diff.inserted.map { IndexPath(item: $0, section: 0) }))

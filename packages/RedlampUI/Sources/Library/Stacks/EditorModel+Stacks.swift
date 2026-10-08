@@ -270,9 +270,10 @@ public extension EditorModel {
         photo == selection || library.photoID(of: photo).map(photoSelection.contains) == true
     }
 
-    /// The stacks' actions; ← and →, culling's advance and Deselect Other Photos among cells; and taking a stack's
-    /// change back or making it again, which the panels' Undo does. Nil for every other action.
-    internal func performStackShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool? {
+    /// The stacks' actions; ← and → and Deselect Other Photos among cells; and taking a stack's change back or making
+    /// it again, which the panels' Undo does. Nil for every other action: culling moves on in the grid's order itself
+    /// (`cull(_:advance:)`).
+    internal func performStackShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .toggleStack:
             guard canToggleStack, let id = (opening ?? selection).flatMap(library.photoID(of:)) else { return false }
@@ -305,14 +306,7 @@ public extension EditorModel {
             }
             return nil
         default:
-            guard let change = CullingChange(action), shifted || autoAdvance, let stacked = libraryViews.stacks?.list,
-                  sizedBrush == nil || ![.decreaseRating, .increaseRating].contains(action),
-                  !(action == .flagReject && module == .develop && activeTool == .crop)
-            else { return nil }
-            let culled = module == .library ? selectedOwnIDs
-                : (opening ?? selection).flatMap(library.photoID(of:)).map { [$0] } ?? []
-            guard cull(change, advance: false) else { return false }
-            advance(past: culled, in: stacked)
+            return nil
         }
         return true
     }
@@ -354,16 +348,6 @@ public extension EditorModel {
         select(url)
         coverClosedStacks()
         return true
-    }
-
-    /// Culling's advance: the cell after the last of those standing for `photos`, alone.
-    private func advance(past photos: [Int64], in stacked: StackedList) {
-        let last = photos.compactMap { stacked.cell(for: $0).flatMap(stacked.index(of:)) }.max()
-        guard let last, stacked.indices.contains(last + 1), let url = library.url(ofPhoto: stacked[last + 1]) else {
-            return
-        }
-        select(url)
-        coverClosedStacks()
     }
 
     // MARK: - Making a change

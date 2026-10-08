@@ -82,20 +82,26 @@ public extension EditorModel {
     }
 
     /// Makes `change`: in Library on the selection, in Develop on the active photo, or the one opening;
-    /// `advance` then makes the photo after them active.
+    /// `advance` then makes the photo after them active, in the grid's order (`GridOrder`): past closed groups,
+    /// and from cell to cell among stacks.
     @discardableResult
     func cull(_ change: CullingChange, advance: Bool = false) -> Bool {
         guard let active = opening ?? selection else { return false }
-        let rows: [Int]
+        var culled: [Int64] = []
         if module == .library {
-            rows = selectedRows
+            let rows = selectedRows
+            if advance {
+                let ids = library.photoIDs
+                culled = rows.compactMap { ids.indices.contains($0) ? ids[$0] : nil }
+            }
             cull(change, rows: rows)
         } else {
-            rows = library.index(of: active).map { [$0] } ?? []
+            culled = library.photoID(of: active).map { [$0] } ?? []
             cullActivePhoto(change)
         }
-        if advance, let last = rows.max(), items.indices.contains(last + 1) {
-            select(items[last + 1].url)
+        if advance, let next = gridOrder.cell(after: culled), let url = library.url(ofPhoto: next) {
+            select(url)
+            coverClosedStacks()
         }
         return true
     }

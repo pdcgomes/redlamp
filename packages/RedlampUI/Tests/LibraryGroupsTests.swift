@@ -334,6 +334,110 @@ struct LibraryGroupsTests {
         #expect(model.selection?.lastPathComponent == "B01.JPG")
     }
 
+    /// A filmstrip below the grid in its window, as the editor docks it.
+    private func filmstrip(
+        _ model: EditorModel,
+        below grid: LibraryGridView,
+        in window: NSWindow,
+    ) -> FilmstripStripView {
+        let strip = FilmstripStripView(model: model)
+        let content = NSView(frame: CGRect(origin: .zero, size: window.contentLayoutRect.size))
+        window.contentView = content
+        grid.frame = CGRect(
+            x: 0, y: FilmstripStripView.height, width: content.bounds.width,
+            height: content.bounds.height - FilmstripStripView.height,
+        )
+        strip.frame = CGRect(x: 0, y: 0, width: content.bounds.width, height: FilmstripStripView.height)
+        content.addSubview(grid)
+        content.addSubview(strip)
+        content.layoutSubtreeIfNeeded()
+        return strip
+    }
+
+    /// The filmstrip's photos by name, in its order.
+    private func stripNames(_ strip: FilmstripStripView, _ model: EditorModel) -> [String] {
+        (0 ..< strip.collectionView.numberOfItems(inSection: 0)).compactMap(strip.row(ofItem:))
+            .map { model.items[$0].url.lastPathComponent }
+    }
+
+    @Test func `the filmstrip shows the grid's photos in its order, a closed group's left out, and clicks there follow it`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, grid, window) = try await open()
+        defer { window.contentView = nil }
+        let strip = filmstrip(model, below: grid, in: window)
+        let listed = model.items.map(\.url.lastPathComponent)
+        #expect(stripNames(strip, model) == listed, "ungrouped, the list's order")
+        try await group(model, by: .camera)
+        let byCamera = groupNames(model)
+        #expect(stripNames(strip, model) == byCamera.flatMap(\.self))
+        model.gridGroups.close(1)
+        #expect(stripNames(strip, model) == byCamera[0] + byCamera[2], "a closed group's photos left out")
+        model.closeAllGroups()
+        #expect(stripNames(strip, model).isEmpty)
+        model.openAllGroups()
+        #expect(stripNames(strip, model) == byCamera.flatMap(\.self))
+
+        // ⇧-click in the filmstrip selects in the grid's order, across the groups' boundary.
+        try model.select(url(model, "D02.JPG"))
+        try await Task.sleep(for: .milliseconds(30))
+        let place = try #require(stripNames(strip, model).firstIndex(of: "A02.JPG"))
+        strip.collectionView.layoutSubtreeIfNeeded()
+        let item = try #require(strip.collectionView.item(at: IndexPath(item: place, section: 0)) as? FilmstripItem)
+        item.cell.onClick?([.shift])
+        #expect(selected(model) == ["D02.JPG", "A01.JPG", "A02.JPG"])
+
+        try await group(model, by: .moment, looseness: MomentSetting.tightest)
+        #expect(stripNames(strip, model) == groupNames(model).flatMap(\.self))
+        try await group(model, by: .ungrouped)
+        #expect(stripNames(strip, model) == listed)
+    }
+
+    @Test func `⇧ and Auto Advance move on in the grid's order, past closed groups, in Library, the loupe and Develop`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await open()
+        defer { window.contentView = nil }
+        try await group(model, by: .camera)
+        // Canon's B01 to B03, D01 and D02; the Fujifilm's A01 to A06, C01 and C02; the scan.
+        try model.select(url(model, "B03.JPG"))
+        #expect(model.perform(.rating2, shifted: true))
+        #expect(model.selection?.lastPathComponent == "D01.JPG", "⇧ moves on in the group's order, not the list's")
+        #expect(model.items.first { $0.name == "B03.JPG" }?.metadata.rating == 2)
+        try model.select(url(model, "D02.JPG"))
+        try model.click(url(model, "D01.JPG"), toggling: true)
+        #expect(model.perform(.flagPick, shifted: true))
+        #expect(
+            model.selection?.lastPathComponent == "A01.JPG",
+            "after the last of the photos culled, in the next group",
+        )
+        model.gridGroups.close(1)
+        try model.select(url(model, "D02.JPG"))
+        #expect(model.perform(.rating1, shifted: true) && model.selection?.lastPathComponent == "SCAN.PNG")
+        model.gridGroups.open(1)
+
+        #expect(model.perform(.autoAdvance) && model.autoAdvance)
+        try model.select(url(model, "A06.JPG"))
+        #expect(model.perform(.labelGreen) && model.selection?.lastPathComponent == "C01.JPG")
+        model.showLibrary(.loupe)
+        let right = try #require(ShortcutAction.resolve(KeyCombo(.right), in: .library)?.action)
+        let left = try #require(ShortcutAction.resolve(KeyCombo(.left), in: .library)?.action)
+        #expect(
+            model.perform(left) && model.selection?.lastPathComponent == "A06.JPG",
+            "the loupe's ← in the grid's order",
+        )
+        #expect(model.perform(right) && model.perform(right) && model.selection?.lastPathComponent == "C02.JPG")
+        #expect(model.perform(.toggleMark) && model.selection?.lastPathComponent == "SCAN.PNG")
+        try model.select(url(model, "D02.JPG"))
+        model.showModule(.develop)
+        #expect(model.perform(.rating4) && model.selection?.lastPathComponent == "A01.JPG", "Develop moves on so too")
+        #expect(model.perform(.autoAdvance) && !model.autoAdvance)
+
+        // Develop reads ahead the photos ← and → go to.
+        let ahead = try model.workingSet(around: url(model, "D01.JPG"), comingFrom: url(model, "B03.JPG"))
+        #expect(ahead.map(\.lastPathComponent) == ["D01.JPG", "D02.JPG", "B03.JPG", "A01.JPG"])
+    }
+
     private func press(_ grid: LibraryGridView, _ code: Int, shift: Bool = false) throws {
         let event = try #require(NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: shift ? [.shift, .function] : [.function], timestamp: 0,

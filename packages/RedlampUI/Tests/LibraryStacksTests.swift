@@ -239,6 +239,36 @@ struct LibraryStacksTests {
         model.setGroupKey(.ungrouped)
     }
 
+    @Test func `⇧ and Auto Advance move from cell to cell as the grid shows them, grouped or not`() async throws {
+        defer { cleanUp() }
+        let (model, _, filmstrip, window) = try await open()
+        defer { window.contentView = nil }
+        let burst: Set = ["B01.JPG", "B02.JPG", "B03.JPG"]
+        try model.clickInGrid(url(model, "B01.JPG"))
+        #expect(model.perform(.rating3, shifted: true))
+        #expect(model.selection?.lastPathComponent == "P01.JPG" && selected(model) == ["P01.JPG", "P01.HEIC"])
+        #expect(model.items.filter { $0.metadata.rating == 3 }.count == 3, "the burst's three photos")
+
+        model.setGroupKey(.folder)
+        try await eventually { model.gridGroups.list?.groups.key == .folder }
+        #expect(strip(filmstrip) == 6, "the filmstrip shows the group's cells, each stack one")
+        try model.clickInGrid(url(model, "B01.JPG"))
+        #expect(model.perform(.flagPick, shifted: true))
+        #expect(model.selection?.lastPathComponent == "P01.JPG" && selected(model) == ["P01.JPG", "P01.HEIC"])
+        #expect(Set(model.items.filter { $0.metadata.flag == .pick }.map(\.url.lastPathComponent)) == burst)
+        try model.gridStacks.toggle(id(model, "B01.JPG"))
+        #expect(strip(filmstrip) == 8)
+        model.perform(.autoAdvance)
+        try model.clickInGrid(url(model, "B01.JPG"))
+        #expect(
+            model.perform(.labelRed) && model.selection?.lastPathComponent == "B02.JPG",
+            "an open stack's next frame",
+        )
+        model.perform(.autoAdvance)
+        model.gridStacks.closeAll()
+        model.setGroupKey(.ungrouped)
+    }
+
     // MARK: - Changes
 
     @Test func `stacking, unstacking and a stack's top are changes Undo takes back, the grid following`() async throws {

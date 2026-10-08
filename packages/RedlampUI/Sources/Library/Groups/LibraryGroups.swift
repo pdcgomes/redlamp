@@ -620,21 +620,7 @@ import RedlampLibrary
     /// The photo on show `offset` (1 or -1) after `id` in the grid's order; from a photo of a closed group,
     /// the first on show after its group, or the last before it. A closed stack is its cell.
     func shownPhoto(_ offset: Int, from id: Int64) -> Int64? {
-        guard let list, let group = list.groups.index(of: id) else { return nil }
-        if let item = list.index(of: list.stacked.cell(for: id) ?? id) {
-            let next = item + offset
-            if list.indices.contains(next), case let .photo(photo) = list[next] {
-                return photo
-            }
-        }
-        var next = group + offset
-        while list.groups.indices.contains(next) {
-            if list.isOpen(next), let photo = Self.cell(atEdgeOf: next, first: offset > 0, in: list) {
-                return photo
-            }
-            next += offset
-        }
-        return nil
+        list?.cell(offset, from: id)
     }
 
     /// The first photo on show, or the last.
