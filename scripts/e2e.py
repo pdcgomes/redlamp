@@ -39,7 +39,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BUNDLE_ID = "app.redlamp.mac.e2e"
 NAME = "Redlamp E2E"
-GROUPS = ["main", "relaunch"]
 SCENARIO_TIMEOUT = 300
 QUIET_LOAD = 8.0
 HOME = Path.home()
@@ -466,6 +465,18 @@ def outcomes(run_dir: Path, group: str) -> tuple[dict[str, dict], list[dict], st
     return results, hangs, open_scenario
 
 
+def later_launches(main: list[str], relaunch: list[str], retry: list[str]) -> list[tuple[str, list[str]]]:
+    """The launches after the main group's: the relaunch group, and a fresh one retrying the main group's
+    failures. The relaunch group reopens what the main group's last scenario leaves (smoke.leave-an-edit's
+    photo and edit), so it follows the launch that last ran that scenario: the retry when that scenario
+    is retried, and otherwise the main group's own, before a retry changes what the relaunch would find."""
+    relaunched = [("relaunch", relaunch)] if relaunch else []
+    retried = [("main", retry)] if retry else []
+    if main and main[-1] in retry:
+        return retried + relaunched
+    return relaunched + retried
+
+
 # ---------------------------------------------------------------- performance
 
 def wait_for_quiet(limit: float) -> tuple[bool, float]:
@@ -809,18 +820,12 @@ def main() -> int:
     attempts: dict[str, int] = {}
     hangs: list[dict] = []
     crashes: list[str] = []
-    retry_main: list[str] = []
-    for group in GROUPS + ["retry"]:
-        if group == "retry":
-            # Retried last, so a retry never changes what the relaunch group expects to find.
-            group, ids = "main", retry_main
-        else:
-            ids = [s["id"] for s in chosen if s["group"] == group]
-        if not ids:
-            continue
+
+    def run_group(group: str, ids: list[str]) -> bool:
+        """Runs `ids` in launches of `group`; returns whether each got a result."""
+        nonlocal hangs
         remaining = ids
         tries = 0
-        retrying = ids is retry_main
         while remaining and tries < 4:
             tries += 1
             log(f"Launch '{group}': {len(remaining)} scenario(s)")
@@ -849,14 +854,20 @@ def main() -> int:
                     if previous and previous["status"] == "failed" and result["status"] == "passed":
                         result = dict(result, status="flaky", message=f"passed on retry; first: {previous.get('message', '')}")
                     results[scenario_id] = result
-            done = [i for i in remaining if i in group_results]
             # Scenarios a launch didn't reach (it stopped, or a dialog wouldn't close) run in a fresh one.
             remaining = [i for i in remaining if i not in group_results]
-            # One retry, in a fresh app, for what failed (not the relaunch group, whose state is spent).
-            if not remaining and group == "main" and not retrying:
-                retry_main = [i for i in ids if results.get(i, {}).get("status") == "failed" and attempts.get(i, 0) < 2]
             if outcome["returncode"] not in (0, None) and not stopped and not outcome["timedOut"]:
                 log(f"{group}: the app exited with {outcome['returncode']}")
+        return not remaining
+
+    main_ids = [s["id"] for s in chosen if s["group"] == "main"]
+    relaunch_ids = [s["id"] for s in chosen if s["group"] == "relaunch"]
+    retry = []
+    if run_group("main", main_ids):
+        # One retry, in a fresh app, for what failed (not the relaunch group, whose state is spent).
+        retry = [i for i in main_ids if results.get(i, {}).get("status") == "failed" and attempts.get(i, 0) < 2]
+    for group, ids in later_launches(main_ids, relaunch_ids, retry):
+        run_group(group, ids)
 
     performance = None
     if performance_ids:
