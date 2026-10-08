@@ -19,6 +19,7 @@ public struct RecipeLabView: View {
         case inspect = "Inspect"
         case create = "Create"
         case runs = "Runs"
+        case bench = "Bench"
 
         public var id: String {
             rawValue
@@ -68,6 +69,7 @@ public struct RecipeLabView: View {
                 case .inspect: LabInspectorView(model: model)
                 case .create: LabCreatorView(model: model)
                 case .runs: RecipeRunsView(model: model)
+                case .bench: LabBenchView(bench: .shared)
                 }
             }
             .frame(minWidth: 480, maxWidth: .infinity, maxHeight: .infinity)

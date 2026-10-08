@@ -26,6 +26,26 @@ let project = Project(
                 "CFBundleShortVersionString": "$(MARKETING_VERSION)",
                 "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
                 "LSApplicationCategoryType": "public.app-category.developer-tools",
+                // The Recipe Lab's bench hub (ARC-13): the iPhone app finds it over Bonjour.
+                "NSLocalNetworkUsageDescription": "Redlamp Bench on your iPhone sends tasks and look references to the Recipe Lab.",
+                "NSBonjourServices": ["_redlamp-bench._tcp"],
+                // A bench task as one file, from the iPhone app by AirDrop when the network can't carry it.
+                "UTExportedTypeDeclarations": [
+                    [
+                        "UTTypeIdentifier": "app.redlamp.bench-task",
+                        "UTTypeDescription": "Redlamp Bench Task",
+                        "UTTypeConformsTo": ["public.data"],
+                        "UTTypeTagSpecification": ["public.filename-extension": ["redtask"]],
+                    ],
+                ],
+                "CFBundleDocumentTypes": [
+                    [
+                        "CFBundleTypeName": "Redlamp Bench Task",
+                        "CFBundleTypeRole": "Viewer",
+                        "LSHandlerRank": "Owner",
+                        "LSItemContentTypes": ["app.redlamp.bench-task"],
+                    ],
+                ],
             ]),
             sources: ["Sources/**"],
             resources: [.glob(pattern: .relativeToRoot("apps/RedlampMac/Resources/AppIcon.icon"))],
@@ -38,6 +58,7 @@ let project = Project(
                 Module.design.dependency,
                 Module.ui.dependency,
                 Module.lab.dependency,
+                Module.bench.dependency,
             ],
             settings: .settings(
                 base: [

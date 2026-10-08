@@ -1,8 +1,12 @@
+import AppKit
+import RedlampLab
 @_spi(Harness) import RedlampUI
 import SwiftUI
 
 @main
 struct HarnessApp: App {
+    @NSApplicationDelegateAdaptor(HarnessAppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup("Redlamp Harness") {
             HarnessRootView()
@@ -23,6 +27,22 @@ struct HarnessApp: App {
                 Button("Find Slider…") { PaletteSession.shared.toggle(.sliders) }
                     .keyboardShortcut("f", modifiers: .command)
             }
+        }
+    }
+}
+
+/// The Recipe Lab's bench hub runs for as long as the harness does, so the iPhone app can reach
+/// it from any scene; a `.redtask` opened from the Finder or AirDrop is filed by it.
+final class HarnessAppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor
+    func applicationDidFinishLaunching(_: Notification) {
+        LabBench.shared.startIfEnabled()
+    }
+
+    @MainActor
+    func application(_: NSApplication, open urls: [URL]) {
+        for url in urls where url.pathExtension.lowercased() == "redtask" {
+            LabBench.shared.receive(url)
         }
     }
 }
