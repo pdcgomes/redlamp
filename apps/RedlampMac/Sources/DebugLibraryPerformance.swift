@@ -12,8 +12,8 @@
     import Synchronization
 
     /// `--library-perf <fixture> [--library-perf-library <folder>] [--library-perf-memory]
-    /// [--library-perf-profile] [--library-perf-quit]`: the library in the
-    /// app (docs/plans/2026-10-05-library-design.md, The stress harness), on a fixture made by
+    /// [--library-perf-profile] [--library-perf-only <parts>] [--library-perf-quit]`:
+    /// the library in the app (docs/plans/2026-10-05-library-design.md, The stress harness), on a fixture made by
     /// `redlamp library fixture`. It indexes the fixture into a temporary library, its thumbnails
     /// included, and closes it as quitting does; then it checks a warm launch (the library open,
     /// searchable and caught up with the disk), opening the fixture with Show Photos in Subfolders in
@@ -45,8 +45,9 @@
     /// each phase into memory.txt beside it, and `--library-perf-profile` samples the main thread
     /// while the grid scrolls into /tmp/redlamp-profile.txt. Every turn of the main thread's run loop
     /// longer than half a second is sampled (with `--library-perf-turns`, while typing and culling every turn
-    /// longer than 16 ms), and where they went written to /tmp/redlamp-stalls.txt, with what changed in each
-    /// culling step.
+    /// longer than 16 ms, and while grouping and holding the arrow keys every turn longer than 8 ms; with
+    /// `--library-perf-profile-turns`, every turn of those phases from its start), and where they went written to
+    /// /tmp/redlamp-stalls.txt, with what changed in each culling step.
     @MainActor
     enum DebugLibraryPerformance {
         private static var stalls: StallSampler?
@@ -55,7 +56,10 @@
         /// than `sampling` (half a second when nil).
         private static func phase(_ name: String, sampling: Duration? = nil) {
             trace(name)
-            stalls?.enter(name, sampling: LaunchArguments.all.contains("--library-perf-turns") ? sampling : nil)
+            let arguments = LaunchArguments.all
+            let sampled = arguments.contains("--library-perf-turns") || arguments
+                .contains("--library-perf-profile-turns")
+            stalls?.enter(name, sampling: sampled ? sampling : nil)
         }
 
         /// `text` in the debug log, written off the main thread.
@@ -144,6 +148,7 @@
                 "Load average at the start: \(loadAverage())",
             ]
             var measured = Measured()
+            appWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
             // With nobody at the Mac, its windows out of sight, App Nap would otherwise lower every thread to
             // the background band within minutes and stop the run.
             let activity = ProcessInfo.processInfo.beginActivity(
@@ -257,6 +262,7 @@
             await memory.mark("scrolled")
 
             if arguments.contains("--library-perf-groups-only") {
+                letGoOfHiddenWindows()
                 let groups = await group(model)
                 lines.append(groups.report)
                 measured.grouped = groups.grouped
@@ -274,63 +280,81 @@
                     .write(toFile: Self.stallsPath, atomically: true, encoding: .utf8)
                 return finish(lines, budgets: groupBudgets(measured), memory: memory, title: fixture.path)
             }
-            let (gridScrolling, gridReport) = await scrollGrid(model)
-            measured.gridScrolling = gridScrolling
-            lines.append(gridReport)
-            await memory.mark("grid scrolled")
-            for (label, size, style) in [
-                ("expanded cells", GridSize.standard, GridCellStyle.expanded),
-                ("the largest thumbnails, from the preview tier", GridSize.range.upperBound, .compact),
-            ] {
-                let (summary, report) = await scrollGrid(model, size: size, style: style, label: label)
-                measured.gridPhases.append((label, summary))
-                lines.append(report)
+            if part("grid") {
+                let (gridScrolling, gridReport) = await scrollGrid(model)
+                measured.gridScrolling = gridScrolling
+                lines.append(gridReport)
+                await memory.mark("grid scrolled")
+                for (label, size, style) in [
+                    ("expanded cells", GridSize.standard, GridCellStyle.expanded),
+                    ("the largest thumbnails, from the preview tier", GridSize.range.upperBound, .compact),
+                ] {
+                    let (summary, report) = await scrollGrid(model, size: size, style: style, label: label)
+                    measured.gridPhases.append((label, summary))
+                    lines.append(report)
+                }
+                await memory.mark("grid phases")
             }
-            await memory.mark("grid phases")
 
-            let (typing, typed, typingReport) = await typeInFilterBar(model)
-            measured.typing = typing
-            measured.typed = typed
-            lines.append(typingReport)
-            await memory.mark("typed")
-
-            for (label, interval) in [("at the key-repeat rate (30 ms)", 0.030), ("at 120 Hz", 1.0 / 120)] {
-                phase("holding the arrow keys \(label)")
-                let held = await holdArrow(model, loader: loader, interval: interval, steps: 300)
-                measured.arrows.append((label, held.summary, held.steps, held.blank))
-                lines.append(String(
-                    format: "Held arrow keys %@: %d steps, %d blank frames", label, held.steps, held.blank,
-                ))
-                lines.append(held.report)
+            if part("typing") {
+                let (typing, typed, typingReport) = await typeInFilterBar(model)
+                measured.typing = typing
+                measured.typed = typed
+                lines.append(typingReport)
+                await memory.mark("typed")
             }
-            await memory.mark("held arrows")
 
-            let switched = await switchModules(model, count: 200)
-            measured.switches = switched.durations
-            measured.switchReads = switched.reads
-            lines.append(switched.report)
-            await memory.mark("switched")
+            if part("arrows") {
+                for (label, interval) in [("at the key-repeat rate (30 ms)", 0.030), ("at 120 Hz", 1.0 / 120)] {
+                    phase("holding the arrow keys \(label)", sampling: .milliseconds(8))
+                    let held = await holdArrow(model, loader: loader, interval: interval, steps: 300)
+                    measured.arrows.append((label, held.summary, held.steps, held.blank))
+                    lines.append(String(
+                        format: "Held arrow keys %@: %d steps, %d blank frames", label, held.steps, held.blank,
+                    ))
+                    lines.append(held.report)
+                }
+                await memory.mark("held arrows")
+            }
 
-            let edits = await renderEdits(model, memory: memory)
-            measured.editScrolling = edits.scrolling
-            lines += edits.lines
+            if part("switching") {
+                let switched = await switchModules(model, count: 200)
+                measured.switches = switched.durations
+                measured.switchReads = switched.reads
+                lines.append(switched.report)
+                await memory.mark("switched")
+            }
 
-            let culled = await cull(model)
-            (measured.culling, measured.culled, measured.cullWrites) = (culled.summary, culled.onScreen, culled.writes)
-            (measured.cullLeft, measured.cullCount) = (culled.left, culled.count)
-            lines.append(culled.report)
-            await memory.mark("culled")
+            if part("edits") {
+                let edits = await renderEdits(model, memory: memory)
+                measured.editScrolling = edits.scrolling
+                lines += edits.lines
+            }
 
-            let groups = await group(model)
-            lines.append(groups.report)
-            measured.grouped = groups.grouped
-            (measured.grouping, measured.regrouped) = (groups.changing, groups.onScreen)
-            (measured.toggling, measured.toggled, measured.groupArrows) = (
-                groups.toggling,
-                groups.toggled,
-                groups.arrows,
-            )
-            await memory.mark("grouped")
+            if part("culling") {
+                let culled = await cull(model)
+                (measured.culling, measured.culled, measured.cullWrites) = (
+                    culled.summary,
+                    culled.onScreen,
+                    culled.writes,
+                )
+                (measured.cullLeft, measured.cullCount) = (culled.left, culled.count)
+                lines.append(culled.report)
+                await memory.mark("culled")
+            }
+
+            if part("grouping") {
+                let groups = await group(model)
+                lines.append(groups.report)
+                measured.grouped = groups.grouped
+                (measured.grouping, measured.regrouped) = (groups.changing, groups.onScreen)
+                (measured.toggling, measured.toggled, measured.groupArrows) = (
+                    groups.toggling,
+                    groups.toggled,
+                    groups.arrows,
+                )
+                await memory.mark("grouped")
+            }
 
             phase("settling")
             try? await Task.sleep(for: .seconds(3))
@@ -383,6 +407,34 @@
                 memory: memory,
                 title: "Memory on \(fixture.path), \(measured.count) photos",
             )
+        }
+
+        /// Whether the part `name` (grid, typing, arrows, switching, edits, culling or grouping) runs: every part,
+        /// unless `--library-perf-only` names those that do, comma-separated, for profiling one.
+        private static func part(_ name: String) -> Bool {
+            letGoOfHiddenWindows()
+            let arguments = LaunchArguments.all
+            if let index = arguments.firstIndex(of: "--library-perf-only"), index + 1 < arguments.count,
+               !arguments[index + 1].split(separator: ",").contains(Substring(name)) {
+                return false
+            }
+            let windows = NSApp.windows
+            trace("\(name): \(windows.count) windows, \(windows.count { $0.contentView?.subviews.isEmpty == false }) "
+                + "with views")
+            return true
+        }
+
+        /// The app's own windows when the run began.
+        private static var appWindows: Set<ObjectIdentifier> = []
+
+        /// Lets go of the views of the windows the phases before made and ordered out: AppKit keeps an
+        /// ordered-out window, and its views would go on following the model, doing each later phase's work
+        /// again, where the app has one window.
+        private static func letGoOfHiddenWindows() {
+            for window in NSApp.windows where !window.isVisible && !appWindows.contains(ObjectIdentifier(window)) {
+                window.contentViewController = nil
+                window.contentView = nil
+            }
         }
 
         /// Indexes `fixture` into a new library at `paths` until it's caught up and its thumbnails
@@ -853,6 +905,7 @@
                 window.displayIfNeeded()
                 CATransaction.flush()
                 let shown = (CFAbsoluteTimeGetCurrent() - started) * 1000
+                phase("\(name), writing", sampling: .milliseconds(16))
                 while model.isWritingCulling, CFAbsoluteTimeGetCurrent() - started < 900 {
                     try? await Task.sleep(for: .milliseconds(20))
                 }
@@ -1280,7 +1333,11 @@
         nonisolated static let stall: UInt64 = 500_000_000
         /// The samples a phase may take of its turns shorter than a stall.
         static let phaseSamples = 8000
-        private let samples = Samples()
+        /// With `--library-perf-profile-turns`, every turn of a phase given a threshold is sampled, every
+        /// millisecond from its start, for a profile of the phase's main thread rather than of its long turns'
+        /// ends; Instruments and `sample` can't attach to the app from Cursor's sandbox.
+        private let profiling = LaunchArguments.all.contains("--library-perf-profile-turns")
+        private let samples: Samples
         private let started = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         private var observer: CFRunLoopObserver?
         private var turn = 0
@@ -1299,15 +1356,15 @@
         /// What the sampling thread shares with the main thread.
         private final class Samples: @unchecked Sendable {
             static let maxDepth = 96
-            static let maxSamples = 60000
-            static let interval: useconds_t = 4000
+            let maxSamples: Int
+            let interval: useconds_t
             /// Strips pointer-authentication bits from return addresses signed by arm64e system code.
             static let addressMask: UInt = 0x0000_0FFF_FFFF_FFFF
             let mainThread = mach_thread_self()
-            let buffer = UnsafeMutablePointer<UInt>.allocate(capacity: maxDepth * maxSamples)
-            let depths = UnsafeMutablePointer<Int>.allocate(capacity: maxSamples)
-            let turns = UnsafeMutablePointer<Int>.allocate(capacity: maxSamples)
-            let phases = UnsafeMutablePointer<Int>.allocate(capacity: maxSamples)
+            let buffer: UnsafeMutablePointer<UInt>
+            let depths: UnsafeMutablePointer<Int>
+            let turns: UnsafeMutablePointer<Int>
+            let phases: UnsafeMutablePointer<Int>
             let count = Atomic<Int>(0)
             let running = Atomic<Bool>(true)
             /// The main thread's turn and phase, when the turn began in nanoseconds of uptime (0 while the
@@ -1319,9 +1376,18 @@
             /// The samples the phase may still take of turns shorter than a stall, which always are.
             let budget = Atomic<Int>(0)
 
+            init(profiling: Bool) {
+                maxSamples = profiling ? 200_000 : 60000
+                interval = profiling ? 1000 : 4000
+                buffer = .allocate(capacity: Self.maxDepth * maxSamples)
+                depths = .allocate(capacity: maxSamples)
+                turns = .allocate(capacity: maxSamples)
+                phases = .allocate(capacity: maxSamples)
+            }
+
             /// Runs the calling thread under a real-time policy: on a loaded Mac a sampler preempted while the
             /// main thread is suspended would freeze it, lengthening the turns it measures.
-            static func runInRealTime() {
+            func runInRealTime() {
                 var timebase = mach_timebase_info_data_t()
                 mach_timebase_info(&timebase)
                 func ticks(_ nanoseconds: Double) -> UInt32 {
@@ -1347,7 +1413,7 @@
 
             func sample(stalled: Bool) {
                 let index = count.load(ordering: .relaxed)
-                guard index < Self.maxSamples else { return }
+                guard index < maxSamples else { return }
                 if !stalled {
                     guard budget.load(ordering: .relaxed) > 0 else { return }
                     budget.subtract(1, ordering: .relaxed)
@@ -1387,15 +1453,20 @@
             }
         }
 
+        init() {
+            samples = Samples(profiling: profiling)
+        }
+
         /// From now on, turns are reported under `name`, and sampled once they run longer than `threshold`.
         func enter(_ name: String, sampling threshold: Duration? = nil) {
             let nanoseconds = threshold.map {
-                UInt64($0.components.seconds) * 1_000_000_000 + UInt64($0.components.attoseconds / 1_000_000_000)
+                profiling ? 0
+                    : UInt64($0.components.seconds) * 1_000_000_000 + UInt64($0.components.attoseconds / 1_000_000_000)
             } ?? Self.stall
             phases.append(Phase(name: name, threshold: min(nanoseconds, Self.stall)))
             samples.phase.store(phases.count - 1, ordering: .relaxed)
             samples.threshold.store(min(nanoseconds, Self.stall), ordering: .relaxed)
-            samples.budget.store(Self.phaseSamples, ordering: .relaxed)
+            samples.budget.store(profiling ? samples.maxSamples : Self.phaseSamples, ordering: .relaxed)
         }
 
         func start() {
@@ -1408,14 +1479,14 @@
             self.observer = observer
             let samples = samples
             let thread = Thread {
-                Samples.runInRealTime()
+                samples.runInRealTime()
                 while samples.running.load(ordering: .relaxed) {
                     let began = samples.began.load(ordering: .acquiring)
                     let running = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) &- began
                     if began != 0, running > samples.threshold.load(ordering: .relaxed) {
                         samples.sample(stalled: running > StallSampler.stall)
                     }
-                    usleep(Samples.interval)
+                    usleep(samples.interval)
                 }
             }
             thread.qualityOfService = .userInteractive
@@ -1559,7 +1630,7 @@
                     lines += profile(indices, stack: false)
                 }
             }
-            if count == Samples.maxSamples {
+            if count == samples.maxSamples {
                 lines.append("(the sample buffer filled up: later turns have no samples)")
             }
             return lines.joined(separator: "\n")
