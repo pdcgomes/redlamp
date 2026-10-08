@@ -5,9 +5,9 @@ import RedlampLibrary
 /// The Keyword List panel (LIB-21): the library's keywords in their hierarchy, each with how many photos have
 /// it or one inside it, filtered by name. A row's checkbox puts its keyword on the photos selected or takes it
 /// off them, showing whether every one, some or none has it; its arrow shows the keyword's photos through the
-/// filter bar; its menu edits the keyword's name, synonyms, export options and kind, merges it into another and
-/// deletes it. Lightroom Classic's keyword-list file is imported and exported from the panel's menu and the File
-/// menu.
+/// filter bar; its context menu, the panel's menu for the row chosen, and a double-click edit the keyword's name,
+/// synonyms, export options and kind, merge it into another and delete it. Lightroom Classic's keyword-list file
+/// is imported and exported from the panel's menu and the File menu.
 final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuDelegate,
     NSSearchFieldDelegate {
     private let panels: LibraryPanels
@@ -44,8 +44,9 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         more.addItem(withTitle: "")
         more.lastItem?.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "More")
         for (title, action) in [
-            ("Import Keywords…", #selector(importKeywords)), ("Export Keywords…", #selector(exportKeywords)),
-            ("Purge Unused Keywords", #selector(purge)),
+            ("Edit Keyword…", #selector(editSelected)), ("Merge Into…", #selector(mergeSelected)),
+            ("Delete Keyword", #selector(deleteSelected)), ("Import Keywords…", #selector(importKeywords)),
+            ("Export Keywords…", #selector(exportKeywords)), ("Purge Unused Keywords", #selector(purge)),
         ] {
             more.menu?.addItem(withTitle: title, action: action, keyEquivalent: "").target = self
         }
@@ -60,6 +61,8 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         outline.dataSource = self
         outline.delegate = self
         outline.setAccessibilityIdentifier("keywordList.outline")
+        outline.target = self
+        outline.doubleAction = #selector(editClicked)
         let menu = NSMenu()
         menu.delegate = self
         outline.menu = menu
@@ -200,9 +203,35 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
             ("Delete “\(path.name)”", true, { [weak self] in _ = self?.panels.delete(path) }),
         ]
         for (title, enabled, action) in items {
-            let item = ClosureMenuItem(title: title, action: action)
+            // Run once the menu has closed, as AppKit sends a menu item's action: a sheet opened while it tracks
+            // would begin under it.
+            let item = ClosureMenuItem(title: title) { DispatchQueue.main.async { MainActor.assumeIsolated(action) } }
             item.isEnabled = enabled
             menu.addItem(item)
+        }
+    }
+
+    /// The keyword of the row selected in the list.
+    private var selectedKeyword: KeywordPath? {
+        (outline.item(atRow: outline.selectedRow) as? KeywordNode)?.path
+    }
+
+    @objc private func editClicked() {
+        guard let node = outline.item(atRow: outline.clickedRow) as? KeywordNode else { return }
+        editKeyword(node.path)
+    }
+
+    @objc private func editSelected() {
+        selectedKeyword.map(editKeyword)
+    }
+
+    @objc private func mergeSelected() {
+        selectedKeyword.map(mergeKeyword)
+    }
+
+    @objc private func deleteSelected() {
+        if let keyword = selectedKeyword {
+            panels.delete(keyword)
         }
     }
 
@@ -289,7 +318,6 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         let targets = list.ordered.map(\.path).filter { !$0.isWithin(path) }
         let target = NSComboBox()
         target.addItems(withObjectValues: targets.map(\.displayName))
-        target.completes = true
         target.numberOfVisibleItems = 12
         target.setAccessibilityIdentifier("mergeKeyword.target")
         target.widthAnchor.constraint(equalToConstant: 260).isActive = true
