@@ -169,6 +169,7 @@
                 try app.wait("the burst's three photos selected") { model in
                     Set(model.selectedPhotos.map(\.lastPathComponent)) == Set(burst)
                 }
+                app.covered(.feature("library.grid"), via: .mouse)
                 try app.press(.flagPick)
                 try app.wait("P on every frame of the burst") { model in
                     names(in: model) { $0.flag == .pick } == Set(burst)
@@ -317,7 +318,9 @@
                 try app.wait("⇧S to show it for the stack", timeout: 60) { top($0) == firstID }
                 app.covered(.action(.moveToStackTop), via: .key)
 
-                // Unstack from the Photo menu: both photos alone again.
+                // Unstack from the Photo menu, ⇧⌘G being one of the ⇧⌘ keys synthetic events don't reach: both photos
+                // alone again.
+                try app.expectKeyBinding(.unstackPhotos)
                 try app.choose(.unstackPhotos)
                 try app.waitForStacks("Unstack to take the stack apart", open: 0, closed: 2, timeout: 60)
                 try app.expect(try app.main(top) == nil, "The photo is still in a stack")
@@ -326,7 +329,9 @@
                 // ⌘Z takes each change back, the stack again with its top; ⇧⌘Z makes the last again.
                 try app.press(.undo)
                 try app.wait("⌘Z to stack them again", timeout: 60) { top($0) == firstID }
-                try app.press(.redo)
+                // ⇧⌘Z: synthetic events don't reach SwiftUI's handling of ⇧⌘ keys, so its item runs from the menu.
+                try app.expectKeyBinding(.redo)
+                try app.choose(.redo)
                 try app.wait("⇧⌘Z to take them apart again", timeout: 60) { top($0) == nil }
                 try app.press(.undo)
                 try app.wait("⌘Z once more", timeout: 60) { top($0) == firstID }

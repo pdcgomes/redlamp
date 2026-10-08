@@ -66,11 +66,10 @@ import RedlampLibrary
     init(model: EditorModel) {
         self.model = model
         observation = model.library.observe { [weak self] diff in self?.libraryChanged(diff) }
-        // A folder listed from the disk is shown from the library once it's indexed, without a change when nothing
-        // differs.
+        // The library indexed more photos, whose names stacks are found from; and a folder listed from the disk is
+        // shown from the library once it's indexed, without a change when nothing differs.
         indexing = model.library.service?.observe { [weak self] in
-            guard let self, list == nil else { return }
-            restackWhenQuiet()
+            self?.restackWhenQuiet(names: true)
         }
         selectionTracker = Tracker { [weak model] in
             guard let model else { return }
@@ -94,6 +93,8 @@ import RedlampLibrary
     /// there are none.
     func restack(forgetting: Bool = false, names: Bool = false) {
         guard let model else { return }
+        self.forgetting.stacks = self.forgetting.stacks || forgetting
+        self.forgetting.names = self.forgetting.names || forgetting && names
         let library = model.library
         guard library.isShownFromLibrary, let core = library.service?.core else {
             pending = false
@@ -102,8 +103,6 @@ import RedlampLibrary
             }
             return
         }
-        self.forgetting.stacks = self.forgetting.stacks || forgetting
-        self.forgetting.names = self.forgetting.names || forgetting && names
         guard !stacking else {
             pending = true
             return
@@ -224,8 +223,9 @@ import RedlampLibrary
         restackWhenQuiet()
     }
 
-    /// Finds the stacks again once changes have been quiet a moment.
-    private func restackWhenQuiet() {
+    /// Finds the stacks again once changes have been quiet a moment, with `names` their photos' names too.
+    private func restackWhenQuiet(names: Bool = false) {
+        forgetting.names = forgetting.names || names
         quiet?.cancel()
         quiet = Task { [weak self] in
             try? await Task.sleep(for: Self.quietPause)

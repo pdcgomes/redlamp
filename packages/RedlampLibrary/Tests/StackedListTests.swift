@@ -94,10 +94,22 @@ struct StackedListTests {
         let id = { (name: String) in ids[name]! }
         var stacked = StackedList(library.list, stacks: library.find(choices))
         #expect(stacked.stacksShown == (open: 0, closed: 3))
+        #expect(stacked.shownStacks(of: id("jpeg1")).map(\.first) == [id("raw0")], "the closed burst stands for it")
         stacked.open(id("raw0"))
         #expect(stacked.stacksShown == (open: 1, closed: 5), "the burst's three pairs are shown, closed")
+        let around = stacked.shownStacks(of: id("jpeg1"))
+        #expect(around.map(\.kind) == [.burst, .pair] && around.map(\.isOpen) == [true, false])
+        #expect(around.map(\.first) == [id("raw0"), id("raw1")] && stacked.shownStacks(of: id("between")).isEmpty)
         stacked.openAll()
         #expect(stacked.stacksShown == (open: 6, closed: 0))
+    }
+
+    @Test func `names read before photos with larger IDs were indexed don't reach them`() {
+        let names = StackLibrary().names
+        var library = StackLibrary()
+        library.add("A.JPG", at: 1000)
+        library.add("B.JPG", at: 2000)
+        #expect(library.names.reaches(2) && !library.names.reaches(3) && !names.reaches(0))
     }
 
     @Test func `a selection of cells covers each closed stack's photos, and only those whose cell is selected`() {

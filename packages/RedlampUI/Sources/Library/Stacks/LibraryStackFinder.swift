@@ -48,8 +48,9 @@ actor LibraryStackFinder {
                 try await engine.load()
             }
             guard let store = engine.store else { return nil }
+            let kept = known.flatMap { $0.reaches(store.ids.max() ?? -1) ? $0 : nil }
             let (names, choices) = try await index.read { reader in
-                try (known ?? StackNames(reader), StackChoices(reader))
+                try (kept ?? StackNames(reader), StackChoices(reader))
             }
             return (names, StackFinder.find(in: store, names: names, choices: choices))
         } catch {

@@ -271,6 +271,12 @@ struct LibraryStacksTests {
         #expect(model.perform(.undo))
         try await eventually(seconds: 20) { top() == first }
         #expect(top() == first, "⌘Z stacks them again")
+        #expect(model.canPerform(.redo))
+        #expect(model.perform(.redo))
+        try await eventually(seconds: 20) { top() == nil }
+        #expect(top() == nil, "⇧⌘Z takes them apart again")
+        #expect(model.perform(.undo))
+        try await eventually(seconds: 20) { top() == first }
         #expect(model.perform(.undo))
         try await eventually(seconds: 20) { top() == second }
         #expect(model.perform(.undo))

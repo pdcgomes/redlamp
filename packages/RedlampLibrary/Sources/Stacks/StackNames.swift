@@ -33,6 +33,12 @@ public struct StackNames: Sendable {
         names.reserveCapacity(photos)
     }
 
+    /// Whether it has a place for every photo up to `largest`, the largest ID: names read before photos with
+    /// larger IDs were indexed don't.
+    public func reaches(_ largest: Int64) -> Bool {
+        largest < Int64(names.count)
+    }
+
     /// Runs `body` with the names by ID.
     func withUnsafeBufferPointer<T>(_ body: (UnsafeBufferPointer<String>) -> T) -> T {
         names.withUnsafeBufferPointer(body)
