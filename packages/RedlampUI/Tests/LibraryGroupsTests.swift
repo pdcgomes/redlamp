@@ -370,6 +370,8 @@ struct LibraryGroupsTests {
         #expect(stripNames(strip, model) == listed, "ungrouped, the list's order")
         try await group(model, by: .camera)
         let byCamera = groupNames(model)
+        // A new order reaches the strip a turn after the grid.
+        try await eventually { stripNames(strip, model) == byCamera.flatMap(\.self) }
         #expect(stripNames(strip, model) == byCamera.flatMap(\.self))
         model.gridGroups.close(1)
         #expect(stripNames(strip, model) == byCamera[0] + byCamera[2], "a closed group's photos left out")
@@ -388,8 +390,10 @@ struct LibraryGroupsTests {
         #expect(selected(model) == ["D02.JPG", "A01.JPG", "A02.JPG"])
 
         try await group(model, by: .moment, looseness: MomentSetting.tightest)
+        try await eventually { stripNames(strip, model) == groupNames(model).flatMap(\.self) }
         #expect(stripNames(strip, model) == groupNames(model).flatMap(\.self))
         try await group(model, by: .ungrouped)
+        try await eventually { stripNames(strip, model) == listed }
         #expect(stripNames(strip, model) == listed)
     }
 

@@ -46,6 +46,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     /// The photos changed while the strip was out of sight (hidden, or in the module not shown): it reloads
     /// once shown.
     private var isStale = false
+    /// Grouped afresh in a new order, which the strip shows a turn later.
+    private var isRegrouping = false
     /// In sight when it last looked.
     private var wasInSight = false
 
@@ -208,9 +210,30 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     /// The groups changed: grouped afresh, or opened and closed. Their headers aren't in the strip.
     private func groupsChanged(_ change: LibraryGroups.Change) {
         switch change {
-        case .regrouped: cellsChanged(afresh: true)
+        case .regrouped: regrouped()
         case .items: cellsChanged(afresh: false)
         case .headers: break
+        }
+    }
+
+    /// Grouped afresh: the cells in the same order (moments, days and the moments' setting keep the photos' order)
+    /// stay as they are; a new order is shown a turn later, so the grid's change goes on screen first.
+    private func regrouped() {
+        guard isInShownModule(model) else {
+            isStale = true
+            return
+        }
+        let order = model.gridOrder
+        if shownOrder != nil, case .grouped = order, order.cells == itemPhotos {
+            shownOrder = order
+            return
+        }
+        guard !isRegrouping else { return }
+        isRegrouping = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self, isRegrouping else { return }
+            isRegrouping = false
+            cellsChanged(afresh: true)
         }
     }
 
