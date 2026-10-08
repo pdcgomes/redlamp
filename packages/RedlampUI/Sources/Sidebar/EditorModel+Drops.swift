@@ -110,3 +110,30 @@ extension EditorModel {
 
     @_spi(Harness) public static let notCopied = "Photos can't be copied to a folder yet"
 }
+
+/// Photos dragged onto a collection go in it, as Photo › Add to Collection puts them (LIB-23): one change with
+/// Undo on Library's ⌘Z and ⇧⌘Z. A set and a smart collection, whose photos are their query's, refuse them.
+extension LibrarySources {
+    /// What dropping `photos` on the place at `path` in the collection list does, given the operations the drag
+    /// offers; nil refuses it.
+    func photoDrop(_ photos: DraggedPhotos, onto path: CollectionPath, operations: NSDragOperation) -> PhotoDrop? {
+        guard let model, !model.isModalDialogOpen, photos.fromLibrary, collections[path]?.kind == .collection,
+              let operation = [NSDragOperation.copy, .generic, .move].first(where: { operations.contains($0) })
+        else { return nil }
+        return PhotoDrop(operation: operation) { [weak self] in
+            Task { await self?.add(photos, to: path) }
+        }
+    }
+
+    /// Puts the photos dropped in the collection at `path`, then counts again.
+    func add(_ photos: DraggedPhotos, to path: CollectionPath) async {
+        let urls = await photos.urls()
+        let ids = await indexIDs(of: urls)
+        guard !ids.isEmpty, let panels = model?.libraryPanels, panels.make(
+            [.collections(.add(ids, to: path))], title: "Add \(Self.count(ids.count)) to “\(path.displayName)”",
+            photos: (urls, ids),
+        ) else { return }
+        await panels.written()
+        recount()
+    }
+}

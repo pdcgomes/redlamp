@@ -11,7 +11,7 @@
     /// drop targets' dragging destinations; only the window server's part of a drag, which doesn't follow a
     /// synthetic mouse, is the suite's (`LibraryDrags.simulates`).
     enum DragScenarios {
-        static let all: [Scenario] = [toFolder]
+        static let all: [Scenario] = [toFolder, toCollection]
 
         static let toFolder = Scenario(
             "library.drag-to-folder",
@@ -63,6 +63,56 @@
             }
             try app.dismissDropAlert()
             try app.expect(scratch.files(in: scratch.picked).isEmpty, "⌥ moved B to Picked")
+        }
+
+        static let toCollection = Scenario(
+            "library.drag-to-collection",
+            "Photos dragged from the grid onto a collection go in it as one change, and ⌘Z takes them out again; a "
+                + "smart collection refuses them",
+            claims: [.feature("library.collections")],
+        ) { app in
+            let scratch = try DragScratch()
+            defer { scratch.remove(app) }
+            try scratch.show(app)
+            try app.simulateLibraryDrags(true)
+            defer { try? app.simulateLibraryDrags(false) }
+            let name = "Dragged \(UUID().uuidString.prefix(6))"
+            guard let selects = CollectionPath(names: [name]), let picks = CollectionPath(names: [name + " Picks"])
+            else { throw ScenarioFailure("No collection paths") }
+            try app.main { model in
+                model.librarySources.create(.collection, named: selects.name)
+                model.librarySources.saveSmart("flag:pick", named: picks.name, inside: nil)
+            }
+            defer {
+                try? app.main { model in
+                    model.librarySources.delete(selects)
+                    model.librarySources.delete(picks)
+                }
+            }
+            try app.waitForDropCounts("the two collections listed") { sources in
+                sources.collections[selects] != nil && sources.collections[picks] != nil
+            }
+            try app.wait("their rows") { _ in
+                Views.editorWindow.flatMap { Views.find("collections." + picks.text, in: $0) } != nil
+            }
+            let (a, c) = (scratch.photo("A.jpg"), scratch.photo("C.jpg"))
+            try app.main { model in
+                model.select(a)
+                model.click(c, toggling: true)
+            }
+            try app.wait("A and C selected") { Set($0.selectedPhotos) == [a, c] }
+
+            try app.dragGridPhoto("A.jpg", onto: "collections." + selects.text)
+            try app.waitForDropCounts("A and C in the collection") { $0.count(of: .collection(selects)) == 2 }
+            app.covered(.feature("library.collections"), via: .mouse)
+            try app.press(.undo)
+            try app.waitForDropCounts("⌘Z to take them out") { $0.count(of: .collection(selects)) == 0 }
+
+            // A smart collection's photos are its query's.
+            let changes = try app.main { $0.libraryPanels.undoCount }
+            try app.dragGridPhoto("A.jpg", onto: "collections." + picks.text)
+            app.pause(0.5)
+            try app.expect(try app.main { $0.libraryPanels.undoCount } == changes, "The smart collection took photos")
         }
     }
 
@@ -161,6 +211,27 @@
                 .identifier("grid.\(name)"), by: CGVector(dx: to.midX - from.midX, dy: to.midY - from.midY),
                 steps: 12, modifiers: modifiers,
             )
+        }
+
+        /// Counts the library again, and again, until `condition` holds of the left panel's sources: a drop's change
+        /// reaches the query engine a moment after its batch.
+        func waitForDropCounts(
+            _ what: String, timeout: Double = 30, _ condition: @escaping @MainActor (LibrarySources) -> Bool,
+        ) throws {
+            let deadline = Date().addingTimeInterval(timeout)
+            while true {
+                try run("counting the library") { model in
+                    await model.libraryPanels.written()
+                    model.librarySources.recount()
+                    await model.librarySources.counted()
+                }
+                if try main({ condition($0.librarySources) }) {
+                    return
+                }
+                guard Date() < deadline
+                else { throw ScenarioFailure("Timed out after \(timeout) s waiting for \(what)") }
+                pause(0.1)
+            }
         }
 
         /// Closes the alert a drop put up, as its OK button's Return does.

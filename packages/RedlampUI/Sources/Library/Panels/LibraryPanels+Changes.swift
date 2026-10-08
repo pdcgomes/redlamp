@@ -403,15 +403,17 @@ extension LibraryPanels {
 
     /// Makes `changes` as one step with Undo, `overlay` showing it until the library has it. Made `onSelection`,
     /// the photos selected wait for their saves, and Develop's open photo among them saves first; a change to
-    /// the keyword list reaches the photos with its keywords, wherever they are.
+    /// the keyword list reaches the photos with its keywords, wherever they are. Made on `photos` (a drop's or a
+    /// stroke of the painter's), those photos do as the selection's would.
     @discardableResult
     func make(
         _ changes: [PanelChange], title: String, overlay: PanelOverlay? = nil, onSelection: Bool = true,
+        photos: (urls: [URL], ids: [Int64])? = nil,
     ) -> Bool {
         guard let model, model.library.service?.isReady == true else { return false }
         let step = PanelStep(
-            title: title, changes: changes, photos: onSelection ? model.selectedPhotos : [],
-            ids: onSelection ? selection.ids : [],
+            title: title, changes: changes, photos: photos?.urls ?? (onSelection ? model.selectedPhotos : []),
+            ids: photos?.ids ?? (onSelection ? selection.ids : []),
         )
         problem = nil
         push(step)

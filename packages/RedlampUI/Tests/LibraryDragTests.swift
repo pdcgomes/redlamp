@@ -136,4 +136,58 @@ struct LibraryDragTests {
         #expect(sandbox.files(in: "Picked").isEmpty && sandbox.shownNames() == ["A.JPG", "B.JPG"])
         #expect(model.fileUndoCount == 0)
     }
+
+    // MARK: - Onto a collection (LIB-23)
+
+    @Test func `photos dragged onto a collection go in it as one change, with Undo and Redo, and a smart collection or a set refuses them`(
+    ) async throws {
+        let sandbox = DragSandbox()
+        defer { sandbox.close() }
+        try await sandbox.open(photos: ["A.JPG", "B.JPG", "C.JPG"])
+        let model = try #require(sandbox.model)
+        let sources = model.librarySources
+        let selects = try #require(CollectionPath("Selects"))
+        let picks = try #require(CollectionPath("Picks"))
+        let clients = try #require(CollectionPath("Clients"))
+        try await sandbox.made { $0.isCounted }
+        #expect(sources.create(.collection, named: "Selects"))
+        #expect(sources.create(.set, named: "Clients"))
+        #expect(sources.saveSmart("flag:pick", named: "Picks", inside: nil))
+        try await sandbox.made { $0.collections.count == 3 }
+        let rows = [selects, picks, clients].map { SourceRow.identifier(of: .collection($0)) }
+        try await sandbox.eventually { rows.allSatisfy { sandbox.view($0) != nil } }
+        sandbox.layOut()
+        try sandbox.click("A.JPG")
+        try sandbox.click("B.JPG", modifiers: .command)
+        let list = try #require(sandbox.first(CollectionOutlineView.self))
+        let changes = model.libraryPanels.undoCount
+
+        for (refused, row) in zip([picks, clients], rows.dropFirst()) {
+            try sandbox.press("A.JPG")
+            let location = try sandbox.middle(of: row)
+            try sandbox.drag(from: sandbox.cell("A.JPG"), to: location, release: false)
+            #expect(list.photoDropRow == nil, "\(refused.text) refuses photos")
+            try sandbox.release(at: location)
+        }
+        try sandbox.press("A.JPG")
+        let location = try sandbox.middle(of: rows[0])
+        try sandbox.drag(from: sandbox.cell("A.JPG"), to: location, release: false)
+        #expect(list.photoDropRow != nil, "a collection takes them")
+        try sandbox.release(at: location)
+        try await sandbox.eventually { model.libraryPanels.undoCount > changes }
+        #expect(model.libraryPanels.undoCount == changes + 1, "one change")
+        try await sandbox.made { $0.count(of: .collection(selects)) == 2 }
+        #expect(sources.count(of: .collection(selects)) == 2)
+        let core = try #require(sandbox.service.core)
+        let id = try #require(await LibraryService.indexIDs(of: [sandbox.photo("B.JPG")], in: core.index).values.first)
+        #expect(try await core.index.read { try $0.collections(ofPhoto: id) } == [selects], "its sidecar names it")
+
+        #expect(model.perform(.undo))
+        try await sandbox.made { $0.count(of: .collection(selects)) == 0 }
+        #expect(sources.count(of: .collection(selects)) == 0)
+        #expect(model.perform(.redo))
+        try await sandbox.made { $0.count(of: .collection(selects)) == 2 }
+        #expect(sources.count(of: .collection(selects)) == 2)
+        #expect(sources.count(of: .collection(picks)) == 0)
+    }
 }

@@ -127,7 +127,7 @@ final class LibraryOutlineView: SourceOutlineView {
 
 /// The Collections section's list: the collection list's sets, collections and smart collections, each level in
 /// the Finder's order of names, sets open or closed as they were left, the target collection's name ending
-/// with +.
+/// with +. Photos dragged from the grid onto a collection go in it (`EditorModel+Drops`).
 final class CollectionOutlineView: SourceOutlineView {
     override init(model: EditorModel) {
         super.init(model: model)
@@ -142,6 +142,14 @@ final class CollectionOutlineView: SourceOutlineView {
             else { return }
             sources.setOpen(path, expanded)
         }
+        registerForDraggedTypes([LibraryDrags.photos])
+    }
+
+    override func photoDrop(onRow row: Int, _ photos: DraggedPhotos, operations: NSDragOperation) -> PhotoDrop? {
+        guard let node = item(atRow: row) as? SidebarNode, case let .source(place) = node.kind,
+              case let .collection(path) = place.source
+        else { return nil }
+        return sources.photoDrop(photos, onto: path, operations: operations)
     }
 
     override func rows() -> [SidebarNode] {
