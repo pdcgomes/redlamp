@@ -65,6 +65,9 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
     private var tracker: Tracker?
     /// Rows are being reloaded: expansion changes then are restorations, not the user's.
     var isReloading = false
+    /// Library's photos are dragged over the list, and the row that takes them is outlined.
+    private var isDraggingPhotos = false
+    private(set) var photoDropRow: Int?
 
     init(model: EditorModel) {
         self.model = model
@@ -225,6 +228,101 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
             forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true],
         ) as? [URL] ?? []
         return acceptsFiles(urls)
+    }
+
+    // MARK: - Library's photos dropped (LIB-23, LIB-26)
+
+    /// What dropping Library's photos on row `row` does, given the operations the drag offers; nil refuses the drop.
+    /// The Folders and Collections lists, which take them, say.
+    func photoDrop(onRow _: Int, _: DraggedPhotos, operations _: NSDragOperation) -> PhotoDrop? {
+        nil
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard let photos = LibraryDrags.photos(in: sender) else {
+            return super.draggingEntered(sender)
+        }
+        return photosDragged(sender, photos)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard let photos = LibraryDrags.photos(in: sender) else {
+            return super.draggingUpdated(sender)
+        }
+        return photosDragged(sender, photos)
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        guard isDraggingPhotos else { return super.draggingExited(sender) }
+        endPhotoDrag()
+    }
+
+    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        isDraggingPhotos || super.prepareForDragOperation(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard isDraggingPhotos else { return super.performDragOperation(sender) }
+        let row = photoDropRow
+        showPhotoDrop(nil)
+        guard let photos = LibraryDrags.photos(in: sender), let row,
+              let drop = photoDrop(onRow: row, photos, operations: sender.draggingSourceOperationMask)
+        else { return false }
+        // Once the drag has ended: a move shows its progress in a sheet, and may end with an alert.
+        DispatchQueue.main.async { MainActor.assumeIsolated(drop.perform) }
+        return true
+    }
+
+    override func concludeDragOperation(_ sender: (any NSDraggingInfo)?) {
+        guard isDraggingPhotos else { return super.concludeDragOperation(sender) }
+        endPhotoDrag()
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        guard isDraggingPhotos else { return super.draggingEnded(sender) }
+        endPhotoDrag()
+    }
+
+    /// The row under the drag outlined when it takes the photos; a refused drop shows the cursor that says so.
+    private func photosDragged(_ sender: any NSDraggingInfo, _ photos: DraggedPhotos) -> NSDragOperation {
+        // The other module's column stays in place, transparent, and takes nothing.
+        guard isOnScreen else { return [] }
+        isDraggingPhotos = true
+        let row = row(at: convert(sender.draggingLocation, from: nil))
+        let drop = row >= 0 ? photoDrop(onRow: row, photos, operations: sender.draggingSourceOperationMask) : nil
+        showPhotoDrop(drop == nil ? nil : row)
+        guard let drop else {
+            NSCursor.operationNotAllowed.set()
+            return []
+        }
+        return drop.operation
+    }
+
+    private func endPhotoDrag() {
+        isDraggingPhotos = false
+        showPhotoDrop(nil)
+    }
+
+    private var isOnScreen: Bool {
+        var view: NSView? = self
+        while let current = view {
+            if current.isHidden || current.alphaValue == 0 {
+                return false
+            }
+            view = current.superview
+        }
+        return true
+    }
+
+    private func showPhotoDrop(_ row: Int?) {
+        guard row != photoDropRow else { return }
+        if let shown = photoDropRow, shown < numberOfRows {
+            (rowView(atRow: shown, makeIfNecessary: false) as? SidebarRowView)?.isDropTarget = false
+        }
+        photoDropRow = row
+        if let row {
+            (rowView(atRow: row, makeIfNecessary: false) as? SidebarRowView)?.isDropTarget = true
+        }
     }
 
     // MARK: - Delegate

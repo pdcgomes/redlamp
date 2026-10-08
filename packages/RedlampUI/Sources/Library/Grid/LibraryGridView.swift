@@ -16,6 +16,9 @@ import RedlampLibrary
 ///   what it covers, adding to the selection with ⇧ or ⌘. The arrow keys move the active photo, ⇧
 ///   extending the selection from the photo it started at; Home and End go to the ends, Page Up and
 ///   Page Down a screen; Return, Space or a double-click open the loupe, and Z the loupe at 1:1.
+/// - A photo pressed and moved drags the selection when it's in it, else the photo alone, onto a folder or a
+///   collection in the left panel (`LibraryGridView+Drag`); a press on a selected photo keeps the selection
+///   until it's released without a drag.
 /// - The thumbnail size (= and -), the cell style (J) and a context menu on photos and between them;
 ///   each source's size, style, place and selection are remembered (`LibraryViewState`).
 /// - Grouped (LIB-41, `LibraryGroups`), each group has a header across the grid, a click on it opening or
@@ -28,7 +31,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     let scrollView = NSScrollView()
     let content = LibraryGridContentView()
     private(set) var gridLayout = LibraryGridLayout()
-    private let model: EditorModel
+    let model: EditorModel
     let thumbnails: GridThumbnails
     let details: PhotoDetailsCache
     private var observation: LibraryObservation?
@@ -74,6 +77,8 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private var hasToolTip = false
     /// A rubber band being drawn: where it started, and the selection it adds to (with ⇧ or ⌘).
     private var band: Band?
+    /// A press on a photo, which a drag takes along (`LibraryGridView+Drag`).
+    var photoPress: PhotoPress?
     /// The item whose context menu is open.
     private var menuItem: Int?
     /// The cells' accessibility elements, by photo, and the headers', by group, as last asked for.
@@ -893,6 +898,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     fileprivate func pressed(_ event: NSEvent) {
         let point = content.convert(event.locationInWindow, from: nil)
         window?.makeFirstResponder(content)
+        photoPress = nil
         if event.modifierFlags.contains(.control) {
             if let menu = menu(at: point) {
                 NSMenu.popUpContextMenu(menu, with: event, for: content)
@@ -917,17 +923,23 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         }
         let url = model.items[row].url
         let frame = gridLayout.frame(forItem: index)
-        if event.clickCount == 1, event.modifierFlags.isDisjoint(with: [.command, .shift]),
+        let plain = event.modifierFlags.isDisjoint(with: [.command, .shift])
+        if event.clickCount == 1, plain,
            let target = gridLayout.geometry.target(at: CGPoint(x: point.x - frame.minX, y: point.y - frame.minY)) {
             cull(target, item: index, row: row, event: event)
         } else if event.clickCount >= 2 {
             model.openInLoupe(url)
+        } else if plain, model.isMultiSelecting,
+                  model.library.photoID(of: url).map(model.photoSelection.contains) == true {
+            // The selection stays for a drag; a click without one selects the photo alone as it ends.
+            photoPress = PhotoPress(point: point, url: url, item: index, selectsOnRelease: true)
         } else {
             model.clickInGrid(
                 url,
                 toggling: event.modifierFlags.contains(.command),
                 extending: event.modifierFlags.contains(.shift),
             )
+            photoPress = PhotoPress(point: point, url: url, item: index, selectsOnRelease: false)
         }
     }
 
@@ -949,13 +961,15 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     fileprivate func dragged(_ event: NSEvent) {
-        guard band != nil else { return }
+        guard !LibraryDrags.follow(event), !dragsPhotos(event), band != nil else { return }
         content.autoscroll(with: event)
         extendBand(to: content.convert(event.locationInWindow, from: nil))
         startAutoscroll()
     }
 
-    fileprivate func released(_: NSEvent) {
+    fileprivate func released(_ event: NSEvent) {
+        guard !LibraryDrags.follow(event) else { return }
+        releasePhotoPress()
         guard let band else { return }
         band.timer?.invalidate()
         CATransaction.begin()

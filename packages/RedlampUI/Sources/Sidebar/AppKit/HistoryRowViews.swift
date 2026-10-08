@@ -73,10 +73,18 @@ final class HistoryValuesView: LayerDrawnView {
 }
 
 /// A sidebar row. The current history step is highlighted, which leaves the row's trailing
-/// edge to its values.
+/// edge to its values; a row photos are dragged onto that takes them is outlined.
 final class SidebarRowView: NSTableRowView {
     var isCurrentStep = false {
         didSet { needsDisplay = true }
+    }
+
+    var isDropTarget = false {
+        didSet {
+            if isDropTarget != oldValue {
+                needsDisplay = true
+            }
+        }
     }
 
     /// How far the highlight reaches past the row's content.
@@ -84,13 +92,24 @@ final class SidebarRowView: NSTableRowView {
 
     override func drawBackground(in dirtyRect: NSRect) {
         super.drawBackground(in: dirtyRect)
-        guard isCurrentStep, let content = view(atColumn: 0) as? NSView else { return }
+        guard isCurrentStep || isDropTarget, let content = view(atColumn: 0) as? NSView else { return }
         let rect = CGRect(
             x: max(content.frame.minX - Self.highlightOutset, 0), y: 0,
             width: min(content.frame.width + Self.highlightOutset * 2, bounds.width), height: bounds.height,
         )
-        Palette.selection.nsColor.setFill()
-        NSBezierPath(roundedRect: PixelGrid.snap(rect, scale: window?.backingScaleFactor ?? 2), xRadius: 5, yRadius: 5)
-            .fill()
+        let path = NSBezierPath(
+            roundedRect: PixelGrid.snap(rect, scale: window?.backingScaleFactor ?? 2), xRadius: 5, yRadius: 5,
+        )
+        if isCurrentStep {
+            Palette.selection.nsColor.setFill()
+            path.fill()
+        }
+        if isDropTarget {
+            NSColor.controlAccentColor.withAlphaComponent(0.25).setFill()
+            path.fill()
+            NSColor.controlAccentColor.setStroke()
+            path.lineWidth = 1.5
+            path.stroke()
+        }
     }
 }

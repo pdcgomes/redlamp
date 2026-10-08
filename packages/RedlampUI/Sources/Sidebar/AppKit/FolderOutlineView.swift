@@ -11,7 +11,8 @@ import RedlampDocument
 /// or the library's counts) that row alone; only the roots changing reloads the list.
 ///
 /// Recently Trashed follows the folders while the library is open (LIB-26), with its count, and shown
-/// empty, a line under it saying what it holds.
+/// empty, a line under it saying what it holds. Photos dragged from the grid onto a folder move there
+/// (`EditorModel+Drops`).
 final class FolderOutlineView: SidebarOutlineView {
     private var rootNodes: [SidebarNode] = []
     private var nodes: [String: SidebarNode] = [:]
@@ -42,6 +43,12 @@ final class FolderOutlineView: SidebarOutlineView {
             guard let self, !isReloading, case let .folder(row) = node.kind else { return }
             library.setExpanded(row.url, expanded)
         }
+        registerForDraggedTypes([LibraryDrags.photos])
+    }
+
+    override func photoDrop(onRow row: Int, _ photos: DraggedPhotos, operations: NSDragOperation) -> PhotoDrop? {
+        guard let node = item(atRow: row) as? SidebarNode, case let .folder(folder) = node.kind else { return nil }
+        return model.photoDrop(photos, onFolder: folder.url, isMissing: folder.isMissing, operations: operations)
     }
 
     override func track() {

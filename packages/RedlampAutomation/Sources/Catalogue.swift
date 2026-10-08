@@ -20,6 +20,7 @@
             + CollectionScenarios.all
             + PanelScenarios.all
             + RenameScenarios.all
+            + DragScenarios.all
             + SoakScenarios.all + PerformanceScenarios.all + PanelPerformanceScenarios.all
             + LibrarySourcesPerformanceScenarios.all + SmokeScenarios.last
 
