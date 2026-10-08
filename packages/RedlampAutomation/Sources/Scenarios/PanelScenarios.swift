@@ -182,11 +182,16 @@
 
         /// Clicks the text field `identifier` and types `text` into it, then Return.
         func typeInField(_ identifier: String, _ text: String, returning: Bool = true) throws {
-            try clickControl(identifier)
-            try wait("\(identifier) to take the keyboard") { _ in
+            @MainActor func editing() -> Bool {
                 (Views.editorWindow?.firstResponder as? NSTextView)?.delegate.map { delegate in
                     (delegate as? NSView)?.accessibilityIdentifier() == identifier
                 } ?? false
+            }
+            try clickControl(identifier)
+            // A click while the column still lays out can miss the field: once more.
+            if (try? wait("\(identifier) to take the keyboard", timeout: 4) { _ in editing() }) == nil {
+                try clickControl(identifier)
+                try wait("\(identifier) to take the keyboard") { _ in editing() }
             }
             try typeQuery(text)
             if returning {
@@ -238,6 +243,8 @@
                 try app.expect(try app.exists(.identifier("library.keywording.header")), "the Keywording panel")
                 try app.press(.toggleRightPanel)
                 try app.wait("F8 to hide the right column") { !$0.rightPanelVisible }
+                // The column slides out; its split view writes what it ends as back to the model.
+                app.pause(1)
                 let binding = try app.main { _ -> (String, NSEvent.ModifierFlags)? in
                     guard let (menu, index) = Menus.find(ShortcutAction.toggleRightPanel.title) else { return nil }
                     let item = menu.items[index]
