@@ -1010,6 +1010,7 @@
             phase("grouping, changing Group By and the setting", sampling: .milliseconds(8))
             var onScreen: [Double] = []
             var offMain: [Double] = []
+            var parts: [[Double]] = []
             var slowest = (label: "", onScreen: 0.0, offMain: 0.0)
             var missed = 0
             let keys: [GroupKey] = [.day, .camera, .folder, .lens, .orientation, .momentCamera, .moment]
@@ -1025,6 +1026,7 @@
                         drawn()
                         onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
                         offMain.append(seconds(groups.lastGrouping) * 1000)
+                        parts.append(groups.lastGroupingParts.map { seconds($0) * 1000 })
                         if let last = onScreen.last, last > slowest.onScreen {
                             slowest = (key.title, last, offMain.last ?? 0)
                         }
@@ -1040,6 +1042,7 @@
                         drawn()
                         onScreen.append((CFAbsoluteTimeGetCurrent() - started) * 1000)
                         offMain.append(seconds(groups.lastGrouping) * 1000)
+                        parts.append(groups.lastGroupingParts.map { seconds($0) * 1000 })
                         if let last = onScreen.last, last > slowest.onScreen {
                             slowest = ("the setting at \(looseness)", last, offMain.last ?? 0)
                         }
@@ -1061,6 +1064,14 @@
                 percentile(onScreen, 0.95), onScreen.max() ?? 0, percentile(offMain, 0.5), offMain.max() ?? 0, missed,
                 slowest.label, slowest.onScreen, slowest.offMain,
             )
+            let names = ["the photos' IDs", "the engine's grouping", "the groups", "their list"]
+            report += "; off the main thread, p50: " + names.indices.map { part in
+                String(
+                    format: "%@ %.2f ms",
+                    names[part],
+                    percentile(parts.compactMap { $0.indices.contains(part) ? $0[part] : nil }, 0.5),
+                )
+            }.joined(separator: ", ")
             report += "\n" + monitor.report("Main thread changing Group By and the setting", seconds: elapsed)
 
             phase("grouping, opening and closing every group", sampling: .milliseconds(8))

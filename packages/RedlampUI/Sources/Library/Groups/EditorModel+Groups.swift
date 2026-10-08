@@ -124,7 +124,10 @@ extension EditorModel {
 
     /// Every closed group's photos leave the selection, as `leaveClosedGroup` takes them out.
     func deselectClosed(in list: GroupedList) {
-        let closed = list.groups.indices.filter { !list.isOpen($0) }
+        var closed: [Int] = []
+        for group in list.groups.indices where !list.isOpen(group) {
+            closed.append(group)
+        }
         guard !closed.isEmpty else { return }
         leaveClosed(closed, in: list)
     }
@@ -134,7 +137,7 @@ extension EditorModel {
         let photos = library.photoList
         if !selected.isEmpty {
             for group in groups {
-                for id in list.groups[group].photos where selected.contains(id) {
+                for id in list.groups.photos(ofGroup: group) where selected.contains(id) {
                     selected.toggle(id, in: photos)
                 }
             }

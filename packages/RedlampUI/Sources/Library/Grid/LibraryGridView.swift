@@ -231,17 +231,19 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         shownGroups = model.gridGroups.list
         sections = shownGroups.map(GridSections.init)
         shownCount = shownGroups?.count ?? model.items.count
-        itemPhotos = []
+        // Made apart and set once: appending to the view's own array checks its access at every item.
+        var photos = ContiguousArray<Int64>()
         if let shownGroups {
-            itemPhotos.reserveCapacity(shownGroups.count)
+            photos.reserveCapacity(shownGroups.count)
             for item in shownGroups {
                 if case let .photo(id) = item {
-                    itemPhotos.append(id)
+                    photos.append(id)
                 } else {
-                    itemPhotos.append(-1)
+                    photos.append(-1)
                 }
             }
         }
+        itemPhotos = photos
     }
 
     /// The same source's photos in another order or another number (a filter, LIB-18), or grouped afresh:

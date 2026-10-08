@@ -64,8 +64,10 @@ import RedlampLibrary
     /// Each photo's ID in the index, by its ID here, for the source they were found for.
     @ObservationIgnored private var indexIDs: [Int64: Int64] = [:]
     @ObservationIgnored private var indexedSource: PhotoSource?
-    /// How long the last grouping took off the main thread, for `--library-perf`.
+    /// How long the last grouping took off the main thread, for `--library-perf`, and its parts: the photos'
+    /// IDs in the index, the engine's grouping handed over, the groups made, and the list of them.
     @ObservationIgnored @_spi(Harness) public private(set) var lastGrouping: Duration = .zero
+    @ObservationIgnored @_spi(Harness) public private(set) var lastGroupingParts: [Duration] = []
 
     init(model: EditorModel) {
         self.model = model
@@ -132,22 +134,30 @@ import RedlampLibrary
             items: library.items, ids: library.photoIDs, known: indexIDs,
             sort: library.filters?.sort.query ?? QuerySort(), grouping: wanted,
         )
-        Task { [weak self] in
+        // Detached, so the grouping starts at once rather than once the main thread has drawn the change of Group
+        // By that asked for it.
+        Task.detached(priority: .userInitiated) { [weak self] in
             let started = ContinuousClock.now
             let result = await Self.group(request, index: core.index, engine: core.engine)
-            guard let self else { return }
-            grouping = false
-            lastGrouping = ContinuousClock.now - started
-            let now = self.wanted
-            if let result {
-                indexIDs.merge(result.found) { _, new in new }
-                if result.grouping == now {
-                    adopt(result.groups)
-                }
+            await self?.grouped(result, as: request.grouping, since: started)
+        }
+    }
+
+    /// The grouping asked for as `asked` is made: shown if it's still the one wanted, and the next asked for
+    /// meanwhile started.
+    private func grouped(_ result: Result?, as asked: Grouping, since started: ContinuousClock.Instant) {
+        grouping = false
+        lastGrouping = ContinuousClock.now - started
+        let now = wanted
+        if let result {
+            lastGroupingParts = result.parts
+            indexIDs.merge(result.found) { _, new in new }
+            if result.grouping == now {
+                adopt(result.grouped)
             }
-            if pending || request.grouping != now {
-                regroup()
-            }
+        }
+        if pending || asked != now {
+            regroup()
         }
     }
 
@@ -160,10 +170,12 @@ import RedlampLibrary
     }
 
     private struct Result: Sendable {
-        var groups: PhotoGroups
+        /// The groups, every one open: made here, as it's a pass over the photos.
+        var grouped: GroupedList
         /// The index's IDs found for photos `known` didn't have.
         var found: [Int64: Int64]
         var grouping: Grouping
+        var parts: [Duration] = []
     }
 
     /// The request's photos grouped as the library groups their rows in the index, relabelled with the IDs
@@ -172,6 +184,14 @@ import RedlampLibrary
         -> Result? {
         let (items, ids, known) = (request.items, request.ids, request.known)
         guard items.count == ids.count else { return nil }
+        let clock = ContinuousClock()
+        var mark = clock.now
+        var parts: [Duration] = []
+        func lap() {
+            let now = clock.now
+            parts.append(now - mark)
+            mark = now
+        }
         var found: [Int64: Int64] = [:]
         let missing = ids.indices.filter { known[ids[$0]] == nil }
         if !missing.isEmpty {
@@ -192,25 +212,29 @@ import RedlampLibrary
             indexed.append(indexID)
             own.append(id)
         }
+        lap()
         guard let grouping = try? await engine.grouping() else { return nil }
+        lap()
         let (source, sort) = (request.grouping.source, request.sort)
         let groups = grouping.groups(
             of: PhotoList(source: source, sort: sort, ids: indexed), by: request.grouping.key,
             setting: request.grouping.setting,
         )
-        return Result(
-            groups: groups.relabelled(as: PhotoList(source: source, sort: sort, ids: own)), found: found,
-            grouping: request.grouping,
-        )
+        lap()
+        let relabelled = groups.relabelled(as: PhotoList(source: source, sort: sort, ids: own))
+        let grouped = GroupedList(relabelled, stacks: Stacks())
+        lap()
+        return Result(grouped: grouped, found: found, grouping: request.grouping, parts: parts)
     }
 
-    /// Shows `groups`, with the groups open that were open in the list it replaces, matched by their value,
-    /// or for moments, which keep none from one grouping to the next, by the first of their photos it had.
-    /// The same photos in the same groups change only the headers whose names changed.
-    private func adopt(_ groups: PhotoGroups) {
+    /// Shows `made`'s groups, with the groups open that were open in the list it replaces, matched by their
+    /// value, or for moments, which keep none from one grouping to the next, by the first of their photos it
+    /// had. The same photos in the same groups change only the headers whose names changed.
+    private func adopt(_ made: GroupedList) {
+        let groups = made.groups
         if let old = list, old.groups.key == groups.key, let renamed = Self.renamed(old.groups, groups) {
             guard !renamed.isEmpty || old.groups.setting != groups.setting else { return }
-            var grouped = GroupedList(groups, stacks: Stacks())
+            var grouped = made
             Self.open(&grouped, as: old)
             list = grouped
             if !renamed.isEmpty {
@@ -218,7 +242,7 @@ import RedlampLibrary
             }
             return
         }
-        var grouped = GroupedList(groups, stacks: Stacks())
+        var grouped = made
         if let old = list, old.groups.key == groups.key {
             Self.open(&grouped, as: old, opensNew: opensNew)
         } else {
@@ -234,9 +258,10 @@ import RedlampLibrary
         guard old.count == new.count, old.photos == new.photos else { return nil }
         var renamed = IndexSet()
         for group in new.indices {
-            let (before, after) = (old[group], new[group])
-            guard before.count == after.count, before.value == after.value else { return nil }
-            if before.name != after.name {
+            guard old.photos(ofGroup: group).count == new.photos(ofGroup: group).count,
+                  old.value(ofGroup: group) == new.value(ofGroup: group)
+            else { return nil }
+            if old.name(ofGroup: group) != new.name(ofGroup: group) {
                 renamed.insert(group)
             }
         }
@@ -251,22 +276,28 @@ import RedlampLibrary
         switch groups.key {
         case .moment, .momentCamera:
             for group in groups.indices {
-                if let match = groups[group].photos.lazy.compactMap(old.groups.index(of:)).first {
-                    open[group] = old.isOpen(match)
+                for photo in groups.photos(ofGroup: group) {
+                    if let match = old.groups.index(of: photo) {
+                        open[group] = old.isOpen(match)
+                        break
+                    }
                 }
             }
         default:
             var byValue: [GroupValue: Int] = [:]
-            for (group, detail) in old.groups.enumerated() {
-                byValue[detail.value] = group
+            for group in old.groups.indices {
+                byValue[old.groups.value(ofGroup: group)] = group
             }
             for group in groups.indices {
-                if let match = byValue[groups[group].value] {
+                if let match = byValue[groups.value(ofGroup: group)] {
                     open[group] = old.isOpen(match)
                 }
             }
         }
-        let closing = open.count { !$0 }
+        var closing = 0
+        for isOpen in open where !isOpen {
+            closing += 1
+        }
         if closing * 2 > open.count {
             grouped.closeAll()
             for group in open.indices where open[group] {
@@ -293,8 +324,19 @@ import RedlampLibrary
         if change == .regrouped {
             next.groupings += 1
         }
-        next.someOpen = list.map { list in list.groups.indices.contains(where: list.isOpen) } ?? false
-        next.someClosed = list.map { list in list.groups.indices.contains { !list.isOpen($0) } } ?? false
+        (next.someOpen, next.someClosed) = (false, false)
+        if let list {
+            for group in list.groups.indices {
+                if list.isOpen(group) {
+                    next.someOpen = true
+                } else {
+                    next.someClosed = true
+                }
+                if next.someOpen, next.someClosed {
+                    break
+                }
+            }
+        }
         if next != outline {
             outline = next
         }
@@ -326,38 +368,33 @@ import RedlampLibrary
             coverage = nil
             return
         }
-        let library = model.library
-        let (items, photos) = (library.items, library.photoList)
-        picks = list.groups.map { group in
-            group.photos.reduce(0) { count, id in
-                count + (photos.index(of: id).map { items[$0].metadata.flag == .pick ? 1 : 0 } ?? 0)
+        picks = Self.picks(of: list.groups, in: model.library)
+        updateCoverage()
+    }
+
+    /// Each group's picks, in one pass over the photos shown: loops, as a closure formed in the main actor's
+    /// code checks it's on the main actor each time it's called, a photo at a time.
+    private static func picks(of groups: PhotoGroups, in library: FolderLibrary) -> [Int] {
+        let (items, ids) = (library.items, library.photoIDs)
+        var picks = [Int](repeating: 0, count: groups.count)
+        for row in items.indices where row < ids.count && items[row].metadata.flag == .pick {
+            if let group = groups.index(of: ids[row]) {
+                picks[group] += 1
             }
         }
-        updateCoverage()
+        return picks
     }
 
     /// The badges of these rows changed: their groups' picks are counted again.
     private func badgesChanged(_ rows: IndexSet) {
-        guard let list, let model else { return }
-        let library = model.library
-        let (items, ids, photos) = (library.items, library.photoIDs, library.photoList)
-        var touched = IndexSet()
-        for row in rows where ids.indices.contains(row) {
-            if let group = list.groups.index(of: ids[row]) {
-                touched.insert(group)
-            }
-        }
+        guard let list, let model, !rows.isEmpty else { return }
+        let counted = Self.picks(of: list.groups, in: model.library)
         var changed = IndexSet()
-        for group in touched where picks.indices.contains(group) {
-            let count = list.groups[group].photos.reduce(0) { count, id in
-                count + (photos.index(of: id).map { items[$0].metadata.flag == .pick ? 1 : 0 } ?? 0)
-            }
-            if count != picks[group] {
-                picks[group] = count
-                changed.insert(group)
-            }
+        for group in counted.indices where !picks.indices.contains(group) || counted[group] != picks[group] {
+            changed.insert(group)
         }
         guard !changed.isEmpty else { return }
+        picks = counted
         updateCoverage()
         self.changed(.headers(changed))
     }
@@ -367,11 +404,26 @@ import RedlampLibrary
             coverage = nil
             return
         }
-        var picked: [Int?: Bool] = [:]
-        for (group, moment) in moments.enumerated() {
-            picked[moment, default: false] = picked[moment, default: false] || picks[group] > 0
+        var last = -1
+        for moment in moments {
+            last = max(last, moment ?? -1)
         }
-        let next = Coverage(unpicked: picked.values.count { !$0 }, moments: picked.count)
+        // Each moment's, by its number, and the photos without a capture time's: 0 none, 1 no pick, 2 a pick.
+        var marks = [UInt8](repeating: 0, count: last + 1)
+        var timeless: UInt8 = 0
+        for group in moments.indices {
+            let mark: UInt8 = picks.indices.contains(group) && picks[group] > 0 ? 2 : 1
+            if let moment = moments[group] {
+                marks[moment] = max(marks[moment], mark)
+            } else {
+                timeless = max(timeless, mark)
+            }
+        }
+        var next = Coverage(unpicked: timeless == 1 ? 1 : 0, moments: timeless == 0 ? 0 : 1)
+        for mark in marks where mark > 0 {
+            next.moments += 1
+            next.unpicked += mark == 1 ? 1 : 0
+        }
         if next != coverage {
             coverage = next
         }
@@ -382,13 +434,16 @@ import RedlampLibrary
     private func momentOfGroup(_ groups: PhotoGroups) -> [Int?]? {
         switch groups.key {
         case .moment, .momentCamera:
-            groups.map { group -> Int? in
-                switch group.value {
-                case let .moment(moment), let .momentCamera(moment, _): moment
-                default: nil
+            var moments: [Int?] = []
+            moments.reserveCapacity(groups.count)
+            for group in groups.indices {
+                switch groups.value(ofGroup: group) {
+                case let .moment(moment), let .momentCamera(moment, _): moments.append(moment)
+                default: moments.append(nil)
                 }
             }
-        default: nil
+            return moments
+        default: return nil
         }
     }
 
@@ -492,8 +547,8 @@ import RedlampLibrary
         }
         var next = group + offset
         while list.groups.indices.contains(next) {
-            if list.isOpen(next), let photo = offset > 0 ? list.groups[next].photos.first
-                : list.groups[next].photos.last {
+            if list.isOpen(next), let photo = offset > 0 ? list.groups.photos(ofGroup: next).first
+                : list.groups.photos(ofGroup: next).last {
                 return photo
             }
             next += offset
@@ -506,7 +561,8 @@ import RedlampLibrary
         guard let list else { return nil }
         let order = first ? Array(list.groups.indices) : Array(list.groups.indices.reversed())
         for group in order where list.isOpen(group) {
-            if let photo = first ? list.groups[group].photos.first : list.groups[group].photos.last {
+            let photos = list.groups.photos(ofGroup: group)
+            if let photo = first ? photos.first : photos.last {
                 return photo
             }
         }

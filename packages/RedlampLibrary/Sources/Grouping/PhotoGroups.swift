@@ -112,6 +112,22 @@ public struct PhotoGroups: Sendable, RandomAccessCollection {
         list.index(of: id).map { Int(groupOfPlace[$0]) }
     }
 
+    /// Group `index`'s photos alone, as `self[index].photos`, for a pass over every group: a group made whole
+    /// makes its name, filter and span too, a millisecond for 2,000 groups.
+    public func photos(ofGroup index: Int) -> ArraySlice<Int64> {
+        photos[Int(starts[index]) ..< Int(starts[index + 1])]
+    }
+
+    /// Group `index`'s value alone, as `self[index].value`.
+    public func value(ofGroup index: Int) -> GroupValue {
+        details[index].value
+    }
+
+    /// Group `index`'s name alone, as `self[index].name`.
+    public func name(ofGroup index: Int) -> String {
+        details[index].name
+    }
+
     /// These groups over `list`, which holds the same photos in the same places under a view's own IDs,
     /// as the app numbers the photos it lists so a selection outlives a filter: each photo keeps its
     /// group, and the groups their names, picks and filters.
