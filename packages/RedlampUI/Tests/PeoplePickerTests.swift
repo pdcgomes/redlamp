@@ -151,14 +151,12 @@ struct PeoplePickerTests {
         try await open(model)
         engine.maskList.release()
         try await eventually { model.peoplePicker?.needsModel[.hair] != nil }
-        withKnownIssue("RESP-15: a picker opened before the list of parts arrives never asks for a part's model") {
-            #expect(model.peoplePicker?.needsModel[.hair]?.id == "sam3")
-            model.togglePersonPart(.hair)
-            #expect(model.pendingModel?.part == .hair)
-            model.declinePendingModel()
-            #expect(model.pendingModel == nil)
-            #expect(model.peoplePicker?.parts == [.entirePerson])
-        }
+        #expect(model.peoplePicker?.needsModel[.hair]?.id == "sam3")
+        model.togglePersonPart(.hair)
+        #expect(model.pendingModel?.part == .hair)
+        model.declinePendingModel()
+        #expect(model.pendingModel == nil)
+        #expect(model.peoplePicker?.parts == [.entirePerson])
     }
 
     @Test func `with nobody found the picker says so and makes nothing`() async throws {

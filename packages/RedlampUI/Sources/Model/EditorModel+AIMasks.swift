@@ -16,7 +16,8 @@ public extension EditorModel {
     }
 
     /// Asks the engine which AI masks and People parts it can make for the open photo, off the
-    /// main actor: the first ask builds the model catalogue, which can take seconds.
+    /// main actor: the first ask builds the model catalogue, which can take seconds. An open People
+    /// picker then works out again which parts need a model, as it may have opened before the answer.
     func refreshAvailableMasks() async {
         guard let visit = currentVisit else { return }
         let engine = engine
@@ -26,6 +27,9 @@ public extension EditorModel {
         guard currentVisit == visit else { return }
         availableAIMaskKinds = kinds
         offeredPersonParts = parts
+        if peoplePicker != nil {
+            await refreshPartsNeedingModel()
+        }
     }
 
     /// Computes an AI mask: a new mask, or a component of `target` with `operation`. People
@@ -115,12 +119,8 @@ public extension EditorModel {
             }
             await refreshAvailableMasks()
             modelDownloadProgress = nil
-            guard currentVisit == visit else { return }
-            if peoplePicker != nil {
-                await refreshPartsNeedingModel()
-            } else {
-                await startAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
-            }
+            guard currentVisit == visit, peoplePicker == nil else { return }
+            await startAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
         } catch {
             maskMessage = "\(model.name) couldn't be downloaded: \(error)"
         }
