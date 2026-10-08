@@ -37,6 +37,15 @@ Redlamp is a macOS raw editor in Swift and Metal (`README.md`). These rules appl
 - **Commit to your own branch** in small, described commits. Never push, merge or rebase onto `main`. A bug's agent, started from the reports room's Fix it, is the exception: it pushes its own fix to main through the push gate (`.cursor/skills/redlamp-reports/bug-agent.md`).
 - **Commit messages** are short and name the tracker row and its issue: `LCP lens profiles: parse and match (LNS-04, #82)`.
 
+## Working within a budget
+
+Tokens are a budget: agent work is moving to fixed subscriptions with no on-demand spending, and [docs/working-with-agents.md](docs/working-with-agents.md) explains what it costs. Every step re-sends the whole conversation, and after about five idle minutes the provider's cache expires and the next step pays 25 times as much to send it.
+
+- **Don't wait inside a long conversation.** Run the push gate, full suites and anything else that takes minutes in the background, and check on them at intervals under four minutes (`block_until_ms` of 240000 or less in Cursor), or end the turn and say what's still running.
+- **One task per chat.** When the task is done, leave the handover in the tracker, the workstream canvas or the plan, and suggest a new chat for the next task rather than carrying on in this one.
+- **Read what you need.** Search the long files (the README, the tracker) before reading them, and don't read a file again unless it has changed.
+- **Subagents:** at most three at a time, each with a brief complete enough that it doesn't need the parent's context.
+
 ## Conventions
 
 - Write code that reads like the code around it: its naming, comment density and idiom. Comments state constraints the code can't show; not what the next line does, nor why your change is right.
