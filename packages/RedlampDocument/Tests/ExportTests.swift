@@ -27,6 +27,14 @@ struct ImageIOFiles: FileInspecting {
     func haldImage(of _: URL) -> HaldImage? {
         nil
     }
+
+    func embeddedMattes(in _: URL) -> Set<EmbeddedMatte> {
+        []
+    }
+
+    func embeddedMatte(_: EmbeddedMatte, in _: URL) -> EmbeddedMatteImage? {
+        nil
+    }
 }
 
 /// Export takes what it reads from files from its reader, which in the app is the decode service.
@@ -59,6 +67,14 @@ struct ExportReadingTests {
         }
 
         func haldImage(of _: URL) -> HaldImage? {
+            nil
+        }
+
+        func embeddedMattes(in _: URL) -> Set<EmbeddedMatte> {
+            []
+        }
+
+        func embeddedMatte(_: EmbeddedMatte, in _: URL) -> EmbeddedMatteImage? {
             nil
         }
     }

@@ -120,6 +120,14 @@ struct StackDetectorTests {
         func haldImage(of _: URL) -> HaldImage? {
             nil
         }
+
+        func embeddedMattes(in _: URL) -> Set<EmbeddedMatte> {
+            []
+        }
+
+        func embeddedMatte(_: EmbeddedMatte, in _: URL) -> EmbeddedMatteImage? {
+            nil
+        }
     }
 
     @Test(arguments: [false, true])

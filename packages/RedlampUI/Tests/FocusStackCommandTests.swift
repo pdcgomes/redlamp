@@ -66,6 +66,14 @@ struct FocusStackCommandTests: PaletteTesting {
         func haldImage(of _: URL) -> HaldImage? {
             nil
         }
+
+        func embeddedMattes(in _: URL) -> Set<EmbeddedMatte> {
+            []
+        }
+
+        func embeddedMatte(_: EmbeddedMatte, in _: URL) -> EmbeddedMatteImage? {
+            nil
+        }
     }
 
     @Test func `a folder's stacks are found through the engine's reader, its captures in one call`() async throws {

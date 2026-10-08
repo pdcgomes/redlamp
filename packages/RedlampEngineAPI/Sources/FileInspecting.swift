@@ -21,6 +21,12 @@ public protocol FileInspecting: Sendable {
     /// file that isn't an image.
     func haldImage(of url: URL) -> HaldImage?
 
+    /// The mattes the file carries; none for a file that can't be read.
+    func embeddedMattes(in url: URL) -> Set<EmbeddedMatte>
+
+    /// One of the file's mattes (see `EmbeddedMatteImage`); nil when it hasn't that one.
+    func embeddedMatte(_ matte: EmbeddedMatte, in url: URL) -> EmbeddedMatteImage?
+
     /// Each raw file's camera, raw mode and capture settings, as `RawFileInspecting.identify`
     /// reads them; nil for a file that isn't raw.
     func rawIdentities(of urls: [URL]) -> [RawFileIdentity?]
@@ -59,6 +65,38 @@ public struct UnreadableFiles: FileInspecting {
 
     public func haldImage(of _: URL) -> HaldImage? {
         nil
+    }
+
+    public func embeddedMattes(in _: URL) -> Set<EmbeddedMatte> {
+        []
+    }
+
+    public func embeddedMatte(_: EmbeddedMatte, in _: URL) -> EmbeddedMatteImage? {
+        nil
+    }
+}
+
+/// Mattes and depth some files carry, written by the camera at capture: iPhone Portrait mattes,
+/// semantic mattes (hair, skin, teeth, glasses, sky) and depth or disparity. When a file has
+/// one, the matching mask is free and capture-accurate.
+public enum EmbeddedMatte: String, CaseIterable, Sendable {
+    case portrait, hair, skin, teeth, glasses, sky, depth
+}
+
+/// A matte as the file stores it: coverage from 0 to 1, row after row, in the frame of the
+/// photo's pixels before `orientation` (its EXIF orientation) turns them. Depth comes as
+/// disparity scaled to 0...1, near at 1.
+public struct EmbeddedMatteImage: Sendable, Equatable {
+    public let width: Int
+    public let height: Int
+    public let coverage: [Float]
+    public let orientation: Int
+
+    public init(width: Int, height: Int, coverage: [Float], orientation: Int) {
+        self.width = width
+        self.height = height
+        self.coverage = coverage
+        self.orientation = orientation
     }
 }
 

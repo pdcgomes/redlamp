@@ -355,6 +355,14 @@ public extension DecodedImage {
             }
         }
 
+        public func embeddedMattes(in _: URL) -> Set<EmbeddedMatte> {
+            []
+        }
+
+        public func embeddedMatte(_: EmbeddedMatte, in _: URL) -> EmbeddedMatteImage? {
+            nil
+        }
+
         public func haldImage(of url: URL) -> HaldImage? {
             Self.checkOffMain()
             guard let file = try? Data(contentsOf: url, options: .alwaysMapped) else { return nil }

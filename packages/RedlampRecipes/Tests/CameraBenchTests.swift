@@ -405,6 +405,14 @@ extension FaultyDecoder: FileInspecting {
         InProcessDecoder().haldImage(of: url)
     }
 
+    func embeddedMattes(in url: URL) -> Set<EmbeddedMatte> {
+        InProcessDecoder().embeddedMattes(in: url)
+    }
+
+    func embeddedMatte(_ matte: EmbeddedMatte, in url: URL) -> EmbeddedMatteImage? {
+        InProcessDecoder().embeddedMatte(matte, in: url)
+    }
+
     func rawIdentities(of urls: [URL]) -> [RawFileIdentity?] {
         InProcessDecoder().rawIdentities(of: urls)
     }
@@ -437,6 +445,14 @@ struct DisplayP3Previews: ImageDecoding, FileInspecting {
 
     func haldImage(of url: URL) -> HaldImage? {
         reader.haldImage(of: url)
+    }
+
+    func embeddedMattes(in url: URL) -> Set<EmbeddedMatte> {
+        reader.embeddedMattes(in: url)
+    }
+
+    func embeddedMatte(_ matte: EmbeddedMatte, in url: URL) -> EmbeddedMatteImage? {
+        reader.embeddedMatte(matte, in: url)
     }
 
     func rawIdentities(of urls: [URL]) -> [RawFileIdentity?] {

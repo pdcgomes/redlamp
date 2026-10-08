@@ -4,12 +4,7 @@ import Foundation
 import ImageIO
 import RedlampEngineAPI
 
-/// Mattes and depth some files carry, written by the camera at capture: iPhone Portrait mattes,
-/// semantic mattes (hair, skin, teeth, glasses, sky) and depth or disparity. When a file has
-/// one, the matching mask is free and capture-accurate.
-public enum EmbeddedMatte: String, CaseIterable, Sendable {
-    case portrait, hair, skin, teeth, glasses, sky, depth
-
+extension EmbeddedMatte {
     var auxiliaryType: CFString {
         switch self {
         case .portrait: kCGImageAuxiliaryDataTypePortraitEffectsMatte
@@ -20,6 +15,14 @@ public enum EmbeddedMatte: String, CaseIterable, Sendable {
         case .sky: kCGImageAuxiliaryDataTypeSemanticSegmentationSkyMatte
         case .depth: kCGImageAuxiliaryDataTypeDisparity
         }
+    }
+}
+
+public extension GrayMask {
+    /// A file's matte, as the decoder read it, in the oriented frame.
+    init(_ matte: EmbeddedMatteImage) {
+        self = GrayMask(width: matte.width, height: matte.height, coverage: matte.coverage)
+            .oriented(exif: matte.orientation)
     }
 }
 

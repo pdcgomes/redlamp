@@ -40,6 +40,16 @@ final class ThreadRecordingFiles: FileInspecting, @unchecked Sendable {
         return nil
     }
 
+    func embeddedMattes(in url: URL) -> Set<EmbeddedMatte> {
+        record([url])
+        return []
+    }
+
+    func embeddedMatte(_: EmbeddedMatte, in url: URL) -> EmbeddedMatteImage? {
+        record([url])
+        return nil
+    }
+
     private func record(_ urls: [URL]) {
         let onMain = Thread.isMainThread
         lock.withLock { calls += urls.map { ($0, onMain) } }

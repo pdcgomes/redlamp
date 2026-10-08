@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreVideo
 import Foundation
 import ImageIO
 import RedlampEngineAPI
@@ -199,6 +200,89 @@ struct PreviewPixels: Codable, Sendable {
     }
 }
 
+extension FileInspection {
+    static func mattes(_ source: CGImageSource) -> Set<EmbeddedMatte> {
+        Set(EmbeddedMatte.allCases.filter { matte in
+            auxiliaryTypes(matte).contains { CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, $0) != nil }
+        })
+    }
+
+    static func matte(_ matte: EmbeddedMatte, _ source: CGImageSource) -> EmbeddedMatteImage? {
+        let orientation = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])?[
+            kCGImagePropertyOrientation,
+        ] as? Int ?? 1
+        guard let (type, info) = auxiliaryTypes(matte).lazy.compactMap({ type in
+            (CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, type) as? [CFString: Any]).map { (type, $0) }
+        }).first,
+            let data = info[kCGImageAuxiliaryDataInfoData] as? Data,
+            let description = info[kCGImageAuxiliaryDataInfoDataDescription] as? [CFString: Any],
+            let width = description["Width" as CFString] as? Int,
+            let height = description["Height" as CFString] as? Int,
+            let rowBytes = description["BytesPerRow" as CFString] as? Int
+        else { return nil }
+        let format = description["PixelFormat" as CFString] as? UInt32 ?? kCVPixelFormatType_OneComponent8
+        guard let values = matteValues(data, width: width, height: height, rowBytes: rowBytes, format: format)
+        else { return nil }
+        var coverage = values
+        if matte == .depth {
+            // Disparity is 1 / distance; depth is distance. Either way, near ends up at 1.
+            let finite = values.filter(\.isFinite)
+            let low = finite.min() ?? 0
+            let high = finite.max() ?? 1
+            let span = max(high - low, 1e-6)
+            let isDepth = type == kCGImageAuxiliaryDataTypeDepth
+            coverage = values.map { value in
+                guard value.isFinite else { return 0 }
+                let t = (value - low) / span
+                return isDepth ? 1 - t : t
+            }
+        }
+        return EmbeddedMatteImage(width: width, height: height, coverage: coverage, orientation: orientation)
+    }
+
+    /// Where ImageIO keeps `matte`, in the order it's looked for: depth as disparity first.
+    private static func auxiliaryTypes(_ matte: EmbeddedMatte) -> [CFString] {
+        switch matte {
+        case .portrait: [kCGImageAuxiliaryDataTypePortraitEffectsMatte]
+        case .hair: [kCGImageAuxiliaryDataTypeSemanticSegmentationHairMatte]
+        case .skin: [kCGImageAuxiliaryDataTypeSemanticSegmentationSkinMatte]
+        case .teeth: [kCGImageAuxiliaryDataTypeSemanticSegmentationTeethMatte]
+        case .glasses: [kCGImageAuxiliaryDataTypeSemanticSegmentationGlassesMatte]
+        case .sky: [kCGImageAuxiliaryDataTypeSemanticSegmentationSkyMatte]
+        case .depth: [kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth]
+        }
+    }
+
+    /// nil when the rows don't fit in `data`.
+    private static func matteValues(_ data: Data, width: Int, height: Int, rowBytes: Int, format: UInt32) -> [Float]? {
+        let bytesPerValue = switch format {
+        case kCVPixelFormatType_DisparityFloat16, kCVPixelFormatType_DepthFloat16,
+             kCVPixelFormatType_OneComponent16Half: 2
+        case kCVPixelFormatType_DisparityFloat32, kCVPixelFormatType_DepthFloat32,
+             kCVPixelFormatType_OneComponent32Float: 4
+        default: 1
+        }
+        guard width > 0, height > 0, rowBytes >= width * bytesPerValue,
+              data.count >= (height - 1) * rowBytes + width * bytesPerValue
+        else { return nil }
+        var values = [Float](repeating: 0, count: width * height)
+        data.withUnsafeBytes { bytes in
+            for y in 0 ..< height {
+                let row = y * rowBytes
+                for x in 0 ..< width {
+                    let offset = row + x * bytesPerValue
+                    values[y * width + x] = switch bytesPerValue {
+                    case 2: Float(bytes.loadUnaligned(fromByteOffset: offset, as: Float16.self))
+                    case 4: bytes.loadUnaligned(fromByteOffset: offset, as: Float.self)
+                    default: Float(bytes[offset]) / 255
+                    }
+                }
+            }
+        }
+        return values
+    }
+}
+
 extension InProcessDecoder: FileInspecting {
     public func rawIdentities(of urls: [URL]) -> [RawFileIdentity?] {
         urls.map { ImageDecoder.identify($0) }
@@ -225,5 +309,13 @@ extension InProcessDecoder: FileInspecting {
 
     public func haldImage(of url: URL) -> HaldImage? {
         FileInspection.source(url).flatMap(FileInspection.haldImage)
+    }
+
+    public func embeddedMattes(in url: URL) -> Set<EmbeddedMatte> {
+        FileInspection.source(url).map(FileInspection.mattes) ?? []
+    }
+
+    public func embeddedMatte(_ matte: EmbeddedMatte, in url: URL) -> EmbeddedMatteImage? {
+        FileInspection.source(url).flatMap { FileInspection.matte(matte, $0) }
     }
 }
