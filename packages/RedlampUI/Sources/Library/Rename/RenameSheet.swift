@@ -184,13 +184,14 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
             template.show(error: model.error)
             updateTexts()
         case .phase:
-            if case let .renaming(done, total) = model.phase {
-                progress.isHidden = false
-                progress.doubleValue = total > 0 ? Double(done) / Double(total) : 0
-                status.stringValue = total > 0 ? "Renaming: \(RenameModel.count(done)) of \(RenameModel.count(total)) steps"
-                    : "Renaming…"
+            guard case let .renaming(done, total) = model.phase else {
+                table.reloadData()
+                break
             }
-            table.reloadData()
+            progress.isHidden = false
+            progress.doubleValue = total > 0 ? Double(done) / Double(total) : 0
+            status.stringValue = total > 0 ? "Renaming: \(RenameModel.count(done)) of \(RenameModel.count(total)) steps"
+                : "Renaming…"
         }
         update()
     }
@@ -333,6 +334,16 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
         RenameSheetController.current?.model.summary
     }
 
+    /// Whether the sheet's names follow the template as it stands; a check cheap enough for each key.
+    var renameSheetFollows: Bool {
+        RenameSheetController.current.map { $0.model.isCurrent && $0.model.batch != nil } ?? false
+    }
+
+    /// The template in the sheet's field, as typed.
+    var renameSheetTemplate: String? {
+        RenameSheetController.current?.model.text
+    }
+
     /// File steps on Library's Undo and Redo.
     var fileUndoCount: Int {
         fileSteps.undo.count
@@ -340,6 +351,12 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTa
 
     var fileRedoCount: Int {
         fileSteps.redo.count
+    }
+
+    /// The folder Move to Folder… moves to without its Open panel, which the regression suite can't drive.
+    static var moveToFolderAnswer: URL? {
+        get { MoveFolderPanel.answer }
+        set { MoveFolderPanel.answer = newValue }
     }
 
     /// Returns once every rename and move asked for, and their Undos and Redos, are made.

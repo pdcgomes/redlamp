@@ -55,14 +55,14 @@ final class NamingTemplateField: NSObject, NSTextFieldDelegate {
     }
 
     /// The presets, the field with the tokens beside it, and the error, for a column.
-    var rows: [NSView] {
+    private(set) lazy var rows: [NSView] = {
         let row = NSStackView(views: [field, tokens])
         row.orientation = .horizontal
         row.spacing = 6
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         tokens.setContentHuggingPriority(.required, for: .horizontal)
         return [presets, row, error]
-    }
+    }()
 
     /// The template's text; set while the field isn't being edited.
     var text: String {

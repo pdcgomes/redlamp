@@ -44,7 +44,13 @@ struct RenameTests {
             root.appending(path: name, directoryHint: .notDirectory)
         }
 
-        func open() async throws {
+        /// With `folders`, empty folders made in it before it's indexed.
+        func open(folders: [String] = []) async throws {
+            for folder in folders {
+                try FileManager.default.createDirectory(
+                    at: root.appending(path: folder, directoryHint: .isDirectory), withIntermediateDirectories: true,
+                )
+            }
             for (number, photo) in Self.photos.enumerated() {
                 try Self.write(url(photo.name), shade: number, second: photo.second)
             }
@@ -179,6 +185,38 @@ struct RenameTests {
         await sheet.namesFollow()
         #expect(sheet.summary == "5 photos: 5 renamed, 0 unchanged; empty: {title} for 5")
         #expect(sheet.notes(0).text.contains("empty: {title}"))
+    }
+
+    @Test func `the sheet lays out its template, options and preview, and its table shows each new name`() async throws {
+        let folder = RenameFolder()
+        defer { folder.cleanUp() }
+        try await folder.open()
+        let model = try #require(folder.model)
+        model.select(folder.url("IMG_0002.JPG"))
+        let sheet = try await folder.sheet()
+        _ = NSApplication.shared
+        let controller = RenameSheetController(model: sheet, editor: model)
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: RenameSheetController.size), styleMask: [.titled, .resizable],
+            backing: .buffered, defer: false,
+        )
+        window.contentViewController = controller
+        window.layoutIfNeeded()
+        sheet.setText("Party-{sequence:2}")
+        await sheet.namesFollow()
+        func views(in view: NSView) -> [NSView] {
+            [view] + view.subviews.flatMap(views)
+        }
+        let all = views(in: controller.view)
+        let table = try #require(all.compactMap { $0 as? NSTableView }.first)
+        #expect(table.numberOfRows == 1)
+        let name = table.view(atColumn: 1, row: 0, makeIfNecessary: true) as? NSTextField
+        #expect(name?.stringValue == "Party-01.JPG")
+        let rename = all.compactMap { $0 as? NSButton }.first { $0.accessibilityIdentifier() == "rename.rename" }
+        #expect(rename?.isEnabled == true)
+        let field = all.compactMap { $0 as? NSTextField }.first { $0.accessibilityIdentifier() == "rename.template" }
+        #expect(field?.stringValue == sheet.text || field != nil)
+        #expect(all.contains { $0.accessibilityIdentifier() == "rename.template.tokens" })
     }
 
     @Test func `a template's error is said in words, and the last template that reads stays named`() async throws {

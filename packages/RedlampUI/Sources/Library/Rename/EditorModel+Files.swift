@@ -268,14 +268,20 @@ extension EditorModel {
             step.selected = Set(selectedPhotos)
             step.active = selection
         }
-        let (active, activeRow) = (selection, selectionIndex)
-        let destination = active.flatMap { active in shown.first { $0.from == active } }
+        let destination = selection.flatMap { active in shown.first { $0.from == active } }
+        // The photo after the active one that stays, else the nearest before it.
+        var next: URL?
+        if destination?.to == nil, let row = selectionIndex, items.indices.contains(row) {
+            let leaving = Set(shown.filter { $0.to == nil }.map(\.from))
+            next = items[(row + 1)...].first { !leaving.contains($0.url) }?.url
+                ?? items[..<row].last { !leaving.contains($0.url) }?.url
+        }
         await library.show(LibraryMoves(moves: shown, restoring: restoring, keys: keys)) { [self] in
             if let destination {
                 if let to = destination.to {
                     select(to, keepingSelection: true)
-                } else if !items.isEmpty {
-                    select(items[min(activeRow ?? 0, items.count - 1)].url)
+                } else if let next, library.index(of: next) != nil {
+                    select(next)
                 }
             }
             if let anchor = selectionAnchor, let moved = shown.first(where: { $0.from == anchor }) {

@@ -105,7 +105,7 @@ extension EditorModel {
 @MainActor
 final class MoveFolderPanel: NSObject, NSOpenSavePanelDelegate {
     /// The folder the regression suite chooses, as the panel, which it can't drive, would.
-    @_spi(Harness) public static var answer: URL?
+    static var answer: URL?
 
     private let roots: [String]
 

@@ -17,10 +17,11 @@ struct MoveToFolderTests {
     ) async throws {
         let folder = RenameTests.RenameFolder()
         defer { folder.cleanUp() }
-        try await folder.open()
+        // Made before the folder's indexed: change tracking would otherwise index it, a new folder, as the move
+        // fills it, which is the indexer's to leave to batches (LIB-26).
+        try await folder.open(folders: ["Picked"])
         let model = try #require(folder.model)
         let picked = folder.root.appending(path: "Picked", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: picked, withIntermediateDirectories: true)
         model.select(folder.url("IMG_0001.JPG"))
         model.click(folder.url("IMG_0003.JPG"), toggling: true)
         let before = files(in: folder.root)

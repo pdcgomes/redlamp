@@ -171,7 +171,7 @@ final class RenameModel {
 
     /// The names are the template's as it stands.
     var isCurrent: Bool {
-        guard let template, let named, !naming else { return false }
+        guard let template, let named, waiting == nil else { return false }
         return named.template == template && named.options == options && named.texts == texts
     }
 
