@@ -324,6 +324,8 @@
         private let thread: thread_act_t
         private let running = Mutex(true)
         private let samples = Mutex<[[UInt]]>([])
+        /// The most addresses a sample holds.
+        private static let depth = 96
 
         static var isOn: Bool {
             ProcessInfo.processInfo.environment["REDLAMP_DRAG_PROFILE"] != nil
@@ -378,6 +380,8 @@
             var state = arm_thread_state64_t()
             var count = mach_msg_type_number_t(MemoryLayout<arm_thread_state64_t>.size / MemoryLayout<UInt32>.size)
             var addresses: [UInt] = []
+            // Nothing may allocate while the thread is suspended: it may hold the allocator's lock.
+            addresses.reserveCapacity(Self.depth)
             guard thread_suspend(thread) == KERN_SUCCESS else { return [] }
             let result = withUnsafeMutablePointer(to: &state) {
                 $0.withMemoryRebound(to: natural_t.self, capacity: Int(count)) {
@@ -389,7 +393,8 @@
                 addresses.append(UInt(state.__pc) & mask)
                 addresses.append(UInt(state.__lr) & mask)
                 var fp = UInt(state.__fp)
-                while fp != 0, fp & 7 == 0, addresses.count < 96, let frame = UnsafePointer<UInt>(bitPattern: fp) {
+                while fp != 0, fp & 7 == 0, addresses.count < Self.depth,
+                      let frame = UnsafePointer<UInt>(bitPattern: fp) {
                     addresses.append(frame[1] & mask)
                     let next = frame[0]
                     guard next > fp else { break }
