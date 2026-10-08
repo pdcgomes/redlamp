@@ -168,7 +168,8 @@ public extension Target {
             product: .unitTests,
             bundleId: "\(redlampBundlePrefix).\(module.name)Tests",
             deploymentTargets: .macOS(redlampMacOSVersion),
-            sources: ["Tests/**"],
+            // tests/support: what every package's tests share, such as the `.measuresSpeed` trait.
+            sources: ["Tests/**", .glob(.relativeToRoot("tests/support/**"))],
             dependencies: [.target(name: module.name)] + dependencies,
             settings: .settings(base: redlampBaseSettings),
             // Metal's validation layer turns a dispatch or binding the GPU would get wrong into a
