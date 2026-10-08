@@ -697,6 +697,27 @@ struct EngineMemoryTests {
         #expect(held == 0, "\(held >> 20) MB of textures held")
     }
 
+    /// A render that finishes after the engine let go of its photo (an AI mask's warm-up step
+    /// already running when the window closed) keeps nothing for it.
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.closed != nil))
+    func `a render for a photo already released keeps nothing for it`() async throws {
+        let engine = try RedlampEngine()
+        _ = try await engine.open(#require(Self.closed))
+        let session = try #require(engine.currentSession())
+        await engine.releaseResources()
+        _ = try? await engine.analysisImage(for: session)
+        _ = try? await engine.matteImage(for: session)
+        let (held, masks) = engine.renderQueue.sync {
+            (
+                engine.heldTextures.reduce(0) { $0 + $1.allocatedSize },
+                engine.masks.heldTextures.reduce(0) { $0 + $1.allocatedSize },
+            )
+        }
+        withKnownIssue {
+            #expect(held == 0, "\(held >> 20) MB of textures held, \(masks >> 20) MB of them the masks'")
+        }
+    }
+
     /// The photo open now, fitted in a canvas.
     static func frame(_ engine: RedlampEngine, _ recipe: EditRecipe) async throws {
         var frames = engine.frames().makeAsyncIterator()
