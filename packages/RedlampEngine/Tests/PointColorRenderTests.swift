@@ -165,6 +165,34 @@ struct PointColorRenderTests: PointColorRendering {
             #expect(difference < 0.005, "click \(click): \(picked) against \(plain)")
         }
     }
+
+    @Test(arguments: [3, 5, 6])
+    func `on a cropped photo the camera turned, the eyedropper reads the colour shown under the click`(
+        orientation: Int,
+    ) throws {
+        let quarters = [Self.skin, Self.blue, SIMD3<Float>(0.1, 0.35, 0.12), SIMD3<Float>(0.5, 0.42, 0.18)]
+        let session = try makeSession(width: 160, height: 120, orientation: orientation) { x, y in
+            quarters[(x < 80 ? 0 : 1) + (y < 60 ? 0 : 2)]
+        }
+        let engine = try RedlampEngine()
+        var cropped = EditRecipe()
+        cropped.crop = CropRect(left: 0.3, top: 0.3, right: 0.95, bottom: 0.95)
+        let shown = try render(cropped, session: session)
+        let frame = cropped.developedSize(imageSize: session.orientedSize)
+        let map = GeometryMap(recipe: cropped, imageSize: session.orientedSize, lens: nil)
+        // Where a point of the frame and the photo point at the same coordinates lie in different quarters.
+        for click in [SIMD2(0.2, 0.2), SIMD2(0.5, 0.2), SIMD2(0.2, 0.5)] {
+            let photo = try #require(map.imagePoint(click))
+            let picked = try engine.samplePointColorInput(
+                at: CGPoint(x: photo.x, y: photo.y), radius: 0, recipe: cropped, session: session,
+            )
+            let pixel = Int(click.y * Double(frame.height)) * frame.width + Int(click.x * Double(frame.width))
+            let under = lch(shown[pixel])
+            #expect(abs(picked.lightness - under.x) < 0.003, "click \(click): \(picked) against \(under)")
+            #expect(abs(picked.chroma - under.y) < 0.003, "click \(click): \(picked) against \(under)")
+            #expect(abs(hueDifference(picked.hue, under.z)) < 1, "click \(click): \(picked) against \(under)")
+        }
+    }
 }
 
 /// Point Color's sliders in the kernel's units.

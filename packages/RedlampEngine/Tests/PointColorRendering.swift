@@ -67,10 +67,10 @@ extension PointColorRendering {
         )
     }
 
-    /// The whole photo at full size, as linear output.
+    /// The edit's frame at full size, as linear output.
     func render(_ recipe: EditRecipe, session: ImageSession, visualize: UUID? = nil) throws -> [SIMD3<Float>] {
         let engine = try RedlampEngine()
-        let size = session.orientedSize
+        let size = recipe.developedSize(imageSize: session.orientedSize)
         var request = RenderRequest(recipe: recipe, targetSize: size, generation: 0)
         request.visualizePointColor = visualize
         let frame = try engine.renderFrame(request, session: session)
@@ -90,8 +90,11 @@ extension PointColorRendering {
         return pixels
     }
 
-    /// A noiseless linear raw of `color(x, y)` in camera RGB (identity matrix: linear sRGB).
-    func makeSession(width: Int, height: Int, color: (Int, Int) -> SIMD3<Float>) throws -> ImageSession {
+    /// A noiseless linear raw of `color(x, y)` in camera RGB (identity matrix: linear sRGB), as the
+    /// camera recorded it before turning it by `orientation` (LibRaw's code).
+    func makeSession(
+        width: Int, height: Int, orientation: Int = 0, color: (Int, Int) -> SIMD3<Float>,
+    ) throws -> ImageSession {
         let black: Float = 512
         let white: Float = 16383
         var samples = [UInt16](repeating: 0, count: width * height * 3)
@@ -108,10 +111,12 @@ extension PointColorRendering {
             width: width, height: height, layout: .linearRGB, samples: samples,
             blackLevels: [black, black, black], whiteLevel: white,
             asShotMultipliers: SIMD3(1, 1, 1), cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1], xyzToCamera: nil,
-            orientation: 0, baselineExposure: 0,
+            orientation: orientation, baselineExposure: 0,
             info: ImageInfo(
                 url: URL(fileURLWithPath: "/synthetic-point-color.dng"),
-                pixelSize: PixelSize(width: width, height: height), isRaw: true, sensorDescription: "synthetic",
+                pixelSize: orientation == 5 || orientation == 6
+                    ? PixelSize(width: height, height: width) : PixelSize(width: width, height: height),
+                isRaw: true, sensorDescription: "synthetic",
             ),
         )
         decoded.noiseProfile = DetailStageTests.noise
