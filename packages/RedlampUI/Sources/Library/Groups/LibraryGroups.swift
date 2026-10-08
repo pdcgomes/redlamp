@@ -71,6 +71,8 @@ import RedlampLibrary
     /// IDs in the index, the engine's grouping handed over, the groups made, and the list of them.
     @ObservationIgnored @_spi(Harness) public private(set) var lastGrouping: Duration = .zero
     @ObservationIgnored @_spi(Harness) public private(set) var lastGroupingParts: [Duration] = []
+    /// How long the main thread took to show the last grouping, the views following it included.
+    @ObservationIgnored @_spi(Harness) public private(set) var lastAdoption: Duration = .zero
 
     init(model: EditorModel) {
         self.model = model
@@ -159,7 +161,9 @@ import RedlampLibrary
             lastGroupingParts = result.parts
             indexIDs.merge(result.found) { _, new in new }
             if result.grouping == now {
+                let adopting = ContinuousClock.now
                 adopt(result.grouped)
+                lastAdoption = ContinuousClock.now - adopting
             }
         }
         if pending || asked != now {
