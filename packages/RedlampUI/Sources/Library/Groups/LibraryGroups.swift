@@ -293,10 +293,10 @@ import RedlampLibrary
         guard old.count == new.count, old.photos == new.photos else { return nil }
         var renamed = IndexSet()
         for group in new.indices {
-            guard old.photos(ofGroup: group).count == new.photos(ofGroup: group).count,
+            guard old.count(ofGroup: group) == new.count(ofGroup: group),
                   old.value(ofGroup: group) == new.value(ofGroup: group)
             else { return nil }
-            if old.name(ofGroup: group) != new.name(ofGroup: group) {
+            if !new.name(ofGroup: group, matches: group, in: old) {
                 renamed.insert(group)
             }
         }

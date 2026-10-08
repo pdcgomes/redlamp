@@ -78,14 +78,18 @@ public struct PhotoGroups: Sendable, RandomAccessCollection {
     let details: [Detail]
     /// The group of each of the list's photos, by its place in the list.
     let groupOfPlace: ContiguousArray<Int32>
+    /// The terms a folder's, camera's or lens's filter is made of, the other values the list has left out.
+    let filters: GroupFilters?
 
+    /// What a group shows, and what its name and filter are made of: they're made as they're asked for, as making
+    /// one takes longer than grouping its photos, and a grid shows a screenful of thousands of moments.
     struct Detail: Sendable, Hashable {
         var value: GroupValue
-        var name: String
         var picks: Int
-        var filter: LibraryQuery?
         /// Milliseconds, as the column store keeps capture times.
         var span: ClosedRange<Int64>?
+        /// A stack joined photos of another value to the group, or took its photos from it: no filter finds them.
+        var crossed = false
     }
 
     public var startIndex: Int {
@@ -99,8 +103,8 @@ public struct PhotoGroups: Sendable, RandomAccessCollection {
     public subscript(position: Int) -> PhotoGroup {
         let detail = details[position]
         return PhotoGroup(
-            value: detail.value, name: detail.name, photos: photos[Int(starts[position]) ..< Int(starts[position + 1])],
-            picks: detail.picks, filter: detail.filter, span: detail.span.map { span in
+            value: detail.value, name: name(of: detail), photos: photos(ofGroup: position), picks: detail.picks,
+            filter: filter(of: detail), span: detail.span.map { span in
                 Date(timeIntervalSince1970: Double(span.lowerBound) / 1000)
                     ... Date(timeIntervalSince1970: Double(span.upperBound) / 1000)
             },
@@ -125,7 +129,27 @@ public struct PhotoGroups: Sendable, RandomAccessCollection {
 
     /// Group `index`'s name alone, as `self[index].name`.
     public func name(ofGroup index: Int) -> String {
-        details[index].name
+        name(of: details[index])
+    }
+
+    /// How many photos group `index` has, as `self[index].count`.
+    public func count(ofGroup index: Int) -> Int {
+        Int(starts[index + 1] - starts[index])
+    }
+
+    /// Group `index`'s picks alone, as `self[index].picks`.
+    public func picks(ofGroup index: Int) -> Int {
+        details[index].picks
+    }
+
+    /// Whether group `index`'s name is group `other`'s of `groups`, the names made only where what they're made of
+    /// differs.
+    public func name(ofGroup index: Int, matches other: Int, in groups: PhotoGroups) -> Bool {
+        let (mine, theirs) = (details[index], groups.details[other])
+        guard key == groups.key, mine.value == theirs.value, mine.span == theirs.span else {
+            return name(of: mine) == groups.name(of: theirs)
+        }
+        return true
     }
 
     /// These groups over `list`, which holds the same photos in the same places under a view's own IDs,
@@ -143,7 +167,46 @@ public struct PhotoGroups: Sendable, RandomAccessCollection {
         }
         return PhotoGroups(
             key: key, setting: setting, list: list, photos: relabelled, starts: starts, details: details,
-            groupOfPlace: groupOfPlace,
+            groupOfPlace: groupOfPlace, filters: filters,
         )
+    }
+
+    /// A group's name, from what it shares and when its photos were taken.
+    func name(of detail: Detail) -> String {
+        switch detail.value {
+        case .all: "All photos"
+        case .moment(nil), .day(nil): LibraryGrouping.undated
+        case .moment: LibraryGrouping.name(of: detail.span)
+        case let .day(day?): GroupNames.day(day)
+        case let .folder(name): name ?? "No folder"
+        case let .camera(name): name ?? "No camera"
+        case let .lens(name): name ?? "No lens"
+        case let .orientation(orientation): orientation?.rawValue.capitalized ?? "No orientation"
+        case let .momentCamera(moment, camera):
+            (moment == nil ? LibraryGrouping.undated : LibraryGrouping.name(of: detail.span)) + " — "
+                + (camera ?? "No camera")
+        }
+    }
+
+    /// The query finding exactly a group's photos among the list's, as `PhotoGroup.filter` describes it.
+    func filter(of detail: Detail) -> LibraryQuery? {
+        guard !detail.crossed else { return nil }
+        switch detail.value {
+        case .all, .moment(nil), .day(nil), .folder(nil), .camera(nil), .lens(nil), .momentCamera(nil, _):
+            return nil
+        case .moment:
+            return detail.span.flatMap(LibraryGrouping.filter(spanning:))
+        case let .day(day?):
+            return .filter(LibraryQuery.Filter(.date, .equal, [.date(day)]))
+        case let .folder(name?), let .camera(name?), let .lens(name?):
+            return filters?.filter(for: name)
+        case let .orientation(orientation):
+            return .filter(LibraryQuery.Filter(.orientation, .equal, [.orientation(orientation)]))
+        case let .momentCamera(_, camera):
+            guard let camera, let times = detail.span.flatMap(LibraryGrouping.filter(spanning:)),
+                  let byCamera = filters?.filter(for: camera)
+            else { return nil }
+            return .joined([times, byCamera], or: false)
+        }
     }
 }

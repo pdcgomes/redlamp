@@ -685,15 +685,18 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private func place(header: Int, _ cell: GroupHeaderCell) {
         guard case let .header(group) = content(ofItem: header), let shownGroups else { return }
         let groups = model.gridGroups
-        let shown = shownGroups.groups[group]
-        let picks = groups.picks.indices.contains(group) ? groups.picks[group] : shown.picks
+        let shown = shownGroups.groups
+        let picks = groups.picks.indices.contains(group) ? groups.picks[group] : shown.picks(ofGroup: group)
         let frame = gridLayout.frame(forItem: header)
-        let detail = GroupHeaderText.detail(count: shown.count, picks: picks)
+        let (title, detail) = (
+            shown.name(ofGroup: group),
+            GroupHeaderText.detail(count: shown.count(ofGroup: group), picks: picks),
+        )
         cell.show(
-            group: group, title: shown.name, detail: detail, open: shownGroups.isOpen(group),
+            group: group, title: title, detail: detail, open: shownGroups.isOpen(group),
             focused: !shownGroups.isOpen(group) && focusedGroup == group, frame: frame, scale: scale,
         )
-        let key = GroupHeaderText.Key(title: shown.name, detail: detail, width: max(frame.width - 34, 1), scale: scale)
+        let key = GroupHeaderText.Key(title: title, detail: detail, width: max(frame.width - 34, 1), scale: scale)
         guard cell.textKey != key else { return }
         if let image = headerTexts[key] {
             return cell.setText(image, for: key)

@@ -41,47 +41,34 @@ public extension LibraryGrouping {
         let newestFirst = list.sort.key == .captured && !list.sort.ascending
         let byTime = { (codes: [Int64]) in codes.sorted { newestFirst ? $0 > $1 : $0 < $1 } }
         let sorted: Sorted
-        let describe: (_ code: Int64?, _ group: Int, _ span: ClosedRange<Int64>?) -> (GroupValue, String, LibraryQuery?)
+        let value: (_ code: Int64?, _ group: Int) -> GroupValue
+        var filters: GroupFilters?
         switch key {
         case .ungrouped:
             sorted = self.sorted(list, rows: rows, own: ContiguousArray(repeating: 0, count: list.count)) { $0 }
-            describe = { _, _, _ in (.all, "All photos", nil) }
+            value = { _, _ in .all }
         case .moment:
             sorted = self.sorted(list, rows: rows, own: moments(of: list, rows: rows, setting: setting), order: byTime)
             let dated = sorted.codes.count { $0 != .min }
-            describe = { code, group, span in
-                guard let code else { return (.moment(nil), Self.undated, nil) }
-                let filter = sorted.crossed.contains(code) ? nil : span.flatMap(Self.filter(spanning:))
-                return (.moment(newestFirst ? dated - 1 - group : group), Self.name(of: span), filter)
-            }
+            value = { code, group in code == nil ? .moment(nil) : .moment(newestFirst ? dated - 1 - group : group) }
         case .day:
             let days = column(rows, store.captured) { $0 == .min ? .min : Int64(QueryCalendar.day(ofMilliseconds: $0)) }
             sorted = self.sorted(list, rows: rows, own: days, order: byTime)
-            describe = { code, _, _ in
-                guard let code else { return (.day(nil), Self.undated, nil) }
+            value = { code, _ in
+                guard let code else { return .day(nil) }
                 let (year, month, date) = QueryCalendar.civil(Int(code))
-                let day = QueryDate.day(year, month, date)
-                let filter = LibraryQuery.filter(LibraryQuery.Filter(.date, .equal, [.date(day)]))
-                return (.day(day), GroupNames.day(Int(code)), sorted.crossed.contains(code) ? nil : filter)
+                return .day(QueryDate.day(year, month, date))
             }
         case .folder, .camera, .lens:
             let named = named(key, rows: rows)
             sorted = self.sorted(list, rows: rows, own: named.codes) { Self.byName($0, named.names) }
             let values = Set(sorted.codes + sorted.crossed).compactMap { named.names[$0] }.sorted()
-            let filters = GroupFilters(field: named.field, values: values)
-            describe = { code, _, _ in
-                guard let code, let name = named.names[code] else { return (named.value(nil), named.none, nil) }
-                return (named.value(name), name, sorted.crossed.contains(code) ? nil : filters.filter(for: name))
-            }
+            filters = GroupFilters(field: named.field, values: values)
+            value = { code, _ in named.value(code.flatMap { named.names[$0] }) }
         case .orientation:
             let codes = column(rows, store.orientations) { $0 == 0 ? .min : Int64($0) }
             sorted = self.sorted(list, rows: rows, own: codes) { $0.sorted() }
-            describe = { code, _, _ in
-                let orientation = code.flatMap { PhotoOrientation(code: UInt8($0)) }
-                let filter = sorted.crossed.contains(code ?? .min) ? nil
-                    : LibraryQuery.filter(LibraryQuery.Filter(.orientation, .equal, [.orientation(orientation)]))
-                return (.orientation(orientation), orientation?.rawValue.capitalized ?? "No orientation", filter)
-            }
+            value = { code, _ in .orientation(code.flatMap { PhotoOrientation(code: UInt8($0)) }) }
         case .momentCamera:
             let combined = momentCameras(of: list, rows: rows, setting: setting)
             sorted = self.sorted(list, rows: rows, own: combined.codes) { codes in
@@ -102,34 +89,26 @@ public extension LibraryGrouping {
                     1
                 ordinals.append(shown)
             }
-            // Each camera's term once: a list's moments are many more than its cameras.
-            let filters = GroupFilters(field: .camera, values: combined.cameras)
-            let cameras = Dictionary(combined.cameras.map { ($0, filters.filter(for: $0)) }) { first, _ in first }
-            describe = { code, group, span in
+            filters = GroupFilters(field: .camera, values: combined.cameras)
+            value = { code, group in
                 let camera = code.flatMap(combined.cameraName)
-                let suffix = " — " + (camera ?? "No camera")
                 guard let code, combined.moment(code) != combined.undated else {
-                    return (.momentCamera(nil, camera: camera), Self.undated + suffix, nil)
+                    return .momentCamera(nil, camera: camera)
                 }
-                let ordinal = newestFirst ? dated - 1 - ordinals[group] : ordinals[group]
-                var filter: LibraryQuery?
-                if !sorted.crossed.contains(code), let camera, let times = span.flatMap(Self.filter(spanning:)),
-                   let byCamera = cameras[camera] ?? nil {
-                    filter = .joined([times, byCamera], or: false)
-                }
-                return (.momentCamera(ordinal, camera: camera), Self.name(of: span) + suffix, filter)
+                return .momentCamera(newestFirst ? dated - 1 - ordinals[group] : ordinals[group], camera: camera)
             }
         }
-        let details = sorted.codes.enumerated().map { group, code in
-            let span = sorted.layout.span(of: group)
-            let (value, name, filter) = describe(code == .min ? nil : code, group, span)
-            return PhotoGroups.Detail(
-                value: value, name: name, picks: sorted.layout.picks[group], filter: filter, span: span,
-            )
+        var details: [PhotoGroups.Detail] = []
+        details.reserveCapacity(sorted.codes.count)
+        for (group, code) in sorted.codes.enumerated() {
+            details.append(PhotoGroups.Detail(
+                value: value(code == .min ? nil : code, group), picks: sorted.layout.picks[group],
+                span: sorted.layout.span(of: group), crossed: sorted.crossed.contains(code),
+            ))
         }
         return PhotoGroups(
             key: key, setting: setting, list: list, photos: sorted.layout.photos, starts: sorted.layout.starts,
-            details: details, groupOfPlace: sorted.layout.groupOfPlace,
+            details: details, groupOfPlace: sorted.layout.groupOfPlace, filters: filters,
         )
     }
 

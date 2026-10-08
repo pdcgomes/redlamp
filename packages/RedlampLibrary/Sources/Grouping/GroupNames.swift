@@ -15,6 +15,12 @@ enum GroupNames {
         return "\(date) \(months[month - 1]) \(year)"
     }
 
+    /// `14 June 2025`, of a day as the query language has it.
+    static func day(_ date: QueryDate) -> String {
+        guard case let .day(year, month, day) = date, (1 ... 12).contains(month) else { return "\(date)" }
+        return "\(day) \(months[month - 1]) \(year)"
+    }
+
     /// `14 June 2025, 14:03 to 14:47`: one time when both are in the same minute, and both days when
     /// they're on different days.
     static func span(_ first: Int64, _ last: Int64) -> String {

@@ -604,7 +604,7 @@ public struct GroupedList: Sendable, RandomAccessCollection {
             }
             kept[match] = true
             if new.groups.details[group] != old.groups.details[match]
-                || new.groups.photoCount(of: group) != old.groups.photoCount(of: match)
+                || new.groups.count(ofGroup: group) != old.groups.count(ofGroup: match)
                 || new.isOpen(group) != old.isOpen(match) {
                 bits.insert(base + match)
             }
@@ -671,12 +671,5 @@ public extension LibraryGrouping {
     func grouped(_ list: PhotoList, by key: GroupKey, setting: MomentSetting = MomentSetting(), open: Bool = true)
         -> GroupedList {
         GroupedList(groups(of: list, by: key, setting: setting), stacks: stacks, open: open)
-    }
-}
-
-extension PhotoGroups {
-    /// How many photos group `group` has.
-    func photoCount(of group: Int) -> Int {
-        Int(starts[group + 1] - starts[group])
     }
 }

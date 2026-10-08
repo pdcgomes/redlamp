@@ -4,7 +4,7 @@ import Foundation
 /// `camera:` and `lens:` find a substring of a folder's path or a camera's or a lens's name, ignoring
 /// case, so a group's filter leaves out the other values among the list's that its term also finds: a
 /// folder's subfolders in one term.
-struct GroupFilters {
+struct GroupFilters: Sendable {
     let field: LibraryQuery.Field
     private let values: [String]
     /// For folders: every path's parts from each `/` on, folded, in order, with the path's place in

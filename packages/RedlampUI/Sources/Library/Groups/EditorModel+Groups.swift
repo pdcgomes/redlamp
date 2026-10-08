@@ -51,7 +51,7 @@ public extension EditorModel {
     @discardableResult
     func moveToGroup(by offset: Int) -> Bool {
         guard let target = groupBeside(by: offset), let list = gridGroups.list,
-              let first = list.groups[target].photos.first, let url = library.url(ofPhoto: first)
+              let first = list.groups.photos(ofGroup: target).first, let url = library.url(ofPhoto: first)
         else { return false }
         gridGroups.open(target)
         select(url)
@@ -177,12 +177,12 @@ extension EditorModel {
     /// The first photo on show after group `group` that `matches`, else the last before it.
     private static func nearest(to group: Int, in list: GroupedList, where matches: (Int64) -> Bool) -> Int64? {
         for next in list.groups.indices where next > group && list.isOpen(next) {
-            if let found = list.groups[next].photos.first(where: matches) {
+            if let found = list.groups.photos(ofGroup: next).first(where: matches) {
                 return found
             }
         }
         for previous in (0 ..< min(group, list.groups.count)).reversed() where list.isOpen(previous) {
-            if let found = list.groups[previous].photos.last(where: matches) {
+            if let found = list.groups.photos(ofGroup: previous).last(where: matches) {
                 return found
             }
         }
@@ -259,7 +259,7 @@ extension EditorModel {
             return groups.shownPhoto(action == .nextPhoto ? 1 : -1, from: id) != nil
         case .selectAllPhotos:
             guard let list, outline.someClosed else { return nil }
-            let shown = list.groups.indices.reduce(0) { $0 + (list.isOpen($1) ? list.groups[$1].count : 0) }
+            let shown = list.groups.indices.reduce(0) { $0 + (list.isOpen($1) ? list.groups.count(ofGroup: $1) : 0) }
             return selection != nil && photoSelection.count < shown
         default:
             guard CullingChange(action) != nil, module == .library, photoSelection.isEmpty, activePhotoIsClosed else {
