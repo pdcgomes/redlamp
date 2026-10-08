@@ -263,8 +263,9 @@ def seed_defaults(relay: int) -> None:
     defaults("write", BUNDLE_ID, "FeedbackEndpoint", f"http://127.0.0.1:{relay}/api/feedback")
     defaults("write", BUNDLE_ID, "CameraBenchEndpoint", f"http://127.0.0.1:{relay}/api/bench")
     defaults("write", BUNDLE_ID, "feedback.noteAccepted", "-int", "1")
-    # The Export dialog opens on these; Show in Finder after export would bring Finder forward.
-    previous = json.dumps({"revealInFinder": False, "existingFiles": "keepBoth"}).encode().hex()
+    # The Export dialog opens on these; Show in Finder after export would bring Finder forward, and Ask
+    # would stop an export to a name an earlier scenario's export took. A value the app can't read is Ask.
+    previous = json.dumps({"revealInFinder": False, "existingFiles": "addNumber"}).encode().hex()
     defaults("write", BUNDLE_ID, "exportPrevious", "-data", previous)
 
 
