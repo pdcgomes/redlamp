@@ -36,7 +36,7 @@
             try app.main { $0.select(scratch.photo(names[2])) }
             try app.press(.flagReject)
             try app.wait("the Library panel counting two marked photos and a rejected one", timeout: 30) { _ in
-                app.sourceRowLabel("sources.marked") == "Marked, 2 photos"
+                app.sourceRowLabel("sources.marked")?.hasPrefix("Marked, 2 photos") == true
                     && app.sourceRowLabel("sources.rejected") == "Rejected, 1 photo"
             }
 

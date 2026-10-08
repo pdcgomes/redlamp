@@ -22,11 +22,13 @@ extension ShortcutAction {
     }
 
     /// The Library grid's, on keys Develop gives other meanings: J cycles the cell style where Develop
-    /// shows clipping, = and - size the thumbnails where Develop steps the selected setting, and \ shows
-    /// the filter bar where Develop shows Before / After.
+    /// shows clipping, = and - size the thumbnails where Develop steps the selected setting, \ shows
+    /// the filter bar where Develop shows Before / After, ⌘N makes a collection where Develop makes a
+    /// snapshot, and ⌫ takes photos out of a collection where Develop deletes a mask.
     var isLibraryOnly: Bool {
         switch self {
-        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .toggleFilterBar: true
+        case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .toggleFilterBar, .newCollection,
+             .removeFromCollection: true
         default: false
         }
     }

@@ -3,8 +3,8 @@ import Observation
 import RedlampDesign
 import RedlampDocument
 
-/// The Library module's left column: the Library panel (LIB-23), then the Folders panel, which choose the source
-/// the grid and the filmstrip show.
+/// The Library module's left column: the Library panel (LIB-23), the Folders panel and the Collections panel, which
+/// choose the source the grid and the filmstrip show.
 final class LibraryFoldersColumn: PanelColumnScrollView {
     init(model: EditorModel) {
         let add = SymbolImageView("plus", pointSize: 11, color: Palette.secondaryLabel.nsColor)
@@ -16,7 +16,7 @@ final class LibraryFoldersColumn: PanelColumnScrollView {
         let folders = PanelSectionView(
             section: .folders, model: model, accessory: add, insets: insets, rows: [FolderOutlineView(model: model)],
         )
-        super.init(views: [SourcePanels.library(model: model), folders])
+        super.init(views: [SourcePanels.library(model: model), folders, SourcePanels.collections(model: model)])
     }
 
     @available(*, unavailable)

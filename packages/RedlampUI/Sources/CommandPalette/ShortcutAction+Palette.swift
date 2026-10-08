@@ -23,6 +23,11 @@ extension ShortcutAction {
         .showPreviousImport: ["import", "last import", "recent", "new photos", "card", "library"],
         .showMarked: ["marked", "quick collection", "mark", "b", "library"],
         .showRejected: ["rejects", "rejected", "flagged", "x", "library"],
+        .newCollection: ["collection", "album", "new", "make", "group", "library"],
+        .newCollectionSet: ["collection set", "set", "folder", "group", "new", "library"],
+        .addToCollection: ["collection", "album", "add", "put in", "selection", "library"],
+        .addToTargetCollection: ["target", "collection", "add", "quick collection", "library"],
+        .removeFromCollection: ["collection", "remove", "take out", "album", "library"],
         .toggleFilterBar: ["filter", "search", "find", "query", "library filter", "text", "attribute", "metadata"],
         .toggleFilters: ["filter", "filters off", "turn off", "library"],
         .lockFilters: ["filter", "lock", "keep", "every folder", "library"],
@@ -188,6 +193,10 @@ extension ShortcutAction {
         case .showPreviousImport: "square.and.arrow.down"
         case .showMarked: "circle.inset.filled"
         case .showRejected: "xmark.circle"
+        case .newCollection, .addToCollection: "rectangle.stack.badge.plus"
+        case .newCollectionSet: "square.stack.3d.up"
+        case .addToTargetCollection: "plus.rectangle.on.rectangle"
+        case .removeFromCollection: "rectangle.stack.badge.minus"
         case .toggleFilterBar: "line.3.horizontal.decrease.circle"
         case .toggleFilters: "line.3.horizontal.decrease"
         case .lockFilters: "lock"

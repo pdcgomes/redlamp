@@ -173,6 +173,16 @@
                     action: action,
                     unavailable: "needs imported, marked or rejected photos: checked by library.library-panel",
                 )
+            case .newCollection, .newCollectionSet, .addToCollection, .removeFromCollection:
+                ActionCheck(
+                    action: action,
+                    unavailable: "makes a collection in a sheet, or needs one: checked by library.collections",
+                )
+            case .addToTargetCollection:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs a target collection: checked by library.target-collection",
+                )
             case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
                  .keywordSet8, .keywordSet9:
                 ActionCheck(

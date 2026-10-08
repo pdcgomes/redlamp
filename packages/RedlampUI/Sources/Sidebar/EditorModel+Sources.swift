@@ -1,8 +1,9 @@
 import Foundation
 
 /// The actions of the sources the left panel chooses: Show Photos in Subfolders (LIB-10); the Library panel's
-/// entries (LIB-23, `LibrarySources`); and Recently Trashed's (LIB-26, `EditorModel+Trash`), which come before
-/// every other action's so that Recently Trashed can leave off those that would write to its photos.
+/// entries and the collections' (LIB-23, `LibrarySources`); and Recently Trashed's (LIB-26, `EditorModel+Trash`),
+/// which come before every other action's so that Recently Trashed can leave off those that would write to its
+/// photos.
 extension EditorModel {
     /// Nil for every other action.
     func performSourceShortcut(_ action: ShortcutAction) -> Bool? {
@@ -13,6 +14,16 @@ extension EditorModel {
         case .showPhotosInSubfolders:
             setIncludesSubfolders(!library.includesSubfolders)
             return true
+        case .newCollection:
+            return CollectionSheets.create(.collection, model: self)
+        case .newCollectionSet:
+            return CollectionSheets.create(.set, model: self)
+        case .addToCollection:
+            return CollectionSheets.addToCollection(model: self)
+        case .addToTargetCollection:
+            return librarySources.addToTarget()
+        case .removeFromCollection:
+            return librarySources.removeFromShown()
         default:
             return performTrashShortcut(action)
         }
@@ -25,6 +36,10 @@ extension EditorModel {
         }
         switch action {
         case .showPhotosInSubfolders: return true
+        case .newCollection, .newCollectionSet: return library.service?.isReady == true
+        case .addToCollection: return librarySources.canAdd && !librarySources.collectionsTakingPhotos.isEmpty
+        case .addToTargetCollection: return librarySources.canAdd
+        case .removeFromCollection: return librarySources.canRemove
         default: return canPerformTrashShortcut(action)
         }
     }

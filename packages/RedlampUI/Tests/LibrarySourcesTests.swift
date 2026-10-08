@@ -204,7 +204,7 @@ struct LibrarySourcesTests {
         try await sandbox.eventually(seconds: 20) { rows().map(\.count) == [3, 2] }
         #expect(rows().map(\.count) == [3, 2] && sources.rows == made, "the count changed in place")
         let cell = list.view(atColumn: 0, row: 1, makeIfNecessary: false) as? SidebarCellView
-        #expect(cell?.accessibilityLabel() == "Marked, 2 photos")
+        #expect(cell?.accessibilityLabel() == "Marked, 2 photos, target collection", "Marked the target, as none is")
 
         #expect(sources.show(.marked))
         try await sandbox.eventually { rows().last?.isShown == true }

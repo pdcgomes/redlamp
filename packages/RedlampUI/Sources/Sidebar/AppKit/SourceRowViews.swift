@@ -82,11 +82,44 @@ extension SidebarCellView {
         accessibilityLabel: "Library Health", symbol: "stethoscope", color: Palette.secondaryLabel,
     )
 
-    /// A source's menu.
+    /// A source's menu: choosing it as the target, and for the collection list's places, renaming, moving and
+    /// deleting them, and making places inside a set.
     static func sourceMenu(_ row: SourceRow, model: EditorModel) -> NSMenu {
         let sources = model.librarySources
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Show") { sources.show(row.source) })
+        if row.source == .marked || row.kind == .collection {
+            let target: CollectionPath? = if case let .collection(path) = row.source {
+                path
+            } else {
+                nil
+            }
+            let item = NSMenuItem(title: "Set as Target Collection") { sources.setTarget(target) }
+            item.state = row.isTarget ? .on : .off
+            menu.addItem(item)
+        }
+        guard case let .collection(path) = row.source, let kind = row.kind else { return menu }
+        menu.addItem(.separator())
+        if kind == .set {
+            menu.addItem(NSMenuItem(title: "New Collection Inside…") {
+                CollectionSheets.create(.collection, inside: path, model: model)
+            })
+            menu.addItem(NSMenuItem(title: "New Collection Set Inside…") {
+                CollectionSheets.create(.set, inside: path, model: model)
+            })
+            menu.addItem(.separator())
+        }
+        menu.addItem(NSMenuItem(title: "Rename…") { CollectionSheets.rename(path, model: model) })
+        let move = NSMenuItem(title: "Move To", action: nil, keyEquivalent: "")
+        let places = NSMenu()
+        for set in [nil] + sources.sets.map(Optional.some) where set != path.parent && !(set?.isWithin(path) ?? false) {
+            places.addItem(NSMenuItem(title: set?.displayName ?? "Top Level") { sources.move(path, into: set) })
+        }
+        move.submenu = places
+        move.isEnabled = !places.items.isEmpty
+        menu.addItem(move)
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Delete") { sources.delete(path) })
         return menu
     }
 

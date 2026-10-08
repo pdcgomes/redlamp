@@ -8,6 +8,8 @@ enum PanelChange: Sendable, Hashable {
     case keywords(KeywordChange)
     case metadata(MetadataChange)
     case captureTime(CaptureTimeChange)
+    /// The Collections section's changes (LIB-23), batches of the metadata journal.
+    case collections(CollectionChange)
 
     var isKeywords: Bool {
         if case .keywords = self {
@@ -57,6 +59,7 @@ extension LibraryService {
                 case let .keywords(change): try await .keywords(keywords.plan(change))
                 case let .metadata(change): try await .metadata(metadata.plan(change))
                 case let .captureTime(change): try await .metadata(metadata.plan(change))
+                case let .collections(change): try await .metadata(metadata.collections.plan(change))
                 }
             }
         }
@@ -93,6 +96,11 @@ extension LibraryService {
                         return .metadata(plan)
                     }
                     return try await .metadata(metadata.plan(change))
+                case let .collections(change):
+                    if let undo, let plan = try? await metadata.planRedo(undo) {
+                        return .metadata(plan)
+                    }
+                    return try await .metadata(metadata.collections.plan(change))
                 }
             }
         }

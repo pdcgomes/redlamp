@@ -46,10 +46,10 @@ class SourceOutlineView: SidebarOutlineView {
 
     /// `source`'s row as `sources` has it now.
     final func row(_ source: LibrarySource, kind: CollectionKind? = nil, hasChildren: Bool = false) -> SourceRow {
-        let isTarget = if case let .collection(path) = source {
-            sources.target == path
-        } else {
-            false
+        let isTarget = switch source {
+        case .marked: sources.isCounted && sources.target == nil
+        case let .collection(path): sources.target == path
+        default: false
         }
         return SourceRow(
             source: source, kind: kind, count: sources.count(of: source), isShown: sources.shown == source,
@@ -122,5 +122,38 @@ final class LibraryOutlineView: SourceOutlineView {
             nodes.append(SidebarNode(.libraryHealth, children: checks.map { SidebarNode(.source(row($0))) }))
         }
         return nodes.isEmpty ? [SidebarNode(.placeholder(LibrarySourcesText.empty))] : nodes
+    }
+}
+
+/// The Collections section's list: the collection list's sets, collections and smart collections, each level in
+/// the Finder's order of names, sets open or closed as they were left, the target collection's name ending
+/// with +.
+final class CollectionOutlineView: SourceOutlineView {
+    override init(model: EditorModel) {
+        super.init(model: model)
+        isExpanded = { [weak self] node in
+            guard let self, case let .source(row) = node.kind, case let .collection(path) = row.source else {
+                return false
+            }
+            return sources.isOpen(path)
+        }
+        expansionChanged = { [weak self] node, expanded in
+            guard let self, !isReloading, case let .source(row) = node.kind, case let .collection(path) = row.source
+            else { return }
+            sources.setOpen(path, expanded)
+        }
+    }
+
+    override func rows() -> [SidebarNode] {
+        guard model.library.service?.isReady == true, sources.isCounted else { return [] }
+        func nodes(inside set: CollectionPath?) -> [SidebarNode] {
+            sources.collections(inside: set).map { place in
+                let children = place.kind == .set ? nodes(inside: place.path) : []
+                let row = row(.collection(place.path), kind: place.kind, hasChildren: !children.isEmpty)
+                return SidebarNode(.source(row), children: children)
+            }
+        }
+        let top = nodes(inside: nil)
+        return top.isEmpty ? [SidebarNode(.placeholder(LibrarySourcesText.noCollections))] : top
     }
 }

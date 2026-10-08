@@ -28,6 +28,11 @@ struct AppCommands: Commands {
             item(.importKeywords)
             item(.exportKeywords)
             Divider()
+            // ⌘N is New Collection's in Library and New Snapshot's in Develop: AppKit gives a key to the first item
+            // that has it, enabled or not.
+            item(.newCollection, keyed: model.module == .library)
+            item(.newCollectionSet)
+            Divider()
             item(.export, perform: onExport)
             item(.exportWithPrevious, perform: onExportWithPrevious)
         }
@@ -55,6 +60,10 @@ struct AppCommands: Commands {
             mouseItem(.renamePhotos)
             item(.moveToFolder)
             Divider()
+            item(.addToCollection)
+            item(.addToTargetCollection)
+            mouseItem(.removeFromCollection)
+            Divider()
             item(.copySettings)
             item(.copySettingsAgain)
             item(.pasteSettings)
@@ -77,7 +86,7 @@ struct AppCommands: Commands {
             item(.rotateLeft)
             item(.rotateRight)
             Divider()
-            item(.newSnapshot)
+            item(.newSnapshot, keyed: model.module != .library)
             item(.newPreset)
             item(.virtualCopy)
             Divider()
@@ -262,8 +271,8 @@ struct AppCommands: Commands {
         }
     }
 
-    /// A menu item with the action's ⌘ shortcut.
-    private func item(_ action: ShortcutAction, perform: (() -> Void)? = nil) -> some View {
+    /// A menu item with the action's ⌘ shortcut, unless it isn't `keyed`.
+    private func item(_ action: ShortcutAction, keyed: Bool = true, perform: (() -> Void)? = nil) -> some View {
         Button(action.plannedPhase.map { "\(action.title) (\($0))" } ?? action.title) {
             if let perform {
                 perform()
@@ -271,7 +280,7 @@ struct AppCommands: Commands {
                 model.perform(action)
             }
         }
-        .keyboardShortcut(action.combos.first?.keyboardShortcut)
+        .keyboardShortcut(keyed ? action.combos.first?.keyboardShortcut : nil)
         .disabled(!action.isAvailable || !model.canPerform(action))
     }
 

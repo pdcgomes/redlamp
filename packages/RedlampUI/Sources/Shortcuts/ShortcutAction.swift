@@ -110,6 +110,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder, showPhotosInSubfolders
     case showRecentlyTrashed, putBack, putBackBatch
     case showAllPhotographs, showPreviousImport, showMarked, showRejected
+    case newCollection, newCollectionSet, addToCollection, addToTargetCollection, removeFromCollection
     case toggleFilterBar, toggleFilters, lockFilters
     case sortByFolder, sortByCaptureTime, sortByName, sortByRating, sortByEditTime, sortByModified, sortByFileSize
     case reverseSort
@@ -172,6 +173,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder, .showPhotosInSubfolders,
              .showRecentlyTrashed, .putBack, .putBackBatch,
              .showAllPhotographs, .showPreviousImport, .showMarked, .showRejected,
+             .newCollection, .newCollectionSet, .addToCollection, .addToTargetCollection, .removeFromCollection,
              .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
              .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort,
              .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
@@ -236,6 +238,11 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .showPreviousImport: "Show Previous Import"
         case .showMarked: "Show Marked"
         case .showRejected: "Show Rejected"
+        case .newCollection: "New Collection…"
+        case .newCollectionSet: "New Collection Set…"
+        case .addToCollection: "Add to Collection…"
+        case .addToTargetCollection: "Add to Target Collection"
+        case .removeFromCollection: "Remove from Collection"
         case .toggleFilterBar: "Show / Hide Filter Bar"
         case .toggleFilters: "Enable Filters"
         case .lockFilters: "Lock Filters"
@@ -401,6 +408,10 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .reverseSort, .showAllPhotographs, .showPreviousImport, .showRejected: []
         // Lightroom Classic's Show Quick Collection.
         case .showMarked: [.char("b", command: true)]
+        // Lightroom Classic's, in Library, where Develop's New Snapshot and Delete Mask don't reach.
+        case .newCollection: [.char("n", command: true)]
+        case .removeFromCollection: [KeyCombo(.delete)]
+        case .newCollectionSet, .addToCollection, .addToTargetCollection: []
         // Lightroom Classic's keys for the active keyword set's nine keywords.
         case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9:

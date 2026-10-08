@@ -42,6 +42,7 @@ public final class LibrarySources {
 
     static let pairRuleKey = "library.health.pairs"
     static let expandedKey = "library.sources.expanded"
+    static let collapsedSetsKey = "library.collections.collapsed"
     /// Counting at most this often while the library keeps changing.
     static let countingInterval = Duration.seconds(1)
 
@@ -56,6 +57,8 @@ public final class LibrarySources {
     public private(set) var isCounted = false
     /// The sections open, as last left.
     public private(set) var expanded: Set<Panel>
+    /// The sets closed in the collection list, by path, as last left; every other set is open.
+    @ObservationIgnored private var collapsedSets: Set<String>
 
     @ObservationIgnored weak var model: EditorModel?
     @ObservationIgnored private(set) var counts = LibraryCounts()
@@ -89,6 +92,23 @@ public final class LibrarySources {
         pairRule = defaults?.string(forKey: Self.pairRuleKey).flatMap(PairRule.init(rawValue:)) ?? .keepBoth
         expanded = defaults?.stringArray(forKey: Self.expandedKey).map { Set($0.compactMap(Panel.init(rawValue:))) }
             ?? Set(Panel.allCases)
+        collapsedSets = Set(defaults?.stringArray(forKey: Self.collapsedSetsKey) ?? [])
+    }
+
+    /// Whether the set at `path` shows what's inside it in the collection list.
+    public func isOpen(_ path: CollectionPath) -> Bool {
+        !collapsedSets.contains(path.text)
+    }
+
+    /// Opens or closes the set at `path` in the collection list, kept between launches.
+    public func setOpen(_ path: CollectionPath, _ open: Bool) {
+        guard open == collapsedSets.contains(path.text) else { return }
+        if open {
+            collapsedSets.remove(path.text)
+        } else {
+            collapsedSets.insert(path.text)
+        }
+        model?.library.defaults?.set(collapsedSets.sorted(), forKey: Self.collapsedSetsKey)
     }
 
     public func isExpanded(_ panel: Panel) -> Bool {
