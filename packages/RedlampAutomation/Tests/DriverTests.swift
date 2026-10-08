@@ -97,6 +97,22 @@ struct DriverTests {
         #expect(Views.ancestry(nil) == ["nothing"])
     }
 
+    @Test func `a view left in place inside a transparent one isn't on screen`() {
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.borderless], backing: .buffered,
+            defer: false,
+        )
+        window.isReleasedWhenClosed = false
+        let strip = NSView(frame: CGRect(x: 0, y: 0, width: 200, height: 50))
+        let cell = NSView(frame: CGRect(x: 10, y: 10, width: 40, height: 30))
+        cell.setAccessibilityIdentifier("filmstrip.A.ARW")
+        strip.addSubview(cell)
+        window.contentView?.addSubview(strip)
+        #expect(Views.find("filmstrip.A.ARW", in: window) != nil)
+        strip.alphaValue = 0
+        #expect(Views.find("filmstrip.A.ARW", in: window) == nil)
+    }
+
     @Test func `the first responder names the field being typed in, not its field editor`() throws {
         let window = NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: 200, height: 60), styleMask: [.titled], backing: .buffered,
