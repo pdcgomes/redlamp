@@ -96,9 +96,11 @@
                 try main { $0.select(url) }
                 covered(.feature("library.filmstrip"), via: .model)
             } else {
-                // ← and → step through the filmstrip.
+                // ← and → step through the filmstrip, where an open stack's photos follow its top.
                 let (target, current) = try main { model -> (Int?, Int?) in
-                    let names = model.items.map(\.url.lastPathComponent)
+                    let names = model.gridStacks.list.map { list in
+                        list.compactMap { model.library.url(ofPhoto: $0)?.lastPathComponent }
+                    } ?? model.items.map(\.url.lastPathComponent)
                     return (
                         names.firstIndex(of: name),
                         model.selection.flatMap { names.firstIndex(of: $0.lastPathComponent) },
