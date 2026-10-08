@@ -23,8 +23,12 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
     /// The rows' value fields, by their places in the rules.
     private var values: [ObjectIdentifier: [Int]] = [:]
     private var counting: Task<Void, Never>?
+    private var reading: Task<Void, Never>?
 
     private static let matches: [(QueryRules.Match, String)] = [(.all, "all"), (.any, "any"), (.none, "none")]
+    /// The rules are made again from the text, and counted, once typing pauses this long: making them again at
+    /// every key holds the main thread.
+    private static let typingPause = Duration.milliseconds(150)
 
     /// New Smart Collection…: starting from the photos flagged as picks, inside `set`.
     @discardableResult
@@ -261,10 +265,17 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
     /// The text edited: once the language reads it, it makes the rules again.
     private func textChanged() {
         do {
-            rules = try SmartRules(parsing: text.stringValue)
+            let read = try SmartRules(parsing: text.stringValue)
             problem.stringValue = ""
-            showRules()
-            rulesChanged()
+            guard read != rules else { return }
+            rules = read
+            reading?.cancel()
+            reading = Task { [weak self] in
+                try? await Task.sleep(for: Self.typingPause)
+                guard !Task.isCancelled, let self else { return }
+                showRules()
+                rulesChanged()
+            }
         } catch {
             problem.stringValue = error.message
         }
@@ -275,6 +286,8 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
         counting?.cancel()
         guard let engine = model.library.service?.engine else { return }
         counting = Task { [weak self] in
+            try? await Task.sleep(for: Self.typingPause)
+            guard !Task.isCancelled else { return }
             let found = try? await engine.list(.query(query)).count
             guard !Task.isCancelled, let self, let found else { return }
             count.stringValue = LibrarySources.count(found).capitalizedFirst + " match these rules"
@@ -284,7 +297,10 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
     private func resize() {
         guard let content = sheet.window.contentView else { return }
         content.layoutSubtreeIfNeeded()
-        sheet.window.setContentSize(content.fittingSize)
+        let size = content.fittingSize
+        if size != content.frame.size {
+            sheet.window.setContentSize(size)
+        }
     }
 
     // MARK: - Saving
@@ -308,6 +324,7 @@ final class SmartCollectionSheet: NSObject, NSTextFieldDelegate {
             return false
         }
         counting?.cancel()
+        reading?.cancel()
         return sources.saveSmart(query, named: name.stringValue, inside: set, editing: editing)
     }
 }
