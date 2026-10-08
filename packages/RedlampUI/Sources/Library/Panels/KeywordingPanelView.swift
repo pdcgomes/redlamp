@@ -5,7 +5,7 @@ import RedlampLibrary
 /// The Keywording panel (LIB-21): the keywords of the photos selected as full paths, those only some of them
 /// have marked with how many; a field that adds keywords, completing them from the library's keywords and
 /// synonyms and making new ones; and the keyword set ⌥1 to ⌥9 apply, chosen here, its nine keywords toggled
-/// on the photos by a click.
+/// on the photos by a click, with the painter's button beside it (`KeywordPainterButton`).
 final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
     private let panels: LibraryPanels
     private let summary = PanelControls.label("", secondary: true)
@@ -66,7 +66,9 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         addFullWidth(keywords)
         addFullWidth(entry)
         addFullWidth(completions)
-        addFullWidth(PanelControls.row([PanelControls.label("Keyword Set", secondary: true), sets]))
+        addFullWidth(PanelControls.row([
+            PanelControls.label("Keyword Set", secondary: true), sets, KeywordPainterButton(model: panels.model),
+        ]))
         addFullWidth(grid)
         for button in buttons {
             button.widthAnchor.constraint(equalTo: stack.widthAnchor, multiplier: 1.0 / 3, constant: -4).isActive = true

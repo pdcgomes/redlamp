@@ -131,6 +131,11 @@
                     action: action,
                     unavailable: "renames and moves files: checked on copies by library.rename-photos",
                 )
+            case .keywordPainter:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs Library's grid with the library open: checked by library.keyword-painter",
+                )
             case .showInFinder:
                 ActionCheck(action: action, setUp: { app in
                     try app.main { $0.libraryViews.revealInFinder = { Revealed.photos.append(contentsOf: $0) } }

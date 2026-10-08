@@ -18,7 +18,8 @@ import RedlampLibrary
 ///   Page Down a screen; Return, Space or a double-click open the loupe, and Z the loupe at 1:1.
 /// - A photo pressed and moved drags the selection when it's in it, else the photo alone, onto a folder or a
 ///   collection in the left panel (`LibraryGridView+Drag`); a press on a selected photo keeps the selection
-///   until it's released without a drag.
+///   until it's released without a drag. While the painter is out, a press and a drag paint the photos they
+///   reach rather than selecting them (`LibraryGridView+Painter`).
 /// - The thumbnail size (= and -), the cell style (J) and a context menu on photos and between them;
 ///   each source's size, style, place and selection are remembered (`LibraryViewState`).
 /// - Grouped (LIB-41, `LibraryGroups`), each group has a header across the grid, a click on it opening or
@@ -81,6 +82,8 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// (`LibraryGridView+Drag`).
     var photoPress: PhotoPress?
     var keywordTarget: KeywordTarget?
+    /// Where the painter's stroke last reached (`LibraryGridView+Painter`).
+    var lastPaint: CGPoint?
     /// The item whose context menu is open.
     private var menuItem: Int?
     /// The cells' accessibility elements, by photo, and the headers', by group, as last asked for.
@@ -180,6 +183,12 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             Tracker { [weak self] in
                 guard let self, model.libraryViews.restoredTop != nil, isShown, wasShown, !isStale else { return }
                 _ = restorePlace()
+            },
+            // The painter's brush over the grid while it's out.
+            Tracker { [weak self] in
+                guard let self else { return }
+                _ = model.keywordPainter.isOn
+                self.window?.invalidateCursorRects(for: content)
             },
         ]
     }
@@ -907,6 +916,9 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             }
             return
         }
+        if paints(event, at: point) {
+            return
+        }
         guard let index = gridLayout.item(at: point), index < shownCount else {
             let flags = event.modifierFlags
             band = Band(
@@ -963,14 +975,14 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     fileprivate func dragged(_ event: NSEvent) {
-        guard !LibraryDrags.follow(event), !dragsPhotos(event), band != nil else { return }
+        guard !LibraryDrags.follow(event), !paintsAlong(event), !dragsPhotos(event), band != nil else { return }
         content.autoscroll(with: event)
         extendBand(to: content.convert(event.locationInWindow, from: nil))
         startAutoscroll()
     }
 
     fileprivate func released(_ event: NSEvent) {
-        guard !LibraryDrags.follow(event) else { return }
+        guard !LibraryDrags.follow(event), !endsStroke() else { return }
         releasePhotoPress()
         guard let band else { return }
         band.timer?.invalidate()
@@ -1290,6 +1302,12 @@ final class LibraryGridContentView: NSView {
 
     override var acceptsFirstResponder: Bool {
         true
+    }
+
+    override func resetCursorRects() {
+        if grid?.model.keywordPainter.isOn == true {
+            addCursorRect(visibleRect, cursor: KeywordPainter.cursor)
+        }
     }
 
     override func keyDown(with event: NSEvent) {

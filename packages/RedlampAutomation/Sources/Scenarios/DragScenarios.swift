@@ -11,7 +11,7 @@
     /// drop targets' dragging destinations; only the window server's part of a drag, which doesn't follow a
     /// synthetic mouse, is the suite's (`LibraryDrags.simulates`).
     enum DragScenarios {
-        static let all: [Scenario] = [toFolder, toCollection, keywordOntoPhotos]
+        static let all: [Scenario] = [toFolder, toCollection, keywordOntoPhotos, painter]
 
         static let toFolder = Scenario(
             "library.drag-to-folder",
@@ -165,6 +165,62 @@
             }
             try app.press(.undo)
             try app.wait("⌘Z to take it off them", timeout: 30) { _ in keywords(a).isEmpty && keywords(b).isEmpty }
+        }
+
+        static let painter = Scenario(
+            "library.keyword-painter",
+            "Library › Keyword Painter (⌥⌘K) takes out the painter; a stroke across photos in the grid paints them with "
+                + "the keyword typed in its field, one change ⌘Z takes back, the selection staying; ⌥ takes it off; Esc "
+                + "and the toolbar's button put the painter away",
+            claims: [.action(.keywordPainter), .feature("library.keywords")],
+        ) { app in
+            let scratch = try DragScratch()
+            defer { scratch.remove(app) }
+            try scratch.show(app)
+            let text = "Painted-\(UUID().uuidString.prefix(6))"
+            guard let keyword = KeywordPath(text) else { throw ScenarioFailure("No keyword path") }
+            defer {
+                try? app.main { model in
+                    model.keywordPainter.setOn(false)
+                    model.keywordPainter.text = ""
+                    _ = model.libraryPanels.delete(keyword)
+                }
+            }
+            let (a, b, c, d) = (
+                scratch.photo("A.jpg"), scratch.photo("B.jpg"), scratch.photo("C.jpg"), scratch.photo("D.jpg"),
+            )
+            try app.main { $0.select(a) }
+            func keywords(_ photo: URL) -> [String] {
+                SidecarStore(locator: .besidePhotos).load(for: photo)?.metadata?.keywords ?? []
+            }
+
+            try app.expectKeyBinding(.keywordPainter)
+            try app.choose(.keywordPainter)
+            try app.wait("the painter out") { $0.keywordPainter.isOn }
+            try app.typeInField("library.toolbar.paints", text, returning: false)
+            try app.wait("the painter's field to hold the keyword") { $0.keywordPainter.text == text }
+
+            try app.dragGridPhoto("B.jpg", onto: "grid.C.jpg")
+            try app.wait("B and C painted, A and D left alone", timeout: 30) { _ in
+                keywords(b) == [text] && keywords(c) == [text] && keywords(a).isEmpty && keywords(d).isEmpty
+            }
+            try app.expect(try app.main { $0.selectedPhotos } == [a], "Painting changed the selection")
+            app.covered(.feature("library.keywords"), via: .mouse)
+            try app.press(.undo)
+            try app.wait("⌘Z to take the stroke back", timeout: 30) { _ in keywords(b).isEmpty && keywords(c).isEmpty }
+            try app.choose(.redo)
+            try app.wait("⇧⌘Z to paint it again", timeout: 30) { _ in keywords(b) == [text] && keywords(c) == [text] }
+
+            try app.drag(.identifier("grid.B.jpg"), by: CGVector(dx: 0, dy: 0), steps: 1, modifiers: .option)
+            try app.wait("⌥ to take it off B", timeout: 30) { _ in keywords(b).isEmpty && keywords(c) == [text] }
+
+            try app.press(.cancel)
+            try app.wait("Esc to put the painter away") { !$0.keywordPainter.isOn }
+            try app.click(.identifier("library.toolbar.painter"))
+            try app.wait("the toolbar's button to take it out") { $0.keywordPainter.isOn }
+            try app.click(.identifier("library.toolbar.painter"))
+            try app.wait("and to put it away") { !$0.keywordPainter.isOn }
+            app.covered(.action(.keywordPainter), via: .mouse)
         }
     }
 

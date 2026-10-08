@@ -7,8 +7,9 @@ import RedlampLibrary
 /// Develop or in Finder. Each button's tooltip names its key. Its controls act on the press itself, as
 /// the module picker does, rather than tracking the mouse as AppKit's controls do. In the grid, Group By
 /// (LIB-41) and, grouped by moment, the Tighter–Looser slider and the moments without a pick are AppKit's
-/// own controls until the library's polish phase (LIB-45).
-final class LibraryToolbarView: NSView {
+/// own controls until the library's polish phase (LIB-45), as is the painter's field (LIB-21), shown while
+/// it's out.
+final class LibraryToolbarView: NSView, NSTextFieldDelegate {
     static let height: CGFloat = 30
 
     private let model: EditorModel
@@ -20,6 +21,9 @@ final class LibraryToolbarView: NSView {
     private let actual = ToolbarButton(title: LoupeZoom.actual.title, identifier: "library.toolbar.actual")
     private let develop = ToolbarButton(symbol: "slider.horizontal.3", identifier: "library.toolbar.develop")
     private let finder = ToolbarButton(symbol: "folder", identifier: "library.toolbar.finder")
+    private let painterButton = ToolbarButton(symbol: "paintbrush.pointed", identifier: "library.toolbar.painter")
+    /// The keywords the painter paints; empty, the active keyword set's.
+    private let paints = NSTextField()
     private let groupBy = NSPopUpButton(frame: .zero, pullsDown: false)
     private let looseness = NSSlider(
         value: 0, minValue: Double(MomentSetting.tightest), maxValue: Double(MomentSetting.loosest), target: nil,
@@ -66,7 +70,15 @@ final class LibraryToolbarView: NSView {
         }
         size.range = GridSize.range
         size.onChange = { model.setThumbnailSize($0) }
-        for view in [grid, loupe, fit, actual, develop, finder, size] + GridCellStyle.allCases
+        painterButton.toolTip = "\(Self.tip(.keywordPainter)): click or drag over photos to put keywords on them, ⌥ to take "
+            + "them off"
+        painterButton.onPress = { model.perform(.keywordPainter) }
+        paints.controlSize = .small
+        paints.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        paints.delegate = self
+        paints.setAccessibilityLabel("Keywords to Paint")
+        paints.setAccessibilityIdentifier("library.toolbar.paints")
+        for view in [grid, loupe, fit, actual, develop, finder, size, painterButton, paints] + GridCellStyle.allCases
             .compactMap({ styles[$0] })
             as [NSView] {
             addSubview(view)
@@ -201,8 +213,10 @@ final class LibraryToolbarView: NSView {
                 Self.set(fit, hidden: inGrid)
                 Self.set(actual, hidden: inGrid)
                 updateGroups(inGrid: inGrid)
+                updatePainter(inGrid: inGrid)
                 let layout: [CGFloat] = [
                     inGrid ? 1 : 0, looseness.isHidden ? 0 : 1, unpicked.isHidden ? 0 : unpickedWidth,
+                    paints.isHidden ? 0 : 1,
                 ]
                 if layout != laidOut {
                     laidOut = layout
@@ -218,6 +232,28 @@ final class LibraryToolbarView: NSView {
                 loupe.isEnabled = hasPhoto
             },
         ]
+    }
+
+    /// The painter's button, and while it's out its field, whose placeholder names the keyword set it paints
+    /// while the field is empty.
+    private func updatePainter(inGrid: Bool) {
+        let painter = model.keywordPainter
+        painterButton.isOn = painter.isOn
+        painterButton.isEnabled = painter.isOn || painter.isAvailable
+        Self.set(painterButton, hidden: !inGrid)
+        Self.set(paints, hidden: !inGrid || !painter.isOn)
+        let placeholder = model.libraryPanels.activeSet.map { "Keywords, or those of “\($0.name)”" }
+            ?? "Keywords to paint"
+        if paints.placeholderString != placeholder {
+            paints.placeholderString = placeholder
+        }
+        if paints.currentEditor() == nil, paints.stringValue != painter.text {
+            paints.stringValue = painter.text
+        }
+    }
+
+    func controlTextDidChange(_: Notification) {
+        model.keywordPainter.text = paints.stringValue
     }
 
     /// Shows or hides `view` only when that changes it: the trackers set every control again on each change
@@ -243,6 +279,11 @@ final class LibraryToolbarView: NSView {
                 if let button = styles[style] {
                     place(button, width: 28)
                 }
+            }
+            x += 14
+            place(painterButton, width: 28)
+            if !paints.isHidden {
+                place(paints, width: 200)
             }
             x += 14
             place(groupBy, width: 150)

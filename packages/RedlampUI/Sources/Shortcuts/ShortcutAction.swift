@@ -121,7 +121,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case keywordSet1, keywordSet2, keywordSet3, keywordSet4, keywordSet5, keywordSet6, keywordSet7, keywordSet8
     case keywordSet9
     case importKeywords, exportKeywords, editCaptureTime
-    case renamePhotos, moveToFolder
+    case renamePhotos, moveToFolder, keywordPainter
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -183,7 +183,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .openAllGroups, .closeAllGroups, .unpickedMoments,
              .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9, .importKeywords, .exportKeywords, .editCaptureTime, .renamePhotos,
-             .moveToFolder:
+             .moveToFolder, .keywordPainter:
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
@@ -279,6 +279,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .editCaptureTime: "Edit Capture Time…"
         case .renamePhotos: "Rename Photos…"
         case .moveToFolder: "Move to Folder…"
+        case .keywordPainter: "Keyword Painter"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -428,6 +429,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .closeAllGroups, .unpickedMoments: []
         case .renamePhotos: [KeyCombo(.function(2))]
         case .moveToFolder: []
+        // Lightroom Classic's Enable Painting.
+        case .keywordPainter: [.char("k", option: true, command: true)]
         case .beforeAfter: [.char("\\")]
         case .nextCompareLayout: [.char("y")]
         case .previousCompareLayout: [.char("y", shift: true)]

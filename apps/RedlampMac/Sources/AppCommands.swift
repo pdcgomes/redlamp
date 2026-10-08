@@ -51,6 +51,7 @@ struct AppCommands: Commands {
 
         CommandMenu("Library") {
             mouseItem(.renamePhotos)
+            toggle(.keywordPainter, isOn: model.keywordPainter.isOn)
         }
 
         CommandMenu("Photo") {

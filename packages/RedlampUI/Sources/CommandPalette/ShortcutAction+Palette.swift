@@ -72,6 +72,7 @@ extension ShortcutAction {
             "rename", "file name", "filename", "template", "naming", "batch rename", "sequence", "f2", "library",
         ],
         .moveToFolder: ["move", "folder", "organise", "organize", "file", "relocate", "library"],
+        .keywordPainter: ["painter", "paint", "spray", "brush", "keywords", "tag", "keyword set", "library"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -222,6 +223,7 @@ extension ShortcutAction {
         case .editCaptureTime: "clock.arrow.2.circlepath"
         case .renamePhotos: "character.cursor.ibeam"
         case .moveToFolder: "folder.badge.plus"
+        case .keywordPainter: "paintbrush.pointed"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"
