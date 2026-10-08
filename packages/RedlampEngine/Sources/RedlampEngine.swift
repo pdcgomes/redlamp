@@ -657,14 +657,17 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     func renderStillNow(_ request: StillRequest, session: ImageSession) throws -> CGImage {
         // A photo no longer open (the editor moved on, or let go of it, while this waited) or
         // never open, as a focus stack's preview, is rendered without the detail stage keeping
-        // anything for it, nor evicting what it keeps for the photo open. Its retouches last
-        // until it's done, for its tiles.
+        // anything for it, nor evicting what it keeps for the photo open. Its retouches and masks
+        // last until it's done, for its tiles.
         let isOpen = currentSession() === session
         defer {
             if !isOpen {
                 let open = currentSession()
                 detailStage.keepOnly(open)
                 retouch.keepOnly(open)
+                if open !== session {
+                    masks.letGo(of: session)
+                }
             }
         }
         let developed = request.recipe.developedSize(imageSize: session.orientedSize)

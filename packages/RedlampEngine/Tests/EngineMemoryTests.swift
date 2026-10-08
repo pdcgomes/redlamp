@@ -847,10 +847,9 @@ struct EngineMemoryTests {
         for _ in 0 ..< 50 where photo != nil {
             try await Task.sleep(for: .milliseconds(20))
         }
-        let after = Self.retouchAndMaskBytes(engine, open: open)
         print(
-            "masks \(before) bytes before the exports, \(after.masks) after; "
-                + "the exported photo's retouches \(during.retouch) bytes once both were done",
+            "mask textures: \(before) bytes before the exports, \(during.masks) once both were done; "
+                + "the exported photo's retouches: \(during.retouch) bytes",
         )
         let photoBytes = photo?.allocatedBytes ?? 0
         try await Self.frame(engine, recipe, generation: 3)
@@ -859,10 +858,8 @@ struct EngineMemoryTests {
         }
         #expect(during.retouch == 0, "\(during.retouch) bytes of its retouched copies kept")
         #expect(retouchesAfter == retouches, "the open photo's retouches were made again")
-        withKnownIssue("the mask stage keeps the last photo it rendered a still for") {
-            #expect(photo == nil, "\(photoBytes) bytes of the exported photo kept")
-            #expect(during.masks <= before, "\(during.masks - before) bytes of mask textures kept for it")
-        }
+        #expect(photo == nil, "\(photoBytes) bytes of the exported photo kept")
+        #expect(during.masks <= before, "\(during.masks - before) bytes of mask textures kept for it")
         #expect(engine.renderQueue.sync { engine.masks.slicesDrawn } == slices)
     }
 
@@ -889,10 +886,8 @@ struct EngineMemoryTests {
         let photoBytes = photo?.allocatedBytes ?? 0
         let (retouch, masks) = Self.retouchAndMaskBytes(engine, open: nil)
         #expect(retouch == 0, "\(retouch) bytes of its retouched copy kept")
-        withKnownIssue("the mask stage keeps the last photo it rendered a still for") {
-            #expect(photo == nil, "\(photoBytes) bytes of the photo kept")
-            #expect(masks == 0, "\(masks) bytes of mask textures kept")
-        }
+        #expect(photo == nil, "\(photoBytes) bytes of the photo kept")
+        #expect(masks == 0, "\(masks) bytes of mask textures kept")
     }
 
     /// Segment Anything's embedding of a photo, which the shared embedding cache also keeps in

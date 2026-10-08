@@ -484,11 +484,29 @@ final class MaskResources {
         parked.removeAll { $0.session == nil || kept == nil }
         edgeMaps.removeAll { $0.session == nil || kept == nil }
         colorMaps.removeAll { $0.session == nil || kept == nil }
+        pruneRecordings()
         guard let session, session.original !== kept?.original else { return }
         if kept != nil {
             park(session, queue: queue)
         }
-        self.session = nil
+        clearCurrent()
+    }
+
+    /// Lets go of what is kept for `photo`, rendered last or kept aside, without keeping it
+    /// aside: after a still of a photo that isn't open.
+    func letGo(of photo: ImageSession) {
+        let original = photo.original
+        parked.removeAll { $0.session == nil || $0.session?.original === original }
+        edgeMaps.removeAll { $0.session == nil || $0.session?.original === original }
+        colorMaps.removeAll { $0.session == nil || $0.session?.original === original }
+        pruneRecordings()
+        if session?.original === original {
+            clearCurrent()
+        }
+    }
+
+    private func clearCurrent() {
+        session = nil
         rasterSize = .zero
         guideSize = .zero
         scratch = nil
@@ -904,7 +922,7 @@ final class MaskResources {
         if let recorded = recordings.last(where: { $0.commands === commands }) {
             return recorded
         }
-        recordings.removeAll { $0.commands == nil || $0.commands?.status == .completed }
+        pruneRecordings()
         let recorded = Recording(commands: commands, session: session)
         recordings.append(recorded)
         return recorded
@@ -914,6 +932,11 @@ final class MaskResources {
     /// `commands`.
     func recordPainting(in commands: any MTLCommandBuffer) {
         recording(commands).painting = true
+    }
+
+    /// Forgets the command buffers that are done, and the textures they would have put back.
+    private func pruneRecordings() {
+        recordings.removeAll { $0.commands == nil || $0.commands?.status == .completed }
     }
 }
 
