@@ -80,6 +80,10 @@
                     "showBefore": model.showBefore,
                 ],
             ]
+            // What the app did last, which a scenario's clean-up after the failure doesn't take away.
+            state["activity"] = model.activity.events.suffix(24).map { event in
+                "\(event.kind.rawValue): \(event.text)\(event.count > 1 ? " ×\(event.count)" : "")"
+            }
             if let editor {
                 var window = window(editor)
                 window["firstResponder"] = editor.firstResponder.map(Views.describe) ?? "none"
