@@ -169,9 +169,7 @@ struct CameraBenchTests {
         encoder.outputFormatting = [.sortedKeys]
         #expect(try encoder.encode(CameraBenchReport(environment: environment, photos: reports[1]))
             == encoder.encode(CameraBenchReport(environment: environment, photos: reports[0])))
-        withKnownIssue("the bench identifies files and reads their previews in the app") {
-            #expect(service.benchReads >= 2 * urls.count)
-        }
+        #expect(service.benchReads >= 2 * urls.count)
     }
 
     // MARK: - Faults, through the real decode and rendering
@@ -389,6 +387,33 @@ struct CameraBenchTests {
 }
 
 /// Decodes as LibRaw does, then introduces one fault, as a decoder bug would.
+/// Reads files as the CLI's engine does, so the bench identifies them and finds their previews.
+extension FaultyDecoder: FileInspecting {
+    func captures(of urls: [URL], concurrently: Bool) -> [CaptureSettings?] {
+        InProcessDecoder().captures(of: urls, concurrently: concurrently)
+    }
+
+    func focusThumbnails(of urls: [URL], concurrently: Bool) -> [GreyThumbnail?] {
+        InProcessDecoder().focusThumbnails(of: urls, concurrently: concurrently)
+    }
+
+    func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+        InProcessDecoder().imageProperties(of: urls)
+    }
+
+    func haldImage(of url: URL) -> HaldImage? {
+        InProcessDecoder().haldImage(of: url)
+    }
+
+    func rawIdentities(of urls: [URL]) -> [RawFileIdentity?] {
+        InProcessDecoder().rawIdentities(of: urls)
+    }
+
+    func cameraPreviews(of urls: [URL], maxLongEdge: Int) -> [CGImage?] {
+        InProcessDecoder().cameraPreviews(of: urls, maxLongEdge: maxLongEdge)
+    }
+}
+
 struct FaultyDecoder: ImageDecoding {
     enum Fault {
         /// The orientation a quarter turn off.

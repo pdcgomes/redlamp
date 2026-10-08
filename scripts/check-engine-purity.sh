@@ -70,8 +70,6 @@ DIRECT_READ='\b(ImageDecoder|RawDecoder|BitmapDecoder|Thumbnails)\.'
 ALLOWED_READS=(
     "RedlampEngine/Sources/RedlampEngine.swift|Thumbnails.thumbnail(|filmstrip thumbnails; the service's lookup missed the first-visit budget"
     "RedlampEngine/Sources/RedlampEngine+Thumbnails.swift|Thumbnails.thumbnail(|filmstrip thumbnails, as above"
-    "RedlampEngine/Sources/RedlampEngine+CameraBench.swift|ImageDecoder.identify(|Camera Bench: identifying each file in the chosen folder"
-    "RedlampEngine/Sources/RedlampEngine+CameraBench.swift|Thumbnails.cameraPreview(|Camera Bench: the camera's own JPEG"
     "RedlampEngine/Sources/RedlampEngine+CameraBench.swift|ImageDecoder.rawDecoderVersion|LibRaw's version string, which reads no file"
 )
 allowed_uses=()

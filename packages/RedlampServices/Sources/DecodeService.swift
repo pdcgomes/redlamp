@@ -87,14 +87,27 @@ public final class DecodeService: NSObject, DecodeServiceProtocol {
         reply(image.rgba16, image.width, image.height)
     }
 
-    public func rawIdentities(_: [Data], paths _: [String], reply: @escaping @Sendable (Data?) -> Void) {
-        reply(nil)
+    public func rawIdentities(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void) {
+        reply(try? JSONEncoder().encode(Self.read(files, paths: paths, concurrently: true) { file, url in
+            ImageDecoder.identify(file, url: url)
+        }))
     }
 
     public func cameraPreviews(
-        _: [Data], paths _: [String], maxLongEdge _: Int, reply: @escaping @Sendable (Data?) -> Void,
+        _ files: [Data], paths: [String], maxLongEdge: Int, reply: @escaping @Sendable (Data?) -> Void,
     ) {
-        reply(nil)
+        reply(try? JSONEncoder().encode(Self.read(files, paths: paths, concurrently: false) { file, _ in
+            Thumbnails.cameraPreview(in: file as NSData, maxPixelSize: maxLongEdge).flatMap(PreviewPixels.init)
+        }))
+    }
+
+    private static func read<T: Sendable>(
+        _ files: [Data], paths: [String], concurrently: Bool, _ read: @escaping @Sendable (Data, URL) -> T?,
+    ) -> [T?] {
+        guard files.count == paths.count else { return [] }
+        return FileInspection.map(Array(files.indices), concurrently: concurrently) { index in
+            read(files[index], URL(fileURLWithPath: paths[index]))
+        }
     }
 
     private static func inspect<T: Sendable>(

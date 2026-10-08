@@ -133,13 +133,16 @@ public final class CameraBenchModel {
             return
         }
         var candidates: [CameraBenchSelection.Candidate] = []
-        for (index, url) in files.enumerated() {
+        for start in stride(from: 0, to: files.count, by: Self.identifiedTogether) {
             guard !Task.isCancelled else { return }
-            if let identity = await Task.detached(priority: .userInitiated, operation: { bench.engine.identify(url) })
-                .value {
-                candidates.append(CameraBenchSelection.Candidate(url: url, identity: identity))
+            let batch = Array(files[start ..< min(start + Self.identifiedTogether, files.count)])
+            let identities = await Task.detached(priority: .userInitiated) { bench.engine.identify(batch) }.value
+            for (url, identity) in zip(batch, identities) {
+                if let identity {
+                    candidates.append(CameraBenchSelection.Candidate(url: url, identity: identity))
+                }
             }
-            phase = .reading(done: index + 1, total: files.count)
+            phase = .reading(done: start + batch.count, total: files.count)
         }
         let groups = CameraBenchSelection.choose(candidates, perMode: perMode, needs: summary?.needs ?? [:])
         modes = groups.map { Mode(mode: $0.mode, candidates: $0.candidates, photos: []) }
@@ -161,6 +164,10 @@ public final class CameraBenchModel {
         }
         phase = .results
     }
+
+    /// Files identified in one call to the engine, which reads them in the decode service: one
+    /// message for many files, with the progress still moving.
+    nonisolated static let identifiedTogether = 25
 
     nonisolated static func raws(in urls: [URL]) -> [URL] {
         urls.flatMap { url -> [URL] in

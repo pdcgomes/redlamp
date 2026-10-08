@@ -174,13 +174,11 @@ struct RawDiagnosticsTests {
 
         let listener = FileInspectionTests.Listener()
         let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
-        withKnownIssue("the decode service doesn't identify files yet") {
-            let served = service.rawIdentities(of: files)
-            for (url, (served, local)) in zip(files, zip(served, local)) {
-                #expect(served == local, "\(url.lastPathComponent)")
-            }
-            #expect(served.count == files.count)
+        let served = service.rawIdentities(of: files)
+        for (url, (served, local)) in zip(files, zip(served, local)) {
+            #expect(served == local, "\(url.lastPathComponent)")
         }
+        #expect(served.count == files.count)
     }
 
     @Test(.enabled(if: samples.count > 1))
@@ -194,15 +192,13 @@ struct RawDiagnosticsTests {
 
         let listener = FileInspectionTests.Listener()
         let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
-        withKnownIssue("the decode service doesn't read camera previews yet") {
-            let served = service.cameraPreviews(of: files, maxLongEdge: size)
-            #expect(served.count == files.count)
-            for (url, (served, local)) in zip(files, zip(served, local)) {
-                let (theirs, ours) = (Self.drawn(served), Self.drawn(local))
-                #expect(theirs?.profile == ours?.profile, "\(url.lastPathComponent)")
-                #expect(theirs?.width == ours?.width && theirs?.height == ours?.height, "\(url.lastPathComponent)")
-                #expect(theirs?.pixels == ours?.pixels, "\(url.lastPathComponent)")
-            }
+        let served = service.cameraPreviews(of: files, maxLongEdge: size)
+        #expect(served.count == files.count)
+        for (url, (served, local)) in zip(files, zip(served, local)) {
+            let (theirs, ours) = (Self.drawn(served), Self.drawn(local))
+            #expect(theirs?.profile == ours?.profile, "\(url.lastPathComponent)")
+            #expect(theirs?.width == ours?.width && theirs?.height == ours?.height, "\(url.lastPathComponent)")
+            #expect(theirs?.pixels == ours?.pixels, "\(url.lastPathComponent)")
         }
     }
 }
