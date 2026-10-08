@@ -132,6 +132,7 @@ struct SourceSummaryTests {
             contentRect: CGRect(x: 0, y: 0, width: 260, height: 300), styleMask: [.titled], backing: .buffered,
             defer: false,
         )
+        window.isReleasedWhenClosed = false
         let row = NSView(frame: CGRect(x: 0, y: 0, width: 200, height: 24))
         window.contentView?.addSubview(row)
         window.orderFront(nil)
