@@ -74,6 +74,18 @@ struct FileInspectionTests {
             recorded.withLock { $0.append(1) }
             service.haldImage(file, path: path, reply: reply)
         }
+
+        func rawIdentities(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void) {
+            recorded.withLock { $0.append(files.count) }
+            service.rawIdentities(files, paths: paths, reply: reply)
+        }
+
+        func cameraPreviews(
+            _ files: [Data], paths: [String], maxLongEdge: Int, reply: @escaping @Sendable (Data?) -> Void,
+        ) {
+            recorded.withLock { $0.append(files.count) }
+            service.cameraPreviews(files, paths: paths, maxLongEdge: maxLongEdge, reply: reply)
+        }
     }
 
     @Test(.enabled(if: !series.isEmpty))

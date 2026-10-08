@@ -49,9 +49,13 @@ public enum Thumbnails {
     /// The largest JPEG a raw file embeds, which is the camera's own rendering, upright and at
     /// most `maxPixelSize` on its long edge: what the camera bench compares Redlamp's with.
     public static func cameraPreview(of url: URL, maxPixelSize: Int) -> CGImage? {
-        guard let file = try? NSData(contentsOf: url, options: .alwaysMapped),
-              let raw = libraw_init(0)
-        else { return nil }
+        guard let file = try? NSData(contentsOf: url, options: .alwaysMapped) else { return nil }
+        return cameraPreview(in: file, maxPixelSize: maxPixelSize)
+    }
+
+    /// The same from the file's bytes, as the decode service reads it.
+    static func cameraPreview(in file: NSData, maxPixelSize: Int) -> CGImage? {
+        guard let raw = libraw_init(0) else { return nil }
         defer { libraw_close(raw) }
         let opened = Data(referencing: file).withUnsafeBytes { libraw_open_buffer(raw, $0.baseAddress, $0.count) }
         guard opened == LIBRAW_SUCCESS.rawValue else { return nil }

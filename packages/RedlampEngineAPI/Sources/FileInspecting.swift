@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Reads what the library needs from photo files without developing them: in the Mac app, in the
@@ -19,6 +20,25 @@ public protocol FileInspecting: Sendable {
     /// A HaldCLUT image's pixels, as a look table import reads them (see `HaldImage`); nil for a
     /// file that isn't an image.
     func haldImage(of url: URL) -> HaldImage?
+
+    /// Each raw file's camera, raw mode and capture settings, as `RawFileInspecting.identify`
+    /// reads them; nil for a file that isn't raw.
+    func rawIdentities(of urls: [URL]) -> [RawFileIdentity?]
+
+    /// Each raw file's largest embedded JPEG, the camera's own rendering, upright and at most
+    /// `maxLongEdge` on its long edge, as `RawFileInspecting.cameraPreview` reads it.
+    func cameraPreviews(of urls: [URL], maxLongEdge: Int) -> [CGImage?]
+}
+
+/// For readers that read no raw files.
+public extension FileInspecting {
+    func rawIdentities(of urls: [URL]) -> [RawFileIdentity?] {
+        urls.map { _ in nil }
+    }
+
+    func cameraPreviews(of urls: [URL], maxLongEdge _: Int) -> [CGImage?] {
+        urls.map { _ in nil }
+    }
 }
 
 /// A reader that can read no file: for engines that read none, such as previews' and tests'.

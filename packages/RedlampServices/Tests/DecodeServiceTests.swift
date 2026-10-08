@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import RedlampEngineAPI
 import Testing
@@ -260,6 +261,35 @@ struct DecodeServiceTests {
         guard let check = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "sandbox_check") else { return false }
         return unsafeBitCast(check, to: Check.self)(getpid(), nil, 0) != 0
     }()
+}
+
+extension DecodeServiceTests {
+    @Test func `a camera preview the app can't use is refused`() throws {
+        let space = try #require(CGColorSpace(name: CGColorSpace.displayP3))
+        let context = try #require(CGContext(
+            data: nil, width: 8, height: 4, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue,
+        ))
+        context.setFillColor(red: 0.2, green: 0.6, blue: 0.9, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 8, height: 4))
+        let image = try #require(context.makeImage())
+        let pixels = try #require(PreviewPixels(image))
+        #expect(pixels.colorSpace == CGColorSpace.displayP3 as String && pixels.iccProfile == nil)
+        #expect(pixels.image(maxLongEdge: 8)?.colorSpace?.name == CGColorSpace.displayP3)
+
+        var short = pixels
+        short.bytes.removeLast()
+        var unknown = pixels
+        unknown.colorSpace = "not a colour space"
+        var grey = pixels
+        grey.colorSpace = CGColorSpace.linearGray as String
+        var empty = pixels
+        empty.width = 0
+        for damaged in [short, unknown, grey, empty] {
+            #expect(damaged.image(maxLongEdge: 8) == nil)
+        }
+        #expect(pixels.image(maxLongEdge: 7) == nil)
+    }
 }
 
 /// The service replies synchronously; this holds what it sent.

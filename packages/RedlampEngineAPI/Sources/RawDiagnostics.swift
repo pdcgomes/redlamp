@@ -167,10 +167,19 @@ public protocol RawFileInspecting: Sendable {
     /// that aren't raw.
     func identify(_ url: URL) -> RawFileIdentity?
 
+    /// `identify(_:)` of each file, in their order, read together.
+    func identify(_ urls: [URL]) -> [RawFileIdentity?]
+
     /// The largest JPEG the file embeds, which is the camera's own rendering, upright and at
     /// most `maxLongEdge` on its long edge.
     func cameraPreview(of url: URL, maxLongEdge: Int) -> CGImage?
 
     /// The raw decoder and its version, such as "LibRaw 0.22.2".
     var rawDecoderVersion: String { get }
+}
+
+public extension RawFileInspecting {
+    func identify(_ urls: [URL]) -> [RawFileIdentity?] {
+        urls.map(identify)
+    }
 }

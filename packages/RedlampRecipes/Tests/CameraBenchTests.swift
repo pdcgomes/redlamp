@@ -2,9 +2,10 @@ import CoreGraphics
 import Foundation
 import RedlampEngine
 import RedlampEngineAPI
-import RedlampServices
+import Synchronization
 import Testing
 @testable import RedlampRecipes
+@testable import RedlampServices
 
 /// The camera bench (CAM-14): no false alarms on the verified cameras, and each fault it's
 /// meant to catch caught by its own check, through the real decode and rendering.
@@ -54,6 +55,123 @@ struct CameraBenchTests {
         #expect(failed.isEmpty, "\(url.lastPathComponent): \(failed)")
         #expect(result.photo.fileHash.count == 64)
         #expect(result.photo.mode.key.hasPrefix(result.photo.identity.normalizedMake ?? "?"))
+    }
+
+    // MARK: - Through the decode service (DATA-17)
+
+    /// A listener in this process that answers as the decode service does, through a real
+    /// connection, counting the bench's own reads: identifying files and their camera previews.
+    final class BenchService: NSObject, DecodeServiceProtocol, NSXPCListenerDelegate, @unchecked Sendable {
+        let listener = NSXPCListener.anonymous()
+        private let service = DecodeService()
+        private let reads = Mutex(0)
+
+        var benchReads: Int {
+            reads.withLock { $0 }
+        }
+
+        override init() {
+            super.init()
+            listener.delegate = self
+            listener.resume()
+        }
+
+        func listener(_: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
+            connection.exportedInterface = NSXPCInterface(with: DecodeServiceProtocol.self)
+            connection.exportedObject = self
+            connection.resume()
+            return true
+        }
+
+        func decode(_ file: Data, path: String, reply: @escaping @Sendable (Data?, Data?) -> Void) {
+            service.decode(file, path: path, reply: reply)
+        }
+
+        func captures(
+            _ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void,
+        ) {
+            service.captures(files, paths: paths, concurrently: concurrently, reply: reply)
+        }
+
+        func focusThumbnails(
+            _ files: [Data], paths: [String], concurrently: Bool, reply: @escaping @Sendable (Data?) -> Void,
+        ) {
+            service.focusThumbnails(files, paths: paths, concurrently: concurrently, reply: reply)
+        }
+
+        func imageProperties(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void) {
+            service.imageProperties(files, paths: paths, reply: reply)
+        }
+
+        func haldImage(_ file: Data, path: String, reply: @escaping @Sendable (Data?, Int, Int) -> Void) {
+            service.haldImage(file, path: path, reply: reply)
+        }
+
+        func rawIdentities(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void) {
+            reads.withLock { $0 += files.count }
+            service.rawIdentities(files, paths: paths, reply: reply)
+        }
+
+        func cameraPreviews(
+            _ files: [Data], paths: [String], maxLongEdge: Int, reply: @escaping @Sendable (Data?) -> Void,
+        ) {
+            reads.withLock { $0 += files.count }
+            service.cameraPreviews(files, paths: paths, maxLongEdge: maxLongEdge, reply: reply)
+        }
+    }
+
+    /// Previews in sRGB, Display P3 and an ICC profile of their own, and a camera that embeds none
+    /// the bench can read.
+    static let serviceSamples = [
+        "_DSC0009.ARW",
+        "IMG_1361.DNG",
+        "Samsung_Galaxy-S23-Ultra.dng",
+        "Canon_EOS-R5-Mark-II.CR3",
+    ]
+
+    static func untimed(_ photo: CameraBenchPhoto) -> CameraBenchPhoto {
+        var photo = photo
+        photo.decodeSeconds = nil
+        photo.renderSeconds = nil
+        return photo
+    }
+
+    /// An image's pixels drawn in sRGB, 8 bits a channel.
+    static func pixels(_ image: CGImage?) -> [UInt8]? {
+        guard let image, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let context = CGContext(
+            data: &pixels, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+            space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+        )
+        context?.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return pixels
+    }
+
+    @Test(.enabled(if: canRender && sample(serviceSamples[0]) != nil))
+    func `the bench reports the same through the decode service as in the app`() async throws {
+        let service = BenchService()
+        let served = try CameraBench(engine: RedlampEngine(decoder: DecodeServiceClient(
+            endpoint: service.listener.endpoint,
+        )))
+        let local = try Self.bench()
+        let urls = Self.serviceSamples.compactMap(Self.sample)
+        var reports: [[CameraBenchPhoto]] = [[], []]
+        for url in urls {
+            let ours = try #require(await local.run(url), "\(url.lastPathComponent)")
+            let theirs = try #require(await served.run(url), "\(url.lastPathComponent)")
+            reports[0].append(Self.untimed(ours.photo))
+            reports[1].append(Self.untimed(theirs.photo))
+            #expect(Self.pixels(theirs.theirs) == Self.pixels(ours.theirs), "\(url.lastPathComponent)")
+        }
+        let environment = local.environment(redlamp: "development", commit: nil)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        #expect(try encoder.encode(CameraBenchReport(environment: environment, photos: reports[1]))
+            == encoder.encode(CameraBenchReport(environment: environment, photos: reports[0])))
+        withKnownIssue("the bench identifies files and reads their previews in the app") {
+            #expect(service.benchReads >= 2 * urls.count)
+        }
     }
 
     // MARK: - Faults, through the real decode and rendering

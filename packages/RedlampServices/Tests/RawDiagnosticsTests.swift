@@ -111,4 +111,98 @@ struct RawDiagnosticsTests {
     @Test func `bitmaps aren't identified`() {
         #expect(ImageDecoder.identify(URL(fileURLWithPath: "/tmp/photo.jpg")) == nil)
     }
+
+    // MARK: - In the decode service (DATA-17)
+
+    /// Every sample, a Nikon HE NEF and a damaged raw, the last two in a folder of their own.
+    static func parityFiles() throws -> (files: [URL], highEfficiency: URL, damaged: URL, cleanup: () -> Void) {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let highEfficiency = try Self.highEfficiencyNEF(in: folder)
+        let damaged = folder.appending(path: "damaged.CR3")
+        try Data(repeating: 7, count: 4096).write(to: damaged)
+        return (samples + [highEfficiency, damaged], highEfficiency, damaged, {
+            try? FileManager.default.removeItem(at: folder)
+        })
+    }
+
+    /// DSC_0750.NEF with its raw image opening on JPEG XS's markers, as an HE NEF's does.
+    static func highEfficiencyNEF(in folder: URL) throws -> URL {
+        let source = try #require(samples.first { $0.lastPathComponent == "DSC_0750.NEF" })
+        var data = try Data(contentsOf: source)
+        let strip = data.withUnsafeBytes { bytes in
+            TIFFReader(bytes: bytes).flatMap { reader in
+                reader.imageFileDirectories().lazy.compactMap { entries -> Int? in
+                    let tags = Dictionary(entries.map { ($0.tag, $0) }) { first, _ in first }
+                    let value = { (tag: UInt16) in tags[tag].flatMap { reader.integers($0).first } }
+                    guard value(254) ?? 0 == 0, value(259) == NikonHighEfficiency.nefCompression,
+                          value(256) ?? 0 > 0
+                    else { return nil }
+                    return value(273)
+                }.first
+            }
+        }
+        let offset = try #require(strip)
+        data.replaceSubrange(offset ..< offset + NikonHighEfficiency.markers.count, with: NikonHighEfficiency.markers)
+        #expect(NikonHighEfficiency.isHighEfficiency(data))
+        let url = folder.appending(path: "DSC_0750_HE.NEF")
+        try data.write(to: url)
+        return url
+    }
+
+    /// An image's colour space and its pixels drawn in sRGB, 8 bits a channel.
+    static func drawn(_ image: CGImage?) -> (profile: Data?, width: Int, height: Int, pixels: [UInt8])? {
+        guard let image, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let context = CGContext(
+            data: &pixels, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+            space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+        )
+        context?.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return (image.colorSpace?.copyICCData() as Data?, image.width, image.height, pixels)
+    }
+
+    @Test(.enabled(if: samples.count > 1))
+    func `the decode service identifies each file as the app does`() throws {
+        let (files, highEfficiency, damaged, cleanup) = try Self.parityFiles()
+        defer { cleanup() }
+        let local = files.map { ImageDecoder.identify($0) }
+        #expect(local.allSatisfy { $0 != nil })
+        #expect(try local[#require(files.firstIndex(of: highEfficiency))]?.decoder == NikonHighEfficiency.libRawDecoder)
+        #expect(try local[#require(files.firstIndex(of: damaged))]?.refusal != nil)
+        #expect(InProcessDecoder().rawIdentities(of: files) == local)
+
+        let listener = FileInspectionTests.Listener()
+        let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
+        withKnownIssue("the decode service doesn't identify files yet") {
+            let served = service.rawIdentities(of: files)
+            for (url, (served, local)) in zip(files, zip(served, local)) {
+                #expect(served == local, "\(url.lastPathComponent)")
+            }
+            #expect(served.count == files.count)
+        }
+    }
+
+    @Test(.enabled(if: samples.count > 1))
+    func `the decode service's camera previews are the app's, pixel for pixel`() throws {
+        let (files, _, damaged, cleanup) = try Self.parityFiles()
+        defer { cleanup() }
+        let size = 1024
+        let local = files.map { Thumbnails.cameraPreview(of: $0, maxPixelSize: size) }
+        #expect(local.compactMap(\.self).count >= files.count - 5)
+        #expect(try local[#require(files.firstIndex(of: damaged))] == nil)
+
+        let listener = FileInspectionTests.Listener()
+        let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
+        withKnownIssue("the decode service doesn't read camera previews yet") {
+            let served = service.cameraPreviews(of: files, maxLongEdge: size)
+            #expect(served.count == files.count)
+            for (url, (served, local)) in zip(files, zip(served, local)) {
+                let (theirs, ours) = (Self.drawn(served), Self.drawn(local))
+                #expect(theirs?.profile == ours?.profile, "\(url.lastPathComponent)")
+                #expect(theirs?.width == ours?.width && theirs?.height == ours?.height, "\(url.lastPathComponent)")
+                #expect(theirs?.pixels == ours?.pixels, "\(url.lastPathComponent)")
+            }
+        }
+    }
 }

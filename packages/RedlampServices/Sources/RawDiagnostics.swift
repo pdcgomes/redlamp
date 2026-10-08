@@ -10,6 +10,11 @@ public extension ImageDecoder {
         SupportedFormats.isRaw(url) ? RawDecoder.identify(url) : nil
     }
 
+    /// The same from the file's bytes, as the decode service reads it; `url` gives its type.
+    static func identify(_ file: Data, url: URL) -> RawFileIdentity? {
+        SupportedFormats.isRaw(url) ? RawDecoder.identify(file, url: url) : nil
+    }
+
     /// "LibRaw 0.22.2".
     static var rawDecoderVersion: String {
         "LibRaw \(String(cString: libraw_version()))"
@@ -21,16 +26,36 @@ extension RawDecoder {
         guard let raw = libraw_init(0) else { return nil }
         defer { libraw_close(raw) }
         let status = url.withUnsafeFileSystemRepresentation { libraw_open_file(raw, $0) }
+        return identity(raw, opened: status, data: nil, url: url) {
+            CGImageSourceCreateWithURL(url as CFURL, nil)
+        }
+    }
+
+    static func identify(_ file: Data, url: URL) -> RawFileIdentity? {
+        guard let raw = libraw_init(0) else { return nil }
+        defer { libraw_close(raw) }
+        let status = file.withUnsafeBytes { libraw_open_buffer(raw, $0.baseAddress, $0.count) }
+        return identity(raw, opened: status, data: file, url: url) {
+            FileInspection.source(file, path: url.path)
+        }
+    }
+
+    /// What LibRaw read, or what the EXIF says with LibRaw's reason when `status` is a refusal.
+    private static func identity(
+        _ raw: UnsafeMutablePointer<libraw_data_t>, opened status: Int32, data: Data?, url: URL,
+        source: () -> CGImageSource?,
+    ) -> RawFileIdentity {
         guard status != 0 else {
             var identity = identity(raw, url: url)
             // LibRaw names another decoder for the HE data of bodies it doesn't check; a camera
             // mode must keep that data apart from the same body's lossless files.
-            if NikonHighEfficiency.isHighEfficiency(raw, data: nil, url: url) {
+            if NikonHighEfficiency.isHighEfficiency(raw, data: data, url: url) {
                 identity.decoder = NikonHighEfficiency.libRawDecoder
             }
             return identity
         }
-        var stated = exifIdentity(url) ?? RawFileIdentity(format: url.pathExtension.uppercased())
+        var stated = source().flatMap { exifIdentity($0, url: url) }
+            ?? RawFileIdentity(format: url.pathExtension.uppercased())
         stated.refusal = String(cString: libraw_strerror(status))
         return stated
     }
@@ -98,10 +123,10 @@ extension RawDecoder {
     }
 
     /// What ImageIO reads from a file's EXIF, for a file LibRaw won't open.
-    static func exifIdentity(_ url: URL) -> RawFileIdentity? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
-        else { return nil }
+    static func exifIdentity(_ source: CGImageSource, url: URL) -> RawFileIdentity? {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else {
+            return nil
+        }
         let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
         let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
         func words(_ value: Any?) -> String? {

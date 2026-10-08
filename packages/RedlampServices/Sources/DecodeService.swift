@@ -41,6 +41,14 @@ public struct InProcessDecoder: ImageDecoding {
     func imageProperties(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void)
     /// `FileInspecting.haldImage`: the pixels as raw bytes and the size, or nil and zeros.
     func haldImage(_ file: Data, path: String, reply: @escaping @Sendable (Data?, Int, Int) -> Void)
+
+    /// `FileInspecting.rawIdentities` likewise: a JSON array of `RawFileIdentity` or null.
+    func rawIdentities(_ files: [Data], paths: [String], reply: @escaping @Sendable (Data?) -> Void)
+
+    /// `FileInspecting.cameraPreviews` likewise: a JSON array of `PreviewPixels` or null.
+    func cameraPreviews(
+        _ files: [Data], paths: [String], maxLongEdge: Int, reply: @escaping @Sendable (Data?) -> Void,
+    )
 }
 
 /// The service side: decodes from the bytes it is sent (it has no file system access).
@@ -77,6 +85,16 @@ public final class DecodeService: NSObject, DecodeServiceProtocol {
             return reply(nil, 0, 0)
         }
         reply(image.rgba16, image.width, image.height)
+    }
+
+    public func rawIdentities(_: [Data], paths _: [String], reply: @escaping @Sendable (Data?) -> Void) {
+        reply(nil)
+    }
+
+    public func cameraPreviews(
+        _: [Data], paths _: [String], maxLongEdge _: Int, reply: @escaping @Sendable (Data?) -> Void,
+    ) {
+        reply(nil)
     }
 
     private static func inspect<T: Sendable>(
@@ -302,6 +320,9 @@ public extension DecodedImage {
         /// Both sides hold about 0.1 MB a file while a message is answered (its mapped pages, not
         /// copies), so a message carries no more than this many.
         static let filesPerCall = 1000
+        /// A camera preview's pixels come back in the reply, 4 MB each at the bench's 1,024 px, so a
+        /// message carries no more than this many.
+        static let previewsPerCall = 4
 
         public func captures(of urls: [URL], concurrently: Bool) -> [CaptureSettings?] {
             inspect(urls, as: CaptureSettings.self) { proxy, files, paths, reply in
@@ -335,8 +356,20 @@ public extension DecodedImage {
             return answer.withLock { $0 }
         }
 
+        public func rawIdentities(of urls: [URL]) -> [RawFileIdentity?] {
+            inspect(urls, as: RawFileIdentity.self) { proxy, files, paths, reply in
+                proxy.rawIdentities(files, paths: paths, reply: reply)
+            }
+        }
+
+        public func cameraPreviews(of urls: [URL], maxLongEdge: Int) -> [CGImage?] {
+            inspect(urls, as: PreviewPixels.self, perCall: Self.previewsPerCall) { proxy, files, paths, reply in
+                proxy.cameraPreviews(files, paths: paths, maxLongEdge: maxLongEdge, reply: reply)
+            }.map { $0?.image(maxLongEdge: maxLongEdge) }
+        }
+
         private func inspect<T: Decodable>(
-            _ urls: [URL], as _: T.Type,
+            _ urls: [URL], as _: T.Type, perCall: Int = filesPerCall,
             _ call: (any DecodeServiceProtocol, [Data], [String], @escaping @Sendable (Data?) -> Void) -> Void,
         ) -> [T?] {
             Self.checkOffMain()
@@ -344,8 +377,8 @@ public extension DecodedImage {
             let connection = connect()
             defer { connection.invalidate() }
             let proxy = connection.synchronousRemoteObjectProxyWithErrorHandler { _ in } as? DecodeServiceProtocol
-            return stride(from: 0, to: urls.count, by: Self.filesPerCall).flatMap { start -> [T?] in
-                let batch = urls[start ..< min(start + Self.filesPerCall, urls.count)]
+            return stride(from: 0, to: urls.count, by: perCall).flatMap { start -> [T?] in
+                let batch = urls[start ..< min(start + perCall, urls.count)]
                 let files = batch.map { (try? Data(contentsOf: $0, options: .alwaysMapped)) ?? Data() }
                 let answer = Mutex<Data?>(nil)
                 if let proxy {

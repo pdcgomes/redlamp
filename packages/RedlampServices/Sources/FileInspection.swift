@@ -141,7 +141,66 @@ extension FileInspection {
     }
 }
 
+/// A camera preview as the decode service sends it: 8 bits a channel, red, green and blue then
+/// a byte unused, in the preview's own colour space, by its name or else by its ICC profile.
+struct PreviewPixels: Codable, Sendable {
+    var width: Int
+    var height: Int
+    var colorSpace: String?
+    var iccProfile: Data?
+    var bytes: Data
+
+    init?(_ image: CGImage) {
+        guard let space = image.colorSpace, space.model == .rgb, image.width > 0, image.height > 0 else { return nil }
+        let name = space.name as String?
+        let profile = name == nil ? space.copyICCData() as Data? : nil
+        guard name != nil || profile != nil else { return nil }
+        let (width, height) = (image.width, image.height)
+        var bytes = Data(count: width * height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+            ) else { return false }
+            context.interpolationQuality = .none
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+        self.width = width
+        self.height = height
+        colorSpace = name
+        iccProfile = profile
+        self.bytes = bytes
+    }
+
+    /// Nil for a size over `maxLongEdge`, pixels that don't fill it, or a colour space that isn't
+    /// RGB, so a damaged reply can't be shown or measured.
+    func image(maxLongEdge: Int) -> CGImage? {
+        guard (1 ... maxLongEdge).contains(width), (1 ... maxLongEdge).contains(height),
+              bytes.count == width * height * 4,
+              let space = colorSpace.flatMap({ CGColorSpace(name: $0 as CFString) })
+              ?? iccProfile.flatMap({ CGColorSpace(iccData: $0 as CFData) }),
+              space.model == .rgb,
+              let provider = CGDataProvider(data: bytes as CFData)
+        else { return nil }
+        return CGImage(
+            width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4, space: space,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue), provider: provider,
+            decode: nil, shouldInterpolate: true, intent: .defaultIntent,
+        )
+    }
+}
+
 extension InProcessDecoder: FileInspecting {
+    public func rawIdentities(of urls: [URL]) -> [RawFileIdentity?] {
+        urls.map { ImageDecoder.identify($0) }
+    }
+
+    public func cameraPreviews(of urls: [URL], maxLongEdge: Int) -> [CGImage?] {
+        urls.map { Thumbnails.cameraPreview(of: $0, maxPixelSize: maxLongEdge) }
+    }
+
     public func captures(of urls: [URL], concurrently: Bool) -> [CaptureSettings?] {
         FileInspection
             .map(urls, concurrently: concurrently) { FileInspection.source($0).flatMap(FileInspection.capture) }
