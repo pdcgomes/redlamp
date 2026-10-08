@@ -188,6 +188,28 @@ struct LibraryServiceTests {
         #expect(library.items[1].metadata.rating == 3, "the photo that stayed keeps its badges")
     }
 
+    @Test func `a photo's content key comes across when its file changes, and not when only its badges do`(
+    ) async throws {
+        defer { cleanUp() }
+        try photos(["A.JPG", "C.JPG"])
+        let (library, _) = try await indexedLibrary()
+        library.open(root)
+        try await eventually { library.isShownFromLibrary && !library.isListing }
+        try #require(library.items.map(\.name) == ["A.JPG", "C.JPG"])
+        let key = try #require(library.storeThumbnail(for: library.items[1])?.1)
+
+        try SidecarStore().save(Sidecar(recipe: Self.edited, metadata: PhotoMetadata(rating: 3)), for: photo("C.JPG"))
+        library.sidecarSaved(photo("C.JPG"))
+        try await eventually { library.items[1].metadata.rating == 3 }
+        #expect(library.items[1].metadata.rating == 3)
+        #expect(library.storeThumbnail(for: library.items[1])?.1 == key, "a badge's change keeps the photo's key")
+
+        try write("C.JPG", shade: 9)
+        try await eventually(seconds: 30) { library.storeThumbnail(for: library.items[1])?.1 != key }
+        let rewritten = try #require(library.storeThumbnail(for: library.items[1])?.1)
+        #expect(rewritten != key, "the photo rewritten with other pixels shows its new key")
+    }
+
     @Test func `a folder the library hasn't indexed is listed, then shown from the library without a jump`(
     ) async throws {
         defer { cleanUp() }

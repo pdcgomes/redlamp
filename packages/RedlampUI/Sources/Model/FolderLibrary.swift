@@ -26,6 +26,24 @@ public struct LibraryDiff: Sendable, Equatable {
     }
 }
 
+extension IndexSet {
+    /// `rows`, in any order, inserted a run of consecutive rows at a time: a selection's 20,000 rows are one
+    /// insert, where one each takes most of a millisecond.
+    init(rows: [Int]) {
+        self.init()
+        let sorted = zip(rows, rows.dropFirst()).allSatisfy { $0 <= $1 } ? rows : rows.sorted()
+        var start = sorted.startIndex
+        while start < sorted.endIndex {
+            var end = start + 1
+            while end < sorted.endIndex, sorted[end] <= sorted[end - 1] + 1 {
+                end += 1
+            }
+            insert(integersIn: sorted[start] ... sorted[end - 1])
+            start = end
+        }
+    }
+}
+
 /// A folder as the tree shows it: the photos directly in it and its subfolders, in Finder's order.
 public struct FolderNode: Sendable, Equatable {
     public var count: Int

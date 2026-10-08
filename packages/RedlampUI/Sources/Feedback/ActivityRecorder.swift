@@ -30,7 +30,8 @@ final class ActivityRecorder {
         watch(model, { $0.canvas.zoomPercent }) { _, percent in
             log.record(.view, "Zoom: \(percent)%", replacing: "zoom")
         }
-        watch(model, { $0.selectedPhotos.count }) { _, count in
+        // The selection's own count: `selectedPhotos` walks every photo shown, on each step of a held arrow key.
+        watch(model, { $0.photoSelection.count }) { _, count in
             if count > 1 {
                 log.record(.view, "Selected \(count) photos", replacing: "selection")
             }

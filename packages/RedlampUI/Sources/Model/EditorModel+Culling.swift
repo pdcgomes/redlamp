@@ -901,26 +901,30 @@ extension CullingValues {
 
 extension FolderLibrary {
     /// Changes the badges of the photos in `rows`, in order, as one change, each of which `change` changes:
-    /// a pass over them and nothing more, for a selection of thousands.
+    /// a pass over them in one mutation of `items`, for a selection of thousands.
     func setMetadata(_ rows: [Int], _ change: (Int, inout PhotoMetadata) -> Void) {
-        for (place, row) in rows.enumerated() where items.indices.contains(row) {
-            change(place, &items[row].metadata)
+        items.withUnsafeMutableBufferPointer { items in
+            for (place, row) in rows.enumerated() where items.indices.contains(row) {
+                change(place, &items[row].metadata)
+            }
         }
-        publish(LibraryDiff(updated: IndexSet(rows)))
+        publish(LibraryDiff(updated: IndexSet(rows: rows)))
     }
 
     /// Changes the badges of the photos in `rows` as one change; `change` hears each photo's place in `rows`.
     func updateMetadata(_ rows: [Int], _ change: (Int, inout PhotoMetadata) -> Void) {
-        var updated = IndexSet()
-        for (place, row) in rows.enumerated() where items.indices.contains(row) {
-            let before = items[row].metadata
-            change(place, &items[row].metadata)
-            if items[row].metadata != before {
-                updated.insert(row)
+        var updated: [Int] = []
+        items.withUnsafeMutableBufferPointer { items in
+            for (place, row) in rows.enumerated() where items.indices.contains(row) {
+                let before = items[row].metadata
+                change(place, &items[row].metadata)
+                if items[row].metadata != before {
+                    updated.append(row)
+                }
             }
         }
         if !updated.isEmpty {
-            publish(LibraryDiff(updated: updated))
+            publish(LibraryDiff(updated: IndexSet(rows: updated)))
         }
     }
 }

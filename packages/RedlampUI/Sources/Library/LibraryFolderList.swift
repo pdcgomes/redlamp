@@ -26,7 +26,8 @@ final class LibraryFolderList: Sendable {
         var inserted: [LibraryItem] = []
         /// Photos still shown under the same URL whose row changed.
         var updated: [LibraryItem] = []
-        /// The content keys of the photos in `all`, `inserted` and `updated` that have one.
+        /// The content keys of the photos in `all` and `inserted` that have one, and of those in `updated` whose
+        /// key changed.
         var keys: [URL: ContentKey] = [:]
         /// The filtered or sorted list, which replaces every photo shown.
         var ordered: Ordered?
@@ -260,7 +261,8 @@ final class LibraryFolderList: Sendable {
                     forget(id)
                     continue
                 }
-                if let key = row.contentKey.flatMap(ContentKey.init(data:)) {
+                // A photo shown under the same URL with the same content (a culling batch's thousands) sends no key.
+                if let key = row.contentKey.flatMap(ContentKey.init(data:)), before != item.url || keys[id] != key {
                     change.keys[item.url] = key
                     keys[id] = key
                 }

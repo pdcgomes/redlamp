@@ -242,7 +242,7 @@ extension FolderLibrary {
         return kept
     }
 
-    /// LibraryLive's change to the open folder's photos, as a `LibraryDiff`.
+    /// LibraryLive's change to the open folder's photos, as a `LibraryDiff`: each photo looked up once.
     private func apply(library change: LibraryFolderList.Change) {
         for url in change.removed {
             fromLibrary.keys[url] = nil
@@ -250,15 +250,21 @@ extension FolderLibrary {
         fromLibrary.keys.merge(change.keys) { _, new in new }
         var removed = IndexSet(change.removed.compactMap { positions[$0] })
         var updated: [URL] = []
+        var updatedRows: [Int] = []
         var inserting: [LibraryItem] = []
+        // Only the photos a change brings can start settling: those settling already wait for `settleFromLibrary`.
+        var settles = false
         let now = clock()
-        for var item in change.inserted + change.updated {
+        for var item in [change.inserted, change.updated].joined() {
             guard let index = positions[item.url] else {
                 item.isSettling = Self.isSettling(item.modified, at: now)
+                settles = settles || item.isSettling
                 inserting.append(item)
                 continue
             }
-            removed.remove(index)
+            if !removed.isEmpty {
+                removed.remove(index)
+            }
             var kept = Self.keeping(items[index], as: item)
             if kept.size != items[index].size || kept.modified != items[index].modified {
                 kept.isSettling = Self.isSettling(kept.modified, at: now)
@@ -266,12 +272,18 @@ extension FolderLibrary {
             if kept != items[index] {
                 items[index] = kept
                 updated.append(item.url)
+                updatedRows.append(index)
+                settles = settles || kept.isSettling
             }
         }
         guard !removed.isEmpty || !inserting.isEmpty || !updated.isEmpty else { return }
-        apply(removed: removed, inserting: inserting, updated: updated, probing: false)
+        if removed.isEmpty, inserting.isEmpty {
+            publish(LibraryDiff(updated: IndexSet(rows: updatedRows)))
+        } else {
+            apply(removed: removed, inserting: inserting, updated: updated, probing: false)
+        }
         listedDirectories.formUnion(inserting.map(\.folderPath))
-        if items.contains(where: \.isSettling) {
+        if settles {
             settleFromLibrary(generation)
         }
         if !removed.isEmpty || !inserting.isEmpty {

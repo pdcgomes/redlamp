@@ -131,4 +131,22 @@ struct ActivityLogTests {
         try await eventually { texts(model).last == "Masking said: The model isn't downloaded" }
         #expect(texts(model).last == "Masking said: The model isn't downloaded")
     }
+
+    @Test func `a selection of several photos is recorded with its count`() async throws {
+        let model = EditorModel(engine: StubEngine())
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let photos = ["A", "B", "C", "D"].map { folder.appending(path: "\($0).ARW") }
+        photos.forEach { model.library.insert(LibraryItem(url: $0)) }
+
+        model.click(photos[0])
+        model.click(photos[2], toggling: true)
+        try await eventually { texts(model).contains("Selected 2 photos") }
+        #expect(texts(model).contains("Selected 2 photos"))
+        model.selectAllPhotos()
+        try await eventually { texts(model).contains("Selected 4 photos") }
+        #expect(texts(model).contains("Selected 4 photos"))
+        model.deselectOtherPhotos()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!texts(model).contains { $0.hasPrefix("Selected 1") }, "one photo isn't a selection worth a line")
+    }
 }

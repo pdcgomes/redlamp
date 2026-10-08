@@ -159,4 +159,31 @@ struct FolderLibraryTests {
         try await eventually { SidecarStore().load(for: photo)?.metadata?.rating == 4 }
         #expect(SidecarStore().load(for: photo)?.metadata?.rating == 4)
     }
+
+    @Test func `a change's rows make the index set they name, in any order, with gaps and repeats`() {
+        let cases: [[Int]] = [[], [4], [0, 1, 2, 3], [0, 1, 5, 6, 7, 9], [9, 3, 4, 3, 0, 8, 8], Array(0 ..< 20000)]
+        for rows in cases {
+            #expect(IndexSet(rows: rows) == rows.reduce(into: IndexSet()) { $0.insert($1) })
+        }
+        #expect(IndexSet(rows: Array(0 ..< 20000)).rangeView.count == 1, "a whole selection is one range")
+    }
+
+    @Test func `a culling change to thousands of rows is one diff of those rows`() {
+        let model = EditorModel(engine: StubEngine())
+        let photos = (0 ..< 5000).map { folder.appending(path: String(format: "IMG_%04d.ARW", $0)) }
+        model.library.replace(with: photos.map { LibraryItem(url: $0) })
+        var diffs: [LibraryDiff] = []
+        let observation = model.library.observe { diffs.append($0) }
+        defer { observation.invalidate() }
+
+        let rows = Array(stride(from: 1, to: 5000, by: 2))
+        model.library.setMetadata(rows) { place, metadata in metadata.rating = place % 5 + 1 }
+        #expect(diffs == [LibraryDiff(updated: IndexSet(rows))])
+        #expect(rows.indices.allSatisfy { model.items[rows[$0]].metadata.rating == $0 % 5 + 1 })
+        #expect(model.items[0].metadata.rating == 0, "rows not named keep their badges")
+
+        diffs = []
+        model.library.updateMetadata([0, 1, 3]) { _, metadata in metadata.rating = 1 }
+        #expect(diffs == [LibraryDiff(updated: [0, 3])], "only the rows whose badges changed")
+    }
 }
