@@ -62,9 +62,11 @@ import RedlampLibrary
     /// The grouping that follows badges' changes once they're quiet.
     @ObservationIgnored private var quiet: Task<Void, Never>?
     @ObservationIgnored private var pending = false
-    /// Each photo's ID in the index, by its ID here, for the source they were found for.
+    /// Each photo's ID in the index, by its ID here, for the source they were found for, and the last grouping's
+    /// photos as the index has them.
     @ObservationIgnored private var indexIDs: [Int64: Int64] = [:]
     @ObservationIgnored private var indexedSource: PhotoSource?
+    @ObservationIgnored private var indexedPhotos: IndexedPhotos?
     /// The stacks' openings and closings counted when the grouping in progress took them.
     @ObservationIgnored private var stackOpenings = 0
     /// How long the last grouping took off the main thread, for `--library-perf`, and its parts: the photos'
@@ -133,12 +135,13 @@ import RedlampLibrary
         let library = model.library
         if wanted.source != indexedSource {
             indexIDs = [:]
+            indexedPhotos = nil
             indexedSource = wanted.source
         }
         let stacks = model.gridStacks
         stackOpenings = stacks.openings
         let request = Request(
-            items: library.items, ids: library.photoIDs, known: indexIDs,
+            items: library.items, ids: library.photoIDs, known: indexIDs, indexed: indexedPhotos,
             sort: library.filters?.sort.query ?? QuerySort(), grouping: wanted, finder: stacks.finder,
             stacks: stacks.list, opensStacks: stacks.opensNew,
         )
@@ -160,6 +163,9 @@ import RedlampLibrary
         if let result {
             lastGroupingParts = result.parts
             indexIDs.merge(result.found) { _, new in new }
+            if result.grouping.source == indexedSource {
+                indexedPhotos = result.indexed
+            }
             if result.grouping == now {
                 let adopting = ContinuousClock.now
                 adopt(result.grouped)
@@ -175,6 +181,8 @@ import RedlampLibrary
         var items: [LibraryItem]
         var ids: ContiguousArray<Int64>
         var known: [Int64: Int64]
+        /// The photos as the last grouping found them in the index, for the same list.
+        var indexed: IndexedPhotos?
         var sort: QuerySort
         var grouping: Grouping
         var finder: LibraryStackFinder
@@ -188,8 +196,49 @@ import RedlampLibrary
         var grouped: GroupedList
         /// The index's IDs found for photos `known` didn't have.
         var found: [Int64: Int64]
+        var indexed: IndexedPhotos
         var grouping: Grouping
         var parts: [Duration] = []
+    }
+
+    /// A list's photos as the index has them, kept from one grouping to the next while the list stays the same,
+    /// since a change of Group By or the setting doesn't change them: the photos the index has, by their IDs there
+    /// and here, in the list's order, and each index ID's photo here.
+    private struct IndexedPhotos: Sendable {
+        /// The list's IDs here, as they were asked for.
+        let ids: ContiguousArray<Int64>
+        let sort: QuerySort
+        let indexed: PhotoList
+        let own: PhotoList
+        let byIndex: [Int64: Int64]
+        /// Above every ID here, where the stacks' photos the list doesn't have are numbered.
+        let above: Int64
+
+        /// `ids`'s photos the index has, by `indexIDs`, the first photo of an index ID taking it.
+        init(_ ids: ContiguousArray<Int64>, source: PhotoSource, sort: QuerySort, indexIDs: (Int64) -> Int64?) {
+            var indexed = ContiguousArray<Int64>()
+            var own = ContiguousArray<Int64>()
+            var byIndex: [Int64: Int64] = [:]
+            indexed.reserveCapacity(ids.count)
+            own.reserveCapacity(ids.count)
+            byIndex.reserveCapacity(ids.count)
+            for id in ids {
+                guard let indexID = indexIDs(id), byIndex[indexID] == nil else { continue }
+                byIndex[indexID] = id
+                indexed.append(indexID)
+                own.append(id)
+            }
+            self.ids = ids
+            self.sort = sort
+            self.indexed = PhotoList(source: source, sort: sort, ids: indexed)
+            self.own = PhotoList(source: source, sort: sort, ids: own)
+            self.byIndex = byIndex
+            above = ids.max() ?? -1
+        }
+
+        func holds(_ ids: ContiguousArray<Int64>, source: PhotoSource, sort: QuerySort) -> Bool {
+            self.sort == sort && own.source == source && self.ids == ids
+        }
     }
 
     /// The request's photos grouped as the library groups their rows in the index, relabelled with the IDs
@@ -206,50 +255,41 @@ import RedlampLibrary
             parts.append(now - mark)
             mark = now
         }
+        let (source, sort) = (request.grouping.source, request.sort)
         var found: [Int64: Int64] = [:]
-        let missing = ids.indices.filter { known[ids[$0]] == nil }
-        if !missing.isEmpty {
-            let byURL = await LibraryService.indexIDs(of: missing.map { items[$0].url }, in: index)
-            for place in missing {
-                if let id = byURL[items[place].url] {
-                    found[ids[place]] = id
+        let photos: IndexedPhotos
+        if let indexed = request.indexed, indexed.holds(ids, source: source, sort: sort) {
+            photos = indexed
+        } else {
+            let missing = ids.indices.filter { known[ids[$0]] == nil }
+            if !missing.isEmpty {
+                let byURL = await LibraryService.indexIDs(of: missing.map { items[$0].url }, in: index)
+                for place in missing {
+                    if let id = byURL[items[place].url] {
+                        found[ids[place]] = id
+                    }
                 }
             }
-        }
-        var indexed = ContiguousArray<Int64>()
-        var own = ContiguousArray<Int64>()
-        indexed.reserveCapacity(ids.count)
-        own.reserveCapacity(ids.count)
-        var taken = Set<Int64>(minimumCapacity: ids.count)
-        for id in ids {
-            guard let indexID = known[id] ?? found[id], taken.insert(indexID).inserted else { continue }
-            indexed.append(indexID)
-            own.append(id)
+            photos = IndexedPhotos(ids, source: source, sort: sort) { known[$0] ?? found[$0] }
         }
         lap()
         let stacks = await request.finder.stacks(in: index, engine: engine) ?? Stacks()
         guard let grouping = try? await engine.grouping(stacks: stacks) else { return nil }
         lap()
-        let (source, sort) = (request.grouping.source, request.sort)
         let groups = grouping.groups(
-            of: PhotoList(source: source, sort: sort, ids: indexed), by: request.grouping.key,
-            setting: request.grouping.setting,
+            of: photos.indexed, by: request.grouping.key, setting: request.grouping.setting,
         )
         lap()
-        let relabelled = groups.relabelled(as: PhotoList(source: source, sort: sort, ids: own))
-        var byIndex: [Int64: Int64] = [:]
-        byIndex.reserveCapacity(indexed.count)
-        for (place, id) in indexed.enumerated() {
-            byIndex[id] = own[place]
-        }
-        var grouped = GroupedList(relabelled, stacks: stacks.relabelled(above: ids.max() ?? -1) { byIndex[$0] })
+        let relabelled = groups.relabelled(as: photos.own)
+        let byIndex = photos.byIndex
+        var grouped = GroupedList(relabelled, stacks: stacks.relabelled(above: photos.above) { byIndex[$0] })
         if let shown = request.stacks {
             grouped.openStacks(as: shown)
         } else if request.opensStacks {
             grouped.openAllStacks()
         }
         lap()
-        return Result(grouped: grouped, found: found, grouping: request.grouping, parts: parts)
+        return Result(grouped: grouped, found: found, indexed: photos, grouping: request.grouping, parts: parts)
     }
 
     /// Shows `made`'s groups, with the groups open that were open in the list it replaces, matched by their
