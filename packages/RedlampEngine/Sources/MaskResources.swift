@@ -632,18 +632,26 @@ final class MaskResources {
     static func guideRecipe(for recipe: EditRecipe) -> EditRecipe {
         var global = recipe
         global.masks = []
-        let unframed = EditRecipe()
+        let defaults = EditRecipe()
         for parameter in unreadByGuide {
-            global[parameter] = unframed[parameter]
+            global[parameter] = defaults[parameter]
         }
-        guard recipe.processVersion >= 14 else { return global }
-        global.orientation = .identity
-        global.crop = .full
+        return recipe.processVersion >= 14 ? unframed(global) : global
+    }
+
+    /// `recipe` over the whole EXIF-oriented photo, so a render's pixels sit at the photo points
+    /// behind them: no orientation, crop, angle, Transform or distortion. The profile's
+    /// vignetting, a matter of tone, stays.
+    static func unframed(_ recipe: EditRecipe) -> EditRecipe {
+        var unframed = recipe
+        let defaults = EditRecipe()
+        unframed.orientation = .identity
+        unframed.crop = .full
         for parameter in EditRecipe.geometryParameters where parameter != .lensProfile {
-            global[parameter] = unframed[parameter]
+            unframed[parameter] = defaults[parameter]
         }
-        global[.lensProfileDistortion] = 0
-        return global
+        unframed[.lensProfileDistortion] = 0
+        return unframed
     }
 
     /// OKLab of the default develop (as-shot white balance, no edits), which never changes with

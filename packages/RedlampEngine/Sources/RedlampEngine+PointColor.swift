@@ -75,9 +75,10 @@ extension RedlampEngine {
         return colors
     }
 
-    /// What Point Color receives at `point`, averaged over a disc of `radius` (a fraction of the image
-    /// height; 0 for a click): the edit, its masks included, rendered at the guide's size in the
-    /// `pointColorInput` encoding, and read a level down, further for a wider disc.
+    /// What Point Color receives at the photo point `point` (EXIF-oriented, 0...1), averaged over a
+    /// disc of `radius` (a fraction of the photo's height; 0 for a click): the edit, its masks
+    /// included, rendered unframed at the guide's size in the `pointColorInput` encoding, and read a
+    /// level down, further for a wider disc.
     func samplePointColorInput(
         at point: CGPoint, radius: Double, recipe: EditRecipe, session: ImageSession,
     ) throws -> OKLCh {
@@ -94,8 +95,9 @@ extension RedlampEngine {
             descriptor.storageMode = .private
             guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
             try encodeDevelop(
-                recipe, session: session, into: texture, size: size, encoding: .pointColorInput, showClipping: false,
-                commands: commands, cacheDetail: false, detail: false, retouchMaps: .refreshLater,
+                MaskResources.unframed(recipe), session: session, into: texture, size: size,
+                encoding: .pointColorInput, showClipping: false, commands: commands, cacheDetail: false,
+                detail: false, retouchMaps: .refreshLater,
             )
             guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
             blit.generateMipmaps(for: texture)

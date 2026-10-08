@@ -162,9 +162,7 @@ struct PointColorRenderTests: PointColorRendering {
             let picked = try engine.samplePointColorInput(at: point, radius: 0, recipe: reframed, session: session)
             let plain = try engine.samplePointColorInput(at: point, radius: 0, recipe: EditRecipe(), session: session)
             let difference = simd_abs(picked.clippedLinearSRGB - plain.clippedLinearSRGB).max()
-            withKnownIssue("PIPE-18: the eyedropper samples the framed render at the photo point") {
-                #expect(difference < 0.005, "click \(click): \(picked) against \(plain)")
-            }
+            #expect(difference < 0.005, "click \(click): \(picked) against \(plain)")
         }
     }
 }
