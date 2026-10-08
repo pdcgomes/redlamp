@@ -67,9 +67,7 @@ struct ColumnLayoutTests {
         }
         window.contentView?.layoutSubtreeIfNeeded()
 
-        withKnownIssue("each change sizes the document at once, measuring every row again") {
-            #expect(rows.map(\.measured).max() == 1, "measured \(rows.map(\.measured).max() ?? 0) times")
-        }
+        #expect(rows.map(\.measured).max() == 1, "measured \(rows.map(\.measured).max() ?? 0) times")
         #expect(first.prefix(6).allSatisfy { $0.frame.height == 32 })
         #expect(below.convert(below.bounds, to: column.document).minY == top + 6 * 12)
         let document = column.document

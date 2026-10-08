@@ -20,6 +20,10 @@ open class ColumnView: NSView, HeightProviding {
 
     public private(set) var arrangedViews: [NSView] = []
 
+    /// The rows' frames at the width and scale they were measured for, until a row tells its
+    /// column it changed (`invalidateColumnLayout`).
+    private var measured: (width: CGFloat, scale: CGFloat, frames: [CGRect])?
+
     public init(spacing: CGFloat = 0, insets: NSEdgeInsets = NSEdgeInsets(), views: [NSView] = []) {
         self.spacing = spacing
         self.insets = insets
@@ -58,6 +62,11 @@ open class ColumnView: NSView, HeightProviding {
         NSSize(width: NSView.noIntrinsicMetric, height: height(forWidth: bounds.width))
     }
 
+    override open func invalidateIntrinsicContentSize() {
+        measured = nil
+        super.invalidateIntrinsicContentSize()
+    }
+
     override open func layout() {
         super.layout()
         for (view, frame) in zip(arrangedViews.filter { !$0.isHidden }, rowFrames(width: bounds.width)) {
@@ -69,14 +78,19 @@ open class ColumnView: NSView, HeightProviding {
     /// then put on the pixel grid, as SwiftUI does: a 14.125 pt checkbox row lands where
     /// it does in the SwiftUI original.
     private func rowFrames(width: CGFloat) -> [CGRect] {
-        let content = width - insets.left - insets.right
         let scale = backingScale
+        if let measured, measured.width == width, measured.scale == scale {
+            return measured.frames
+        }
+        let content = width - insets.left - insets.right
         var y = insets.top
-        return arrangedViews.filter { !$0.isHidden }.map { view in
+        let frames = arrangedViews.filter { !$0.isHidden }.map { view in
             let height = Self.height(of: view, width: content)
             defer { y += height + spacing }
             return PixelGrid.snap(CGRect(x: insets.left, y: y, width: content, height: height), scale: scale)
         }
+        measured = (width, scale, frames)
+        return frames
     }
 
     public static func height(of view: NSView, width: CGFloat) -> CGFloat {

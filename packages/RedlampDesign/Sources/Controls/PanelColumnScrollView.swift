@@ -11,7 +11,8 @@ open class PanelColumnScrollView: NSView {
         super.init(frame: .zero)
         scrollView.documentView = document
         addSubview(scrollView)
-        document.onHeightChange = { [weak self] in self?.sizeDocument() }
+        document.onHeightChange = { [weak self] in self?.needsLayout = true }
+        document.sizeNow = { [weak self] in self?.layoutSubtreeIfNeeded() }
     }
 
     @available(*, unavailable)
@@ -37,7 +38,12 @@ open class PanelColumnScrollView: NSView {
 
 /// The scroll view's document: the panels, top to bottom.
 public final class PanelColumnDocumentView: ColumnView, ColumnHost {
+    /// Told when the panels' height may have changed; the document is sized in the next layout
+    /// pass, once for however many changes.
     public var onHeightChange: () -> Void = {}
+
+    /// Sizes the document now, for an animation that needs the new frames up front.
+    var sizeNow: () -> Void = {}
 
     public init(views: [NSView]) {
         super.init(views: views)

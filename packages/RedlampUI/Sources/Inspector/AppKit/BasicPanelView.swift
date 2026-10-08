@@ -59,6 +59,8 @@ import SwiftUI
 final class HostedControl: NSView, ProposalSizing, HeightProviding {
     private let controller: NSHostingController<AnyView>
     private let resized: Resized
+    /// SwiftUI's height at a width, until the content lays out at another height.
+    private var measured: (width: CGFloat, height: CGFloat)?
 
     /// Told as the content lays out at a new height (a row appearing inside it), so the columns
     /// around it are measured again.
@@ -78,7 +80,9 @@ final class HostedControl: NSView, ProposalSizing, HeightProviding {
         super.init(frame: .zero)
         addSubview(controller.view)
         resized.action = { [weak self] in
-            guard let self, abs(bounds.height - height(forWidth: bounds.width)) > 0.5 else { return }
+            guard let self else { return }
+            measured = nil
+            guard abs(bounds.height - height(forWidth: bounds.width)) > 0.5 else { return }
             invalidateColumnLayout()
         }
     }
@@ -95,7 +99,21 @@ final class HostedControl: NSView, ProposalSizing, HeightProviding {
     /// The height SwiftUI chooses at this width (not the minimum, which is shorter for
     /// some controls, such as checkboxes).
     func height(forWidth width: CGFloat) -> CGFloat {
-        controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        if let measured, measured.width == width {
+            return measured.height
+        }
+        let height = controller.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        measured = (width, height)
+        return height
+    }
+
+    /// Its content may have changed while it was out of the window, where SwiftUI doesn't lay it out.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        measured = nil
+        if window != nil {
+            invalidateColumnLayout()
+        }
     }
 
     override var intrinsicContentSize: NSSize {

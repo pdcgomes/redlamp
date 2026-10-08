@@ -143,6 +143,7 @@ public final class PanelSectionView: NSView, HeightProviding {
             }
             return
         }
+        (enclosingColumnHost as? PanelColumnDocumentView)?.sizeNow()
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
