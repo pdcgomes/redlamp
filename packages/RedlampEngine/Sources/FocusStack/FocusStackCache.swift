@@ -64,8 +64,7 @@ final class FocusStackCache: Sendable {
     static let decodesAhead = 3
 
     static var defaultRoot: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("app.redlamp/FocusStacks", isDirectory: true)
+        RedlampFolders.caches.appendingPathComponent("FocusStacks", isDirectory: true)
     }
 
     let root: URL

@@ -226,8 +226,7 @@ public enum CompiledModels {
     static let leftoverAge: TimeInterval = 60 * 60
 
     public static var root: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appending(path: "app.redlamp/CompiledModels")
+        RedlampFolders.caches.appending(path: "CompiledModels")
     }
 
     /// Removes compiles of model versions `catalog` doesn't list; one is compiled again if needed.

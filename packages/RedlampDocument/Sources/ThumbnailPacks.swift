@@ -2,6 +2,7 @@ import CoreGraphics
 import CryptoKit
 import Foundation
 import ImageIO
+import RedlampEngineAPI
 import Synchronization
 import UniformTypeIdentifiers
 
@@ -15,8 +16,9 @@ import UniformTypeIdentifiers
 /// appended. A pack more than a third stale is rewritten with only its live records. When all
 /// packs pass `budget`, the least recently opened go first.
 public final class ThumbnailPacks: Sendable {
-    public static let defaultDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        .appending(path: "app.redlamp/Thumbnails", directoryHint: .isDirectory)
+    public static var defaultDirectory: URL {
+        RedlampFolders.caches.appending(path: "Thumbnails", directoryHint: .isDirectory)
+    }
 
     public let directory: URL
     public let budget: Int64

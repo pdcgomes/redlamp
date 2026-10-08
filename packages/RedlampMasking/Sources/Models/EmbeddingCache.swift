@@ -1,4 +1,5 @@
 import Foundation
+import RedlampEngineAPI
 
 /// Model outputs worth keeping between sessions (SAM's image embedding is about 8 MB a photo and
 /// takes ~60 ms to recompute), in the purgeable Caches directory, never in the sidecar.
@@ -12,8 +13,7 @@ public actor EmbeddingCache {
     private var memory: (key: String, data: Data)?
 
     public init(root: URL? = nil, budget: Int = 1 << 30) {
-        self.root = root ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appending(path: "app.redlamp/Embeddings")
+        self.root = root ?? RedlampFolders.caches.appending(path: "Embeddings")
         self.budget = budget
     }
 
