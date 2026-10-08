@@ -4,6 +4,7 @@
     import RedlampDesign
     import RedlampLibrary
     @_spi(Harness) import RedlampUI
+    import Synchronization
 
     /// Stacks at the grid's budgets (LIB-28), on a copy of lib-20k's 2007 folder, or of the folder
     /// `REDLAMP_STACK_FIXTURE` (else `REDLAMP_DRAG_FIXTURE`) names, such as all of lib-20k: the stacks the library
@@ -65,6 +66,14 @@
                     phase.summary?.max ?? -1, phase.summary?.overFrame ?? -1, phase.summary?.iterations ?? -1,
                 ))
             }
+            let mainThread = try app.main { _ in mach_thread_self() }
+            func watched(
+                _ name: String, _ body: () throws -> Void,
+            ) throws -> (summary: MainThreadMonitor.Summary?, seconds: Double) {
+                let profile = DragPhaseProfile.isOn ? DragPhaseProfile(thread: mainThread) : nil
+                defer { profile?.write(to: app.runDirectory.appending(path: "stack-profile-\(name).txt")) }
+                return try app.watchingMainThread(name, body)
+            }
             func describe(_ name: String, _ times: [Double]) {
                 let sorted = times.sorted()
                 guard !sorted.isEmpty else { return }
@@ -77,37 +86,50 @@
                 ))
             }
 
-            // Each stack opened and closed by itself, as S and a click on its count do: the call and the views
-            // following its diff, timed on the main thread.
+            // Each stack opened and closed by itself, each in a turn of its own, as S and a click on its count do: the
+            // call and the views following its diff, timed on the main thread.
             let tops = try app.main { model -> [Int64] in
                 guard let list = model.gridStacks.list else { return [] }
                 return Array(list.lazy.filter { list.badges(of: $0).stack?.isOpen == false }.prefix(wanted))
             }
             try app.expect(!tops.isEmpty, "No stack to open")
             var (opening, closing) = ([Double](), [Double]())
-            let toggling = try app.watchingMainThread("toggle") {
+            let within = ProcessInfo.processInfo.environment["REDLAMP_STACK_PROFILE"] != nil
+                ? StackCallProfile(thread: mainThread) : nil
+            let toggling = try watched("toggle") {
                 for top in tops {
-                    let (opened, closed) = try app.main { model -> (Double, Double) in
-                        let clock = ContinuousClock()
-                        let start = clock.now
-                        model.gridStacks.toggle(top)
-                        let middle = clock.now
-                        model.gridStacks.toggle(top)
-                        let end = clock.now
-                        return (Self.milliseconds(middle - start), Self.milliseconds(end - middle))
-                    }
-                    opening.append(opened)
-                    closing.append(closed)
-                    app.pause(0.02)
+                    try opening.append(app.main { model in Self.timed { model.gridStacks.toggle(top) } })
+                    app.pause(0.03)
+                    try closing.append(app.main { model in Self.timed { model.gridStacks.toggle(top) } })
+                    app.pause(0.03)
                 }
             }
+            within?.write(
+                to: app.runDirectory.appending(path: "stack-profile-within-toggle.txt"),
+                inside: "LibraryStacks",
+            )
             describe("open-one", opening)
             describe("close-one", closing)
             note("toggle", toggling)
 
+            // The same with the filmstrip out of sight, for the grid's part.
+            try app.main { $0.filmstripVisible = false }
+            app.pause(1)
+            var (gridOpening, gridClosing) = ([Double](), [Double]())
+            for top in tops.prefix(20) {
+                try gridOpening.append(app.main { model in Self.timed { model.gridStacks.toggle(top) } })
+                app.pause(0.03)
+                try gridClosing.append(app.main { model in Self.timed { model.gridStacks.toggle(top) } })
+                app.pause(0.03)
+            }
+            try app.main { $0.filmstripVisible = true }
+            app.pause(1)
+            describe("open-one-grid-only", gridOpening)
+            describe("close-one-grid-only", gridClosing)
+
             // Every stack at once.
             var (openingAll, closingAll) = ([Double](), [Double]())
-            let all = try app.watchingMainThread("all") {
+            let all = try watched("all") {
                 for _ in 0 ..< 5 {
                     try openingAll.append(app.main { model in
                         Self.timed { model.gridStacks.openAll() }
@@ -124,7 +146,7 @@
             note("all", all)
 
             // The grid scrolled from top to bottom and back with the stacks closed.
-            let scrolling = try app.watchingMainThread("scroll") {
+            let scrolling = try watched("scroll") {
                 for step in 0 ... 240 {
                     let fraction = Double(step <= 120 ? step : 240 - step) / 120
                     try app.main { _ in
@@ -137,27 +159,116 @@
             }
             note("scroll", scrolling)
 
-            // → held in the grid, from cell to cell past the closed stacks' photos.
-            try app.main { model in
-                if let first = model.gridStacks.list?.first, let url = model.library.url(ofPhoto: first) {
-                    model.select(url)
+            // → held in the grid, from cell to cell past the closed stacks' photos, and with every stack open for
+            // the cost of the stacks themselves.
+            for (name, open) in [("arrows", false), ("arrows-open", true)] {
+                try app.main { model in
+                    open ? model.gridStacks.openAll() : model.gridStacks.closeAll()
+                    if let first = model.gridStacks.list?.first, let url = model.library.url(ofPhoto: first) {
+                        model.select(url)
+                    }
                 }
-            }
-            try app.press(.gridView)
-            try app.wait("the grid to take the keyboard") { _ in
-                Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"
-            }
-            let walking = try app.watchingMainThread("arrows") {
-                let right = UnicodeScalar(NSRightArrowFunctionKey).map(String.init) ?? ""
-                for _ in 0 ..< 200 {
-                    try app.pressGridKey(kVK_RightArrow, characters: right)
-                    app.pause(1.0 / 30)
+                try app.press(.gridView)
+                try app.wait("the grid to take the keyboard") { _ in
+                    Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"
                 }
+                app.pause(1)
+                let walking = try watched(name) {
+                    let right = UnicodeScalar(NSRightArrowFunctionKey).map(String.init) ?? ""
+                    for _ in 0 ..< 200 {
+                        try app.pressGridKey(kVK_RightArrow, characters: right)
+                        app.pause(1.0 / 30)
+                    }
+                }
+                note(name, walking)
             }
-            note("arrows", walking)
+            try app.main { $0.gridStacks.closeAll() }
             try? (lines.joined(separator: "\n") + "\n").write(
                 to: app.runDirectory.appending(path: "stack-performance.txt"), atomically: true, encoding: .utf8,
             )
+        }
+
+        /// With `REDLAMP_STACK_PROFILE` set, the main thread's stacks sampled every half millisecond while stacks open
+        /// and close, and what the calls named by a frame were busy in: the functions under it on the stack, by the
+        /// samples they're on, and the innermost of them alone. `DragPhaseProfile` keeps every busy sample.
+        final class StackCallProfile: @unchecked Sendable {
+            private let thread: thread_act_t
+            private let running = Mutex(true)
+            private let samples = Mutex<[[UInt]]>([])
+
+            init(thread: thread_act_t) {
+                self.thread = thread
+                Thread { [self] in
+                    while running.withLock({ $0 }) {
+                        let stack = sample()
+                        if !stack.isEmpty {
+                            samples.withLock { $0.append(stack) }
+                        }
+                        usleep(500)
+                    }
+                }.start()
+            }
+
+            /// Stops sampling and writes, for the samples with a frame whose name holds `marker`, the functions called
+            /// under it, the most often on a stack first, and the innermost ones, to `url`.
+            func write(to url: URL, inside marker: String) {
+                running.withLock { $0 = false }
+                var names: [UInt: String] = [:]
+                func name(_ address: UInt) -> String {
+                    if let known = names[address] {
+                        return known
+                    }
+                    var info = Dl_info()
+                    let found = dladdr(UnsafeRawPointer(bitPattern: address), &info) != 0 ? info.dli_sname
+                        .map { String(cString: $0) } : nil
+                    names[address] = found ?? String(format: "0x%lx", address)
+                    return names[address] ?? ""
+                }
+                var (inclusive, innermost) = ([String: Int](), [String: Int]())
+                var inside = 0
+                for stack in samples.withLock({ $0 }) {
+                    let symbols = stack.map(name)
+                    guard let at = symbols.firstIndex(where: { $0.contains(marker) }) else { continue }
+                    inside += 1
+                    for symbol in Set(symbols[..<at]) {
+                        inclusive[symbol, default: 0] += 1
+                    }
+                    if let leaf = symbols.first {
+                        innermost[leaf, default: 0] += 1
+                    }
+                }
+                let lines = ["\(inside) samples inside \(marker)", "", "Under it, by samples:"]
+                    + inclusive.sorted { $0.value > $1.value }.prefix(150).map { "\($0.value)\t\($0.key)" }
+                    + ["", "Innermost:"] + innermost.sorted { $0.value > $1.value }.prefix(60)
+                    .map { "\($0.value)\t\($0.key)" }
+                try? (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+            }
+
+            private func sample() -> [UInt] {
+                var state = arm_thread_state64_t()
+                var count = mach_msg_type_number_t(MemoryLayout<arm_thread_state64_t>.size / MemoryLayout<UInt32>.size)
+                var addresses: [UInt] = []
+                guard thread_suspend(thread) == KERN_SUCCESS else { return [] }
+                let result = withUnsafeMutablePointer(to: &state) {
+                    $0.withMemoryRebound(to: natural_t.self, capacity: Int(count)) {
+                        thread_get_state(thread, ARM_THREAD_STATE64, $0, &count)
+                    }
+                }
+                if result == KERN_SUCCESS {
+                    let mask: UInt = 0x0000_000F_FFFF_FFFF
+                    addresses.append(UInt(state.__pc) & mask)
+                    addresses.append(UInt(state.__lr) & mask)
+                    var fp = UInt(state.__fp)
+                    while fp != 0, fp & 7 == 0, addresses.count < 128, let frame = UnsafePointer<UInt>(bitPattern: fp) {
+                        addresses.append(frame[1] & mask)
+                        let next = frame[0]
+                        guard next > fp else { break }
+                        fp = next
+                    }
+                }
+                thread_resume(thread)
+                return addresses
+            }
         }
 
         static func milliseconds(_ duration: Duration) -> Double {
