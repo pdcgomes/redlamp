@@ -75,6 +75,71 @@ struct DriverTests {
         #expect((coverage?["claims"] as? [String: [String]])?["action.export"] == ["menu"])
     }
 
+    @Test func `a failure's record is named for its scenario and step`() {
+        #expect(FailureRecord
+            .fileName("smoke.actions-by-key.openFolder by key") == "smoke.actions-by-key.openFolder-by-key")
+        #expect(FailureRecord
+            .fileName("smoke.photos-open.open Bracket/A.NEF") == "smoke.photos-open.open-Bracket-A.NEF")
+    }
+
+    @Test func `a press names what it found, up to the first view that carries an identifier`() {
+        let panel = NSView()
+        panel.setAccessibilityIdentifier("panel.basic")
+        let row = NSView()
+        let track = NSView()
+        track.setAccessibilityIdentifier("slider.basic.exposure.track")
+        let knob = NSView()
+        panel.addSubview(row)
+        row.addSubview(track)
+        track.addSubview(knob)
+        #expect(Views.ancestry(knob) == ["NSView", "NSView slider.basic.exposure.track"])
+        #expect(Views.ancestry(track) == ["NSView slider.basic.exposure.track", "NSView", "NSView panel.basic"])
+        #expect(Views.ancestry(nil) == ["nothing"])
+    }
+
+    @Test func `the first responder names the field being typed in, not its field editor`() throws {
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 200, height: 60), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        let field = NSTextField(frame: CGRect(x: 10, y: 10, width: 120, height: 24))
+        field.setAccessibilityIdentifier("slider.basic.exposure.value")
+        window.contentView?.addSubview(field)
+        #expect(window.makeFirstResponder(field))
+        let responder = try #require(window.firstResponder)
+        #expect(Views.describe(responder) == "the field editor of NSTextField slider.basic.exposure.value")
+    }
+
+    @Test func `a window's snapshot draws its views, and leaves out those in a transparent view`() throws {
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.borderless], backing: .buffered,
+            defer: false,
+        )
+        window.isReleasedWhenClosed = false
+        let panel = NSView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        panel.wantsLayer = true
+        panel.layer?.backgroundColor = NSColor.red.cgColor
+        let module = NSView(frame: CGRect(x: 100, y: 0, width: 100, height: 100))
+        module.alphaValue = 0
+        let inModule = NSView(frame: module.bounds)
+        module.addSubview(inModule)
+        window.contentView?.addSubview(panel)
+        window.contentView?.addSubview(module)
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        #expect(panel.isDrawn)
+        #expect(!inModule.isDrawn)
+
+        let url = FileManager.default.temporaryDirectory.appending(path: "snapshot-\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(Snapshot.capture(window, to: url))
+        let image = try #require(NSBitmapImageRep(data: Data(contentsOf: url)))
+        let color = try #require(image.colorAt(x: image.pixelsWide / 4, y: image.pixelsHigh / 2)?
+            .usingColorSpace(.sRGB))
+        // The screen's colour space shifts it, but red dominates.
+        #expect(color.redComponent > color.greenComponent + 0.4 && color.redComponent > color.blueComponent + 0.4)
+    }
+
     @Test func `the driver's thread gets answers from the main thread`() async {
         let answer = await withCheckedContinuation { (continuation: CheckedContinuation<Int, Never>) in
             Thread.detachNewThread {

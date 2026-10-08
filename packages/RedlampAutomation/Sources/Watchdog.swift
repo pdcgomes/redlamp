@@ -110,36 +110,65 @@
         }
     }
 
+    extension NSView {
+        /// Whether the view is drawn: neither it nor a view it's in is hidden or transparent.
+        var isDrawn: Bool {
+            !isHiddenOrHasHiddenAncestor && sequence(first: self, next: \.superview).allSatisfy { $0.alphaValue > 0 }
+        }
+    }
+
     @MainActor
     enum Snapshot {
         /// An image of the window in front (its sheet if one is up), canvas included, written
         /// without Screen Recording permission.
         static func capture(to url: URL) {
-            guard let main = EditorWindowController.frontWindow ?? NSApp.windows.first(where: \.isVisible),
-                  let window = Optional(main.attachedSheet ?? main),
-                  let root = window.contentView?.superview ?? window.contentView,
-                  let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds)
+            guard let main = EditorWindowController.frontWindow ?? NSApp.windows.first(where: \.isVisible)
             else { return }
+            capture(main.attachedSheet ?? main, to: url)
+        }
+
+        /// An image of `window` as it draws itself, each canvas's last frame in its place beneath the
+        /// views over it (its Metal layer isn't in a view's drawing). A view outside the window's bounds
+        /// isn't in it. Returns whether it was written.
+        @discardableResult
+        static func capture(_ window: NSWindow, to url: URL) -> Bool {
+            guard let root = window.contentView?.superview ?? window.contentView,
+                  let rep = root.bitmapImageRepForCachingDisplay(in: root.bounds)
+            else { return false }
+            // The module not shown keeps its canvas, transparent.
+            let stands = Views.all(CanvasMetalView.self, in: root).filter(\.isDrawn).compactMap { canvas -> NSView? in
+                guard let image = canvas.snapshotImage() else { return nil }
+                let stand = NSImageView(frame: canvas.bounds)
+                stand.image = NSImage(cgImage: image, size: canvas.bounds.size)
+                stand.imageScaling = .scaleAxesIndependently
+                canvas.addSubview(stand)
+                return stand
+            }
             root.cacheDisplay(in: root.bounds, to: rep)
+            stands.forEach { $0.removeFromSuperview() }
+            // A view's drawing fills the panels' glass in solid, over them: each panel is drawn again on it.
             if let context = NSGraphicsContext(bitmapImageRep: rep) {
                 NSGraphicsContext.saveGraphicsState()
                 NSGraphicsContext.current = context
-                for canvas in Views.all(CanvasMetalView.self, in: root) where !canvas.isHiddenOrHasHiddenAncestor {
-                    guard let image = canvas.snapshotImage() else { continue }
-                    let frame = canvas.convert(canvas.bounds, to: root)
-                    let rect = root.isFlipped
+                for item in Views.splitItems(in: window) where item.behavior != .default {
+                    let panel = item.viewController.view
+                    guard panel.isDrawn, let image = panel.bitmapImageRepForCachingDisplay(in: panel.bounds) else {
+                        continue
+                    }
+                    panel.cacheDisplay(in: panel.bounds, to: image)
+                    let frame = panel.convert(panel.bounds, to: root)
+                    image.draw(in: root.isFlipped
                         ? NSRect(
                             x: frame.minX,
                             y: root.bounds.height - frame.maxY,
                             width: frame.width,
                             height: frame.height,
                         )
-                        : frame
-                    context.cgContext.draw(image, in: rect)
+                        : frame)
                 }
                 NSGraphicsContext.restoreGraphicsState()
             }
-            try? rep.representation(using: .png, properties: [:])?.write(to: url)
+            return (try? rep.representation(using: .png, properties: [:])?.write(to: url)) != nil
         }
     }
 #endif

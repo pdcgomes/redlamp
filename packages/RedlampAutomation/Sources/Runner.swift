@@ -178,6 +178,7 @@
                 )
                 try? MainThread.run { Snapshot.capture(to: shot) }
                 fields["snapshot"] = shot.path
+                fields["state"] = app.recordFailure(scenario.id, message).path
             }
             recorder.write("scenario-end", fields)
             recorder.currentScenario = nil

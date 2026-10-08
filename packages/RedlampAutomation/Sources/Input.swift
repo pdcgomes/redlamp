@@ -116,8 +116,7 @@
 
         /// Clicks `target` at `point` (0...1 across and down its frame).
         func click(_ target: Target, at point: CGPoint = CGPoint(x: 0.5, y: 0.5), count: Int = 1) throws {
-            let frame = try frame(of: target)
-            let location = Self.location(point, in: frame)
+            let location = try location(point, on: target)
             for clicks in 1 ... count {
                 try mouse([(.leftMouseDown, location, clicks), (.leftMouseUp, location, clicks)])
             }
@@ -128,8 +127,7 @@
             _ target: Target, from start: CGPoint = CGPoint(x: 0.5, y: 0.5), by offset: CGVector,
             steps: Int = 8, modifiers: NSEvent.ModifierFlags = [],
         ) throws {
-            let frame = try frame(of: target)
-            let from = Self.location(start, in: frame)
+            let from = try location(start, on: target)
             var events: [(NSEvent.EventType, NSPoint, Int)] = [(.leftMouseDown, from, 1)]
             for step in 1 ... steps {
                 let t = Double(step) / Double(steps)
@@ -158,6 +156,18 @@
             }
         }
 
+        /// Where `point` of `target` is in the window, which it must be on: a press beside the window
+        /// reaches nothing, as a panel slid off it shows.
+        private func location(_ point: CGPoint, on target: Target) throws -> NSPoint {
+            let location = try Self.location(point, in: frame(of: target))
+            let bounds = try main { _ in Views.editorWindow?.contentView?.bounds ?? .zero }
+            try expect(
+                bounds.contains(location),
+                "\(target) is off the window, at \(Views.describe(location)) of \(Views.describe(bounds))",
+            )
+            return location
+        }
+
         /// Window coordinates: y grows upwards; `point.y` 0 is the frame's top.
         private static func location(_ point: CGPoint, in frame: NSRect) -> NSPoint {
             NSPoint(x: frame.minX + frame.width * point.x, y: frame.maxY - frame.height * point.y)
@@ -172,6 +182,7 @@
             modifiers: NSEvent.ModifierFlags = [],
         ) throws {
             let pressed = PressedView()
+            let kind = events.contains { $0.0 == .leftMouseDragged } ? "drag" : "click"
             for (type, location, clicks) in events {
                 post { _ in
                     guard let window = Views.editorWindow, let event = NSEvent.mouseEvent(
@@ -182,6 +193,11 @@
                     if type == .leftMouseDown {
                         let hit = window.contentView?.superview?.hitTest(location)
                         pressed.view = window.isKeyWindow || hit?.acceptsFirstMouse(for: event) == true ? nil : hit
+                        Views.lastPress = Views.Press(
+                            kind: kind, location: location, window: Views.describe(window),
+                            found: Views.ancestry(hit).joined(separator: " in "),
+                            sentTo: pressed.view.map(Views.describe) ?? "the window", time: Date(),
+                        )
                     }
                     guard let view = pressed.view else {
                         window.sendEvent(event)

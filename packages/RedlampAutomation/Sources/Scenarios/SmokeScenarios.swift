@@ -38,7 +38,15 @@
                         )
                     } else {
                         failures.append("\(name(item)): \(error)")
-                        recorder.write("step", ["name": name(item), "status": "failed", "message": "\(error)"])
+                        // Only the first failure draws the window: the steps after it start from a recovery.
+                        let state = recordFailure(
+                            "\(recorder.currentScenario ?? "step").\(name(item))", "\(error)",
+                            window: failures.count == 1,
+                        )
+                        recorder.write(
+                            "step",
+                            ["name": name(item), "status": "failed", "message": "\(error)", "state": state.path],
+                        )
                     }
                     recover()
                     try? settle()
