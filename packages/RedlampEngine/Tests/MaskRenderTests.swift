@@ -1142,17 +1142,20 @@ extension MaskRenderTests {
     }
 
     @Test func `a model unloads once it's been idle a while`() async throws {
-        let slot = ModelSlot<StubModel>(idle: .milliseconds(200))
+        let slot = ModelSlot<StubModel>(idle: .seconds(2))
         let made = Made()
         _ = try await slot.model(loading: made.load)
-        try await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: .milliseconds(500))
+        let asked = ContinuousClock.now
         _ = try await slot.model(loading: made.load)
-        try await Task.sleep(for: .milliseconds(150))
-        #expect(slot.model != nil, "asked for again meanwhile")
-        for _ in 0 ..< 100 where slot.model != nil {
+        try await Task.sleep(for: .seconds(1))
+        #expect(slot.model != nil, "idle for 1 s")
+        let deadline = ContinuousClock.now + .seconds(10)
+        while slot.model != nil, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(20))
         }
         #expect(slot.model == nil)
+        #expect(ContinuousClock.now - asked >= .seconds(2), "unloaded within 2 s of being asked for again")
         #expect(made.count.withLock { $0 } == 1)
     }
 
