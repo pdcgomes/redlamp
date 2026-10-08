@@ -313,6 +313,7 @@ public extension DecodedImage {
         }
 
         public func decode(_ url: URL) throws -> DecodedImage {
+            Self.checkOffMain()
             let file = try Data(contentsOf: url, options: .alwaysMapped)
             let connection = connect()
             defer { connection.invalidate() }
