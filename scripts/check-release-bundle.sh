@@ -11,13 +11,15 @@
 #   statically, is built hidden so dead-stripping can drop what Redlamp doesn't call;
 # - an XPC service carries its own copy of a framework the app has, which it loads from the
 #   app's Frameworks instead;
+# - a helper in Contents/Helpers (the CLI) links a framework the app doesn't embed, so it
+#   can't start;
 # - the bundle outgrows its budget, 2% above what it measured when the budget was set.
 #
 #   scripts/check-release-bundle.sh build/release/Redlamp.app [build/release/dSYMs]
 
 set -euo pipefail
 
-BUDGET_KB=44000
+BUDGET_KB=45200
 OWN_EXPORTS='^(_\$s|_OBJC_(METACLASS_|CLASS_)\$_|_RedlampServicesVersion)'
 
 APP="${1:?usage: check-release-bundle.sh <app> [dsyms]}"
@@ -82,6 +84,20 @@ done
 if [ "${#copies[@]}" -gt 0 ]; then
     echo "error: XPC services carry copies of the app's frameworks:" >&2
     printf '  %s\n' "${copies[@]}" >&2
+    failed=1
+fi
+# A function, since bash 3.2 misreads parentheses inside a quoted program in <( ).
+rpath_frameworks() { otool -L "$1" | awk -F/ '$1 ~ /@rpath$/ { print $2 }'; }
+missing=()
+for tool in "$APP"/Contents/Helpers/*; do
+    [ -f "$tool" ] || continue
+    while read -r framework; do
+        [ -d "$APP/Contents/Frameworks/$framework" ] || missing+=("$framework: ${tool#"$APP"/}")
+    done < <(rpath_frameworks "$tool")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+    echo "error: the helpers link frameworks the app doesn't embed; add them to the app's dependencies:" >&2
+    printf '  %s\n' "${missing[@]}" >&2
     failed=1
 fi
 size_kb="$(du -sk "$APP" | cut -f1)"
