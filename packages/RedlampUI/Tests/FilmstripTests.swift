@@ -106,6 +106,27 @@ struct FilmstripTests {
         #expect(layout.layoutAttributesForItem(at: IndexPath(item: 20000, section: 0)) == nil)
     }
 
+    @Test func `centring a photo the strip hasn't loaded yet leaves it where it is rather than raising`() {
+        let model = EditorModel(engine: StubEngine())
+        _ = NSApplication.shared
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 900, height: FilmstripStripView.height), styleMask: [.titled],
+            backing: .buffered, defer: false,
+        )
+        let strip = FilmstripStripView(model: model)
+        window.contentView = strip
+        defer { window.contentView = nil }
+        let source = CountingSource(count: 10)
+        strip.collectionView.dataSource = source
+        withExtendedLifetime(source) {
+            strip.layoutSubtreeIfNeeded()
+            strip.collectionView.reloadData()
+            strip.collectionView.layoutSubtreeIfNeeded()
+            strip.center(row: 500, animated: false)
+            #expect(strip.scrollView.contentView.bounds.origin.x == 0)
+        }
+    }
+
     @Test func `reloading twenty thousand photos asks only for the cells on screen`() throws {
         let model = EditorModel(engine: StubEngine())
         _ = NSApplication.shared
