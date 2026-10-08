@@ -1081,6 +1081,34 @@ extension MaskRenderTests {
         #expect(try await ready(within: 30), "the next photo")
     }
 
+    /// Coming back to a photo the Masking tool warmed up renders nothing again and runs no model;
+    /// the matte waits for a mask that needs it, and Depth Anything 3 and SAM 3 for masks of theirs.
+    @Test(.enabled(if: EngineSmokeTests.canRender && EngineSmokeTests.fixtures.count >= 2 && Self.samIsInstalled))
+    func `a photo warmed up once isn't analysed again, and the warm-up runs only what hovering needs`() async throws {
+        setenv("REDLAMP_EVALUATION_MODELS", "1", 1)
+        let engine = try RedlampEngine()
+        func visit(_ index: Int) async throws -> ImageSession {
+            _ = try await engine.open(EngineSmokeTests.fixtures[index])
+            await engine.warmUp.withLock { $0 }?.value
+            return try #require(engine.currentSession())
+        }
+        engine.warmUpMasks()
+        let first = try await visit(0)
+        let hash = try #require(engine.keptAnalysis(for: first)).hash
+        _ = try await visit(1)
+        let before = engine.analysisWork.withLock { $0 }
+        let again = try await visit(0)
+        let after = engine.analysisWork.withLock { $0 }
+        #expect(engine.keptAnalysis(for: again)?.hash == hash)
+        withKnownIssue("PIPE-08: each visit analyses the photo again and runs every model") {
+            #expect(after.analysisRenders == before.analysisRenders, "analysed again")
+            #expect(after.modelRuns == before.modelRuns, "\(after.modelRuns - before.modelRuns) models run again")
+            #expect(after.matteRenders == 0, "\(after.matteRenders) mattes rendered with no mask asking")
+            #expect(engine.depthAnything3Cache.withLock { $0 == nil }, "Depth Anything 3 ran")
+            #expect(engine.sam3Features.withLock { $0 == nil }, "SAM 3 ran")
+        }
+    }
+
     /// A stand-in for a model, and how many were made.
     final class StubModel: Sendable {}
     final class Made: Sendable {

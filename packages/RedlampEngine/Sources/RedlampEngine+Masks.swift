@@ -776,11 +776,17 @@ extension RedlampEngine {
         }
     }
 
+    /// The analysis render kept for `session`, if any.
+    func keptAnalysis(for session: ImageSession) -> (image: CGImage, hash: String)? {
+        analysisCache.withLock { $0?.session === session ? $0.map { ($0.image, $0.hash) } : nil }
+    }
+
     /// The current photo with the default develop, as AI models see it, and a hash of its pixels.
     func analysisImage(for session: ImageSession) async throws -> (image: CGImage, hash: String) {
         if let cached = analysisCache.withLock({ $0 }), cached.session === session {
             return (cached.image, cached.hash)
         }
+        analysisWork.withLock { $0.analysisRenders += 1 }
         let image: CGImage = try await withCheckedThrowingContinuation { continuation in
             renderQueue.async { [self] in
                 continuation.resume(with: Result {
@@ -802,6 +808,7 @@ extension RedlampEngine {
         if let cached = matteCache.withLock({ $0 }), cached.session === session {
             return cached.image
         }
+        analysisWork.withLock { $0.matteRenders += 1 }
         let image: CGImage = try await withCheckedThrowingContinuation { continuation in
             renderQueue.async { [self] in
                 continuation.resume(with: Result {
@@ -853,9 +860,12 @@ extension RedlampEngine {
     /// and after a moment, so the canvas's own frame goes first. Stops if another photo opens or
     /// the Masking tool closes.
     func warm(_ session: ImageSession) {
-        Task.detached(priority: .utility) { [self] in
+        let task = Task.detached(priority: .utility) { [self] in
             func warming() -> Bool {
                 masksWanted.withLock { $0 } && currentSession() === session
+            }
+            func ran() {
+                analysisWork.withLock { $0.modelRuns += 1 }
             }
             try? await Task.sleep(for: .milliseconds(400))
             guard warming(), let analysis = try? await analysisImage(for: session) else { return }
@@ -864,18 +874,22 @@ extension RedlampEngine {
                let segmenter = try? await objectSegmenter(),
                let embedding = try? await objectEmbedding(analysis, segmenter: segmenter) {
                 // One throwaway decode: Core ML prepares the decoder's GPU work on its first.
+                ran()
                 _ = try? segmenter.mask(
                     embedding, included: [ImagePoint(x: 0.5, y: 0.5)], excluded: [],
                     size: PixelSize(width: 64, height: 64),
                 )
             }
             if warming(), let model = await depthAnything3() {
+                ran()
                 _ = try? await depthAnything3Result(analysis, model: model)
             }
             if await isReady(Self.sam3ID), warming(), let model = await sam3() {
+                ran()
                 _ = try? await landscapeClasses(analysis, model: model)
             }
         }
+        warmUp.withLock { $0 = task }
     }
 }
 
@@ -885,6 +899,14 @@ struct AnalysisCache: @unchecked Sendable {
     let session: ImageSession
     let image: CGImage
     let hash: String
+}
+
+/// What getting AI masks ready has done so far, for tests: analysis and matte renders, and the
+/// models the warm-up ran.
+struct AnalysisWork {
+    var analysisRenders = 0
+    var matteRenders = 0
+    var modelRuns = 0
 }
 
 /// What a Subject matte was solved from: the analysis render, the edge setting
