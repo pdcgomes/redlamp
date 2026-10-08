@@ -1,5 +1,6 @@
 import Foundation
 import RedlampEngineAPI
+import Synchronization
 import Testing
 @testable import RedlampUI
 
@@ -19,20 +20,20 @@ struct EditorWindowTests {
         try #require(model.info?.url == photo)
 
         model.windowClosed()
-        for _ in 0 ..< 400 where engine.releases == 0 {
+        for _ in 0 ..< 400 where engine.releases.withLock({ $0 }) == 0 {
             try await Task.sleep(for: .milliseconds(5))
         }
-        #expect(engine.releases == 1)
+        #expect(engine.releases.withLock { $0 } == 1)
         #expect(!model.hasFrame)
         #expect(model.info?.url == photo, "the edit stays open")
 
-        let opens = engine.opened.count
+        let opens = engine.opened.withLock { $0.count }
         let renders = engine.renders.count
         model.windowReopened()
         for _ in 0 ..< 400 where engine.renders.count == renders {
             try await Task.sleep(for: .milliseconds(5))
         }
-        #expect(engine.opened.dropFirst(opens) == [photo])
+        #expect(engine.opened.withLock { Array($0.dropFirst(opens)) } == [photo])
         #expect(engine.renders.count > renders)
     }
 
@@ -44,7 +45,7 @@ struct EditorWindowTests {
         model.windowClosed()
         model.windowReopened()
         try await Task.sleep(for: .milliseconds(100))
-        #expect(engine.releases == 0)
-        #expect(engine.opened.isEmpty)
+        #expect(engine.releases.withLock { $0 } == 0)
+        #expect(engine.opened.withLock { $0.isEmpty })
     }
 }

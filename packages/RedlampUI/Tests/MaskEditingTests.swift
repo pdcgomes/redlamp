@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import RedlampEngineAPI
+import Synchronization
 import Testing
 @testable import RedlampUI
 
@@ -93,22 +94,22 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     var embeddedBaseLook: (look: BaseLookReference, process: Int)?
     var lensCorrection: LensCorrection?
 
-    /// Every photo `open` was asked for, in order.
-    var opened: [URL] = []
+    /// Every photo `open` was asked for, in order. Opens run at once, off the main actor.
+    let opened = Mutex<[URL]>([])
     /// How many times the engine let go of its photos, and of its AI mask models.
-    var releases = 0
-    var maskModelReleases = 0
+    let releases = Mutex(0)
+    let maskModelReleases = Mutex(0)
 
     func releaseResources() async {
-        releases += 1
+        releases.withLock { $0 += 1 }
     }
 
     func releaseMaskModels() async {
-        maskModelReleases += 1
+        maskModelReleases.withLock { $0 += 1 }
     }
 
     func open(_ url: URL) async throws -> ImageInfo {
-        opened.append(url)
+        opened.withLock { $0.append(url) }
         if let openError {
             throw openError
         }
@@ -384,13 +385,13 @@ struct MaskEditingTests {
         let engine = try #require(model.engine as? StubEngine)
         model.activeTool = .masking
         model.activeTool = .heal
-        for _ in 0 ..< 200 where engine.maskModelReleases == 0 {
+        for _ in 0 ..< 200 where engine.maskModelReleases.withLock({ $0 }) == 0 {
             try await Task.sleep(for: .milliseconds(5))
         }
-        #expect(engine.maskModelReleases == 1)
+        #expect(engine.maskModelReleases.withLock { $0 } == 1)
         model.activeTool = .edit
         try await Task.sleep(for: .milliseconds(50))
-        #expect(engine.maskModelReleases == 1, "only the Masking tool's closing")
+        #expect(engine.maskModelReleases.withLock { $0 } == 1, "only the Masking tool's closing")
     }
 
     @Test func `strokes paint into one brush component`() async throws {
