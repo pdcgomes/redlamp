@@ -354,6 +354,43 @@ struct XMPLibraryTests {
         #expect(fromFiles.otherFields == synced.otherFields && fromFiles.rating == 4 && fromFiles.label == .red)
     }
 
+    @Test func `a sync that doesn't fill leaves other apps' fields in their files, the index showing them as theirs`(
+    ) async throws {
+        let sandbox = try await XMPSandbox.make()
+        defer { sandbox.remove() }
+        let photo = try sandbox.photo("IMG_0022.ARW")
+        try sandbox.sidecar("IMG_0022.ARW", PhotoMetadata(rating: 4))
+        try sandbox.write(
+            "IMG_0022.xmp", OtherApps.lightroom(rating: 2, label: "Red", keywords: ["Places/Porto"]), modified: -600,
+        )
+        try await sandbox.indexAll()
+        let edit = SidecarStore().editURL(for: photo)
+        let (saved, xmp) = try (Data(contentsOf: edit), sandbox.text("IMG_0022.xmp"))
+        let theirs = XMPIndexTests.Shown(rating: 4, label: .red, keywords: ["Places/Porto"])
+        #expect(try await sandbox.shown("IMG_0022.ARW") == theirs)
+
+        let report = try await sandbox.xmp.sync([sandbox.id("IMG_0022.ARW")], filling: false)
+        let synced = try #require(report.photo("IMG_0022.ARW"))
+        #expect(synced.taken.isEmpty && XMPIndexTests.Shown(synced) == theirs && LibraryXMP.changedPhotos(report)
+            .isEmpty)
+        #expect(try Data(contentsOf: edit) == saved && sandbox.text("IMG_0022.xmp") == xmp, "neither is written")
+
+        // Read again, as change tracking reads a .redlamp Redlamp wrote: the row shows other apps' fields as
+        // theirs, as an index read from the files does.
+        try sandbox.setModified("IMG_0022.ARW.redlamp", 30)
+        try await sandbox.indexAll()
+        #expect(try await sandbox.shown("IMG_0022.ARW") == theirs)
+        #expect(try await sandbox.row("IMG_0022.ARW").otherFields == [.label, .keywords])
+
+        // Another app's later change is taken in; what it didn't change stays in its files.
+        try sandbox.write(
+            "IMG_0022.xmp", OtherApps.lightroom(rating: 2, label: "Green", keywords: ["Places/Porto"]), modified: 60,
+        )
+        let later = try await sandbox.xmp.sync([sandbox.id("IMG_0022.ARW")], filling: false)
+        #expect(later.photo("IMG_0022.ARW")?.taken == [.label])
+        #expect(sandbox.metadata("IMG_0022.ARW") == PhotoMetadata(rating: 4, label: .green))
+    }
+
     @Test func `a dry run works out the merge and the writes and changes nothing`() async throws {
         let sandbox = try await XMPSandbox.make()
         defer { sandbox.remove() }

@@ -18,6 +18,31 @@ struct XMPMergeTests {
         #expect(outcome.taken == [.flag, .label] && outcome.decided == [.rating] && outcome.kept.isEmpty)
     }
 
+    @Test func `without filling, other apps' fields are left to them the first time, and stay theirs until they change`() {
+        let other = XMPFields(flag: .reject, label: .red, keywords: ["Gulls"])
+        let first = XMPMerge.merge(
+            redlamp: XMPFields(rating: 5), other: other, record: nil, otherIsLater: true, filling: false,
+        )
+        #expect(first.fields == XMPFields(rating: 5, flag: .reject, label: .red, keywords: ["Gulls"]))
+        #expect(first.taken == [.flag, .label, .keywords] && first.theirs == first.taken && first.takenIn.isEmpty)
+        #expect(first.decided == [.rating] && first.redlampFields == XMPFields(rating: 5))
+
+        let recorded = Self.record(other: other, redlamp: first.redlampFields)
+        let again = XMPMerge.merge(redlamp: XMPFields(rating: 5), other: other, record: recorded, otherIsLater: true)
+        #expect(again.fields == first.fields && again.theirs == first.theirs && again.decided == [.rating])
+        // Another app's change is taken in; what it didn't change stays theirs.
+        var relabelled = other
+        relabelled.label = .green
+        let later = XMPMerge.merge(
+            redlamp: XMPFields(rating: 5),
+            other: relabelled,
+            record: recorded,
+            otherIsLater: true,
+        )
+        #expect(later.takenIn == [.label] && later.theirs == [.flag, .keywords])
+        #expect(later.redlampFields == XMPFields(rating: 5, label: .green))
+    }
+
     @Test func `another app's later change is taken, field by field, and what only the .redlamp has stays`() {
         let recorded = Self.record(other: XMPFields(rating: 2), redlamp: XMPFields(rating: 2, flag: .pick))
         let outcome = XMPMerge.merge(

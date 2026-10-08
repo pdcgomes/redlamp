@@ -102,37 +102,62 @@ public struct XMPMergeRecord: Sendable, Hashable, Codable {
 /// - **Other apps' value** is the `.xmp`'s (`IMG_1234.xmp`), else darktable's (`IMG_1234.ARW.xmp`),
 ///   else the photo's own XMP, else its IPTC, field by field (`XMPSource.combining`).
 /// - **The first time** (no record): a field the `.redlamp` holds keeps its value, which Redlamp
-///   then decides; a field it doesn't hold takes other apps'.
+///   then decides; a field it doesn't hold takes other apps', into the `.redlamp` when `filling`, and
+///   otherwise left to them, standing as their files have it.
 /// - **After that**, against the record: a field other apps haven't changed keeps the `.redlamp`'s,
-///   decided by Redlamp if it holds one or changed it since; a field only other apps changed takes
-///   theirs, clearing included; a field both changed takes the later change, other apps' when
-///   their file was modified after the `.redlamp` was saved.
+///   decided by Redlamp if it holds one or changed it since, and is otherwise left to them; a field
+///   only other apps changed takes theirs, clearing included; a field both changed takes the later
+///   change, other apps' when their file was modified after the `.redlamp` was saved.
 ///
 /// Only the fields asked about are touched: whatever else the `.redlamp` holds stays as it is.
 public enum XMPMerge {
     public struct Outcome: Sendable, Hashable {
-        /// The `.redlamp`'s fields once merged.
+        /// The fields once merged.
         public var fields: XMPFields
-        /// Fields taken from other apps.
+        /// Fields whose value is other apps'.
         public var taken: [XMPField]
+        /// Of `taken`, those left to other apps: the `.redlamp` holds none of them, and takes in the rest.
+        public var theirs: [XMPField]
         /// Fields both sides changed, where the `.redlamp`'s later value stays.
         public var kept: [XMPField]
         /// Fields whose value is Redlamp's: what the `.xmp` gets when writing is on.
         public var decided: [XMPField]
+
+        /// The fields the `.redlamp` takes in from other apps.
+        public var takenIn: [XMPField] {
+            taken.filter { !theirs.contains($0) }
+        }
+
+        /// The `.redlamp`'s fields once merged: `fields` but for those left to other apps.
+        public var redlampFields: XMPFields {
+            var held = fields
+            for field in theirs {
+                held.take(field, from: XMPFields())
+            }
+            return held
+        }
+
+        /// Takes other apps' value of `field`, into the `.redlamp` or left to them.
+        mutating func take(_ field: XMPField, from other: XMPFields, into redlamp: Bool) {
+            fields.take(field, from: other)
+            taken.append(field)
+            if !redlamp {
+                theirs.append(field)
+            }
+        }
     }
 
     public static func merge(
         redlamp: XMPFields, other: XMPFields, record: XMPMergeRecord?, fields: Set<XMPField> = XMPField.held,
-        otherIsLater: Bool,
+        otherIsLater: Bool, filling: Bool = true,
     ) -> Outcome {
-        var outcome = Outcome(fields: redlamp, taken: [], kept: [], decided: [])
+        var outcome = Outcome(fields: redlamp, taken: [], theirs: [], kept: [], decided: [])
         for field in fields.sorted() {
             guard let record else {
                 if redlamp.holds(field) {
                     outcome.decided.append(field)
                 } else if other.holds(field) {
-                    outcome.fields.take(field, from: other)
-                    outcome.taken.append(field)
+                    outcome.take(field, from: other, into: filling)
                 }
                 continue
             }
@@ -141,10 +166,11 @@ public enum XMPMerge {
             if !otherChanged || redlamp.same(field, as: other) {
                 if redlamp.holds(field) || redlampChanged {
                     outcome.decided.append(field)
+                } else if other.holds(field) {
+                    outcome.take(field, from: other, into: false)
                 }
             } else if !redlampChanged || otherIsLater {
-                outcome.fields.take(field, from: other)
-                outcome.taken.append(field)
+                outcome.take(field, from: other, into: true)
             } else {
                 outcome.kept.append(field)
                 outcome.decided.append(field)

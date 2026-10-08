@@ -10,6 +10,8 @@ struct XMPSyncContext: Sendable {
     let writes: Bool
     /// Nothing is written: neither sidecars nor records.
     let dryRun: Bool
+    /// A photo's first merge takes other apps' fields into its `.redlamp` (`XMPMerge`'s `filling`).
+    let fills: Bool
     let fields: Set<XMPField>
     let now: Date
     let records: [Int64: XMPMergeRecord]
@@ -123,7 +125,7 @@ extension XMPGroup {
 
         /// The members whose `.redlamp` takes other apps' fields, by their places in the group.
         var takers: [Int] {
-            sides.indices.filter { !(sides[$0].merge?.taken.isEmpty ?? true) }
+            sides.indices.filter { !(sides[$0].merge?.takenIn.isEmpty ?? true) }
         }
 
         func photo(_ taker: Int) -> URL {
@@ -134,7 +136,7 @@ extension XMPGroup {
         /// nothing when it can't be read.
         func taking(_ taker: Int, into sidecar: Sidecar?, context: XMPSyncContext) -> SidecarChange {
             guard let merge = sides[taker].merge, var sidecar else { return .keep }
-            sidecar.metadata = merge.fields.applied(to: sidecar.metadata, fields: Set(merge.taken))
+            sidecar.metadata = merge.fields.applied(to: sidecar.metadata, fields: Set(merge.takenIn))
             sidecar.modified = context.now
             return .save(sidecar)
         }
@@ -280,16 +282,16 @@ extension XMPGroup {
                 continue
             }
             guard !side.failed else { continue }
-            if !merge.taken.isEmpty {
+            if !merge.takenIn.isEmpty {
                 outcome.organising.append((id, merge.fields))
             }
             if let saved = side.saved {
-                outcome.sidecars.append((id, saved, merge.taken))
+                outcome.sidecars.append((id, saved, merge.takenIn))
             }
-            if merge.taken.contains(.keywords) {
+            if merge.takenIn.contains(.keywords) {
                 outcome.keywords.append((id, merge.fields.keywords ?? []))
             }
-            if merge.taken.contains(.captureTime) {
+            if merge.takenIn.contains(.captureTime) {
                 outcome.captures.append((id, merge.fields))
             }
             if let written {
@@ -302,7 +304,7 @@ extension XMPGroup {
             let record = XMPMergeRecord(
                 sidecar: written ?? file.stamp, darktable: side.member.darktable.map(XMPFileStamp.init),
                 photo: XMPFileStamp(side.member.entry), redlamp: side.editStamp, embedded: side.embedded,
-                other: XMPSource.combining([final, side.darktable, side.embedded]), redlampFields: merge.fields,
+                other: XMPSource.combining([final, side.darktable, side.embedded]), redlampFields: merge.redlampFields,
                 unwritten: side.unwritten,
             )
             if record != side.record {
@@ -397,10 +399,10 @@ extension XMPGroup {
         side.merge = XMPMerge.merge(
             redlamp: redlamp, other: side.other, record: side.record,
             fields: member.camera == nil ? context.fields.subtracting([.captureTime]) : context.fields,
-            otherIsLater: otherIsLater,
+            otherIsLater: otherIsLater, filling: context.fills,
         )
-        if side.removed {
-            side.merge?.taken = []
+        if side.removed, let taken = side.merge?.taken {
+            side.merge?.theirs = taken
         }
     }
 
@@ -410,7 +412,7 @@ extension XMPGroup {
             sharedWith: members.map(\.name).filter { $0 != side.member.name },
             darktable: side.member.darktable.map { url($0.name).path }, other: other,
             redlamp: side.removed ? nil : side.redlamp,
-            merged: merged, taken: side.merge?.taken ?? [], kept: side.merge?.kept ?? [], unwritten: side.unwritten,
+            merged: merged, taken: side.merge?.takenIn ?? [], kept: side.merge?.kept ?? [], unwritten: side.unwritten,
             unchanged: unchanged, problem: side.problem,
         )
     }

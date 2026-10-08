@@ -292,12 +292,14 @@ final class LibraryCore: Sendable {
         }
     }
 
-    /// Syncs `ids` now, in the library's changes' turn; nil when the sync failed.
+    /// Syncs `ids` now, in the library's changes' turn; nil when the sync failed. A photo's first sync
+    /// leaves what other apps hold in their files: a `.redlamp` a batch made then holds what the batch
+    /// gave it alone, for its Undo to take back.
     @discardableResult
     func syncXMPNow(_ ids: [Int64]) async -> XMPReport? {
         let report = await change(priority: .utility) { [xmp] () -> Result<XMPReport, any Error> in
             do {
-                return try await .success(xmp.sync(ids))
+                return try await .success(xmp.sync(ids, filling: false))
             } catch {
                 return .failure(error)
             }

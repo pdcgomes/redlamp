@@ -35,12 +35,15 @@ public struct LibraryXMP: Sendable {
     /// Merges the XMP of photos `ids` into their `.redlamp` sidecars and, when `writing` (the
     /// library's setting when nil) says so, writes their `.xmp`; with `dryRun`, works out what that
     /// would do and writes nothing. Photos sharing an `.xmp` with one of them are merged with it.
-    /// Records what was merged and written, so the next sync takes only what changed since and
-    /// doesn't take Redlamp's own `.xmp` for another app's, and brings the index's rows up to date:
-    /// the organising fields and `.redlamp` dates of photos whose `.redlamp` changed, those fields its
-    /// own now, and the `.xmp` date of those whose `.xmp` Redlamp wrote, so the indexer reads neither
-    /// again.
-    public func sync(_ ids: [Int64], writing: Bool? = nil, dryRun: Bool = false) async throws -> XMPReport {
+    /// Without `filling`, a photo's first merge leaves the fields its `.redlamp` lacks to other apps
+    /// rather than taking them in (`XMPMerge`). Records what was merged and written, so the next sync
+    /// takes only what changed since and doesn't take Redlamp's own `.xmp` for another app's, and brings
+    /// the index's rows up to date: the organising fields and `.redlamp` dates of photos whose `.redlamp`
+    /// changed, those fields its own now, and the `.xmp` date of those whose `.xmp` Redlamp wrote, so the
+    /// indexer reads neither again.
+    public func sync(
+        _ ids: [Int64], writing: Bool? = nil, dryRun: Bool = false, filling: Bool = true,
+    ) async throws -> XMPReport {
         let clock = ContinuousClock()
         let started = clock.now
         let settings = try await settings()
@@ -61,7 +64,7 @@ public struct LibraryXMP: Sendable {
         let involved = folders.flatMap(\.rows).map(\.id)
         let records = try await index.read { try XMPMergeRecord.records(involved, in: $0) }
         let context = XMPSyncContext(
-            locator: locator, conventions: settings.conventions, writes: writes, dryRun: dryRun,
+            locator: locator, conventions: settings.conventions, writes: writes, dryRun: dryRun, fills: filling,
             fields: XMPField.synced, now: Date(), records: records,
         )
         let outcomes = try await LibraryIndex.offCaller {
