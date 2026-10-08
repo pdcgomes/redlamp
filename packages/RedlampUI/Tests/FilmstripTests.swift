@@ -112,6 +112,35 @@ struct FilmstripTests {
         #expect(cell(strip, 0)?.isSelected == false)
     }
 
+    @Test func `the strip follows the selection to a photo off screen`() async throws {
+        defer { cleanUp() }
+        let (model, strip, window) = try await showStrip(count: 1000)
+        defer { window.contentView = nil }
+        model.select(model.items[600].url)
+        let frame = try #require(strip.collectionView.layoutAttributesForItem(at: IndexPath(item: 600, section: 0)))
+            .frame
+        try await eventually { strip.scrollView.contentView.bounds.contains(frame) }
+        #expect(strip.scrollView.contentView.bounds.contains(frame))
+        #expect(cell(strip, 600)?.isSelected == true)
+    }
+
+    /// The filmstrip shown again after F6, Lights Out or presenting is a strip made again.
+    @Test func `a strip made again opens at the open photo`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await showStrip(count: 1000)
+        defer { window.contentView = nil }
+        window.contentView = nil
+        model.select(model.items[700].url)
+        try await eventually { model.selection == model.items[700].url }
+        let strip = FilmstripStripView(model: model)
+        window.contentView = strip
+        strip.layoutSubtreeIfNeeded()
+        let frame = try #require(strip.collectionView.layoutAttributesForItem(at: IndexPath(item: 700, section: 0)))
+            .frame
+        try await eventually { strip.scrollView.contentView.bounds.contains(frame) }
+        #expect(strip.scrollView.contentView.bounds.contains(frame), "at \(strip.scrollView.contentView.bounds)")
+    }
+
     /// The strip follows the selection a turn after it changes; cells drawn in between, while the
     /// strip scrolls or reloads, mustn't keep a highlight it never followed.
     @Test func `a photo selected only briefly isn't left highlighted`() async throws {

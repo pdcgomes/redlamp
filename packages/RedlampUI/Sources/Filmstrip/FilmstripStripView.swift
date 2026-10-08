@@ -29,6 +29,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var selected: URL?
     private var marked: Set<URL> = []
     private var prefetching: [URL: UInt64] = [:]
+    /// Shown again: it goes to the active photo once laid out.
+    private var needsPlace = false
 
     init(model: EditorModel) {
         self.model = model
@@ -71,6 +73,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     override func layout() {
         super.layout()
         scrollView.frame = bounds
+        if needsPlace, bounds.width > 0 {
+            restorePlace()
+        }
     }
 
     override func viewDidMoveToWindow() {
@@ -81,10 +86,43 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         guard window != nil else { return }
         collectionView.reloadData()
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
+        selected = model.selection
         tracker = Tracker { [weak self] in
             guard let self else { return }
             follow(model.selection, marking: model.selectedPhotos)
         }
+        needsPlace = true
+        needsLayout = true
+    }
+
+    /// Goes to the active photo once laid out at its width: a strip made again, as the filmstrip is when
+    /// it's shown again after F6, Lights Out or presenting, would start at the first photo.
+    private func restorePlace() {
+        needsPlace = false
+        guard let selection = model.selection, let row = model.library.index(of: selection) else { return }
+        center(row: row, animated: false)
+    }
+
+    /// Scrolls the photo at `row` to the strip's middle, by its clip view: `scrollToItems` doesn't move a
+    /// strip whose scroll view says it has no horizontal scroller (`FilmstripScrollView`).
+    func center(row: Int, animated: Bool) {
+        collectionView.layoutSubtreeIfNeeded()
+        guard let item = collectionView.layoutAttributesForItem(at: IndexPath(item: row, section: 0))?.frame else {
+            return
+        }
+        let clip = scrollView.contentView
+        let end = max(collectionView.frame.width - clip.bounds.width, 0)
+        let origin = CGPoint(x: min(max(item.midX - clip.bounds.width / 2, 0), end), y: 0)
+        // An animation doesn't advance while the window is off screen or the display is asleep.
+        if animated, window?.occlusionState.contains(.visible) == true {
+            NSAnimationContext.runAnimationGroup { context in
+                context.allowsImplicitAnimation = true
+                clip.animator().setBoundsOrigin(origin)
+            }
+        } else {
+            clip.scroll(to: origin)
+        }
+        scrollView.reflectScrolledClipView(clip)
     }
 
     // MARK: - Data source
@@ -229,15 +267,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         selected = selection
         // Scrolled to when it changes, and after a reload; not when only the marks do.
         guard moved || !animated, let selection, let row = model.library.index(of: selection) else { return }
-        let path: Set<IndexPath> = [IndexPath(item: row, section: 0)]
-        if animated {
-            NSAnimationContext.runAnimationGroup { context in
-                context.allowsImplicitAnimation = true
-                collectionView.animator().scrollToItems(at: path, scrollPosition: .centeredHorizontally)
-            }
-        } else {
-            collectionView.scrollToItems(at: path, scrollPosition: .centeredHorizontally)
-        }
+        center(row: row, animated: animated)
     }
 }
 

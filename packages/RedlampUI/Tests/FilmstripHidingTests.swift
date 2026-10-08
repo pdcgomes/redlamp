@@ -61,6 +61,26 @@ struct FilmstripHidingTests {
         }
     }
 
+    /// The editor's canvas with its floating filmstrip, in a window of its own.
+    private static func window(showing model: EditorModel) -> NSWindow {
+        _ = NSApplication.shared
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1200, height: 700), styleMask: [.titled],
+            backing: .buffered, defer: false,
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(
+            rootView: EditorContentView(model: model, theme: ThemeSettings(), onOpen: {}),
+        )
+        return window
+    }
+
+    private func eventually(_ condition: () -> Bool) async throws {
+        for _ in 0 ..< 400 where !condition() {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
     @Test func `Hide Automatically is on until it's turned off, and the next launch reads it back`() throws {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { cleanUp() }
@@ -164,21 +184,8 @@ struct FilmstripHidingTests {
         defer { FilmstripPreference.shared.hidesAutomatically = kept }
         let model = try await editor(photos: 200)
         model.filmstripHidesAutomatically = false
-        _ = NSApplication.shared
-        let window = NSWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 1200, height: 700), styleMask: [.titled],
-            backing: .buffered, defer: false,
-        )
-        window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(
-            rootView: EditorContentView(model: model, theme: ThemeSettings(), onOpen: {}),
-        )
+        let window = Self.window(showing: model)
         defer { window.contentView = nil }
-        func eventually(_ condition: () -> Bool) async throws {
-            for _ in 0 ..< 400 where !condition() {
-                try await Task.sleep(for: .milliseconds(5))
-            }
-        }
         /// As the pointer leaving or coming back does, without waiting for the slide.
         func hidesAutomatically(_ hides: Bool) {
             withTransaction(\.disablesAnimations, true) { model.filmstripHidesAutomatically = hides }
@@ -211,5 +218,30 @@ struct FilmstripHidingTests {
         let bounds = shown.scrollView.contentView.bounds
         #expect(abs(bounds.origin.x - place) < 0.5, "at \(bounds.origin.x), where it was left at \(place)")
         #expect(bounds.contains(frame), "the photo picked is in view")
+    }
+
+    /// F6 takes the filmstrip away altogether, and brings back a new strip: it opens at the photo open
+    /// now, wherever ← and → went meanwhile.
+    @Test func `turned off and on again, the filmstrip opens at the open photo`() async throws {
+        defer { cleanUp() }
+        let kept = FilmstripPreference.shared.hidesAutomatically
+        defer { FilmstripPreference.shared.hidesAutomatically = kept }
+        let model = try await editor(photos: 200)
+        model.filmstripHidesAutomatically = false
+        let window = Self.window(showing: model)
+        defer { window.contentView = nil }
+        try await eventually { Self.shownStrip(in: window) != nil }
+
+        #expect(model.perform(.toggleFilmstrip))
+        try await eventually { Self.shownStrip(in: window) == nil }
+        #expect(Self.shownStrip(in: window) == nil, "F6 took it away")
+        model.select(model.items[160].url)
+        #expect(model.perform(.toggleFilmstrip))
+        try await eventually { Self.shownStrip(in: window) != nil }
+        let strip = try #require(Self.shownStrip(in: window))
+        let frame = try #require(strip.collectionView.layoutAttributesForItem(at: IndexPath(item: 160, section: 0)))
+            .frame
+        try await eventually { strip.scrollView.contentView.bounds.contains(frame) }
+        #expect(strip.scrollView.contentView.bounds.contains(frame), "at \(strip.scrollView.contentView.bounds)")
     }
 }
