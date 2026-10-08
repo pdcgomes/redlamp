@@ -97,8 +97,9 @@ public final class LibraryPanels {
     /// The panels' changes, newest last, for Undo; and those Undo took back, for Redo.
     var undoSteps: [PanelStep] = []
     var redoSteps: [PanelStep] = []
-    /// What a change in flight shows before the library has it.
-    @ObservationIgnored var overlay: PanelOverlay?
+    /// What the changes in flight show before the library has them, oldest first: each until its own batch
+    /// is made, as one finishing while those after it wait would otherwise show them undone.
+    @ObservationIgnored var overlays: [(step: PanelStep, overlay: PanelOverlay)] = []
     @ObservationIgnored let photoIDs = PanelPhotoIDs()
     @ObservationIgnored var tail: Task<Void, Never>?
     @ObservationIgnored private var tracker: Tracker?
@@ -227,7 +228,9 @@ public final class LibraryPanels {
 
     private func show(_ read: PanelSelection) {
         var shown = read
-        overlay?.apply(to: &shown)
+        for (_, overlay) in overlays {
+            overlay.apply(to: &shown)
+        }
         if shown != selection {
             selection = shown
         }

@@ -380,7 +380,7 @@ extension LibraryPanels {
         problem = nil
         push(step)
         if let overlay {
-            self.overlay = overlay
+            overlays.append((step, overlay))
             var shown = selection
             overlay.apply(to: &shown)
             selection = shown
@@ -471,7 +471,7 @@ extension LibraryPanels {
             model.activity.record(.error, "\(title) wasn't saved to \(Self.count(reasons.count)): \(why)")
         }
         await service.settled()
-        overlay = nil
+        overlays.removeAll { $0.step === step }
         refresh()
         if step.changes.contains(where: \.isKeywords) {
             refreshKeywords()
