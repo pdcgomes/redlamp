@@ -353,8 +353,8 @@ public final class LibrarySources {
         return counts.entries[source] != nil
     }
 
-    /// Shows `source` in the grid and the filmstrip, in Library, in place of the open folder; false while the
-    /// library isn't open, and for Previous Import while there's none.
+    /// Shows `source` in the grid and the filmstrip in place of the open folder, Library shown once its photos are
+    /// in; false while the library isn't open, and for Previous Import while there's none.
     @discardableResult
     public func show(_ source: LibrarySource) -> Bool {
         guard let model, let core = model.library.service?.core, model.library.service?.isReady == true else {
@@ -371,7 +371,6 @@ public final class LibrarySources {
             }
             return true
         }
-        model.showModule(.library)
         model.rememberSourceView()
         model.stackSuggestions = []
         followShown()
@@ -413,6 +412,9 @@ public final class LibrarySources {
         ids = change.ids
         if awaitingFirst {
             awaitingFirst = false
+            // Only after the photos are in: a filmstrip out of sight doesn't take them, and one placing itself
+            // as it goes out of sight would look for a photo it doesn't have.
+            model.showModule(.library)
             model.didList(Array(model.library.items.prefix(Self.warmedAsShown)), select: nil)
         }
     }
