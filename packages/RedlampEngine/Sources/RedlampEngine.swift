@@ -231,10 +231,11 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         }
     }
 
-    /// Lets go of what the caches keep for photos other than `kept`, so a photo is freed once the
-    /// session cache lets go of it. The masks keep the photo shown before aside, holding it weakly.
-    private func release(keeping kept: ImageSession) {
-        let photo = kept.original
+    /// Lets go of what the caches keep for photos other than `kept` (every photo when nil), so a
+    /// photo is freed once the session cache lets go of it. The masks keep the photo shown before
+    /// aside, holding it weakly.
+    private func release(keeping kept: ImageSession?) {
+        let photo = kept?.original
         analysisCache.withLock {
             if $0?.session.original !== photo {
                 $0 = nil
@@ -276,6 +277,27 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
     public func prefetch(_ urls: [URL]) {
         sessions.prefetch(urls)
+    }
+
+    public func releaseResources() async {
+        openGeneration.withLock { latest in
+            latest += 1
+            session.withLock { $0 = nil }
+        }
+        renderState.withLock { state in
+            state.pending = nil
+            state.latest = nil
+        }
+        sessions.removeAll()
+        release(keeping: nil)
+        await withCheckedContinuation { (released: CheckedContinuation<Void, Never>) in
+            renderQueue.async { [self] in
+                for pool in [surfaces, overviews, comparisons, comparisonOverviews] {
+                    pool.removeAll()
+                }
+                released.resume()
+            }
+        }
     }
 
     // MARK: - Interactive rendering

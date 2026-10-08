@@ -689,14 +689,12 @@ struct EngineMemoryTests {
             try await Task.sleep(for: .milliseconds(20))
         }
         let held = engine.renderQueue.sync { engine.heldTextures.reduce(0) { $0 + $1.allocatedSize } }
-        withKnownIssue("MEM-09: closing the editor window releases nothing") {
-            #expect(first == nil)
-            #expect(retouched == nil)
-            #expect(second == nil)
-            #expect(engine.currentSession() == nil)
-            #expect(engine.sessions.bytesCached == 0)
-            #expect(held == 0, "\(held >> 20) MB of textures held")
-        }
+        #expect(first == nil)
+        #expect(retouched == nil)
+        #expect(second == nil)
+        #expect(engine.currentSession() == nil)
+        #expect(engine.sessions.bytesCached == 0)
+        #expect(held == 0, "\(held >> 20) MB of textures held")
     }
 
     /// The photo open now, fitted in a canvas.

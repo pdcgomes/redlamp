@@ -478,13 +478,16 @@ final class MaskResources {
     }
 
     /// Lets go of the photo rendered last unless it's `kept`, keeping its rasters and guides aside
-    /// as `use(_:commands:)` does, and of what is kept for photos that are gone.
-    func keepOnly(_ kept: ImageSession, queue: any MTLCommandQueue) {
-        parked.removeAll { $0.session == nil }
-        edgeMaps.removeAll { $0.session == nil }
-        colorMaps.removeAll { $0.session == nil }
-        guard let session, session.original !== kept.original else { return }
-        park(session, queue: queue)
+    /// as `use(_:commands:)` does, and of what is kept for photos that are gone; of every photo
+    /// when `kept` is nil.
+    func keepOnly(_ kept: ImageSession?, queue: any MTLCommandQueue) {
+        parked.removeAll { $0.session == nil || kept == nil }
+        edgeMaps.removeAll { $0.session == nil || kept == nil }
+        colorMaps.removeAll { $0.session == nil || kept == nil }
+        guard let session, session.original !== kept?.original else { return }
+        if kept != nil {
+            park(session, queue: queue)
+        }
         self.session = nil
         rasterSize = .zero
         guideSize = .zero

@@ -1224,6 +1224,48 @@ public final class EditorModel {
     @ObservationIgnored private var lastStatsUpdate = ContinuousClock.now
     @ObservationIgnored private var lastRenderTimeUpdate = ContinuousClock.now
 
+    // MARK: - The window
+
+    @ObservationIgnored private var windowIsOpen = true
+    @ObservationIgnored private var released = false
+    @ObservationIgnored private var windowChange: Task<Void, Never>?
+
+    /// The editor window closed: once the photo opening has opened, its edit is saved, and the
+    /// engine and the canvas let go of every photo.
+    public func windowClosed() {
+        windowIsOpen = false
+        let previous = windowChange
+        windowChange = Task { [weak self] in
+            await previous?.value
+            if let url = self?.selection {
+                await self?.finishOpening(url)
+            }
+            guard let self, !windowIsOpen else { return }
+            saveNow()
+            latestFrame = nil
+            showFrame(nil)
+            await engine.releaseResources()
+            released = true
+            // A frame rendered before the engine let go.
+            latestFrame = nil
+            showFrame(nil)
+        }
+    }
+
+    /// The editor window is back: the photo it showed is decoded and rendered again.
+    public func windowReopened() {
+        windowIsOpen = true
+        let previous = windowChange
+        windowChange = Task { [weak self] in
+            await previous?.value
+            guard let self, released, let url = selection, info != nil else { return }
+            released = false
+            engine.prefetch(workingSet(around: url, comingFrom: nil))
+            guard await (try? engine.open(url)) != nil, selection == url else { return }
+            requestRender()
+        }
+    }
+
     // MARK: - Parameters
 
     public func value(_ parameter: ParameterID) -> Double {

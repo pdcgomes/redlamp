@@ -7,7 +7,7 @@ import SwiftUI
 /// it, and the toolbar's tracking separators put each panel's buttons in its own titlebar
 /// section, which SwiftUI's split views don't offer.
 @MainActor
-public final class EditorWindowController: NSWindowController, NSToolbarDelegate {
+public final class EditorWindowController: NSWindowController, NSToolbarDelegate, NSWindowDelegate {
     /// The window sheets attach to: the one in front, or the editor's when Redlamp isn't the
     /// active app (scripted captures and the regression suite run it in the background).
     public static var frontWindow: NSWindow? {
@@ -66,6 +66,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         window.center()
         window.setFrameAutosaveName("Redlamp Editor")
         super.init(window: window)
+        window.delegate = self
 
         let toolbar = NSToolbar(identifier: "Editor")
         toolbar.delegate = self
@@ -81,6 +82,20 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    // MARK: - Closing
+
+    /// The window is kept for reopening, without the photo's memory.
+    public func windowWillClose(_: Notification) {
+        model.windowClosed()
+    }
+
+    override public func showWindow(_ sender: Any?) {
+        if window?.isVisible == false {
+            model.windowReopened()
+        }
+        super.showWindow(sender)
     }
 
     private func startTracking(root: EditorRootViewController) {

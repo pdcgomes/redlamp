@@ -34,6 +34,8 @@ final class SessionCache: Sendable {
         var failed: Set<URL> = []
         var waiters: [URL: [Waiter]] = [:]
         var wanted: [URL] = []
+        /// Decoding when every session was let go of, and not asked for since: not kept once done.
+        var released: Set<URL> = []
         var clock: UInt64 = 0
         var bytes = 0
         /// What the latest decoded session held: the guess for one not decoded yet.
@@ -127,6 +129,7 @@ final class SessionCache: Sendable {
                     return Work(resume: [(continuation, .success(session))])
                 }
                 state.failed.remove(url)
+                state.released.remove(url)
                 state.wanted.removeAll { $0 == url }
                 state.wanted.insert(url, at: 0)
                 state.waiters[url, default: []].append(continuation)
@@ -141,6 +144,15 @@ final class SessionCache: Sendable {
         state.withLock { state in
             state.remove(url)
             state.failed.remove(url)
+        }
+    }
+
+    /// Lets go of every session, those still decoding once they're done, and wants none.
+    func removeAll() {
+        state.withLock { state in
+            state.wanted = []
+            state.keep(only: [])
+            state.released = state.decoding
         }
     }
 
@@ -165,6 +177,7 @@ final class SessionCache: Sendable {
         let work = state.withLock { state -> Work in
             var seen = Set<URL>()
             state.wanted = urls.filter { seen.insert($0).inserted }
+            state.released.subtract(state.wanted)
             return state.schedule(budget: budget)
         }
         run(work)
@@ -174,7 +187,10 @@ final class SessionCache: Sendable {
         let work = state.withLock { state -> Work in
             state.decoding.remove(url)
             switch result {
-            case let .success(session): state.insert(session, for: url, budget: budget)
+            case let .success(session):
+                if state.released.remove(url) == nil {
+                    state.insert(session, for: url, budget: budget)
+                }
             case .failure: state.failed.insert(url)
             }
             let finished = state.waiters.removeValue(forKey: url) ?? []

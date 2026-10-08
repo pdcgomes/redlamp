@@ -292,15 +292,22 @@ final class RetouchStage: @unchecked Sendable {
     }
 
     /// Lets go of the retouches and Remove fills of photos other than `session`'s, and of their
-    /// sessions.
-    func keepOnly(_ session: ImageSession) {
-        let original = session.original
-        let photo = ObjectIdentifier(original)
+    /// sessions; of every one, and of the generative fills' bitmaps, when it's nil.
+    func keepOnly(_ session: ImageSession?) {
+        let original = session?.original
+        let photo = original.map(ObjectIdentifier.init)
         let dropped = lock.withLock {
-            let dropped = (entries.filter { $0.original !== original }, fills.filter { $0.key.session != photo })
+            let dropped = (
+                entries.filter { $0.original !== original }, fills.filter { $0.key.session != photo },
+                original == nil ? storedFills : [:],
+            )
             entries.removeAll { $0.original !== original }
             fills = fills.filter { $0.key.session == photo }
             fillOrder.removeAll { $0.session != photo }
+            if original == nil {
+                storedFills = [:]
+                storedOrder = []
+            }
             return dropped
         }
         // Released once unlocked: a buffer dropped uncommitted runs its completed handlers then.

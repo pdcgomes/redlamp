@@ -93,7 +93,17 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     var embeddedBaseLook: (look: BaseLookReference, process: Int)?
     var lensCorrection: LensCorrection?
 
+    /// Every photo `open` was asked for, in order.
+    var opened: [URL] = []
+    /// How many times the engine let go of its photos.
+    var releases = 0
+
+    func releaseResources() async {
+        releases += 1
+    }
+
     func open(_ url: URL) async throws -> ImageInfo {
+        opened.append(url)
         if let openError {
             throw openError
         }
