@@ -28,7 +28,7 @@ let project = Project(
                 "LSApplicationCategoryType": "public.app-category.developer-tools",
                 // The Recipe Lab's bench hub (ARC-13): the iPhone app finds it over Bonjour.
                 "NSLocalNetworkUsageDescription": "Redlamp Bench on your iPhone sends tasks and look references to the Recipe Lab.",
-                "NSBonjourServices": ["_redlamp-bench._tcp"],
+                "NSBonjourServices": ["_redlamp-bench._tcp", "_redlamp-phone._tcp"],
                 // A bench task as one file, from the iPhone app by AirDrop when the network can't carry it.
                 "UTExportedTypeDeclarations": [
                     [

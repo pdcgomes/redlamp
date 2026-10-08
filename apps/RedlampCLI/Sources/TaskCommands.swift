@@ -24,8 +24,9 @@ enum TaskCommands {
                                phone, for a filter in a Mac app (default DIR: the current folder)
       add <folder> <files…>    Files exports into a task or look reference and pairs them, as the
                                iPhone app's share extension does
-      serve [--port N]         The Lab's hub without the Lab, until interrupted: prints the pairing
-                               code and what arrives (look references aren't fitted here)
+      serve [--port N]         The Lab's hub without the Lab, until interrupted: asks y or n when a
+                               phone asks to pair, prints the browser's pairing code and what
+                               arrives (look references aren't fitted here)
     The folders are in \(BenchStore.standardRoot.path).
     """
 
@@ -303,6 +304,7 @@ enum TaskCommands {
         // Each event as it happens, even when the output is a pipe or a log.
         setvbuf(stdout, nil, _IOLBF, 0)
         let port = try arguments.int("--port").map(UInt16.init) ?? BenchProtocol.defaultPort
+        let asking = Asking()
         let hub = BenchHub(
             store: store,
             name: "Redlamp hub on \(Host.current().localizedName ?? "this Mac")",
@@ -313,13 +315,37 @@ enum TaskCommands {
             case let .arrival(arrival): print("arrived: \(arrival.summary) (\(arrival.folder.url.path))")
             case let .refused(reason): print("refused: \(reason)")
             case let .paired(device): print("paired \(device)")
+            case let .pairingRequested(request):
+                print("\(request.device) asks to pair: y and Enter allows it, n refuses")
+                Task { await asking.push(request.id) }
             default: break
             }
         }
         try await hub.start(port: port)
         await print("pairing code \(hub.code); the outbox and templates are in \(store.root.path)")
+        while let line = await Task.detached(operation: { readLine() }).value {
+            guard let id = await asking.pop() else { continue }
+            switch line.trimmingCharacters(in: .whitespaces).lowercased() {
+            case "y", "yes": await hub.approve(id)
+            case "n", "no": await hub.deny(id)
+            default: await asking.push(id)
+            }
+        }
         while true {
             try await Task.sleep(for: .seconds(3600))
+        }
+    }
+
+    /// Pairing requests waiting for an answer in the terminal, oldest first.
+    private actor Asking {
+        private var ids: [String] = []
+
+        func push(_ id: String) {
+            ids.append(id)
+        }
+
+        func pop() -> String? {
+            ids.isEmpty ? nil : ids.removeFirst()
         }
     }
 

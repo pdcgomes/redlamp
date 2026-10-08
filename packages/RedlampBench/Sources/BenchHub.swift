@@ -11,7 +11,19 @@ public actor BenchHub {
         case refused(String)
         case paired(device: String)
         case contact(device: String)
+        /// A phone asked to pair without a code; the owner allows or denies it in the Lab.
+        case pairingRequested(PairingRequest)
     }
+
+    /// A phone waiting for the owner to allow it.
+    public struct PairingRequest: Sendable, Hashable, Identifiable {
+        public var id: String
+        public var device: String
+        public var at: Date
+    }
+
+    /// How long a pairing request waits for the owner.
+    public static let requestLifetime: TimeInterval = 180
 
     public struct Device: Codable, Sendable, Hashable {
         public var name: String
@@ -28,6 +40,9 @@ public actor BenchHub {
     public private(set) var state: BenchHTTPServer.State = .stopped
     private var server: BenchHTTPServer?
     private var wrongCodes = 0
+    public private(set) var requests: [PairingRequest] = []
+    /// Answers waiting for the phone to collect them: a token, or nil when denied.
+    private var answers: [String: String?] = [:]
     private var hashes: [String: (modified: Date, bytes: Int, sha256: String)] = [:]
     private let events: @Sendable (Event) -> Void
 
@@ -95,6 +110,9 @@ public actor BenchHub {
         default:
             break
         }
+        if request.method == "GET", let parts = request.parts(after: "/api/pair"), parts.count == 1 {
+            return pairingStatus(parts[0])
+        }
         guard let device = device(request) else { return .error(401, "pair with the code the Lab shows") }
         touch(device)
         if request.method == "GET", request.path == "/api/tasks" {
@@ -118,10 +136,14 @@ public actor BenchHub {
 
     private func pair(_ request: BenchHTTPRequest) -> BenchHTTPResponse {
         guard let pairing = try? JSONDecoder.bench.decode(BenchProtocol.PairRequest.self, from: request.body) else {
-            return .error(400, "send a code and a device name")
+            return .error(400, "send a device name, and a code or none")
         }
-        let given = Data(pairing.code.trimmingCharacters(in: .whitespaces).utf8)
-        guard given.count == code.utf8.count, zip(given, Data(code.utf8)).reduce(0, { $0 | ($1.0 ^ $1.1) }) == 0 else {
+        guard let typed = pairing.code, !typed.isEmpty else {
+            return ask(for: pairing.device)
+        }
+        let given = Data(typed.trimmingCharacters(in: .whitespaces).utf8)
+        let expected = Data(code.utf8)
+        guard given.count == expected.count, zip(given, expected).reduce(0, { $0 | ($1.0 ^ $1.1) }) == 0 else {
             wrongCodes += 1
             if wrongCodes >= 5 {
                 renewCode()
@@ -129,13 +151,59 @@ public actor BenchHub {
             return .error(401, "that isn't the code the Lab shows")
         }
         wrongCodes = 0
+        return .json(BenchProtocol.PairReply(token: admit(pairing.device), hub: name))
+    }
+
+    /// A new token for a device, replacing any it had.
+    private func admit(_ device: String) -> String {
         let token = (0 ..< 32).map { _ in String(format: "%02x", UInt8.random(in: 0 ... 255)) }.joined()
-        let name = String(pairing.device.prefix(60))
+        let name = String(device.prefix(60))
         devices.removeAll { $0.name == name }
         devices.append(Device(name: name, paired: Date(), lastContact: Date(), tokenHash: Self.hash(token)))
         saveDevices()
         events(.paired(device: name))
-        return .json(BenchProtocol.PairReply(token: token, hub: self.name))
+        return token
+    }
+
+    // MARK: - Pairing by the owner's approval
+
+    private func ask(for device: String) -> BenchHTTPResponse {
+        expire()
+        let name = String(device.prefix(60))
+        if let waiting = requests.first(where: { $0.device == name }) {
+            return .json(BenchProtocol.PairPending(request: waiting.id, hub: self.name), status: 202)
+        }
+        guard requests.count < 5 else { return .error(429, "too many phones are waiting; answer them in the Lab") }
+        let request = PairingRequest(id: UUID().uuidString.lowercased(), device: name, at: Date())
+        requests.append(request)
+        events(.pairingRequested(request))
+        return .json(BenchProtocol.PairPending(request: request.id, hub: self.name), status: 202)
+    }
+
+    private func pairingStatus(_ id: String) -> BenchHTTPResponse {
+        expire()
+        if let answer = answers.removeValue(forKey: id) {
+            return .json(BenchProtocol.PairStatus(state: answer == nil ? .denied : .approved, token: answer, hub: name))
+        }
+        let state: BenchProtocol.PairStatus.State = requests.contains { $0.id == id } ? .pending : .expired
+        return .json(BenchProtocol.PairStatus(state: state, token: nil, hub: name))
+    }
+
+    /// The owner allowed a phone: it gets its token the next time it asks.
+    public func approve(_ id: String) {
+        guard let index = requests.firstIndex(where: { $0.id == id }) else { return }
+        let request = requests.remove(at: index)
+        answers[id] = .some(admit(request.device))
+    }
+
+    public func deny(_ id: String) {
+        guard let index = requests.firstIndex(where: { $0.id == id }) else { return }
+        requests.remove(at: index)
+        answers[id] = .some(nil)
+    }
+
+    private func expire() {
+        requests.removeAll { Date().timeIntervalSince($0.at) > Self.requestLifetime }
     }
 
     private func device(_ request: BenchHTTPRequest) -> Device? {

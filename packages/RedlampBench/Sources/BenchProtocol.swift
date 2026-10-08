@@ -5,6 +5,8 @@ public enum BenchProtocol {
     public static let version = 1
     /// The Bonjour service the Lab's hub advertises.
     public static let serviceType = "_redlamp-bench._tcp"
+    /// The Bonjour service the iPhone app advertises while it's open, so the Lab sees it nearby.
+    public static let phoneServiceType = "_redlamp-phone._tcp"
     public static let defaultPort: UInt16 = 8765
 
     public struct HubInfo: Codable, Sendable, Hashable {
@@ -14,14 +16,32 @@ public enum BenchProtocol {
         public var paired: Bool
     }
 
+    /// With a code, pairs at once; without one, asks the owner to allow it in the Lab.
     public struct PairRequest: Codable, Sendable, Hashable {
-        public var code: String
+        public var code: String?
         public var device: String
 
-        public init(code: String, device: String) {
+        public init(code: String? = nil, device: String) {
             self.code = code
             self.device = device
         }
+    }
+
+    /// A pairing the owner hasn't answered yet: the phone asks after it by `request`.
+    public struct PairPending: Codable, Sendable, Hashable {
+        public var request: String
+        public var hub: String
+    }
+
+    public struct PairStatus: Codable, Sendable, Hashable {
+        public enum State: String, Codable, Sendable {
+            case pending, approved, denied, expired
+        }
+
+        public var state: State
+        /// Given once, when the owner allowed it.
+        public var token: String?
+        public var hub: String
     }
 
     public struct PairReply: Codable, Sendable, Hashable {

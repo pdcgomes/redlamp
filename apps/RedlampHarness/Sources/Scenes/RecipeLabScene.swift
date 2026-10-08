@@ -64,15 +64,20 @@ enum HarnessLab {
     static func connectBench() {
         let looks = model.looks
         LabBench.shared.onArrival = { looks.arrived($0) }
-        looks.notify = { text in
-            let center = UNUserNotificationCenter.current()
-            center.requestAuthorization(options: [.alert]) { granted, _ in
-                guard granted else { return }
-                let content = UNMutableNotificationContent()
-                content.title = "Ready to evaluate"
-                content.body = text
-                center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
-            }
+        LabBench.shared.onPairingRequest = { request in
+            notify(title: "\(request.device) asks to pair", body: "Allow it in the Recipe Lab's Bench tab.")
+        }
+        looks.notify = { notify(title: "Ready to evaluate", body: $0) }
+    }
+
+    private static func notify(title: String, body text: String) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = text
+            center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         }
     }
 

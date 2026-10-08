@@ -13,6 +13,9 @@ struct LabBenchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hub
+                if !bench.requests.isEmpty {
+                    requests
+                }
                 if bench.isEnabled {
                     pairing
                 }
@@ -74,19 +77,47 @@ struct LabBenchView: View {
         return false
     }
 
+    private var requests: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(bench.requests) { request in
+                HStack {
+                    Image(systemName: "iphone.radiowaves.left.and.right").foregroundStyle(.tint)
+                    Text("\(request.device) asks to pair with the Lab").fontWeight(.medium)
+                    Spacer()
+                    Button("Don't Allow") { bench.deny(request) }
+                    Button("Allow") { bench.allow(request) }.buttonStyle(.borderedProminent)
+                }
+                .padding(10)
+                .background(.tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+
     private var pairing: some View {
         HStack(alignment: .top, spacing: 24) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Pairing code").font(.caption).foregroundStyle(.secondary)
-                Text(bench.code.isEmpty ? "······" : bench.code)
-                    .font(.system(size: 28, weight: .semibold, design: .monospaced))
-                    .textSelection(.enabled)
-                Button("New Code") { bench.renewCode() }.controlSize(.small)
+                Text("Nearby").font(.caption).foregroundStyle(.secondary)
+                if bench.nearby.isEmpty {
+                    Text("No phone with Redlamp Bench open.").font(.callout).foregroundStyle(.secondary)
+                }
+                ForEach(bench.nearby) { phone in
+                    HStack {
+                        Image(systemName: "iphone")
+                        Text(phone.name)
+                        Text(bench.isPaired(phone) ? "paired" : "not paired: tap Pair on the phone")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.callout)
+                }
+                Text("For a browser, the code is \(bench.code.isEmpty ? "······" : bench.code)")
+                    .font(.caption).foregroundStyle(.tertiary).textSelection(.enabled)
+                    .padding(.top, 6)
+                Button("New Code") { bench.renewCode() }.controlSize(.mini)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Paired").font(.caption).foregroundStyle(.secondary)
                 if bench.devices.isEmpty {
-                    Text("No phone yet: open Redlamp Bench on the iPhone and enter the code.")
+                    Text("No phone yet: open Redlamp Bench on the iPhone and tap Pair.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 ForEach(bench.devices, id: \.name) { device in

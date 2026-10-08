@@ -27,6 +27,13 @@ public final class LabBench {
     public private(set) var done: [BenchFolder] = []
     public private(set) var templates: [BenchFolder] = []
     public private(set) var events: [Event] = []
+    /// Phones asking to pair, waiting for Allow or Deny.
+    public private(set) var requests: [BenchHub.PairingRequest] = []
+    /// Phones with Redlamp Bench open on the network, as they announce themselves.
+    public private(set) var nearby: [BonjourWatcher.Service] = []
+    /// Called when a phone asks to pair, so the harness can say so.
+    @ObservationIgnored public var onPairingRequest: (@MainActor (BenchHub.PairingRequest) -> Void)?
+    @ObservationIgnored private var phones: BonjourWatcher?
     /// Called on every arrival; the Lab's Looks tab fits look references from here.
     @ObservationIgnored public var onArrival: (@MainActor (BenchStore.Arrival) -> Void)?
     @ObservationIgnored private var hub: BenchHub?
@@ -75,6 +82,11 @@ public final class LabBench {
             Task { @MainActor in self?.handle(event) }
         }
         self.hub = hub
+        let phones = BonjourWatcher(type: BenchProtocol.phoneServiceType) { [weak self] found in
+            Task { @MainActor in self?.nearby = found }
+        }
+        phones.start()
+        self.phones = phones
         Task {
             do {
                 try await hub.start()
@@ -90,8 +102,36 @@ public final class LabBench {
     public func stop() {
         guard let hub else { return }
         self.hub = nil
+        phones?.stop()
+        phones = nil
+        nearby = []
+        requests = []
         Task { await hub.stop() }
         state = .stopped
+    }
+
+    public func allow(_ request: BenchHub.PairingRequest) {
+        answer(request) { await $0.approve(request.id) }
+        note("Allowed \(request.device)")
+    }
+
+    public func deny(_ request: BenchHub.PairingRequest) {
+        answer(request) { await $0.deny(request.id) }
+        note("Didn't allow \(request.device)")
+    }
+
+    private func answer(_ request: BenchHub.PairingRequest, _ act: @escaping @Sendable (BenchHub) async -> Void) {
+        requests.removeAll { $0.id == request.id }
+        guard let hub else { return }
+        Task {
+            await act(hub)
+            devices = await hub.devices
+        }
+    }
+
+    /// Whether a phone nearby is one the hub knows.
+    public func isPaired(_ phone: BonjourWatcher.Service) -> Bool {
+        devices.contains { $0.name == phone.name }
     }
 
     public func renewCode() {
@@ -140,6 +180,11 @@ public final class LabBench {
                     devices = await hub.devices
                 }
             }
+        case let .pairingRequested(request):
+            requests.removeAll { $0.device == request.device || -$0.at.timeIntervalSinceNow > BenchHub.requestLifetime }
+            requests.append(request)
+            note("\(request.device) asks to pair")
+            onPairingRequest?(request)
         }
     }
 

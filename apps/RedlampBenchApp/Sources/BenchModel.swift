@@ -9,8 +9,10 @@ import UIKit
 final class BenchModel {
     enum Hub: Equatable {
         case searching
-        /// Found on the network, waiting for the Lab's pairing code.
+        /// Found on the network, not paired yet.
         case found(name: String, url: URL)
+        /// Asked to pair; waiting for Allow on the Mac.
+        case asking(name: String)
         case connected(name: String)
         /// Paired before, but not reachable now: work waits in the queue.
         case away(name: String)
@@ -28,6 +30,10 @@ final class BenchModel {
     /// A folder to open once the app is up.
     var opened: String?
     private var lastAttempt = Date.distantPast
+    /// Labs on the network, as Bonjour reports them while the app is open.
+    private var labs: [BonjourWatcher.Service] = []
+    @ObservationIgnored private var watcher: BonjourWatcher?
+    @ObservationIgnored private let presence = BonjourPresence()
 
     init(library: BenchLibrary = BenchShared.library) {
         self.library = library
@@ -53,7 +59,47 @@ final class BenchModel {
 
     // MARK: - The hub
 
-    /// Reaches the paired hub, or looks for one, then pulls tasks and sends what's queued.
+    /// This phone's name, as the Lab lists it.
+    var device: String {
+        library.settings.device ?? UIDevice.current.name
+    }
+
+    /// Watches for the Lab and announces the phone while the app is in the foreground.
+    func startWatching() {
+        guard watcher == nil else { return }
+        let watcher = BonjourWatcher(type: BenchProtocol.serviceType) { [weak self] found in
+            Task { @MainActor in self?.labsChanged(found) }
+        }
+        watcher.start()
+        self.watcher = watcher
+        presence.start(
+            name: device, type: BenchProtocol.phoneServiceType,
+            info: ["paired": library.settings.token == nil ? "0" : "1"],
+        )
+    }
+
+    func stopWatching() {
+        watcher?.stop()
+        watcher = nil
+        presence.stop()
+    }
+
+    private func labsChanged(_ found: [BonjourWatcher.Service]) {
+        labs = found
+        switch hub {
+        case .connected, .asking:
+            return
+        default:
+            Task { await refresh() }
+        }
+    }
+
+    /// The Lab this phone is paired with if it's on the network, or else the first one found.
+    private var lab: BonjourWatcher.Service? {
+        labs.first { $0.name == library.settings.hubName } ?? labs.first
+    }
+
+    /// Reaches the paired hub, or the one on the network, then pulls tasks and sends what's queued.
     func refresh() async {
         guard !syncing else { return }
         syncing = true
@@ -75,32 +121,28 @@ final class BenchModel {
                 hub = .away(name: settings.hubName ?? "the Lab")
             }
         }
-        // The address may have changed (a new port, a new network): look again.
-        if case .away = hub {} else {
-            hub = .searching
-        }
-        let found = await BenchDiscovery.find()
-        guard let first = found.first else {
+        // The address may have changed (a new port, a new network): use what Bonjour sees.
+        guard let lab, let url = await BenchDiscovery.address(of: lab) else {
             if settings.token == nil {
-                hub = .none
-            } else if case .searching = hub {
+                hub = watcher == nil ? .none : .searching
+            } else {
                 hub = .away(name: settings.hubName ?? "the Lab")
             }
             return
         }
         if let token = settings.token {
-            let client = BenchClient(base: first.url, token: token)
+            let client = BenchClient(base: url, token: token)
             if await (try? client.info())?.paired == true {
                 var updated = library.settings
-                updated.hub = first.url
-                updated.hubName = first.name
+                updated.hub = url
+                updated.hubName = lab.name
                 library.settings = updated
-                hub = .connected(name: first.name)
+                hub = .connected(name: lab.name)
                 try? await sync(client)
                 return
             }
         }
-        hub = .found(name: first.name, url: first.url)
+        hub = .found(name: lab.name, url: url)
     }
 
     /// Refreshes at most every few minutes while the app is open.
@@ -110,21 +152,49 @@ final class BenchModel {
         }
     }
 
-    func pair(code: String, device: String, url: URL, name _: String) async {
+    /// Asks the Lab found on the network to pair, and waits for Allow on the Mac.
+    func pairWithLab() async {
+        guard case let .found(name, url) = hub else { return }
+        hub = .asking(name: name)
+        message = nil
+        do {
+            let reply = try await BenchClient(base: url).pairByApproval(device: device)
+            await paired(reply, url: url)
+        } catch let BenchClientError.http(status, _) where status == 403 || status == 408 {
+            message = status == 403 ? "\(name) didn't allow this phone" : "No answer from \(name); try again"
+            hub = .found(name: name, url: url)
+        } catch {
+            message = "\(error)"
+            hub = .found(name: name, url: url)
+        }
+    }
+
+    func pair(code: String, device: String, url: URL) async {
         do {
             let reply = try await BenchClient(base: url).pair(code: code, device: device)
             var settings = library.settings
-            settings.hub = url
-            settings.hubName = reply.hub
-            settings.token = reply.token
             settings.device = device
             library.settings = settings
-            message = nil
-            hub = .connected(name: reply.hub)
-            await refresh()
+            await paired(reply, url: url)
         } catch {
             message = "\(error)"
         }
+    }
+
+    private func paired(_ reply: BenchProtocol.PairReply, url: URL) async {
+        var settings = library.settings
+        settings.hub = url
+        settings.hubName = reply.hub
+        settings.token = reply.token
+        settings.device = settings.device ?? device
+        library.settings = settings
+        message = nil
+        hub = .connected(name: reply.hub)
+        if watcher != nil {
+            stopWatching()
+            startWatching()
+        }
+        await refresh()
     }
 
     /// Pairs with a hub at an address typed by hand, when Bonjour doesn't find it.
@@ -134,7 +204,7 @@ final class BenchModel {
             message = "That isn't an address"
             return
         }
-        await pair(code: code, device: device, url: url, name: address)
+        await pair(code: code, device: device, url: url)
     }
 
     private func sync(_ client: BenchClient) async throws {

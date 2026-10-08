@@ -82,20 +82,21 @@ A bench folder as one file: a zip of the folder, made by the system's archiver (
 | `redlamp task withdraw <ID>` | Takes a task back; the phone drops it unless it has results |
 | `redlamp task look --app … --filter … [--variant] [--settings] [--set quick\|standard\|full] [--in DIR]` | A look reference from the kit template, as New Look makes one on the phone |
 | `redlamp task add <folder> <files…>` | Files results into a folder and pairs them, as the share extension does |
-| `redlamp task serve [--port N]` | The hub without the Lab, until interrupted, printing the pairing code and what arrives; look references aren't fitted |
+| `redlamp task serve [--port N]` | The hub without the Lab, until interrupted: asks `y` or `n` when a phone asks to pair, prints the browser's pairing code and what arrives; look references aren't fitted |
 | `redlamp recipe app-kit --task` | Publishes the capture kits already written as the `look-kit` template |
 
 Agents follow `.cursor/skills/redlamp-bench/SKILL.md`, which covers writing steps for the phone and making Lightroom's results measurable.
 
 ## The hub
 
-The hub runs in the harness's Recipe Lab, on the local network, advertised over Bonjour as `_redlamp-bench._tcp` (port 8765 when it's free). The phone pairs once with the six-digit code the Lab shows and keeps a token; five wrong codes renew the code. Its API, JSON over HTTP, every route but the first three needing `Authorization: Bearer <token>`:
+The hub runs in the harness's Recipe Lab, on the local network, advertised over Bonjour as `_redlamp-bench._tcp` (port 8765 when it's free). The iPhone app announces itself as `_redlamp-phone._tcp`, so the Lab can list the phones nearby; it takes no connections. Neither side needs an address typed. The phone pairs once and keeps a token: it asks the hub it found, and the owner clicks Allow in the Lab's Bench tab (or types `y` in `redlamp task serve`). A request the Lab doesn't answer within three minutes expires, and at most five wait at once. A browser pairs with the six-digit code the Lab shows instead; five wrong codes renew it, and the phone can use the code and an address too when Bonjour can't reach the Lab, from another subnet or over a VPN. Its API, JSON over HTTP, every route but the first four needing `Authorization: Bearer <token>`:
 
 | Route | What it does |
 | --- | --- |
 | `GET /` | A page for a browser: pair, see what's waiting and what came back, upload a `.redtask` |
 | `GET /api/hub` | The hub's name and protocol version, and whether the request's token is known |
-| `POST /api/pair` | `{"code", "device"}` → `{"token", "hub"}` |
+| `POST /api/pair` | `{"code", "device"}` → `{"token", "hub"}`; without a code, a request for the Lab to allow: 202 and `{"request", "hub"}` |
+| `GET /api/pair/<request>` | Where that request stands: `pending`, `approved` (with the `token`), `denied` or `expired` |
 | `GET /api/tasks` | The outbox and the templates, each with its revision, whether it's withdrawn, and every file's path, size and SHA-256 |
 | `GET /api/tasks/<id>/<path>` | One of those files |
 | `GET /api/done`, `GET /api/done/<id>` | Receipts for what came back: title, summary ("12 results, all paired"), whether it's complete, and the digest of its `results.json` |
@@ -105,7 +106,7 @@ The server is Network.framework with a small HTTP/1.1 reader: one request per co
 
 ### In the Recipe Lab
 
-The Lab's **Bench** tab turns the hub on (it stays on whenever the harness runs: `mise run harness -- --scene recipe-lab --lab-tab bench`), shows its address and the pairing code, the phones paired with it and when each was last in touch, what waits in the outbox and what came back, and what happened recently. A `.redtask` or a bench folder dropped on it, or a `.redtask` opened in the Finder, is filed as an arrival is. Look references go on to the **Looks** tab ([app-looks.md](recipes/app-looks.md#candidates-and-the-looks-tab)), which fits them as they arrive.
+The Lab's **Bench** tab turns the hub on (it stays on whenever the harness runs: `mise run harness -- --scene recipe-lab --lab-tab bench`), lists pairing requests with Allow and Don't Allow (the harness also posts a notification for each), the phones nearby with Redlamp Bench open and whether each is paired, the browser's pairing code and the hub's address, the phones paired with it and when each was last in touch, what waits in the outbox and what came back, and what happened recently. A `.redtask` or a bench folder dropped on it, or a `.redtask` opened in the Finder, is filed as an arrival is. Look references go on to the **Looks** tab ([app-looks.md](recipes/app-looks.md#candidates-and-the-looks-tab)), which fits them as they arrive.
 
 ![The Recipe Lab's Bench tab](images/bench/lab-bench.jpg)
 
@@ -113,7 +114,7 @@ The Lab's **Bench** tab turns the hub on (it stays on whenever the harness runs:
 
 `apps/RedlampBenchApp` (scheme `RedlampBenchApp`): a SwiftUI app and a share extension, with standard iOS screens and Redlamp's icon, installed from Xcode on the owner's phone (DEC-53). It links `RedlampBench`, and through it RedlampRecipes, for pairing; no engine, LibRaw or Metal.
 
-- **Home** lists the tasks pulled from the Lab, each with how many results are back and who asked, the look references, and New Look. The app checks the hub when it opens or comes to the front, and every few minutes while it's open; it finds the hub over Bonjour, or at an address typed when pairing.
+- **Home** lists the tasks pulled from the Lab, each with how many results are back and who asked, the look references, and New Look. The app checks the hub when it opens or comes to the front, and every few minutes while it's open. While it's in the foreground it watches for the hub over Bonjour, so it connects as soon as the Lab appears or moves to a new port or network, and announces itself to the Lab. Unpaired, it shows Pair with the Lab it found; one tap asks the Lab, and it connects once the owner allows it there.
 - **A task opens on its steps, one at a time:** "Step 2 of 7" with a progress bar, the title in large type, the detail, its picture, and its action (Share the photos to the app, Save them to Photos, a question's answers, or the results coming back). Next and Back move between steps, a step whose results are back ticks itself, the view remembers where it was after a trip to Lightroom, and All Steps lists them with ticks.
 - **Photos** shows the assets in a grid with Select, for sharing or saving any of them; each asset's result once it's paired, with pairing and unpairing by hand from its menu; the questions; a note for the agent; and Add Results from Photos.
 - **The share extension** takes up to 20 images from Lightroom, Prequel or Photos, keeps their bytes as they arrived, preselects the last task or reference used (or a new reference with the next variant, when the last is already complete), pairs each image, and sends the folder to the Lab when that completes it. What can't reach the Lab waits in the app's queue.
@@ -130,9 +131,10 @@ The Lab's **Bench** tab turns the hub on (it stays on whenever the harness runs:
 
 ## What's been tried
 
-- **The hub and the phone's library over loopback,** in `RedlampBenchTests`: pairing, a wrong code, pulling a task, pairing results, sending it back, a withdrawn task, a damaged archive refused, and a second hub on a taken port.
+- **The hub and the phone's library over loopback,** in `RedlampBenchTests`: pairing with the code, a wrong code, pairing allowed in the Lab, pairing refused, an expired request, pulling a task, pairing results, sending it back, a withdrawn task, a damaged archive refused, and a second hub on a taken port.
 - **The iPhone app in the iOS 26.5 simulator,** against `redlamp task serve`: the steps one at a time, pulling a task over the network, and sending it back as one archive that the hub checked and filed in Done, after which it left the outbox.
 - **A look reference from the Cine Film 1 exports of 30 September:** the three charts paired by barcode and the bike photo by similarity (score 1.00), and the measured table byte for byte the one `app-import` made from the same files.
-- **Not yet tried:** the share extension (the simulator can't drive another app's share sheet), Bonjour discovery across a real network, and a device install, which needs the owner's signing.
+- **Bonjour in both directions on this Mac:** the app in the simulator found the harness's hub by itself and offered to pair with it, and `dns-sd -B _redlamp-phone._tcp` listed the simulator.
+- **Not yet tried:** the share extension (the simulator can't drive another app's share sheet), Bonjour across a real Wi-Fi network, and a device install, which needs the owner's signing.
 
 The harness's `--snapshot <path>` (with `--snapshot-delay S`) draws its window to a PNG without Screen Recording and quits, which is how the Lab's screenshots here were made.

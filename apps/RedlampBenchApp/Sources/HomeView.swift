@@ -67,9 +67,15 @@ struct HomeView: View {
                 Label("Looking for the Lab…", systemImage: "antenna.radiowaves.left.and.right")
             case let .found(name, _):
                 Button {
-                    pairing = true
+                    Task { await model.pairWithLab() }
                 } label: {
                     Label("Pair with \(name)", systemImage: "link")
+                }
+            case let .asking(name):
+                HStack {
+                    Label("Allow this phone on \(name)", systemImage: "desktopcomputer")
+                    Spacer()
+                    ProgressView()
                 }
             case let .connected(name):
                 Label(name, systemImage: "checkmark.circle")
@@ -78,11 +84,8 @@ struct HomeView: View {
                 Label("\(name) isn't reachable; finished work waits here", systemImage: "wifi.slash")
                     .foregroundStyle(.secondary)
             case .none:
-                Button {
-                    pairing = true
-                } label: {
-                    Label("Pair with the Lab", systemImage: "link")
-                }
+                Label("Open the Recipe Lab on your Mac, on the same network", systemImage: "desktopcomputer")
+                    .foregroundStyle(.secondary)
             }
             if !model.queued.isEmpty {
                 Label("\(model.queued.count) waiting to send", systemImage: "arrow.up.circle")
@@ -90,6 +93,14 @@ struct HomeView: View {
             }
             if let message = model.message {
                 Text(message).font(.footnote).foregroundStyle(.secondary)
+            }
+        } footer: {
+            switch model.hub {
+            case .searching, .none, .found:
+                Button("Pair with a code or an address…") { pairing = true }
+                    .font(.footnote)
+            default:
+                EmptyView()
             }
         }
     }
@@ -120,12 +131,13 @@ struct HomeView: View {
     }
 }
 
-/// Pairing with the hub: the code the Lab's Bench tab shows, and this phone's name.
+/// Pairing by hand, when Bonjour can't find the Lab (another subnet, a VPN): the code the Lab's
+/// Bench tab shows for a browser, and its address.
 struct PairView: View {
     @Bindable var model: BenchModel
     @Environment(\.dismiss) private var dismiss
     @State private var code = ""
-    @State private var device = UIDevice.current.name
+    @State private var device = ""
     @State private var address = ""
     @State private var working = false
 
@@ -147,7 +159,7 @@ struct PairView: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                     } footer: {
-                        Text("Only if the Lab isn't found by itself.")
+                        Text("The Bench tab shows it too.")
                     }
                 }
                 if let message = model.message {
@@ -161,8 +173,8 @@ struct PairView: View {
                     Button("Pair") {
                         working = true
                         Task {
-                            if case let .found(name, url) = model.hub {
-                                await model.pair(code: code, device: device, url: url, name: name)
+                            if case let .found(_, url) = model.hub {
+                                await model.pair(code: code, device: device, url: url)
                             } else {
                                 await model.pair(code: code, device: device, address: address)
                             }
@@ -175,6 +187,7 @@ struct PairView: View {
                     .disabled(code.count != 6 || working)
                 }
             }
+            .onAppear { device = model.device }
         }
     }
 }

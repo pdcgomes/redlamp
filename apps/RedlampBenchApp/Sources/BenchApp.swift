@@ -15,6 +15,7 @@ struct BenchApp: App {
                        index + 1 < CommandLine.arguments.count {
                         model.opened = CommandLine.arguments[index + 1]
                     }
+                    model.startWatching()
                     await model.refresh()
                 }
                 .task {
@@ -28,8 +29,10 @@ struct BenchApp: App {
             switch phase {
             case .active:
                 model.reload()
+                model.startWatching()
                 Task { await model.refresh() }
             case .background:
+                model.stopWatching()
                 Task { await model.sendQueued() }
             default:
                 break

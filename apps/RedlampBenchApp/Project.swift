@@ -35,7 +35,7 @@ let project = Project(
                 "UILaunchScreen": [:],
                 "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait"],
                 "NSLocalNetworkUsageDescription": "Redlamp Bench fetches tasks from the Recipe Lab on your Mac and sends them back.",
-                "NSBonjourServices": ["_redlamp-bench._tcp"],
+                "NSBonjourServices": ["_redlamp-bench._tcp", "_redlamp-phone._tcp"],
                 "NSPhotoLibraryAddUsageDescription": "Saves a task's photos to your library, for apps that only open photos from it.",
                 // The hub is plain HTTP on the local network.
                 "NSAppTransportSecurity": ["NSAllowsLocalNetworking": true],

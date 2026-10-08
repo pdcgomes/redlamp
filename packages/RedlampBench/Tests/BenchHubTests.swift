@@ -7,12 +7,17 @@ import Testing
 @Suite(.serialized)
 struct BenchHubTests {
     /// A started hub on any free port, with a client pointed at it.
-    private func hub(_ scratch: Scratch) async throws -> (BenchHub, BenchClient, BenchStore) {
+    private func hub(
+        _ scratch: Scratch,
+        asked: AsyncStream<BenchHub.PairingRequest>.Continuation? = nil,
+    ) async throws -> (BenchHub, BenchClient, BenchStore) {
         let store = BenchStore(root: scratch.file("store"))
         let ready = AsyncStream<UInt16>.makeStream()
         let hub = BenchHub(store: store, name: "Test Lab") { event in
-            if case let .state(.ready(port)) = event {
-                ready.continuation.yield(port)
+            switch event {
+            case let .state(.ready(port)): ready.continuation.yield(port)
+            case let .pairingRequested(request): asked?.yield(request)
+            default: break
             }
         }
         try await hub.start(port: nil, advertise: false)
@@ -46,6 +51,52 @@ struct BenchHubTests {
         #expect(listings[0].files.first?.path == BenchManifest.fileName)
         #expect(listings[0].files.count == 4)
         #expect(await hub.devices.map(\.name) == ["Pedro's iPhone"])
+    }
+
+    @Test func `A phone allowed in the Lab pairs without a code`() async throws {
+        let scratch = Scratch()
+        let asked = AsyncStream<BenchHub.PairingRequest>.makeStream()
+        let (hub, client, _) = try await hub(scratch, asked: asked.continuation)
+        defer { Task { await hub.stop() } }
+
+        let pairing = Task { try await client.pairByApproval(device: "Pedro's iPhone") }
+        var request: BenchHub.PairingRequest?
+        for await value in asked.stream {
+            request = value
+            break
+        }
+        #expect(request?.device == "Pedro's iPhone")
+        #expect(await hub.requests.count == 1)
+        #expect(await hub.devices.isEmpty)
+        try await hub.approve(#require(request).id)
+
+        let reply = try await pairing.value
+        #expect(reply.hub == "Test Lab")
+        var paired = client
+        paired.token = reply.token
+        #expect(try await paired.info().paired)
+        #expect(await hub.devices.map(\.name) == ["Pedro's iPhone"])
+        #expect(await hub.requests.isEmpty)
+    }
+
+    @Test func `A phone the Lab doesn't allow gets no token, and an unknown request has expired`() async throws {
+        let scratch = Scratch()
+        let asked = AsyncStream<BenchHub.PairingRequest>.makeStream()
+        let (hub, client, _) = try await hub(scratch, asked: asked.continuation)
+        defer { Task { await hub.stop() } }
+
+        let pairing = Task { try await client.pairByApproval(device: "Someone's iPhone") }
+        for await request in asked.stream {
+            await hub.deny(request.id)
+            break
+        }
+        await #expect(throws: BenchClientError.http(403, "the Lab didn't allow this phone")) {
+            try await pairing.value
+        }
+        #expect(await hub.devices.isEmpty)
+        let status = try await client.pairingStatus("no-such-request")
+        #expect(status.state == .expired)
+        #expect(status.token == nil)
     }
 
     @Test func `A task goes to the phone, pairs its results and comes back to Done once complete`() async throws {

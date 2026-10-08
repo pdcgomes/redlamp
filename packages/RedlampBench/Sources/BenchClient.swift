@@ -38,6 +38,34 @@ public struct BenchClient: Sendable {
         return try await json(request)
     }
 
+    /// Asks the owner to allow this phone; returns once they have, with the hub's reply.
+    public func pairByApproval(device: String, timeout: Duration = .seconds(180)) async throws -> BenchProtocol
+        .PairReply {
+        var request = request("POST", "api/pair")
+        request.httpBody = try JSONEncoder.bench.encode(BenchProtocol.PairRequest(device: device))
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let pending: BenchProtocol.PairPending = try await json(request)
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            try await Task.sleep(for: .seconds(1))
+            let status = try await pairingStatus(pending.request)
+            switch status.state {
+            case .pending: continue
+            case .approved:
+                guard let token = status.token else { throw BenchClientError.badResponse }
+                return BenchProtocol.PairReply(token: token, hub: status.hub)
+            case .denied: throw BenchClientError.http(403, "the Lab didn't allow this phone")
+            case .expired: throw BenchClientError.http(408, "the Lab didn't answer in time")
+            }
+        }
+        throw BenchClientError.http(408, "the Lab didn't answer in time")
+    }
+
+    /// Where a pairing request stands: waiting, allowed (with the token), refused or expired.
+    public func pairingStatus(_ request: String) async throws -> BenchProtocol.PairStatus {
+        try await json(self.request("GET", "api/pair/\(request)"))
+    }
+
     public func listings() async throws -> [BenchProtocol.Listing] {
         try await json(request("GET", "api/tasks"))
     }
@@ -132,25 +160,8 @@ public struct BenchClient: Sendable {
     }
 }
 
-/// Finds hubs on the local network over Bonjour and resolves each to an address the phone's
-/// URLSession can reach.
+/// Resolves a hub that `BonjourWatcher` found to an address the phone's URLSession can reach.
 public enum BenchDiscovery {
-    public struct Hub: Sendable, Hashable {
-        public var name: String
-        public var url: URL
-    }
-
-    public static func find(timeout: Duration = .seconds(3)) async -> [Hub] {
-        let endpoints = await browse(timeout: timeout)
-        var hubs: [Hub] = []
-        for (name, endpoint) in endpoints {
-            if let url = await resolve(endpoint) {
-                hubs.append(Hub(name: name, url: url))
-            }
-        }
-        return hubs
-    }
-
     private final class Box<T>: @unchecked Sendable {
         var value: T
         var finished = false
@@ -159,24 +170,9 @@ public enum BenchDiscovery {
         }
     }
 
-    private static func browse(timeout: Duration) async -> [(String, NWEndpoint)] {
-        let queue = DispatchQueue(label: "app.redlamp.bench.browse")
-        let browser = NWBrowser(for: .bonjour(type: BenchProtocol.serviceType, domain: nil), using: .tcp)
-        let found = Box<[(String, NWEndpoint)]>([])
-        browser.browseResultsChangedHandler = { results, _ in
-            found.value = results.compactMap { result in
-                if case let .service(name, _, _, _) = result.endpoint {
-                    return (name, result.endpoint)
-                }
-                return nil
-            }
-        }
-        browser.start(queue: queue)
-        try? await Task.sleep(for: timeout)
-        return queue.sync {
-            browser.cancel()
-            return found.value
-        }
+    /// The address of a service found by `BonjourWatcher`.
+    public static func address(of service: BonjourWatcher.Service) async -> URL? {
+        await resolve(service.endpoint)
     }
 
     /// Opens a connection to the service to learn its address, preferring IPv4, whose URLs need
