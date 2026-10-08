@@ -17,6 +17,11 @@ public actor EmbeddingCache {
         self.budget = budget
     }
 
+    /// The entry kept in memory, and its size.
+    public var inMemory: (key: String, bytes: Int)? {
+        memory.map { ($0.key, $0.data.count) }
+    }
+
     public static func key(model: ModelManifest, analysisHash: String) -> String {
         "\(model.id)-v\(model.version)-\(analysisHash)"
     }

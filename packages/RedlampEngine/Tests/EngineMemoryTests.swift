@@ -1,6 +1,7 @@
 import Foundation
 import Metal
 import RedlampEngineAPI
+import RedlampMasking
 import simd
 import Testing
 @testable import RedlampEngine
@@ -780,12 +781,181 @@ struct EngineMemoryTests {
         #expect(embeddingBytes == 0, "\(embeddingBytes) bytes of its embedding kept")
     }
 
+    /// `closed`'s retouched, masked edit with a Remove spot.
+    static func removalEdit() throws -> EditRecipe {
+        var recipe = try ProcessStabilityTests.retouchEdit(process: EditRecipe.currentProcessVersion)
+        recipe.spots.append(RetouchSpot(
+            mode: .remove, center: ImagePoint(x: 0.7, y: 0.3), source: ImagePoint(x: 0.7, y: 0.3), radius: 0.03,
+        ))
+        return recipe
+    }
+
+    static func exportRequest(_ recipe: EditRecipe) -> StillRequest {
+        StillRequest(recipe: recipe, maxLongEdge: 2000, purpose: .export)
+    }
+
+    /// The bytes of the retouched copies of photos other than `open`, and of every mask texture.
+    static func retouchAndMaskBytes(_ engine: RedlampEngine, open: ImageSession?) -> (retouch: Int, masks: Int) {
+        engine.renderQueue.sync {
+            (
+                engine.retouch.retouchedSessions.filter { $0.original !== open }
+                    .reduce(0) { $0 + $1.pyramid.allocatedSize },
+                engine.masks.heldTextures.reduce(0) { $0 + $1.allocatedSize },
+            )
+        }
+    }
+
+    /// Two exports of a retouched, masked photo that isn't open, as in a batch, while the open
+    /// photo keeps two retouches (its edit with and without its last spot): once they're done,
+    /// nothing keeps the exported photo, its retouches or its masks, and the open photo renders
+    /// again without retouching or drawing a mask anew.
+    @Test(.enabled(if: EngineSmokeTests.canRender && closed != nil && next != nil))
+    func `stills of a photo that isn't open keep none of its retouches or masks`() async throws {
+        let engine = try RedlampEngine()
+        let (opened, other) = try (#require(Self.closed), #require(Self.next))
+        let recipe = try Self.removalEdit()
+        var earlier = recipe
+        earlier.spots.removeLast()
+        _ = try await engine.open(opened)
+        let open = try #require(engine.currentSession())
+        try await Self.frame(engine, earlier)
+        try await Self.frame(engine, recipe, generation: 2)
+        // A retouched copy's maps are made in the background after its frame, which then renders again.
+        for _ in 0 ..< 25 {
+            engine.renderQueue.sync {}
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let retouches = engine.renderQueue.sync { Set(engine.retouch.retouchedSessions.map(ObjectIdentifier.init)) }
+        let (_, before) = Self.retouchAndMaskBytes(engine, open: open)
+        weak var photo: ImageSession?
+        var during = (retouch: 0, masks: 0)
+        var slices = 0
+        do {
+            let session = try await engine.sessions.session(for: other)
+            photo = session
+            for dropped in 1 ... 2 {
+                var exported = recipe
+                exported.spots.removeLast(dropped)
+                _ = try engine.renderQueue.sync {
+                    try engine.renderStillNow(Self.exportRequest(exported), session: session)
+                }
+            }
+            during = Self.retouchAndMaskBytes(engine, open: open)
+            slices = engine.renderQueue.sync { engine.masks.slicesDrawn }
+        }
+        engine.sessions.invalidate(other)
+        for _ in 0 ..< 50 where photo != nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let after = Self.retouchAndMaskBytes(engine, open: open)
+        print(
+            "masks \(before) bytes before the exports, \(after.masks) after; "
+                + "the exported photo's retouches \(during.retouch) bytes once both were done",
+        )
+        let photoBytes = photo?.allocatedBytes ?? 0
+        try await Self.frame(engine, recipe, generation: 3)
+        let retouchesAfter = engine.renderQueue.sync {
+            Set(engine.retouch.retouchedSessions.map(ObjectIdentifier.init))
+        }
+        withKnownIssue("the retouch and mask stages keep the last photo they rendered a still for") {
+            #expect(photo == nil, "\(photoBytes) bytes of the exported photo kept")
+            #expect(during.retouch == 0, "\(during.retouch) bytes of its retouched copies kept")
+            #expect(during.masks <= before, "\(during.masks - before) bytes of mask textures kept for it")
+            #expect(retouchesAfter == retouches, "the open photo's retouches were made again")
+        }
+        #expect(engine.renderQueue.sync { engine.masks.slicesDrawn } == slices)
+    }
+
+    /// An export queued when the editor window closed, which renders after the engine let go of
+    /// its photo: it keeps nothing of the photo, its retouch or its masks.
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.closed != nil))
+    func `a still that finishes after the window closed keeps none of its retouch or masks`() async throws {
+        let engine = try RedlampEngine()
+        let recipe = try Self.removalEdit()
+        weak var photo: ImageSession?
+        do {
+            _ = try await engine.open(#require(Self.closed))
+            try await Self.frame(engine, recipe)
+            let session = try #require(engine.currentSession())
+            photo = session
+            await engine.releaseResources()
+            _ = try engine.renderQueue.sync {
+                try engine.renderStillNow(Self.exportRequest(recipe), session: session)
+            }
+        }
+        for _ in 0 ..< 50 where photo != nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let photoBytes = photo?.allocatedBytes ?? 0
+        let (retouch, masks) = Self.retouchAndMaskBytes(engine, open: nil)
+        withKnownIssue("the retouch and mask stages keep the last photo they rendered a still for") {
+            #expect(photo == nil, "\(photoBytes) bytes of the photo kept")
+            #expect(retouch == 0, "\(retouch) bytes of its retouched copy kept")
+            #expect(masks == 0, "\(masks) bytes of mask textures kept")
+        }
+    }
+
+    /// Segment Anything's embedding of a photo, which the shared embedding cache also keeps in
+    /// memory: closing the window lets go of it, as does a mask reaching the model after that,
+    /// and unloading the models.
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.closed != nil && MaskRenderTests.samIsInstalled))
+    func `closing the window and unloading the models let go of the embedding in memory`() async throws {
+        let closed = try #require(Self.closed)
+        func embed(_ engine: RedlampEngine) async throws -> String {
+            let session = try #require(engine.currentSession())
+            let analysis = try await engine.analysisImage(for: session)
+            let segmenter = try await engine.objectSegmenter()
+            _ = try await engine.objectEmbedding(analysis, segmenter: segmenter)
+            return EmbeddingCache.key(model: segmenter.manifest, analysisHash: analysis.hash)
+        }
+        /// Other tests embed their photos meanwhile, so only this photo's entry counts.
+        func held(_ key: String) async throws -> Int {
+            var kept = await EmbeddingCache.shared.inMemory
+            for _ in 0 ..< 50 where kept?.key == key {
+                try await Task.sleep(for: .milliseconds(10))
+                kept = await EmbeddingCache.shared.inMemory
+            }
+            return kept?.key == key ? kept?.bytes ?? 0 : 0
+        }
+
+        let engine = try RedlampEngine()
+        _ = try await engine.open(closed)
+        let session = try #require(engine.currentSession())
+        let analysis = try await engine.analysisImage(for: session)
+        let key = try await embed(engine)
+        let embedded = await EmbeddingCache.shared.inMemory.flatMap { $0.key == key ? $0.bytes : nil }
+        await engine.releaseResources()
+        let closing = try await held(key)
+        _ = try await engine.objectEmbedding(analysis, segmenter: engine.objectSegmenter())
+        let late = try await held(key)
+
+        let reopened = try RedlampEngine()
+        _ = try await reopened.open(closed)
+        _ = try await embed(reopened)
+        await reopened.releaseMaskModels()
+        let unloaded = try await held(key)
+        print("embedding in memory: \(embedded ?? 0) bytes; \(closing) once closed, \(late) after a late mask, "
+            + "\(unloaded) once the models unloaded")
+        withKnownIssue("the shared embedding cache keeps its last entry in memory") {
+            #expect(closing == 0, "\(closing) bytes kept once the window closed")
+            #expect(late == 0, "\(late) bytes kept after a mask reached the model once it closed")
+            #expect(unloaded == 0, "\(unloaded) bytes kept once the models unloaded")
+        }
+    }
+
     /// The photo open now, fitted in a canvas.
-    static func frame(_ engine: RedlampEngine, _ recipe: EditRecipe) async throws {
+    static func frame(_ engine: RedlampEngine, _ recipe: EditRecipe, generation: UInt64 = 1) async throws {
         var frames = engine.frames().makeAsyncIterator()
-        engine.render(RenderRequest(recipe: recipe, targetSize: PixelSize(width: 1600, height: 1000), generation: 1))
-        let frame = try #require(await frames.next())
-        try #require(frame.generation == 1)
+        engine.render(RenderRequest(
+            recipe: recipe, targetSize: PixelSize(width: 1600, height: 1000), generation: generation,
+        ))
+        // A retouched photo's earlier frame renders again once its maps are made.
+        while let frame = await frames.next() {
+            if frame.generation == generation {
+                return
+            }
+        }
+        Issue.record("no frame of generation \(generation)")
     }
 
     // MARK: - Reclaimed textures
