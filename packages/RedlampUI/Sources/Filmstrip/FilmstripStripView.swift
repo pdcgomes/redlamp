@@ -94,8 +94,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         tracker?.cancel()
         tracker = nil
         guard window != nil else { return }
-        followItems()
-        collectionView.reloadData()
+        reload()
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
         editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
         stacksObservation = model.gridStacks.observe { [weak self] change in self?.stacksChanged(change) }
@@ -136,10 +135,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             isStale = false
             prefetching.values.forEach(model.thumbnailLoader.cancel)
             prefetching = [:]
-            followItems()
-            collectionView.reloadData()
-            // A reload counts the photos at the next layout; a change before then would be counted twice.
-            collectionView.layoutSubtreeIfNeeded()
+            reload()
         }
         follow(model.selection, marking: model.photoSelection, scrolling: false)
         needsPlace = true
@@ -156,6 +152,14 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     }
 
     // MARK: - Items
+
+    /// Shows the items afresh, counted at once: a reload counts them at the next layout, and a batch update before then
+    /// would count its change twice, deleting rows the count no longer has.
+    private func reload() {
+        followItems()
+        collectionView.reloadData()
+        collectionView.layoutSubtreeIfNeeded()
+    }
 
     /// The stacks as the model has them now, while they're the source's, and each cell's photo.
     private func followItems() {
@@ -199,8 +203,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             isStale = true
             return
         }
-        followItems()
-        collectionView.reloadData()
+        reload()
         guard case .items = change else {
             prefetching.values.forEach(model.thumbnailLoader.cancel)
             prefetching = [:]
@@ -357,8 +360,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         guard !diff.reset else {
             prefetching.values.forEach(model.thumbnailLoader.cancel)
             prefetching = [:]
-            followItems()
-            collectionView.reloadData()
+            reload()
             follow(model.selection, marking: model.photoSelection, animated: false)
             return
         }

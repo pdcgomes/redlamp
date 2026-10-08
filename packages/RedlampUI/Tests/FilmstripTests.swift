@@ -340,6 +340,19 @@ struct FilmstripTests {
         #expect(cell(strip, 0) === first)
         #expect(cell(strip, 3)?.item?.name == "IMG_00002a.ARW")
     }
+
+    @Test func `a photo that comes before the strip has counted its reload is counted once`() async throws {
+        defer { cleanUp() }
+        let (model, strip, window) = try await showStrip(count: 5)
+        defer { window.contentView = nil }
+        // Shown again, the strip reloads; the photo comes in the same turn, ahead of the layout that would count it.
+        window.contentView = nil
+        window.contentView = strip
+        model.library.insert(LibraryItem(url: folder.appending(path: "IMG_00002a.ARW")))
+        strip.collectionView.layoutSubtreeIfNeeded()
+        #expect(strip.collectionView.numberOfItems(inSection: 0) == 6)
+        #expect(cell(strip, 3)?.item?.name == "IMG_00002a.ARW")
+    }
 }
 
 /// A strip's photos without a library: plain cells, counted as they're made.
