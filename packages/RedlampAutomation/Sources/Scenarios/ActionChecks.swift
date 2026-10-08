@@ -55,6 +55,11 @@
             let value = Mutex<Value?>(nil)
         }
 
+        /// The app's full-screen hook, kept while the full-screen preview's check runs without it.
+        @MainActor private enum PresentingWindow {
+            static var hook: (() -> Void)?
+        }
+
         /// Changes the edit; undone afterwards.
         static func edit(_ action: ShortcutAction, setUp: @escaping @Sendable (RunningApp) throws -> Void = { _ in
         }) -> ActionCheck {
@@ -201,7 +206,23 @@
                 ActionCheck(action: action, observe: { "\($0.lightsOut)" }, restore: { app in
                     try app.main { $0.lightsOut = 0 }
                 })
-            case .fullScreenPreview: .toggle(action) { "\($0.isPresenting)" }
+            // The window's full screen is left out: its transition is animated, doesn't advance while the
+            // display sleeps, and a press during it is lost, which left the app presenting for the scenarios after.
+            case .fullScreenPreview:
+                ActionCheck(action: action, setUp: { app in
+                    try app.main { model in
+                        PresentingWindow.hook = model.onToggleFullScreen
+                        model.onToggleFullScreen = nil
+                    }
+                }, observe: { "\($0.isPresenting)" }, restore: { app in
+                    try app.main { model in
+                        if model.isPresenting {
+                            _ = model.perform(action)
+                        }
+                        model.onToggleFullScreen = PresentingWindow.hook
+                        PresentingWindow.hook = nil
+                    }
+                })
             case .toggleToolbar:
                 .toggle(action) { _ in "\(Views.editorWindow?.toolbar?.isVisible ?? false)" }
             // Panels
