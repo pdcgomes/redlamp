@@ -3,6 +3,7 @@
     import RedlampCanvas
     import RedlampEngineAPI
     @_spi(Harness) import RedlampUI
+    import Synchronization
 
     /// How to check one action: what to set up so it applies, what it changes, and how to put
     /// things back. Every action in `ShortcutAction` has one, so a new action without a check
@@ -30,6 +31,28 @@
             ActionCheck(action: action, setUp: setUp, observe: observe, restore: { app in
                 try app.main { _ = $0.perform(action) }
             })
+        }
+
+        /// Toggles, then puts back the state read before it: pressed again, an action can land elsewhere
+        /// (a solo panel closes the others), and the scenarios after it need the panels as they were.
+        static func toggle<State: Sendable>(
+            _ action: ShortcutAction,
+            keeping read: @escaping @MainActor @Sendable (EditorModel) -> State,
+            restoring write: @escaping @MainActor @Sendable (EditorModel, State) -> Void,
+            _ observe: @escaping @MainActor @Sendable (EditorModel) -> String,
+        ) -> ActionCheck {
+            let kept = Kept<State>()
+            return ActionCheck(action: action, setUp: { app in
+                let state = try app.main { read($0) }
+                kept.value.withLock { $0 = state }
+            }, observe: observe, restore: { app in
+                guard let state = kept.value.withLock({ $0 }) else { return }
+                try app.main { write($0, state) }
+            })
+        }
+
+        private final class Kept<Value: Sendable>: Sendable {
+            let value = Mutex<Value?>(nil)
         }
 
         /// Changes the edit; undone afterwards.
@@ -169,10 +192,18 @@
                 .toggle(action) { _ in "\(Views.editorWindow?.toolbar?.isVisible ?? false)" }
             // Panels
             case .toggleSidePanels, .toggleAllPanels, .toggleFilmstrip, .toggleLeftPanel, .toggleRightPanel:
-                .toggle(action) { "\($0.leftPanelVisible) \($0.rightPanelVisible) \($0.filmstripVisible)" }
+                .toggle(
+                    action,
+                    keeping: { ($0.leftPanelVisible, $0.rightPanelVisible, $0.filmstripVisible) },
+                    restoring: {
+                        ($0.leftPanelVisible, $0.rightPanelVisible, $0.filmstripVisible) = $1
+                    },
+                ) { "\($0.leftPanelVisible) \($0.rightPanelVisible) \($0.filmstripVisible)" }
             case .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail,
                  .panelLens, .panelTransform, .panelEffects, .panelCalibration:
-                .toggle(action) { $0.expandedPanels.map(\.rawValue).sorted().joined(separator: ",") }
+                .toggle(action, keeping: { $0.expandedPanels }, restoring: { $0.expandedPanels = $1 }) {
+                    $0.expandedPanels.map(\.rawValue).sorted().joined(separator: ",")
+                }
             // Navigation
             case .previousPhoto:
                 ActionCheck(action: action, setUp: { app in
