@@ -25,12 +25,13 @@ import RedlampLibrary
         case items(PhotoListDiff)
     }
 
-    /// The stacks as the menus and the palette follow them, the list itself not being observed.
+    /// The stacks as the menus and the palette follow them, the list itself not being observed. Nothing here changes
+    /// as a stack opens or closes: SwiftUI makes the whole menu bar again for each change.
     @_spi(Harness) public struct Outline: Equatable {
         /// Counts the stackings shown.
         @_spi(Harness) public internal(set) var stackings = 0
-        @_spi(Harness) public internal(set) var someOpen = false
-        @_spi(Harness) public internal(set) var someClosed = false
+        /// Whether the list shows a stack, open or closed.
+        @_spi(Harness) public internal(set) var hasStacks = false
     }
 
     @ObservationIgnored private weak var model: EditorModel?
@@ -204,7 +205,7 @@ import RedlampLibrary
             next.stackings += 1
         }
         let shown = list?.stacksShown ?? (open: 0, closed: 0)
-        (next.someOpen, next.someClosed) = (shown.open > 0, shown.closed > 0)
+        next.hasStacks = shown.open + shown.closed > 0
         if next != outline {
             outline = next
         }

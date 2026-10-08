@@ -323,8 +323,7 @@ public extension EditorModel {
         let outline = action.category == .library ? libraryViews.stacks?.outline : nil
         switch action {
         case .toggleStack: return canToggleStack
-        case .openAllStacks: return outline?.someClosed ?? false
-        case .closeAllStacks: return outline?.someOpen ?? false
+        case .openAllStacks, .closeAllStacks: return outline?.hasStacks ?? false
         case .stackPhotos: return canStackSelection
         case .unstackPhotos: return canUnstackSelection
         case .moveToStackTop: return canMoveToTopOfStack

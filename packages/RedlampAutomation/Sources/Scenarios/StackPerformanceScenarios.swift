@@ -112,7 +112,7 @@
             describe("close-one", closing)
             note("toggle", toggling)
 
-            // The same beside a stack held open, so that whether any stack is open, which the menus follow, stays.
+            // The same beside a stack held open.
             if tops.count > 1 {
                 try app.main { $0.gridStacks.toggle(tops[0]) }
                 app.pause(0.5)
