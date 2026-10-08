@@ -303,7 +303,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         nil
     }
 
-    func registerBaseLook(_: BaseLookDefinition) {}
+    /// Every look registered, in order.
+    private(set) var registeredLooks: [BaseLookDefinition] = []
+
+    func registerBaseLook(_ look: BaseLookDefinition) {
+        registeredLooks.append(look)
+    }
+
     func canRender(_: BaseLookReference) -> Bool {
         true
     }

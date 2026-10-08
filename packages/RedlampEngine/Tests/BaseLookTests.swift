@@ -2,10 +2,10 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import Metal
-import RedlampEngine
 import RedlampEngineAPI
 import Testing
 import UniformTypeIdentifiers
+@testable import RedlampEngine
 
 /// The Base Look stage: tables render exactly as pinned, and cost next to nothing.
 struct BaseLookTests {
@@ -165,6 +165,46 @@ struct BaseLookTests {
         // The same id with a different table: the pinned hash no longer matches.
         engine.registerBaseLook(look(LookTable.identity(size: 9), id: "local/test/grey"))
         #expect(!engine.canRender(recipe.baseLook))
+    }
+
+    @Test(.enabled(if: canRender))
+    func `registering a look again leaves the generation alone, and changing it moves it`() throws {
+        let registry = try BaseLookRegistry(device: #require(MTLCreateSystemDefaultDevice()))
+        let grey = try look(LookTable(size: 9) { _ in SIMD3(repeating: 0.5) }, id: "local/test/grey")
+        registry.register(grey)
+        let registered = registry.generation
+        registry.register(grey)
+        #expect(registry.generation == registered)
+        registry.register(look(LookTable.identity(size: 9), id: "local/test/grey"))
+        #expect(registry.generation != registered)
+    }
+
+    @Test(.enabled(if: canRender))
+    func `a table is uploaded when a render first uses it, not when it is registered`() throws {
+        let registry = try BaseLookRegistry(device: #require(MTLCreateSystemDefaultDevice()))
+        let grey = try look(LookTable(size: 9) { _ in SIMD3(repeating: 0.5) }, id: "local/test/grey")
+        registry.register(grey)
+        #expect(registry.canRender(grey.reference))
+        #expect(registry.uploadedTables == 0)
+        #expect(registry.resolve(grey.reference).table != nil)
+        #expect(registry.uploadedTables == 1)
+    }
+
+    @Test(.enabled(if: canRender))
+    func `an edit rendered while its look is still being registered renders with it`() async throws {
+        let url = try Self.chart()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        let grey = try look(LookTable(size: 9) { _ in SIMD3(repeating: 0.5) }, id: "local/test/grey")
+        engine.registerBaseLooks {
+            Thread.sleep(forTimeInterval: 0.3)
+            return [grey]
+        }
+        var recipe = EditRecipe()
+        recipe.baseLook = grey.reference
+        let channels = try await Self.pixels(render(engine, recipe)).enumerated().filter { $0.offset % 4 != 3 }
+        #expect(channels.allSatisfy { abs(Int($0.element) - 128) <= 3 })
     }
 
     @Test(.enabled(if: canRender))

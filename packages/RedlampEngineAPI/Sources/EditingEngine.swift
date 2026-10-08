@@ -113,6 +113,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// same look again is cheap. Edits whose look isn't registered render without it.
     func registerBaseLook(_ look: BaseLookDefinition)
 
+    /// Registers the looks `load` decodes, away from the caller's thread; a render that uses
+    /// one of them before they're registered waits for them.
+    func registerBaseLooks(_ load: @escaping @Sendable () -> [BaseLookDefinition])
+
     /// Whether the engine can render `reference` exactly as pinned.
     func canRender(_ reference: BaseLookReference) -> Bool
 
@@ -176,6 +180,12 @@ public protocol EditingEngine: AnyObject, Sendable {
 }
 
 public extension EditingEngine {
+    func registerBaseLooks(_ load: @escaping @Sendable () -> [BaseLookDefinition]) {
+        for look in load() {
+            registerBaseLook(look)
+        }
+    }
+
     func warmUpMasks() {}
 
     func peopleFound() async throws -> [PersonFound] {

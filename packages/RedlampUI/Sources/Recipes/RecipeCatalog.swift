@@ -15,17 +15,27 @@ public final class RecipeCatalog {
     public private(set) var lastError: String?
     /// The Recipes panel's lists imports have added to since the panel last took them.
     @ObservationIgnored private var importedLists: Set<String> = []
+    /// The looks given to the engine, by id, version and table hash.
+    @ObservationIgnored private var registered: Set<String> = []
 
     public init(engine: any EditingEngine, library: RecipeLibrary = RecipeLibrary()) {
         self.engine = engine
         self.library = library
+        engine.registerBaseLooks { BuiltInBaseLooks.all.compactMap { try? $0.definition() } }
         registerLooks()
     }
 
+    private static func key(_ package: BaseLookPackage) -> String {
+        "\(package.id)@\(package.version)#\(package.table?.sha256 ?? "")"
+    }
+
+    /// Registers the installed and embedded looks the engine doesn't have yet; the bundled
+    /// ones never change, and are registered once at launch.
     private func registerLooks() {
-        for definition in library.definitions() {
-            engine.registerBaseLook(definition)
-        }
+        let added = (library.storedLooks + library.all.flatMap(\.embeddedBaseLooks))
+            .filter { registered.insert(Self.key($0)).inserted }
+        guard !added.isEmpty else { return }
+        engine.registerBaseLooks { added.compactMap { try? $0.definition() } }
     }
 
     private func changed() {
@@ -98,7 +108,7 @@ public final class RecipeCatalog {
 
     /// Makes a recipe's embedded looks renderable before it is previewed or applied.
     public func prepare(_ recipe: Recipe) {
-        for package in recipe.embeddedBaseLooks {
+        for package in recipe.embeddedBaseLooks where registered.insert(Self.key(package)).inserted {
             if let definition = try? package.definition() {
                 engine.registerBaseLook(definition)
             }
