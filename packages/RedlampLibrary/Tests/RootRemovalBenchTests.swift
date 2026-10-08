@@ -1,0 +1,130 @@
+import Foundation
+import Synchronization
+import Testing
+@testable import RedlampLibrary
+
+/// Taking lib-1m's Clients (150,000 photos) out of a copy of its index split into a root per top folder, as Folders
+/// would hold them: how long the mark takes, then the store, a list of every photo and a search to leave its photos
+/// out, the counts' links to go, and the sweep of its rows, with the longest any other write waited meanwhile.
+/// Skipped unless `REDLAMP_ROOT_REMOVAL_BENCH=1` (`TEST_RUNNER_REDLAMP_ROOT_REMOVAL_BENCH=1` through xcodebuild) and
+/// lib-1m's index is on this Mac.
+struct RootRemovalBenchTests {
+    static let master = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp/indexfix/lib-1m-master/Index.sqlite")
+    static let fixture = "/Volumes/SSD/redlamp-tmp/library-fixtures/lib-1m.noindex"
+
+    private static func milliseconds(_ duration: Duration) -> String {
+        String(format: "%.1f ms", duration / .milliseconds(1))
+    }
+
+    /// The load average over the last minute.
+    private static var load: String {
+        var averages = [Double](repeating: 0, count: 3)
+        getloadavg(&averages, 3)
+        return String(format: "%.0f", averages[0])
+    }
+
+    private static func report(_ line: String) {
+        print("ROOT-REMOVAL-BENCH \(line)")
+    }
+
+    /// Makes each of the fixture's top folders a root of its own; returns their paths.
+    static func split(_ index: LibraryIndex) async throws -> [String] {
+        let root = fixture
+        return try await index.write { writer in
+            let listing = try writer.database.cached("""
+            SELECT path FROM folders WHERE parent = (SELECT id FROM folders WHERE path = ?) ORDER BY path
+            """)
+            try listing.bind(root, at: 1)
+            let tops = try listing.map { $0.string(at: 0) ?? "" }
+            let volume = try #require(try writer.root(path: root)).volume
+            let own = try writer.database
+                .cached("UPDATE folders SET root = ?4 WHERE path = ?1 OR (path >= ?2 AND path < ?3)")
+            let top = try writer.database.cached("UPDATE folders SET parent = NULL WHERE path = ?")
+            for path in tops {
+                try own.bindSubtree(of: path)
+                try own.bind(writer.upsertRoot(RootRecord(volume: volume, path: path)), at: 4)
+                try own.run()
+                try top.bind(path, at: 1)
+                try top.run()
+            }
+            return tops
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_ROOT_REMOVAL_BENCH"] == "1"))
+    func `taking 150,000 photos of a million out of the library`() async throws {
+        try #require(FileManager.default.fileExists(atPath: Self.master.path), "lib-1m's index is on this Mac")
+        let work = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp/removed-folders", isDirectory: true)
+            .appending(path: "bench-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+        let url = work.appending(path: "Index.sqlite")
+        try FileManager.default.copyItem(at: Self.master, to: url)
+        let index = try await LibraryIndex.open(at: url)
+        defer { index.closeAndWait() }
+        let tops = try await Self.split(index)
+        let clients = Self.fixture + "/Clients"
+        let kept = tops.filter { $0 != clients }
+        let engine = QueryEngine(index: index)
+        try await engine.load()
+        let live = LibraryLive(engine: engine)
+        var all = live.open(.allPhotographs, sort: QuerySort(.captured)).makeAsyncIterator()
+        let total = try #require(await all.next()).list.count
+        Self.report("\(total) photos in \(tops.count) roots, load \(Self.load)")
+
+        let clock = ContinuousClock()
+        let started = clock.now
+        let removal = try #require(try await index.write { try $0.markRemoved(clients, keeping: kept) })
+        let marked = clock.now - started
+        await live.remove(removal.photos)
+        let stored = clock.now - started
+        let list = try #require(await all.next())
+        let listed = clock.now - started
+        let found = try await engine.list(.query(LibraryQuery(parsing: "folder:Clients"))).count
+        let searched = clock.now - started
+        try await index.write { try $0.unlinkPhotos(removal.photos) }
+        let unlinked = clock.now - started
+        #expect(list.list.count == total - removal.photos.count && found == 0)
+
+        // The sweep, with another write asked for every 20 ms meanwhile: none waits longer than a batch.
+        let waits = Mutex<[Duration]>([])
+        let sweeping = Mutex(true)
+        let writing = Task.detached {
+            while sweeping.withLock({ $0 }) {
+                let asked = ContinuousClock.now
+                try? await index.write { try $0.setSetting("1", for: "bench.write") }
+                let waited = ContinuousClock.now - asked
+                waits.withLock { $0.append(waited) }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        let indexer = LibraryIndexer(index: index)
+        var batches: [Duration] = []
+        var last = clock.now
+        for await event in indexer.sweepRemovedRoots() {
+            if case let .photosRemoved(ids) = event {
+                batches.append(clock.now - last)
+                try await engine.update(photos: ids)
+                last = clock.now
+            }
+        }
+        let slowest = batches.enumerated().sorted { $0.element > $1.element }.prefix(5)
+        Self.report("slowest batches: " + slowest.map { "#\($0.offset) \(Self.milliseconds($0.element))" }
+            .joined(separator: ", ") + "; median \(Self.milliseconds(batches.sorted()[batches.count / 2]))")
+        let swept = clock.now - started
+        sweeping.withLock { $0 = false }
+        await writing.value
+        let longest = waits.withLock { $0.max() } ?? .zero
+        let left = try await index.read { reader in try (reader.photoCount(), reader.removedRoots().count) }
+        #expect(left.0 == total - removal.photos.count && left.1 == 0)
+
+        Self.report("""
+        \(removal.photos.count) photos in \(removal.folders.count) folders, from the removal: marked by \
+        \(Self.milliseconds(marked)), out of the store by \(Self.milliseconds(stored)), of the list of every photo \
+        by \(Self.milliseconds(listed)), a search for them done by \(Self.milliseconds(searched)), their links gone \
+        by \(Self.milliseconds(unlinked)), swept in \(batches.count) batches by \(Self.milliseconds(swept)); another \
+        write waited at most \(Self.milliseconds(longest)) of \(waits.withLock { $0.count }), load \
+        \(Self.load)
+        """)
+    }
+}
