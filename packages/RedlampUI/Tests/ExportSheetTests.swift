@@ -47,6 +47,14 @@ struct ExportSheetTests {
         }
     }
 
+    /// Waits for what the dialog works out off the main thread, which can take seconds on a busy Mac.
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
     private static func views<T: NSView>(_: T.Type, in view: NSView?) -> [T] {
         guard let view else { return [] }
         return ((view as? T).map { [$0] } ?? []) + view.subviews.flatMap { views(T.self, in: $0) }
@@ -178,22 +186,22 @@ struct ExportSheetTests {
         try Data("raw".utf8).write(to: photo)
         // Not an export, as the reader reads it, so the export takes the next number.
         try Data("photo".utf8).write(to: folder.appending(path: "IMG_0001-redlamp.jpg"))
-        let files = ThreadRecordingFiles(delay: .milliseconds(500))
+        let files = ThreadRecordingFiles()
+        files.gate.hold()
+        defer { files.gate.release() }
         let plan = ExportPlan(photo: photo, files: files)
         var exported: URL?
         let window = try await dialog(height: 720, photo: photo, plan: plan, onExport: { _, _, url in exported = url })
         defer { window.contentViewController = nil }
+        try await eventually { !files.asked.isEmpty }
         #expect(plan.savesAs == "IMG_0001-redlamp.jpg", "until it arrives, the name without a file there")
         #expect(plan.step == nil)
-        for _ in 0 ..< 500 where plan.step == nil {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        files.gate.release()
+        try await eventually { plan.step != nil }
         #expect(plan.savesAs == "IMG_0001-redlamp-2.jpg")
 
         #expect(try window.performKeyEquivalent(with: key(kVK_Return, "\r")))
-        for _ in 0 ..< 500 where exported == nil {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await eventually { exported != nil }
         #expect(exported == folder.appending(path: "IMG_0001-redlamp-2.jpg"))
         #expect(!files.asked.isEmpty)
         #expect(files.mainThreadCalls.isEmpty, "\(files.mainThreadCalls) read on the main thread")

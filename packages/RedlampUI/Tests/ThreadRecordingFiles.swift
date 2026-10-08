@@ -2,8 +2,10 @@ import Foundation
 import RedlampEngineAPI
 
 /// A reader that finds no file to be an export, answers after `delay` as a decode service that
-/// is starting or busy would, and records whether each call came on the main thread.
+/// is starting or busy would, and records whether each call came on the main thread. Its calls
+/// wait at `gate` while it's held.
 final class ThreadRecordingFiles: FileInspecting, @unchecked Sendable {
+    let gate = BlockingGate()
     private let delay: Duration
     private let lock = NSLock()
     private var calls: [(url: URL, onMain: Bool)] = []
@@ -53,6 +55,7 @@ final class ThreadRecordingFiles: FileInspecting, @unchecked Sendable {
     private func record(_ urls: [URL]) {
         let onMain = Thread.isMainThread
         lock.withLock { calls += urls.map { ($0, onMain) } }
+        gate.pass()
         if delay > .zero {
             Thread
                 .sleep(forTimeInterval: Double(delay.components.seconds) + Double(delay.components.attoseconds) / 1e18)
