@@ -41,11 +41,28 @@
             }
 
             // A click on Marked's row shows its photos.
-            try app.click(.identifier("sources.marked"))
+            try app.clickSourceRow("sources.marked")
             try app.wait("Marked's two photos", timeout: 20) { model in
                 model.librarySources.shown == .marked && !model.librarySources.isListing
                     && Set(model.items.map(\.name)) == Set(names.prefix(2))
             }
+
+            // Marked's summary, and the folder's, from their rows' menus.
+            try app.rightClick(.identifier("sources.marked"), choosing: "Show Summary…")
+            try app.wait("Marked's summary", timeout: 20) { _ in
+                SourceSummaryPopover.shownLines.prefix(2) == ["Marked", "2 photos"]
+            }
+            try app.main { _ in SourceSummaryPopover.close() }
+            try app.rightClick(
+                .identifier("folders." + scratch.folder.standardizedFileURL.path),
+                choosing: "Show Summary…",
+            )
+            try app.wait("the folder's summary", timeout: 20) { _ in
+                let lines = SourceSummaryPopover.shownLines
+                return lines.first == scratch.folder.lastPathComponent && lines.count > 2
+                    && lines.last == "No pairs or stacks"
+            }
+            try app.main { _ in SourceSummaryPopover.close() }
 
             // ⌘B from the folder.
             try app.main { $0.showFolder(scratch.folder) }
@@ -68,7 +85,7 @@
             try app.wait("Library Health's Damaged Files", timeout: 30) { _ in
                 app.sourceRowLabel("sources.health.damaged")?.hasPrefix("Damaged Files, ") == true
             }
-            try app.click(.identifier("sources.health.damaged"))
+            try app.clickSourceRow("sources.health.damaged")
             try app.wait("the damaged file", timeout: 20) { model in
                 model.librarySources.shown == .health(.damaged) && model.items.map(\.name).contains("Empty.jpg")
             }
@@ -195,6 +212,47 @@
     }
 
     extension RunningApp {
+        /// Clicks the Library or Collections section's row carrying `identifier`, as the mouse does: the press goes
+        /// to its list, which tracks it, and the release waits in the queue, where the list takes it from. A list
+        /// in a window that isn't key takes the press as the click after activation would.
+        func clickSourceRow(_ identifier: String) throws {
+            let location = try main { _ -> NSPoint in
+                guard let window = Views.editorWindow, let root = window.contentView?.superview,
+                      let row = Views.all(NSView.self, in: root).first(where: {
+                          $0.accessibilityIdentifier() == identifier && !$0.isHiddenOrHasHiddenAncestor
+                      })
+                else { throw ScenarioFailure("\(identifier) isn't on screen") }
+                row.scrollToVisible(row.bounds)
+                let frame = row.convert(row.bounds, to: nil)
+                return NSPoint(x: frame.midX, y: frame.midY)
+            }
+            post { _ in
+                guard let window = Views.editorWindow, let root = window.contentView?.superview,
+                      let row = Views.all(NSView.self, in: root)
+                      .first(where: { $0.accessibilityIdentifier() == identifier })
+                else { return }
+                var list = row.superview
+                while let view = list, !(view is NSOutlineView) {
+                    list = view.superview
+                }
+                let events = [NSEvent.EventType.leftMouseDown, .leftMouseUp].compactMap { type in
+                    NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: [],
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1,
+                    )
+                }
+                guard events.count == 2, let list else { return }
+                NSApp.postEvent(events[1], atStart: false)
+                if window.isKeyWindow {
+                    window.sendEvent(events[0])
+                } else {
+                    list.mouseDown(with: events[0])
+                }
+            }
+            pause(0.2)
+        }
+
         /// What VoiceOver says of the Library or Collections section's row carrying `identifier`: its name and
         /// count ("Marked, 2 photos"); nil while it isn't on screen.
         @MainActor func sourceRowLabel(_ identifier: String) -> String? {

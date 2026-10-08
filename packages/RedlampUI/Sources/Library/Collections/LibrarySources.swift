@@ -351,27 +351,16 @@ public final class LibrarySources {
         guard let model, let core = model.library.service?.core, model.library.service?.isReady == true else {
             return false
         }
-        var only: Set<Int64>?
-        let photos: PhotoSource
-        if source == .previousImport {
-            guard let found = previous?.found, !counts.previousImport.isEmpty else {
-                guard previous == nil else { return false }
-                // Not counted yet: shown once it is, if there's a previous import.
-                recount()
-                Task { [weak self] in
-                    await self?.counted()
-                    guard let self, previous != nil else { return }
-                    show(.previousImport)
-                }
-                return true
+        guard let (listed, only) = photos(of: source) else {
+            guard source == .previousImport, previous == nil else { return false }
+            // Not counted yet: shown once it is, if there's a previous import.
+            recount()
+            Task { [weak self] in
+                await self?.counted()
+                guard let self, previous != nil else { return }
+                show(.previousImport)
             }
-            let folders = found.folders.map { LibraryQuery.filter(LibraryQuery.Filter(.folder, .equal, [.text($0)])) }
-            photos = .query(folders.count == 1 ? folders[0] : .or(folders))
-            only = Set(counts.previousImport)
-        } else if let source = source.photoSource(pairs: pairRule) {
-            photos = source
-        } else {
-            return false
+            return true
         }
         model.showModule(.library)
         model.rememberSourceView()
@@ -382,10 +371,30 @@ public final class LibrarySources {
         self.generation = generation
         shown = source
         awaitingFirst = true
-        list = LibrarySourceList(core: core, source: photos, only: only) { [weak self] change in
+        list = LibrarySourceList(core: core, source: listed, only: only) { [weak self] change in
             self?.received(change, generation: generation)
         }
         return true
+    }
+
+    /// `source`'s photos as the library lists them, and for Previous Import which of them are its; nil for Previous
+    /// Import while it isn't known.
+    func photos(of source: LibrarySource) -> (source: PhotoSource, only: Set<Int64>?)? {
+        guard source == .previousImport else { return source.photoSource(pairs: pairRule).map { ($0, nil) } }
+        guard let found = previous?.found, !counts.previousImport.isEmpty else { return nil }
+        let folders = found.folders.map { LibraryQuery.filter(LibraryQuery.Filter(.folder, .equal, [.text($0)])) }
+        return (.query(folders.count == 1 ? folders[0] : .or(folders)), Set(counts.previousImport))
+    }
+
+    /// Shows `source`'s summary beside `view`: its days, cameras, lenses, settings, pairs and stacks.
+    public func showSummary(of source: LibrarySource, relativeTo view: NSView) {
+        guard let service = model?.library.service, let (listed, only) = photos(of: source) else { return }
+        let title = if case let .collection(path) = source {
+            path.displayName
+        } else {
+            source.title
+        }
+        SourceSummaryPopover.show(title, relativeTo: view) { await service.summary(of: listed, only: only) }
     }
 
     private func received(_ change: LibrarySourceList.Change, generation: Int) {

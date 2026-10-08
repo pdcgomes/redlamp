@@ -302,9 +302,9 @@ final class SidebarCellView: NSTableCellView {
                 menu.addItem(NSMenuItem(title: "Delete Recipe") { [model] in model.recipes.delete(recipe) })
             }
         case let .folder(row):
-            return Self.folderMenu(row, model: model)
+            return Self.folderMenu(row, model: model, anchor: self)
         case let .source(row):
-            return Self.sourceMenu(row, model: model)
+            return Self.sourceMenu(row, model: model, anchor: self)
         case .libraryHealth:
             return Self.healthMenu(model: model)
         default:

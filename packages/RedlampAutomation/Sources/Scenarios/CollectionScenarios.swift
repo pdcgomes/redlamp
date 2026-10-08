@@ -82,7 +82,7 @@
             }
 
             // Selects shown by a click on its row: ⌫ takes A out, and ⌘Z puts it back.
-            try app.click(.identifier("collections.\(selects)"))
+            try app.clickSourceRow("collections.\(selects)")
             try app.wait("Selects shown", timeout: 20) { model in
                 !model.librarySources.isListing && Set(model.items.map(\.url)) == [a, b]
             }
@@ -217,7 +217,7 @@
             try app.wait("the smart collection counting the rated pick", timeout: 30) { _ in
                 app.sourceRowLabel("collections.\(picked)") == "\(picked), 1 photo"
             }
-            try app.click(.identifier("collections.\(picked)"))
+            try app.clickSourceRow("collections.\(picked)")
             try app.wait("its photo shown", timeout: 20) { model in
                 !model.librarySources.isListing && model.items.map(\.url) == [a]
             }

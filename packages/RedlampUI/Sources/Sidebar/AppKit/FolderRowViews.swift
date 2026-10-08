@@ -1,6 +1,7 @@
 import AppKit
 import RedlampDesign
 import RedlampDocument
+import RedlampLibrary
 
 /// A row of the Folders panel: a folder the user added (a root) or one beneath it.
 struct FolderRow: Equatable {
@@ -80,13 +81,21 @@ extension SidebarCellView {
         "\(count.formatted()) photo\(count == 1 ? "" : "s")"
     }
 
-    /// Show in Finder, Show Photos in Subfolders, Remove from Folders, Locate….
-    static func folderMenu(_ row: FolderRow, model: EditorModel) -> NSMenu {
+    /// Show in Finder, Show Summary… (beside `anchor`, its row), Show Photos in Subfolders, Remove from Folders,
+    /// Locate….
+    static func folderMenu(_ row: FolderRow, model: EditorModel, anchor: NSView) -> NSMenu {
         let menu = NSMenu()
         if !row.isMissing {
             menu.addItem(NSMenuItem(title: "Show in Finder") {
                 NSWorkspace.shared.activateFileViewerSelecting([row.url])
             })
+            if let service = model.library.service, service.isReady {
+                let source = PhotoSource.folder(row.url, includingSubfolders: model.library.includesSubfolders)
+                menu.addItem(NSMenuItem(title: "Show Summary…") { [weak anchor] in
+                    guard let anchor else { return }
+                    SourceSummaryPopover.show(row.name, relativeTo: anchor) { await service.summary(of: source) }
+                })
+            }
             let subfolders = NSMenuItem(title: ShortcutAction.showPhotosInSubfolders.title) {
                 if model.folder != row.url {
                     model.showFolder(row.url)

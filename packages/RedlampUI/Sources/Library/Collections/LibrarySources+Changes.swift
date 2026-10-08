@@ -136,7 +136,7 @@ public extension LibrarySources {
     /// Puts the selection's photos in the collection at `path`.
     @discardableResult
     func add(to path: CollectionPath) -> Bool {
-        guard canAdd, let model, collections[path]?.kind == .collection else { return false }
+        guard canAdd, let model, collections[path].map({ $0.kind == .collection }) ?? true else { return false }
         let photos = model.selectedPhotos
         Task { [weak self] in
             guard let self else { return }

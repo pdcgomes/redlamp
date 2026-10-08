@@ -82,12 +82,16 @@ extension SidebarCellView {
         accessibilityLabel: "Library Health", symbol: "stethoscope", color: Palette.secondaryLabel,
     )
 
-    /// A source's menu: choosing it as the target, and for the collection list's places, renaming, moving and
-    /// deleting them, and making places inside a set.
-    static func sourceMenu(_ row: SourceRow, model: EditorModel) -> NSMenu {
+    /// A source's menu: its summary beside `anchor`, its row; choosing it as the target; and for the collection
+    /// list's places, renaming, moving and deleting them, and making places inside a set.
+    static func sourceMenu(_ row: SourceRow, model: EditorModel, anchor: NSView) -> NSMenu {
         let sources = model.librarySources
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Show") { sources.show(row.source) })
+        menu.addItem(NSMenuItem(title: "Show Summary…") { [weak anchor] in
+            guard let anchor else { return }
+            sources.showSummary(of: row.source, relativeTo: anchor)
+        })
         if row.source == .marked || row.kind == .collection {
             let target: CollectionPath? = if case let .collection(path) = row.source {
                 path
