@@ -290,6 +290,36 @@ extension DecodeServiceTests {
         }
         #expect(pixels.image(maxLongEdge: 7) == nil)
     }
+
+    @Test func `a camera preview in an unnamed colour space is sent in Display P3, and one with a profile is refused`(
+    ) throws {
+        let space = try #require(CGColorSpace(
+            calibratedRGBWhitePoint: [0.9505, 1, 1.089], blackPoint: [0, 0, 0], gamma: [2.2, 2.2, 2.2],
+            matrix: [0.4124, 0.2126, 0.0193, 0.3576, 0.7152, 0.1192, 0.1805, 0.0722, 0.9505],
+        ))
+        let profile = try #require(space.copyICCData())
+        #expect(space.name == nil)
+        let context = try #require(CGContext(
+            data: nil, width: 8, height: 4, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+        ))
+        context.setFillColor(red: 0.1, green: 0.8, blue: 0.3, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 8, height: 4))
+        let image = try #require(context.makeImage())
+        let converted = try #require(RawDiagnosticsTests.inDisplayP3(image))
+        let pixels = try #require(PreviewPixels(image))
+        withKnownIssue("the service sends an unnamed space's ICC profile") {
+            #expect(pixels.colorSpace == CGColorSpace.displayP3 as String && pixels.iccProfile == nil)
+            #expect(pixels.image(maxLongEdge: 8)?.colorSpace?.name == CGColorSpace.displayP3)
+            #expect(RawDiagnosticsTests.drawn(pixels.image(maxLongEdge: 8))?.pixels == RawDiagnosticsTests
+                .drawn(converted)?.pixels)
+
+            var profiled = pixels
+            profiled.colorSpace = CGColorSpace.displayP3 as String
+            profiled.iccProfile = profile as Data
+            #expect(profiled.image(maxLongEdge: 8) == nil)
+        }
+    }
 }
 
 /// The service replies synchronously; this holds what it sent.
