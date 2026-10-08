@@ -88,17 +88,11 @@ extension LibraryGridView {
         guard let keyword = LibraryDrags.keyword(in: sender), let target = keywordTarget(at: sender.draggingLocation)
         else { return false }
         let panels = model.libraryPanels
-        switch target {
-        case .selection where !panels.selection.ids.isEmpty:
-            return panels.add([keyword])
-        case .selection:
-            let ids = model.library.photoIDs
-            let selection = model.photoSelection
-            let photos = zip(ids, model.items).filter { selection.contains($0.0) }.map { (list: $0.0, url: $0.1.url) }
-            Task { await panels.change([keyword], on: photos) }
-        case let .photo(list, url):
-            Task { await panels.change([keyword], on: [(list, url)]) }
+        let photos = switch target {
+        case .selection: model.selectedPhotos
+        case let .photo(_, url): [url]
         }
+        Task { await panels.change([keyword], on: photos) }
         return true
     }
 
@@ -124,6 +118,9 @@ extension LibraryGridView {
     func showKeywordTarget(_ target: KeywordTarget?) {
         guard target != keywordTarget else { return }
         keywordTarget = target
+        if target != nil {
+            LibraryDrags.outlined += 1
+        }
         let ids = model.library.photoIDs
         let selection = model.photoSelection
         CATransaction.begin()

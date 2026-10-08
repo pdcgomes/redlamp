@@ -8,12 +8,23 @@ struct PhotoDrop {
     var perform: @MainActor () -> Void
 }
 
+/// A drop's move under way (LIB-26), shown in the grid's toolbar rather than in a sheet: a sheet dims the window
+/// as it comes and goes by drawing the window into a bitmap, a tenth of a second and more on the main thread with
+/// thousands of thumbnails on screen. Actions stay off meanwhile, as they do under a sheet.
+@MainActor
+@Observable
+public final class LibraryMoveProgress {
+    /// What's being done ("Moving to Picked"), while it is.
+    public internal(set) var title: String?
+    public internal(set) var progress: FileProgress?
+}
+
 /// Photos dragged from the grid onto the left panel (LIB-23, LIB-26). Onto a folder of Folders they move there as
-/// Move to Folder moves them: one journaled batch with its progress in a sheet, each photo with its pair, sidecars
-/// and other apps' `.xmp`, and Library's ⌘Z and ⇧⌘Z take it back and make it again. The library's batches don't
-/// copy photos, so with ⌥ held the drop says so and moves nothing. A drop that can't happen is refused as the drag
-/// passes over: onto the folder every photo is in already, a missing folder, one outside the library's folders,
-/// or of photos the library doesn't have or that are in the Trash.
+/// Move to Folder moves them: one journaled batch, its progress in the grid's toolbar, each photo with its pair,
+/// sidecars and other apps' `.xmp`, and Library's ⌘Z and ⇧⌘Z take it back and make it again. The library's
+/// batches don't copy photos, so with ⌥ held the drop says so and moves nothing. A drop that can't happen is
+/// refused as the drag passes over: onto the folder every photo is in already, a missing folder, one outside the
+/// library's folders, or of photos the library doesn't have or that are in the Trash.
 extension EditorModel {
     /// What dropping `photos` on `folder`, a row of Folders, does, given the operations the drag offers; nil refuses
     /// it.
@@ -37,13 +48,18 @@ extension EditorModel {
         }
     }
 
-    /// Moves the photos dropped on `folder` there, the batch's progress in a sheet, and says in an alert why it
-    /// didn't happen.
+    /// Moves the photos dropped on `folder` there, the batch's progress in the grid's toolbar, and says in an alert
+    /// why it didn't happen.
     func drop(_ photos: DraggedPhotos, onFolder folder: URL) async {
         let urls = await photos.urls()
-        let sheet = FileProgressSheet.present("Moving to \(folder.lastPathComponent)", editor: self)
-        let error = await movePhotos(urls, to: folder) { sheet?.show($0) }
-        sheet?.close()
+        let shown = moveProgress
+        shown.title = "Moving to \(folder.lastPathComponent)"
+        shown.progress = nil
+        isModalDialogOpen = true
+        let error = await movePhotos(urls, to: folder) { shown.progress = $0 }
+        shown.title = nil
+        shown.progress = nil
+        isModalDialogOpen = false
         guard let error, let window = EditorWindowController.frontWindow else { return }
         let alert = NSAlert()
         alert.messageText = "The photos weren't moved to \(folder.lastPathComponent)"
@@ -109,6 +125,18 @@ extension EditorModel {
     }
 
     @_spi(Harness) public static let notCopied = "Photos can't be copied to a folder yet"
+
+    /// A drop's move under way, for the grid's toolbar.
+    var moveProgress: LibraryMoveProgress {
+        if let progress = Self.moveProgresses.object(forKey: self) {
+            return progress
+        }
+        let progress = LibraryMoveProgress()
+        Self.moveProgresses.setObject(progress, forKey: self)
+        return progress
+    }
+
+    private static let moveProgresses = NSMapTable<EditorModel, LibraryMoveProgress>.weakToStrongObjects()
 }
 
 /// Photos dragged onto a collection go in it, as Photo › Add to Collection puts them (LIB-23): one change with

@@ -322,6 +322,7 @@ class SidebarOutlineView: NSOutlineView, HeightProviding, NSOutlineViewDataSourc
         photoDropRow = row
         if let row {
             (rowView(atRow: row, makeIfNecessary: false) as? SidebarRowView)?.isDropTarget = true
+            LibraryDrags.outlined += 1
         }
     }
 

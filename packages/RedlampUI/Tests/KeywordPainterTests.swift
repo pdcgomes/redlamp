@@ -94,6 +94,35 @@ struct KeywordPainterTests {
         }
     }
 
+    @Test func `photos a move's Undo brought back are painted, their IDs read afresh`() async throws {
+        let sandbox = DragSandbox()
+        defer { sandbox.close() }
+        try await sandbox.open(photos: ["A.JPG", "B.JPG", "C.JPG"], folders: ["Picked"])
+        let model = try #require(sandbox.model)
+        try sandbox.click("A.JPG")
+        try sandbox.click("B.JPG", modifiers: .command)
+        try sandbox.press("A.JPG")
+        try sandbox.drag(
+            from: sandbox.cell("A.JPG"),
+            to: sandbox.middle(of: "folders." + sandbox.folder("Picked").path),
+        )
+        try await sandbox.filesMade(count: 1)
+        #expect(sandbox.files(in: "Picked") == ["A.JPG", "B.JPG"])
+        #expect(model.perform(.undo))
+        await model.filesMade()
+        try await sandbox.eventually { sandbox.shownNames().count == 3 }
+        try await sandbox.panelsWritten()
+
+        let painter = model.keywordPainter
+        #expect(painter.setOn(true))
+        painter.text = "Lisbon"
+        try sandbox.press("A.JPG")
+        try sandbox.drag(from: sandbox.cell("A.JPG"), to: sandbox.cell("B.JPG"))
+        try await sandbox.eventually { sandbox.keywords("B.JPG") == ["Lisbon"] }
+        try await sandbox.panelsWritten()
+        #expect(sandbox.keywords("A.JPG") == ["Lisbon"] && sandbox.keywords("B.JPG") == ["Lisbon"])
+    }
+
     @Test func `Esc, its key and its buttons in the toolbar and the Keywording panel take it out and put it away`(
     ) async throws {
         let sandbox = try await open(["A.JPG", "B.JPG"])

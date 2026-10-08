@@ -32,6 +32,7 @@ struct LibraryDragTests {
         #expect(model.selectedPhotos.count == 2, "a press on a selected photo keeps the selection for its drag")
         try sandbox.drag(from: sandbox.cell("A.JPG"), to: picked, release: false)
         let list = try #require(sandbox.first(FolderOutlineView.self))
+        let rootsShown = list.rootsShown
         let row = try #require(list.photoDropRow, "the folder under the drag is outlined")
         #expect((list.rowView(atRow: row, makeIfNecessary: false) as? SidebarRowView)?.isDropTarget == true)
         try sandbox.release(at: picked)
@@ -42,6 +43,7 @@ struct LibraryDragTests {
         #expect(sandbox.files() == ["B.JPG", "D.JPG", "Picked"])
         #expect(sandbox.shownNames() == ["B.JPG", "D.JPG"])
         #expect(model.fileUndoCount == 1, "one batch")
+        #expect(list.rootsShown == rootsShown, "Folders keeps its rows as the photos move")
 
         #expect(model.canPerform(.undo) && model.perform(.undo))
         await model.filesMade()

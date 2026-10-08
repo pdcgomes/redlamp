@@ -7,8 +7,8 @@ import RedlampLibrary
 /// Develop or in Finder. Each button's tooltip names its key. Its controls act on the press itself, as
 /// the module picker does, rather than tracking the mouse as AppKit's controls do. In the grid, Group By
 /// (LIB-41) and, grouped by moment, the Tighter–Looser slider and the moments without a pick are AppKit's
-/// own controls until the library's polish phase (LIB-45), as is the painter's field (LIB-21), shown while
-/// it's out.
+/// own controls until the library's polish phase (LIB-45), as are the painter's field (LIB-21), shown while
+/// it's out, and the progress of photos dropped on a folder, shown while they move (LIB-26).
 final class LibraryToolbarView: NSView, NSTextFieldDelegate {
     static let height: CGFloat = 30
 
@@ -24,6 +24,10 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
     private let painterButton = ToolbarButton(symbol: "paintbrush.pointed", identifier: "library.toolbar.painter")
     /// The keywords the painter paints; empty, the active keyword set's.
     private let paints = NSTextField()
+    /// A drop's move under way (`LibraryMoveProgress`), and whether the toolbar was last laid out with it.
+    private let moving = NSTextField(labelWithString: "")
+    private let movingBar = NSProgressIndicator()
+    private var showsMoving = false
     private let groupBy = NSPopUpButton(frame: .zero, pullsDown: false)
     private let looseness = NSSlider(
         value: 0, minValue: Double(MomentSetting.tightest), maxValue: Double(MomentSetting.loosest), target: nil,
@@ -78,9 +82,18 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         paints.delegate = self
         paints.setAccessibilityLabel("Keywords to Paint")
         paints.setAccessibilityIdentifier("library.toolbar.paints")
-        for view in [grid, loupe, fit, actual, develop, finder, size, painterButton, paints] + GridCellStyle.allCases
-            .compactMap({ styles[$0] })
-            as [NSView] {
+        moving.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        moving.textColor = .secondaryLabelColor
+        moving.lineBreakMode = .byTruncatingMiddle
+        moving.setAccessibilityIdentifier("library.toolbar.moving")
+        movingBar.style = .bar
+        movingBar.controlSize = .small
+        movingBar.isIndeterminate = false
+        movingBar.minValue = 0
+        movingBar.maxValue = 1
+        movingBar.setAccessibilityIdentifier("library.toolbar.movingProgress")
+        for view in [grid, loupe, fit, actual, develop, finder, size, painterButton, paints, moving, movingBar]
+            + GridCellStyle.allCases.compactMap({ styles[$0] }) as [NSView] {
             addSubview(view)
         }
         setUpGroups()
@@ -231,7 +244,35 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
                 finder.isEnabled = hasPhoto
                 loupe.isEnabled = hasPhoto
             },
+            // And a move's progress, which changes ten times a second.
+            Tracker { [weak self] in
+                guard let self else { return }
+                showMoving(model.moveProgress)
+            },
         ]
+    }
+
+    private func showMoving(_ shown: LibraryMoveProgress) {
+        let isMoving = shown.title != nil
+        Self.set(moving, hidden: !isMoving)
+        Self.set(movingBar, hidden: !isMoving)
+        if let title = shown.title {
+            let progress = shown.progress
+            let text = progress
+                .map { "\(title): \(RenameModel.count($0.done)) of \(RenameModel.count($0.total)) steps" }
+                ?? "\(title)…"
+            if moving.stringValue != text {
+                moving.stringValue = text
+            }
+            let fraction = progress.map { $0.total > 0 ? Double($0.done) / Double($0.total) : 0 } ?? 0
+            if movingBar.doubleValue != fraction {
+                movingBar.doubleValue = fraction
+            }
+        }
+        if isMoving != showsMoving {
+            showsMoving = isMoving
+            needsLayout = true
+        }
     }
 
     /// The painter's button, and while it's out its field, whose placeholder names the keyword set it paints
@@ -301,6 +342,11 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         } else {
             place(fit, width: 40)
             place(actual, width: 40)
+        }
+        if showsMoving {
+            x += 14
+            place(moving, width: 240)
+            place(movingBar, width: 120)
         }
         let right = bounds.width - 12
         finder.frame = CGRect(x: right - 28, y: (bounds.height - 22) / 2, width: 28, height: 22)

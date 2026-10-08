@@ -18,6 +18,8 @@ import RedlampLibrary
     /// Drags follow the regression suite's synthetic mouse, which the window server doesn't, rather than starting
     /// AppKit's session (`SimulatedDrag`).
     @_spi(Harness) public static var simulates = false
+    /// The drop targets outlined under a drag since launch, for the regression suite.
+    @_spi(Harness) public internal(set) static var outlined = 0
 
     /// Starts dragging `item` from `view`, which `event` pressed and moved: AppKit's session, or the suite's. `mask`
     /// is what the drag offers within Redlamp; outside it, nothing.

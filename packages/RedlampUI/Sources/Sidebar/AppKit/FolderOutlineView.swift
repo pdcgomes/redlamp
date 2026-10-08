@@ -16,6 +16,8 @@ import RedlampDocument
 final class FolderOutlineView: SidebarOutlineView {
     private var rootNodes: [SidebarNode] = []
     private var nodes: [String: SidebarNode] = [:]
+    /// Each folder's subfolders as the outline last asked for them, by path.
+    private var shownSubfolders: [String: [URL]] = [:]
     private var placeholder = SidebarNode(.placeholder("Add a folder of photos with +"))
     private let trashNode = SidebarNode(.recentlyTrashed(TrashRow(count: nil, isOpen: false)))
     private let emptyTrashNode = SidebarNode(.placeholder(RecentlyTrashedText.empty))
@@ -116,9 +118,13 @@ final class FolderOutlineView: SidebarOutlineView {
     }
 
     private func showRoots(_ roots: [WorkingFolder], missing: Set<UUID>) {
+        rootsShown += 1
         rootNodes = roots.map { node(for: $0.url, root: $0, missing: missing.contains($0.id)) }
         reloadTop()
     }
+
+    /// How many times the roots were listed again, for the tests.
+    private(set) var rootsShown = 0
 
     private func reloadTop() {
         isReloading = true
@@ -161,14 +167,24 @@ final class FolderOutlineView: SidebarOutlineView {
         }
     }
 
-    /// Folders listed again: their rows (and, when open, their subfolders) reload, nothing else.
+    /// Folders listed again: their rows (and, when open, their subfolders) reload, nothing else; a row whose
+    /// subfolders are as it shows them shows its count in place, as photos moving in and out change only that.
     private func treeChanged(_ paths: Set<String>) {
         isReloading = true
         for path in paths {
             guard let item = nodes[path], case let .folder(old) = item.kind, row(forItem: item) >= 0 else { continue }
             let updated = row(for: old.url, root: old.root, missing: old.isMissing)
             item.kind = .folder(updated)
-            if isItemExpanded(item) {
+            let subfolders = library.node(for: old.url)?.subfolders ?? []
+            let expanded = isItemExpanded(item)
+            if updated.hasSubfolders == old.hasSubfolders, !expanded || shownSubfolders[path] == subfolders {
+                let index = row(forItem: item)
+                if let cell = view(atColumn: 0, row: index, makeIfNecessary: false) as? SidebarCellView {
+                    cell.refreshFolder(updated)
+                }
+                continue
+            }
+            if expanded {
                 reloadItem(item, reloadChildren: true)
                 expandRemembered(children(of: item))
             } else {
@@ -216,7 +232,9 @@ final class FolderOutlineView: SidebarOutlineView {
     override func outlineView(_: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         guard let item = item as? SidebarNode else { return topNodes.count }
         guard case let .folder(row) = item.kind, !row.isMissing else { return 0 }
-        return library.node(for: row.url)?.subfolders.count ?? 0
+        let subfolders = library.node(for: row.url)?.subfolders ?? []
+        shownSubfolders[row.url.standardizedFileURL.path] = subfolders
+        return subfolders.count
     }
 
     override func outlineView(_: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {

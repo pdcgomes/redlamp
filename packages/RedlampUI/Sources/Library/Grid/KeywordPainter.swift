@@ -16,6 +16,8 @@ public final class KeywordPainter {
     @ObservationIgnored weak var model: EditorModel?
     /// The stroke under way, from the press to the release.
     @ObservationIgnored private(set) var stroke: Stroke?
+    /// The photos the last stroke reached, for the regression suite.
+    @ObservationIgnored @_spi(Harness) public private(set) var lastStroke = 0
 
     struct Stroke {
         let keywords: [KeywordPath]
@@ -82,8 +84,9 @@ public final class KeywordPainter {
     func end() {
         guard let stroke, let panels = model?.libraryPanels else { return }
         self.stroke = nil
+        lastStroke = stroke.photos.count
         guard !stroke.photos.isEmpty else { return }
-        Task { await panels.change(stroke.keywords, removing: stroke.removing, on: stroke.photos) }
+        Task { await panels.change(stroke.keywords, removing: stroke.removing, on: stroke.photos.map(\.url)) }
     }
 
     /// The pointer over the grid while it's out: a brush, its tip the point it paints.
