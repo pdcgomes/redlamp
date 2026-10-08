@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import RedlampEngineAPI
+import RedlampRecipes
 import Testing
 @testable import RedlampUI
 
@@ -70,9 +71,22 @@ struct EditorObservationTests {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }
         let invalidated = invalidates(control, in: model) { model.setValue(.exposure, 1) }
-        withKnownIssue("RESP-01: the hosted controls read the whole edit") {
-            #expect(!invalidated)
-        }
+        #expect(!invalidated)
+    }
+
+    @Test func `the Base Look menu's groups follow the catalogue, not the edit`() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let engine = StubEngine()
+        let recipes = RecipeCatalog(engine: engine, library: RecipeLibrary(root: root, includeBundled: false))
+        let model = EditorModel(engine: engine, recipes: recipes)
+        let flag = Flag()
+        withObservationTracking { _ = BaseLookGroups.current(in: recipes) } onChange: { flag.raised = true }
+        model.setValue(.exposure, 1)
+        #expect(!flag.raised)
+        recipes.reload()
+        #expect(flag.raised)
     }
 
     @Test(arguments: Control.allCases)

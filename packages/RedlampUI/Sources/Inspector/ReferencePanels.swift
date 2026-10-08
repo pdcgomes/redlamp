@@ -69,7 +69,7 @@ struct ParameterToggle: View {
     let help: String
 
     static func isOn(_ parameter: ParameterID, in model: EditorModel) -> Bool {
-        model.recipe[parameter] > 0.5
+        model.value(parameter) > 0.5
     }
 
     var body: some View {
@@ -100,11 +100,11 @@ struct ProfileCorrectionsToggle: View {
 
     /// Whether the photo's lens correction applies at the edit's process version.
     static func applies(in model: EditorModel) -> Bool {
-        model.info?.lensCorrection.map { model.recipe.processVersion >= $0.source.process } ?? false
+        model.info?.lensCorrection.map { model.processVersion >= $0.source.process } ?? false
     }
 
     static func isOn(in model: EditorModel) -> Bool {
-        applies(in: model) && model.recipe[.lensProfile] > 0.5
+        applies(in: model) && model.value(.lensProfile) > 0.5
     }
 
     var body: some View {
@@ -237,7 +237,7 @@ struct FrameStylePicker: View {
     @Environment(EditorModel.self) private var model
 
     static func style(in model: EditorModel) -> Int {
-        Int(model.recipe[.frameStyle].rounded())
+        Int(model.value(.frameStyle).rounded())
     }
 
     var body: some View {
@@ -258,7 +258,7 @@ struct ProcessVersion: View {
     @Environment(EditorModel.self) private var model
 
     static func version(in model: EditorModel) -> Int {
-        model.recipe.processVersion
+        model.processVersion
     }
 
     var body: some View {

@@ -20,6 +20,31 @@ struct BaseLookGroups {
         sections = [("Redlamp", builtIn), ("Film Stocks", stocks), ("Film Styles", film), ("Installed", other)]
             .filter { !$0.1.isEmpty }
     }
+
+    /// The catalogue's current looks, sorted once for each change to it rather than for each
+    /// update of a menu that shows them.
+    @MainActor static func current(in recipes: RecipeCatalog) -> BaseLookGroups {
+        let revision = recipes.revision
+        if let last = Cache.last, last.catalog === recipes, last.revision == revision {
+            return last.groups
+        }
+        let groups = BaseLookGroups(recipes.currentBaseLooks)
+        Cache.last = Cache(catalog: recipes, revision: revision, groups: groups)
+        return groups
+    }
+
+    @MainActor private final class Cache {
+        static var last: Cache?
+        weak var catalog: RecipeCatalog?
+        let revision: Int
+        let groups: BaseLookGroups
+
+        init(catalog: RecipeCatalog, revision: Int, groups: BaseLookGroups) {
+            self.catalog = catalog
+            self.revision = revision
+            self.groups = groups
+        }
+    }
 }
 
 /// Every Base Look rendered on the current photo, as Lightroom's Profile Browser.
@@ -31,7 +56,7 @@ struct BaseLookBrowser: View {
     private static let columns = [GridItem(.adaptive(minimum: 116), spacing: 10)]
 
     var body: some View {
-        let groups = BaseLookGroups(model.recipes.currentBaseLooks)
+        let groups = BaseLookGroups.current(in: model.recipes)
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(groups.sections, id: \.name) { section in

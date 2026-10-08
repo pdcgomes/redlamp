@@ -133,6 +133,9 @@ public final class EditorModel {
             if newValue.baseLook != old.baseLook {
                 withMutation(keyPath: \.baseLook) {}
             }
+            if newValue.processVersion != old.processVersion {
+                withMutation(keyPath: \.processVersion) {}
+            }
             if newValue.appliedRecipe != old.appliedRecipe {
                 withMutation(keyPath: \.appliedRecipe) {}
             }
@@ -169,6 +172,11 @@ public final class EditorModel {
     public var treatment: Treatment {
         access(keyPath: \.treatment)
         return storedRecipe.treatment
+    }
+
+    public var processVersion: Int {
+        access(keyPath: \.processVersion)
+        return storedRecipe.processVersion
     }
 
     public var baseLook: BaseLookReference {

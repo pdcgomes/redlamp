@@ -67,13 +67,13 @@ struct BaseLookMenu: View {
     /// The photo's embedded camera profile look, when the edit's process version renders it.
     static func embeddedLook(in model: EditorModel) -> BaseLookReference? {
         guard let embedded = model.info?.embeddedBaseLook,
-              model.recipe.processVersion >= model.info?.embeddedBaseLookProcess ?? 0 else { return nil }
+              model.processVersion >= model.info?.embeddedBaseLookProcess ?? 0 else { return nil }
         return embedded
     }
 
     var body: some View {
         let current = model.baseLook
-        let groups = BaseLookGroups(model.recipes.currentBaseLooks)
+        let groups = BaseLookGroups.current(in: model.recipes)
         Menu {
             if let embedded = Self.embeddedLook(in: model) {
                 Section("In This Photo") {
