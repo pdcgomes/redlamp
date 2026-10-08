@@ -68,9 +68,13 @@ struct ParameterToggle: View {
     let parameter: ParameterID
     let help: String
 
+    static func isOn(_ parameter: ParameterID, in model: EditorModel) -> Bool {
+        model.recipe[parameter] > 0.5
+    }
+
     var body: some View {
         Toggle(parameter.spec.label, isOn: Binding(
-            get: { model.recipe[parameter] > 0.5 },
+            get: { Self.isOn(parameter, in: model) },
             set: { model.setValue(parameter, $0 ? 1 : 0) },
         ))
         .disabled(model.info == nil)
@@ -94,9 +98,18 @@ struct ParameterToggle: View {
 struct ProfileCorrectionsToggle: View {
     @Environment(EditorModel.self) private var model
 
+    /// Whether the photo's lens correction applies at the edit's process version.
+    static func applies(in model: EditorModel) -> Bool {
+        model.info?.lensCorrection.map { model.recipe.processVersion >= $0.source.process } ?? false
+    }
+
+    static func isOn(in model: EditorModel) -> Bool {
+        applies(in: model) && model.recipe[.lensProfile] > 0.5
+    }
+
     var body: some View {
         let lens = model.info?.lensCorrection
-        let applies = lens.map { model.recipe.processVersion >= $0.source.process } ?? false
+        let applies = Self.applies(in: model)
         let issues = LensProfileIssues.current()
         let notes = [LensPanelText.profile(lens), LensPanelText.issues(issues)].compactMap(\.self)
         if notes.isEmpty {
@@ -118,7 +131,7 @@ struct ProfileCorrectionsToggle: View {
 
     private func toggle(_ lens: LensCorrection?, applies: Bool) -> some View {
         Toggle("Enable Profile Corrections", isOn: Binding(
-            get: { applies && model.recipe[.lensProfile] > 0.5 },
+            get: { Self.isOn(in: model) },
             set: { model.setValue(.lensProfile, $0 ? 1 : 0) },
         ))
         .disabled(!applies)
@@ -223,9 +236,13 @@ struct VignetteStylePicker: View {
 struct FrameStylePicker: View {
     @Environment(EditorModel.self) private var model
 
+    static func style(in model: EditorModel) -> Int {
+        Int(model.recipe[.frameStyle].rounded())
+    }
+
     var body: some View {
         Picker("Style", selection: Binding(
-            get: { Int(model.recipe[.frameStyle].rounded()) },
+            get: { Self.style(in: model) },
             set: { model.setValue(.frameStyle, Double($0)) },
         )) {
             ForEach(FrameStyle.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
@@ -240,9 +257,13 @@ struct FrameStylePicker: View {
 struct ProcessVersion: View {
     @Environment(EditorModel.self) private var model
 
+    static func version(in model: EditorModel) -> Int {
+        model.recipe.processVersion
+    }
+
     var body: some View {
         let current = EditRecipe.currentProcessVersion
-        let version = model.recipe.processVersion
+        let version = Self.version(in: model)
         if version > current {
             Text("Version \(version) (newer Redlamp)").font(Theme.labelFont).foregroundStyle(Theme.value)
         } else {

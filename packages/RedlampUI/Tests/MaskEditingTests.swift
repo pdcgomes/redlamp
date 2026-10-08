@@ -89,17 +89,24 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     var openError: (any Error)?
     /// The size of every photo it opens.
     var pixelSize = PixelSize(width: 600, height: 400)
+    /// The camera profile look and lens correction every photo it opens carries.
+    var embeddedBaseLook: (look: BaseLookReference, process: Int)?
+    var lensCorrection: LensCorrection?
 
     func open(_ url: URL) async throws -> ImageInfo {
         if let openError {
             throw openError
         }
-        return ImageInfo(
+        var info = ImageInfo(
             url: url,
             pixelSize: pixelSize,
             isRaw: true,
             sensorDescription: "stub",
         )
+        info.embeddedBaseLook = embeddedBaseLook?.look
+        info.embeddedBaseLookProcess = embeddedBaseLook?.process
+        info.lensCorrection = lensCorrection
+        return info
     }
 
     /// Photos `openIfReady` opens at once, as if decoded ahead.
