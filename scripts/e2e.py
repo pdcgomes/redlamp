@@ -17,7 +17,9 @@ app crashes or hangs, a feature the full tiers must cover isn't covered or exemp
 owner's own Redlamp state changed. The report is build/e2e/<commit>-<time>/report.md.
 
 A failed scenario is retried once, in a launch that starts from the photos, home and defaults the
-first attempt started from; the run directory's attempt-1 keeps what the first attempt left.
+first attempt started from; the run directory's attempt-1 keeps what the first attempt left. The
+retry's result stands for the scenario: the stalls of the first attempt are reported with their
+attempt but don't count against the run.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -421,11 +424,15 @@ def known_stalls() -> dict[str, str]:
     return {item["frame"]: item["reason"] for item in json.loads(path.read_text()).get("knownStalls", [])}
 
 
-def read_events(path: Path) -> list[dict]:
+def read_events(path: Path, start: int = 0) -> list[dict]:
+    """The events in `path` from byte `start`: where a launch began adding its own to its group's."""
     if not path.exists():
         return []
+    with path.open("rb") as handle:
+        handle.seek(start)
+        text = handle.read().decode(errors="replace")
     events = []
-    for line in path.read_text().splitlines():
+    for line in text.splitlines():
         try:
             events.append(json.loads(line))
         except json.JSONDecodeError:
@@ -439,7 +446,9 @@ def launch(app: Path, run_dir: Path, group: str, scenarios: list[str], args) -> 
             "steps": args.step, "knownIssues": known_issues(), "knownStalls": known_stalls()}
     (run_dir / f"plan-{group}.json").write_text(json.dumps(plan, indent=2))
     events_path = run_dir / f"events-{group}.jsonl"
-    already = len(read_events(events_path))
+    # Each launch of a group adds to the group's events; this one's begin here.
+    start = events_path.stat().st_size if events_path.exists() else 0
+    already = 0
     env = dict(os.environ)
     env["CFFIXED_USER_HOME"] = str(run_dir / "home")
     env["REDLAMP_E2E_SOAK_SECONDS"] = str(args.soak_seconds)
@@ -461,7 +470,7 @@ def launch(app: Path, run_dir: Path, group: str, scenarios: list[str], args) -> 
         time.sleep(0.5)
         if not OTHER_REDLAMP_SEEN and owner_app_running():
             OTHER_REDLAMP_SEEN = True
-        events = read_events(events_path)[already:]
+        events = read_events(events_path, start)[already:]
         for event in events:
             # Any event is progress; a walk gets its own length on top.
             deadline = max(deadline, time.time() + args.timeout)
@@ -486,15 +495,16 @@ def launch(app: Path, run_dir: Path, group: str, scenarios: list[str], args) -> 
     # ReportCrash takes a few seconds to write its report.
     time.sleep(1.5 if process.returncode == 0 else 6)
     return {"returncode": process.returncode, "timedOut": timed_out, "crashes": crash_reports(started),
-            "seconds": time.time() - started}
+            "seconds": time.time() - started, "events": start}
 
 
-def outcomes(run_dir: Path, group: str) -> tuple[dict[str, dict], list[dict], str | None]:
-    """Each scenario's last result in this group, the hangs, and a scenario left unfinished."""
+def outcomes(run_dir: Path, group: str, start: int = 0) -> tuple[dict[str, dict], list[dict], str | None]:
+    """Each scenario's last result in the launch of `group` whose events begin at byte `start`, its hangs, and a
+    scenario it left unfinished."""
     results: dict[str, dict] = {}
     hangs = []
     open_scenario = None
-    for event in read_events(run_dir / f"events-{group}.jsonl"):
+    for event in read_events(run_dir / f"events-{group}.jsonl", start):
         kind = event.get("event")
         if kind == "scenario-start":
             open_scenario = event.get("scenario")
@@ -506,6 +516,64 @@ def outcomes(run_dir: Path, group: str) -> tuple[dict[str, dict], list[dict], st
             if not any(frame in entry for entry in event.get("stack", []) for frame in frames):
                 hangs.append(event)
     return results, hangs, open_scenario
+
+
+class Launches:
+    """A run's launches and what they found: each scenario's latest result and its count of attempts, the crash
+    reports, and the main-thread stalls, each launch's once, marked with the attempt they belong to. A scenario
+    run again is judged on its new attempt, so the stalls of the attempt before move to `retried_hangs`, which
+    the report lists and the verdict doesn't count."""
+
+    def __init__(self, run_dir: Path, start: Callable[[str, list[str]], dict], timeout: float):
+        self.run_dir = run_dir
+        self.start = start
+        self.timeout = timeout
+        self.results: dict[str, dict] = {}
+        self.attempts: dict[str, int] = {}
+        self.hangs: list[dict] = []
+        self.retried_hangs: list[dict] = []
+        self.crashes: list[str] = []
+
+    def run_group(self, group: str, ids: list[str], attempt: int = 1) -> bool:
+        """Runs `ids` in launches of `group`, as attempt `attempt` of each; returns whether each got a result."""
+        remaining = ids
+        tries = 0
+        while remaining and tries < 4:
+            tries += 1
+            log(f"Launch '{group}': {len(remaining)} scenario(s)")
+            outcome = self.start(group, remaining)
+            group_results, group_hangs, unfinished = outcomes(self.run_dir, group, outcome["events"])
+            for path in outcome["crashes"]:
+                target = self.run_dir / "crashes" / path.name
+                target.parent.mkdir(exist_ok=True)
+                shutil.copy(path, target)
+                self.crashes.append(str(target))
+            stopped = unfinished or outcome["timedOut"]
+            if stopped and stopped in ids:
+                if outcome["timedOut"]:
+                    why = f"made no progress for {self.timeout:.0f} s and was stopped"
+                elif outcome["crashes"] or (outcome["returncode"] or 0) not in (0,):
+                    why = f"crashed (exit {outcome['returncode']})"
+                else:
+                    why = "quit"
+                group_results[stopped] = {"status": "failed", "message": f"The app {why} during this scenario"}
+            judged = {i for i in remaining if i in group_results}
+            self.retried_hangs += [h for h in self.hangs if h.get("scenario") in judged]
+            self.hangs = [h for h in self.hangs if h.get("scenario") not in judged] + \
+                [dict(h, attempt=attempt) for h in group_hangs]
+            for scenario_id in remaining:
+                if scenario_id in group_results:
+                    self.attempts[scenario_id] = self.attempts.get(scenario_id, 0) + 1
+                    previous = self.results.get(scenario_id)
+                    result = group_results[scenario_id]
+                    if previous and previous["status"] == "failed" and result["status"] == "passed":
+                        result = dict(result, status="flaky", message=f"passed on retry; first: {previous.get('message', '')}")
+                    self.results[scenario_id] = result
+            # Scenarios a launch didn't reach (it stopped, or a dialog wouldn't close) run in a fresh one.
+            remaining = [i for i in remaining if i not in group_results]
+            if outcome["returncode"] not in (0, None) and not stopped and not outcome["timedOut"]:
+                log(f"{group}: the app exited with {outcome['returncode']}")
+        return not remaining
 
 
 def later_launches(main: list[str], relaunch: list[str], retry: list[str]) -> list[tuple[str, list[str], bool]]:
@@ -582,6 +650,13 @@ def coverage(run_dir: Path, catalogue: dict, ran: set[str]) -> dict:
     }
 
 
+def stall_line(hang: dict, attempt: bool = False) -> str:
+    """A stall in the report: its scenario, with its attempt when asked or after the first, its length and stack."""
+    stack = " ← ".join(hang.get("stack", [])[:8])
+    which = f" (attempt {hang.get('attempt', 1)})" if attempt or hang.get("attempt", 1) > 1 else ""
+    return f"- {hang.get('scenario', '?')}{which}: {hang.get('seconds', 0):.1f} s at {stack}"
+
+
 def write_report(run_dir: Path, report: dict) -> None:
     (run_dir / "report.json").write_text(json.dumps(report, indent=2, default=str))
     lines = [
@@ -603,11 +678,12 @@ def write_report(run_dir: Path, report: dict) -> None:
         lines.append(f"| `{item['id']}` | {item['status']} | {item.get('seconds', 0):.1f} s | {p99} | {note} |")
     if report["crashes"]:
         lines += ["", "## Crashes", ""] + [f"- `{path}`" for path in report["crashes"]]
-    if report["hangs"]:
-        lines += ["", "## Main-thread stalls", ""]
-        for hang in report["hangs"]:
-            stack = " ← ".join(hang.get("stack", [])[:8])
-            lines.append(f"- {hang.get('scenario', '?')}: {hang.get('seconds', 0):.1f} s at {stack}")
+    retried = report.get("retriedHangs", [])
+    if report["hangs"] or retried:
+        lines += ["", "## Main-thread stalls", ""] + [stall_line(hang) for hang in report["hangs"]]
+        if retried:
+            lines += ["", "In attempts a retry replaced, so they don't count against the run:", ""]
+            lines += [stall_line(hang, attempt=True) for hang in retried]
     cover = report.get("coverage")
     if cover:
         lines += ["", "## Coverage", "",
@@ -861,62 +937,21 @@ def main() -> int:
         sys.exit("no scenarios chosen")
     log(f"{len(chosen)} scenarios, {len(photos)} photos, seed {args.seed}, run directory {run_dir}")
 
-    results: dict[str, dict] = {}
-    attempts: dict[str, int] = {}
-    hangs: list[dict] = []
-    crashes: list[str] = []
-
-    def run_group(group: str, ids: list[str]) -> bool:
-        """Runs `ids` in launches of `group`; returns whether each got a result."""
-        nonlocal hangs
-        remaining = ids
-        tries = 0
-        while remaining and tries < 4:
-            tries += 1
-            log(f"Launch '{group}': {len(remaining)} scenario(s)")
-            outcome = launch(app, run_dir, group, remaining, args)
-            group_results, group_hangs, unfinished = outcomes(run_dir, group)
-            hangs = [h for h in hangs if h.get("scenario") not in remaining] + group_hangs
-            for path in outcome["crashes"]:
-                target = run_dir / "crashes" / path.name
-                target.parent.mkdir(exist_ok=True)
-                shutil.copy(path, target)
-                crashes.append(str(target))
-            stopped = unfinished or outcome["timedOut"]
-            if stopped and stopped in ids:
-                if outcome["timedOut"]:
-                    why = f"made no progress for {args.timeout:.0f} s and was stopped"
-                elif outcome["crashes"] or (outcome["returncode"] or 0) not in (0,):
-                    why = f"crashed (exit {outcome['returncode']})"
-                else:
-                    why = "quit"
-                group_results[stopped] = {"status": "failed", "message": f"The app {why} during this scenario"}
-            for scenario_id in remaining:
-                if scenario_id in group_results:
-                    attempts[scenario_id] = attempts.get(scenario_id, 0) + 1
-                    previous = results.get(scenario_id)
-                    result = group_results[scenario_id]
-                    if previous and previous["status"] == "failed" and result["status"] == "passed":
-                        result = dict(result, status="flaky", message=f"passed on retry; first: {previous.get('message', '')}")
-                    results[scenario_id] = result
-            # Scenarios a launch didn't reach (it stopped, or a dialog wouldn't close) run in a fresh one.
-            remaining = [i for i in remaining if i not in group_results]
-            if outcome["returncode"] not in (0, None) and not stopped and not outcome["timedOut"]:
-                log(f"{group}: the app exited with {outcome['returncode']}")
-        return not remaining
-
+    launches = Launches(run_dir, lambda group, ids: launch(app, run_dir, group, ids, args), args.timeout)
     main_ids = [s["id"] for s in chosen if s["group"] == "main"]
     relaunch_ids = [s["id"] for s in chosen if s["group"] == "relaunch"]
     retry = []
-    if run_group("main", main_ids):
+    if launches.run_group("main", main_ids):
         # One retry, in a fresh app, for what failed (not the relaunch group, whose state is spent).
-        retry = [i for i in main_ids if results.get(i, {}).get("status") == "failed" and attempts.get(i, 0) < 2]
+        retry = [i for i in main_ids
+                 if launches.results.get(i, {}).get("status") == "failed" and launches.attempts.get(i, 0) < 2]
     earlier: list[str] = []
     for group, ids, afresh in later_launches(main_ids, relaunch_ids, retry):
         if afresh:
             log("Starting the retry as the first attempt started: the photos, the home and the defaults afresh")
             earlier += start_afresh(run_dir, relay.server_address[1], attempt=2)
-        run_group(group, ids)
+        launches.run_group(group, ids, attempt=2 if afresh else 1)
+    results, attempts, hangs, crashes = launches.results, launches.attempts, launches.hangs, launches.crashes
 
     performance = None
     if performance_ids:
@@ -1000,7 +1035,7 @@ def main() -> int:
         "noisy": max(load_before, load_after) > QUIET_LOAD, "app": str(built), "seed": args.seed,
         "verdict": "Failed: " + ", ".join(problems) if problems else "Passed",
         "summary": summary, "scenarios": scenarios, "crashes": crashes, "hangs": hangs,
-        "coverage": cover, "coverageRequired": coverage_required,
+        "retriedHangs": launches.retried_hangs, "coverage": cover, "coverageRequired": coverage_required,
         "ownerState": {"changed": changed, "ownerAppRunning": owner_running, "summary": state_summary},
         "relay": relay.count, "performance": performance, "storage": storage,
     }
