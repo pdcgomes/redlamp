@@ -94,6 +94,7 @@ public final class BenchHTTPServer: @unchecked Sendable {
     static let headerLimit = 64 << 10
 
     private let queue = DispatchQueue(label: "app.redlamp.bench.http")
+    private let queueKey = DispatchSpecificKey<Void>()
     private let handler: Handler
     private let maxBody: Int64
     private let scratch: URL
@@ -103,9 +104,10 @@ public final class BenchHTTPServer: @unchecked Sendable {
         self.handler = handler
         self.maxBody = maxBody
         self.scratch = scratch
+        queue.setSpecific(key: queueKey, value: ())
     }
 
-    /// Starts listening on `port`, or any free port when nil or taken by another app.
+    /// Starts listening on `port`, or on any free port when it's nil or another app has it.
     public func start(
         port: UInt16?,
         service: (name: String, type: String)?,
@@ -114,28 +116,45 @@ public final class BenchHTTPServer: @unchecked Sendable {
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true
-        let listener: NWListener = if let port, let endpointPort = NWEndpoint.Port(rawValue: port),
-                                      let fixed = try? NWListener(using: parameters, on: endpointPort) {
-            fixed
-        } else {
-            try NWListener(using: parameters)
-        }
+        let fixed = port.flatMap { NWEndpoint.Port(rawValue: $0) }
+        let listener = try fixed.map { try NWListener(using: parameters, on: $0) } ?? NWListener(using: parameters)
         if let service {
             listener.service = NWListener.Service(name: service.name, type: service.type)
         }
-        listener.stateUpdateHandler = { [weak listener] state in
+        listener.stateUpdateHandler = { [weak self, weak listener] state in
             switch state {
-            case .ready: onState(.ready(port: listener?.port?.rawValue ?? 0))
-            case let .failed(error): onState(.failed(error.localizedDescription))
-            case .cancelled: onState(.stopped)
-            default: onState(.starting)
+            case .ready:
+                onState(.ready(port: listener?.port?.rawValue ?? 0))
+            case let .failed(error):
+                // A taken port fails only once the listener starts: try again on any port.
+                if fixed != nil, let self {
+                    listener?.cancel()
+                    do {
+                        try start(port: nil, service: service, onState: onState)
+                    } catch {
+                        onState(.failed(error.localizedDescription))
+                    }
+                } else {
+                    onState(.failed(error.localizedDescription))
+                }
+            case .cancelled:
+                if fixed == nil || self?.listener === listener {
+                    onState(.stopped)
+                }
+            default:
+                onState(.starting)
             }
         }
         listener.newConnectionHandler = { [weak self] connection in
             guard let self else { return connection.cancel() }
             HTTPConnection(connection: connection, server: self).start()
         }
-        queue.sync { self.listener = listener }
+        // A retry after a taken port runs on the server's queue already.
+        if DispatchQueue.getSpecific(key: queueKey) == nil {
+            queue.sync { self.listener = listener }
+        } else {
+            self.listener = listener
+        }
         listener.start(queue: queue)
     }
 

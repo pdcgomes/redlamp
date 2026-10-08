@@ -312,11 +312,11 @@ public struct BenchFolder: Sendable {
         }
     }
 
-    /// "12 results, all paired", or for a look reference "Prequel · Cine Film 2: 11 of 11 kit images".
+    /// "12 results, all paired", or for a look reference "11 of 11 kit images".
     public var summary: String {
-        if let look = manifest.look {
+        if manifest.look != nil {
             let required = manifest.requiredAssets.count
-            return "\(look.title): \(required - missing.count) of \(required) kit images"
+            return "\(required - missing.count) of \(required) kit images"
         }
         let count = results.results.count, unpaired = results.unpaired.count
         let counted = "\(count) result\(count == 1 ? "" : "s")"

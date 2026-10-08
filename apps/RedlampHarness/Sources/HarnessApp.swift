@@ -37,6 +37,23 @@ final class HarnessAppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func applicationDidFinishLaunching(_: Notification) {
         LabBench.shared.startIfEnabled()
+        HarnessLab.connectBench()
+        if let path = HarnessLaunch.value(after: "--snapshot") {
+            let delay = HarnessLaunch.value(after: "--snapshot-delay").flatMap(Double.init) ?? 8
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { Self.snapshot(to: URL(fileURLWithPath: path)) }
+        }
+    }
+
+    /// `--snapshot <path>`: the window as its views draw it, without Screen Recording, then quit.
+    /// Views backed by Metal layers draw blank, so it suits SwiftUI scenes like the Lab's tabs.
+    @MainActor
+    private static func snapshot(to url: URL) {
+        if let view = NSApp.windows.first(where: \.isVisible)?.contentView,
+           let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        }
+        NSApp.terminate(nil)
     }
 
     @MainActor

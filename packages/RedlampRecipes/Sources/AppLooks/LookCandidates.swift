@@ -298,6 +298,25 @@ public enum LookCandidates {
         return samples
     }
 
+    /// A table's outputs on a 9³ grid of the colour cube, to compare captures cheaply.
+    public static func fingerprint(_ table: LookTable) -> [Float] {
+        let n = 9
+        return (0 ..< n * n * n).flatMap { i -> [Float] in
+            let output = table.sample(SIMD3(Float(i % n), Float(i / n % n), Float(i / (n * n))) / Float(n - 1))
+            return [output.x, output.y, output.z]
+        }
+    }
+
+    /// Mean ΔE between two fingerprints; nil when they don't match in size.
+    public static func distance(_ a: [Float], _ b: [Float]) -> Double? {
+        guard a.count == b.count, !a.isEmpty else { return nil }
+        var total: Float = 0
+        for i in stride(from: 0, to: a.count, by: 3) {
+            total += AppLookImport.deltaE(SIMD3(a[i], a[i + 1], a[i + 2]), SIMD3(b[i], b[i + 1], b[i + 2]))
+        }
+        return Double(total / Float(a.count / 3))
+    }
+
     /// Mean ΔE between two tables over a 9³ grid of the colour cube.
     public static func departure(_ a: LookTable, _ b: LookTable) -> Double {
         var total: Float = 0

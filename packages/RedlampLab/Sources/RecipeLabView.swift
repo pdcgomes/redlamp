@@ -19,6 +19,7 @@ public struct RecipeLabView: View {
         case inspect = "Inspect"
         case create = "Create"
         case runs = "Runs"
+        case looks = "Looks"
         case bench = "Bench"
 
         public var id: String {
@@ -69,6 +70,7 @@ public struct RecipeLabView: View {
                 case .inspect: LabInspectorView(model: model)
                 case .create: LabCreatorView(model: model)
                 case .runs: RecipeRunsView(model: model)
+                case .looks: LabLooksView(looks: model.looks)
                 case .bench: LabBenchView(bench: .shared)
                 }
             }

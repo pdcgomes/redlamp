@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import RedlampBench
+import SystemConfiguration
 
 /// The Recipe Lab's bench hub (ARC-13): one per process, remembered on or off. It serves the
 /// outbox and the capture kit to the iPhone app, and files what comes back in Done. The harness
@@ -46,10 +47,12 @@ public final class LabBench {
         "Redlamp Lab on \(Host.current().localizedName ?? "this Mac")"
     }
 
-    /// The address a browser can use.
+    /// The address a browser can use: the Mac's Bonjour name, which needs no DNS lookup
+    /// (`ProcessInfo.hostName` can block the main thread on one).
     public var address: String? {
         guard case let .ready(port) = state else { return nil }
-        return "http://\(ProcessInfo.processInfo.hostName):\(port)/"
+        let host = (SCDynamicStoreCopyLocalHostName(nil) as String?).map { "\($0).local" } ?? "localhost"
+        return "http://\(host):\(port)/"
     }
 
     // MARK: - Running
@@ -118,7 +121,8 @@ public final class LabBench {
         case let .state(state):
             self.state = state
         case let .arrival(arrival):
-            note(arrival.summary + (arrival.folder.isComplete ? "" : ", not complete yet"))
+            let title = arrival.folder.manifest.look?.title ?? arrival.folder.manifest.title
+            note("\(title): \(arrival.summary)" + (arrival.folder.isComplete ? "" : ", not complete yet"))
             refresh()
             onArrival?(arrival)
         case let .refused(reason):
@@ -152,7 +156,8 @@ public final class LabBench {
         do {
             let isFolder = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
             let arrival = try isFolder ? store.file(url) : store.receive(url)
-            note("\(arrival.summary) (from \(url.lastPathComponent))")
+            let title = arrival.folder.manifest.look?.title ?? arrival.folder.manifest.title
+            note("\(title): \(arrival.summary) (from \(url.lastPathComponent))")
             refresh()
             onArrival?(arrival)
             return arrival

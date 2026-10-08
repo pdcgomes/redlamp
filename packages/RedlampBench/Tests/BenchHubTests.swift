@@ -102,6 +102,30 @@ struct BenchHubTests {
         #expect(library.folder(task.id) == nil)
     }
 
+    @Test func `A second hub on a taken port listens on another`() async throws {
+        let scratch = Scratch()
+        func started(_ name: String) async throws -> (BenchHub, UInt16) {
+            let ready = AsyncStream<UInt16>.makeStream()
+            let hub = BenchHub(store: BenchStore(root: scratch.file(name)), name: name) { event in
+                if case let .state(.ready(port)) = event {
+                    ready.continuation.yield(port)
+                }
+            }
+            try await hub.start(port: 18765, advertise: false)
+            for await port in ready.stream {
+                return (hub, port)
+            }
+            return (hub, 0)
+        }
+        let (first, firstPort) = try await started("first")
+        let (second, secondPort) = try await started("second")
+        defer { Task { await first.stop(); await second.stop() } }
+        #expect(firstPort == 18765)
+        #expect(secondPort != 18765 && secondPort != 0)
+        let info = try await BenchClient(base: #require(URL(string: "http://127.0.0.1:\(secondPort)/"))).info()
+        #expect(info.name == "second")
+    }
+
     @Test func `A damaged archive is refused with a reason and nothing reaches Done`() async throws {
         let scratch = Scratch()
         let (hub, client, store) = try await hub(scratch)

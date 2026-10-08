@@ -63,6 +63,8 @@ public final class RecipeLabModel {
     @ObservationIgnored public let editor: EditorModel
     @ObservationIgnored let renderer: RecipeRenderer
     @ObservationIgnored public let root: URL?
+    /// Look references from the bench, fitted into candidates (TON-38).
+    @ObservationIgnored public let looks: LabLooks
 
     public private(set) var images: [LabImage]
     public var selectedImage: LabImage? {
@@ -111,6 +113,7 @@ public final class RecipeLabModel {
         catalog = editor.recipes
         self.root = root
         renderer = RecipeRenderer(engine: engine, library: editor.recipes.library)
+        looks = LabLooks(store: LabBench.shared.store, renderer: renderer, catalog: editor.recipes)
         var all = images ?? Self.defaultImages(root: root)
         if let chart = try? RecipeChart.fileURL() {
             all.append(LabImage(url: chart, name: "Lint chart", categories: ["chart"]))

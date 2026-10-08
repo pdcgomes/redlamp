@@ -3,6 +3,7 @@ import RedlampEngine
 import RedlampLab
 import RedlampUI
 import SwiftUI
+@preconcurrency import UserNotifications
 
 extension HarnessScene {
     static var recipeLab: HarnessScene {
@@ -57,6 +58,23 @@ enum HarnessLab {
         model.preferredRun = HarnessLaunch.value(after: "--lab-run")
         return model
     }()
+
+    /// Look references that reach the hub are fitted as they arrive, and a notification says
+    /// when their candidates are ready to evaluate.
+    static func connectBench() {
+        let looks = model.looks
+        LabBench.shared.onArrival = { looks.arrived($0) }
+        looks.notify = { text in
+            let center = UNUserNotificationCenter.current()
+            center.requestAuthorization(options: [.alert]) { granted, _ in
+                guard granted else { return }
+                let content = UNMutableNotificationContent()
+                content.title = "Ready to evaluate"
+                content.body = text
+                center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+            }
+        }
+    }
 
     static let repositoryRoot = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
