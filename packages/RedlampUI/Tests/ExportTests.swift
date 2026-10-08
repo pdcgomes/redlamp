@@ -92,6 +92,10 @@ struct ExportTests {
             lock.withLock { self.urls += urls }
             return urls.map { $0 == source ? properties : nil }
         }
+
+        func haldImage(of _: URL) -> HaldImage? {
+            nil
+        }
     }
 
     @Test func `an export copies its source's metadata as the engine's reader reads it`() async throws {

@@ -62,6 +62,10 @@ struct FocusStackCommandTests: PaletteTesting {
         func imageProperties(of urls: [URL]) -> [ImageProperties?] {
             urls.map { _ in nil }
         }
+
+        func haldImage(of _: URL) -> HaldImage? {
+            nil
+        }
     }
 
     @Test func `a folder's stacks are found through the engine's reader, its captures in one call`() async throws {

@@ -43,6 +43,23 @@ public struct PixelImage: Sendable {
         self.init(width: width, height: height, pixels: pixels)
     }
 
+    /// 16-bit RGBA words as `init(_:colorSpace:maxLongEdge:)` draws them (little-endian, alpha
+    /// last); nil unless there are `width` × `height` of them.
+    public init?(rgba16: Data, width: Int, height: Int) {
+        let (count, overflow) = width.multipliedReportingOverflow(by: height)
+        guard width > 0, height > 0, !overflow, count <= Int.max / 8, rgba16.count == count * 8 else { return nil }
+        var pixels = [SIMD3<Float>](repeating: .zero, count: count)
+        rgba16.withUnsafeBytes { raw in
+            for i in 0 ..< count {
+                let word = { (channel: Int) in
+                    Float(UInt16(littleEndian: raw.loadUnaligned(fromByteOffset: i * 8 + channel * 2, as: UInt16.self)))
+                }
+                pixels[i] = SIMD3(word(0), word(1), word(2)) / 65535
+            }
+        }
+        self.init(width: width, height: height, pixels: pixels)
+    }
+
     public subscript(x: Int, y: Int) -> SIMD3<Float> {
         get { pixels[y * width + x] }
         set { pixels[y * width + x] = newValue }

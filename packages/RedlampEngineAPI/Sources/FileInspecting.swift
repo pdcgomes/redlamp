@@ -15,6 +15,10 @@ public protocol FileInspecting: Sendable {
     /// Each file's ImageIO properties (its first image's EXIF, TIFF, GPS, IPTC and the rest), for
     /// an export to copy from its source or to tell an earlier export from a photo.
     func imageProperties(of urls: [URL]) -> [ImageProperties?]
+
+    /// A HaldCLUT image's pixels, as a look table import reads them (see `HaldImage`); nil for a
+    /// file that isn't an image.
+    func haldImage(of url: URL) -> HaldImage?
 }
 
 /// A reader that can read no file: for engines that read none, such as previews' and tests'.
@@ -31,6 +35,31 @@ public struct UnreadableFiles: FileInspecting {
 
     public func imageProperties(of urls: [URL]) -> [ImageProperties?] {
         urls.map { _ in nil }
+    }
+
+    public func haldImage(of _: URL) -> HaldImage? {
+        nil
+    }
+}
+
+/// An image's pixels as a HaldCLUT import reads them: drawn into 16-bit RGBA in sRGB, alpha
+/// premultiplied and last, each word little-endian, row after row. An image no HaldCLUT can be
+/// (not square, or a side that isn't a level cubed) has only its size.
+public struct HaldImage: Sendable, Equatable {
+    public let width: Int
+    public let height: Int
+    public let rgba16: Data
+
+    public init(width: Int, height: Int, rgba16: Data) {
+        self.width = width
+        self.height = height
+        self.rgba16 = rgba16
+    }
+
+    /// The level of a HaldCLUT `side` pixels square: a level³ × level³ image holding a
+    /// level²-point table, for levels 2 to 16.
+    public static func level(side: Int) -> Int? {
+        (2 ... 16).first { $0 * $0 * $0 == side }
     }
 }
 

@@ -23,6 +23,10 @@ struct ImageIOFiles: FileInspecting {
                 .flatMap(ImageProperties.init)
         }
     }
+
+    func haldImage(of _: URL) -> HaldImage? {
+        nil
+    }
 }
 
 /// Export takes what it reads from files from its reader, which in the app is the decode service.
@@ -52,6 +56,10 @@ struct ExportReadingTests {
         func imageProperties(of urls: [URL]) -> [ImageProperties?] {
             lock.withLock { self.urls += urls }
             return urls.map { properties[$0] }
+        }
+
+        func haldImage(of _: URL) -> HaldImage? {
+            nil
         }
     }
 

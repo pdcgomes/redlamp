@@ -312,6 +312,10 @@ public extension DecodedImage {
             }
         }
 
+        public func haldImage(of _: URL) -> HaldImage? {
+            nil
+        }
+
         private func inspect<T: Decodable>(
             _ urls: [URL], as _: T.Type,
             _ call: (any DecodeServiceProtocol, [Data], [String], @escaping @Sendable (Data?) -> Void) -> Void,

@@ -117,6 +117,30 @@ struct FocusThumbnail: Codable, Sendable {
     }
 }
 
+extension FileInspection {
+    /// The first image drawn as `HaldImage` describes, or only its size when no HaldCLUT has it.
+    static func haldImage(_ source: CGImageSource) -> HaldImage? {
+        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let (width, height) = (image.width, image.height)
+        guard width == height, HaldImage.level(side: width) != nil else {
+            return HaldImage(width: width, height: height, rgba16: Data())
+        }
+        let count = width * height * 8
+        guard let buffer = calloc(count, 1) else { return nil }
+        let rgba16 = Data(bytesNoCopy: buffer, count: count, deallocator: .free)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                  data: buffer, width: width, height: height, bitsPerComponent: 16, bytesPerRow: width * 8,
+                  space: space,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGImageByteOrderInfo.order16Little.rawValue,
+              )
+        else { return nil }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return HaldImage(width: width, height: height, rgba16: rgba16)
+    }
+}
+
 extension InProcessDecoder: FileInspecting {
     public func captures(of urls: [URL], concurrently: Bool) -> [CaptureSettings?] {
         FileInspection
@@ -131,5 +155,9 @@ extension InProcessDecoder: FileInspecting {
 
     public func imageProperties(of urls: [URL]) -> [ImageProperties?] {
         urls.map { FileInspection.source($0).flatMap(FileInspection.imageProperties) }
+    }
+
+    public func haldImage(of url: URL) -> HaldImage? {
+        FileInspection.source(url).flatMap(FileInspection.haldImage)
     }
 }

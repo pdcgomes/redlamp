@@ -116,6 +116,10 @@ struct StackDetectorTests {
         func imageProperties(of urls: [URL]) -> [ImageProperties?] {
             urls.map { _ in nil }
         }
+
+        func haldImage(of _: URL) -> HaldImage? {
+            nil
+        }
     }
 
     @Test(arguments: [false, true])

@@ -4,6 +4,7 @@ import RedlampEngineAPI
 import RedlampRecipes
 import simd
 import Testing
+@testable import RedlampServices
 
 /// Look tables written in the tests, in the formats Redlamp imports.
 enum LookTableFixtures {
@@ -250,5 +251,103 @@ struct ThreeDLImportTests {
         let (decoded, issues) = try RecipeValidator.decode(RecipeFile.encode(recipe))
         #expect(issues.isEmpty)
         #expect(try decoded.embeddedBaseLooks.first?.definition().table == table)
+    }
+}
+
+/// A HaldCLUT is decoded in the decode service, from the bytes it is sent, and imports as the
+/// app's own decode of the file imported it.
+struct HaldServiceImportTests {
+    /// A listener in this process that answers as the service does, through a real connection.
+    final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
+        let listener = NSXPCListener.anonymous()
+        let exported = DecodeService()
+
+        override init() {
+            super.init()
+            listener.delegate = self
+            listener.resume()
+        }
+
+        func listener(_: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
+            connection.exportedInterface = NSXPCInterface(with: DecodeServiceProtocol.self)
+            connection.exportedObject = exported
+            connection.resume()
+            return true
+        }
+    }
+
+    /// A graded HaldCLUT of `level` written as a `bits`-bit PNG: each channel takes another's
+    /// value, one inverted, so a swapped channel or axis shows.
+    static func hald(level: Int, bits: Int, in folder: URL) throws -> URL {
+        let cube = level * level
+        let side = cube * level
+        let scale = 65535 / Double(cube - 1)
+        var words = [UInt16](repeating: 65535, count: side * side * 4)
+        for i in 0 ..< side * side {
+            let r = i % cube, g = (i / cube) % cube, b = i / (cube * cube)
+            words[i * 4] = UInt16((Double(g) * scale).rounded())
+            words[i * 4 + 1] = UInt16((Double(cube - 1 - b) * scale).rounded())
+            words[i * 4 + 2] = UInt16((Double(r + g) / 2 * scale).rounded())
+        }
+        let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        let image: CGImage
+        if bits == 16 {
+            let data = words.withUnsafeBufferPointer { Data(buffer: $0) }
+            let provider = try #require(CGDataProvider(data: data as CFData))
+            image = try #require(CGImage(
+                width: side, height: side, bitsPerComponent: 16, bitsPerPixel: 64, bytesPerRow: side * 8,
+                space: space,
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue
+                    | CGImageByteOrderInfo.order16Little.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false,
+                intent: .defaultIntent,
+            ))
+        } else {
+            let bytes = Data(words.map { UInt8($0 >> 8) })
+            let provider = try #require(CGDataProvider(data: bytes as CFData))
+            image = try #require(CGImage(
+                width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: side * 4,
+                space: space, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false,
+                intent: .defaultIntent,
+            ))
+        }
+        let url = folder.appending(path: "hald-\(level)-\(bits)-bit.png")
+        try LookTableImport.writePNG(image, to: url)
+        return url
+    }
+
+    /// The same table, value for value, or the same error.
+    static func same(_ a: Result<LookTable, any Error>, _ b: Result<LookTable, any Error>) -> Bool {
+        switch (a, b) {
+        case let (.success(a), .success(b)): a == b
+        case let (.failure(a), .failure(b)): "\(a)" == "\(b)"
+        default: false
+        }
+    }
+
+    @Test(arguments: [8, 12, 16], [8, 16])
+    func `a HaldCLUT decoded in the service imports as the app's own decode did`(level: Int, bits: Int) throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = try Self.hald(level: level, bits: bits, in: folder)
+
+        let local = Result { try LookTableImport.parseHald(LookTableImport.readImage(url)) }
+        if level == 8 {
+            #expect(try local.get().size == 33)
+        } else {
+            // A level-12 or level-16 table has 144 or 256 points, past the most a look table holds.
+            #expect(throws: LookTableImportError.unsupportedSize(level * level)) { try local.get() }
+        }
+        let inProcess = Result { try LookTableImport.parseHald(#require(InProcessDecoder().haldImage(of: url))) }
+        #expect(Self.same(inProcess, local), "read in this process")
+
+        let listener = Listener()
+        let service = DecodeServiceClient(endpoint: listener.listener.endpoint)
+        withKnownIssue("The service decodes no HaldCLUT until it is asked to") {
+            let decoded = Result { try LookTableImport.parseHald(#require(service.haldImage(of: url))) }
+            #expect(Self.same(decoded, local), "decoded in the service")
+        }
     }
 }

@@ -308,17 +308,32 @@ public enum LookTableImport {
 
     /// Reads a graded HaldCLUT back as a look table.
     public static func parseHald(_ image: CGImage, space: ImportedTableSpace = .sRGB) throws -> LookTable {
-        guard image.width == image.height else { throw LookTableImportError.notAHaldImage(
-            width: image.width,
-            height: image.height,
-        ) }
-        let side = image.width
-        guard let level = (2 ... 16).first(where: { $0 * $0 * $0 == side }) else {
-            throw LookTableImportError.notAHaldImage(width: image.width, height: image.height)
-        }
+        let level = try haldLevel(width: image.width, height: image.height)
         guard let pixels = PixelImage(image, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)) else {
             throw LookTableImportError.unreadableImage
         }
+        return try parseHald(pixels, level: level, space: space)
+    }
+
+    /// Reads a graded HaldCLUT's pixels, as a reader decoded them (`FileInspecting.haldImage`),
+    /// back as a look table.
+    public static func parseHald(_ image: HaldImage, space: ImportedTableSpace = .sRGB) throws -> LookTable {
+        let level = try haldLevel(width: image.width, height: image.height)
+        guard let pixels = PixelImage(rgba16: image.rgba16, width: image.width, height: image.height) else {
+            throw LookTableImportError.unreadableImage
+        }
+        return try parseHald(pixels, level: level, space: space)
+    }
+
+    private static func haldLevel(width: Int, height: Int) throws -> Int {
+        guard width == height, let level = HaldImage.level(side: width) else {
+            throw LookTableImportError.notAHaldImage(width: width, height: height)
+        }
+        return level
+    }
+
+    private static func parseHald(_ pixels: PixelImage, level: Int, space: ImportedTableSpace) throws -> LookTable {
+        let side = pixels.width
         let cube = level * level
         var floats = [Float]()
         floats.reserveCapacity(cube * cube * cube * 3)

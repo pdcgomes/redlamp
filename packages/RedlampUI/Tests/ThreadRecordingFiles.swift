@@ -35,6 +35,11 @@ final class ThreadRecordingFiles: FileInspecting, @unchecked Sendable {
         return urls.map { _ in nil }
     }
 
+    func haldImage(of url: URL) -> HaldImage? {
+        record([url])
+        return nil
+    }
+
     private func record(_ urls: [URL]) {
         let onMain = Thread.isMainThread
         lock.withLock { calls += urls.map { ($0, onMain) } }
