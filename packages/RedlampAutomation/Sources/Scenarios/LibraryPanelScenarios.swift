@@ -18,7 +18,7 @@
                 + "View menu and the palette",
             claims: [
                 .action(.showAllPhotographs), .action(.showPreviousImport), .action(.showMarked),
-                .action(.showRejected),
+                .action(.showRejected), .feature("library.library-panel"),
             ],
         ) { app in
             let scratch = try SourcesScratch(app, photos: ["A.jpg", "B.jpg", "C.jpg"], empty: ["Empty.jpg"])
@@ -119,6 +119,7 @@
             try app.wait("Previous Import's row", timeout: 30) { _ in
                 app.sourceRowLabel("sources.previous-import") == "Previous Import, 1 photo, shown"
             }
+            app.covered(.feature("library.library-panel"), via: .mouse)
 
             // As the run had it.
             let photos = app.photos

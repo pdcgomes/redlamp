@@ -16,7 +16,7 @@
                 + "palette and taken out with ⌫, renamed, moved and deleted, with Undo",
             claims: [
                 .action(.newCollection), .action(.newCollectionSet), .action(.addToCollection),
-                .action(.removeFromCollection),
+                .action(.removeFromCollection), .feature("library.collections"),
             ],
         ) { app in
             let scratch = try SourcesScratch(app, photos: ["A.jpg", "B.jpg", "C.jpg"])
@@ -112,13 +112,14 @@
                 app.sourceRowLabel("collections.\(selects)") == "Selects, 2 photos"
                     && app.sourceRowLabel("collections.\(clients)/\(best)") == "\(best), 2 photos"
             }
+            app.covered(.feature("library.collections"), via: .mouse)
         }
 
         static let targetCollection = Scenario(
             "library.target-collection",
             "A collection made the target as it's made and from Marked's menu, marked + in the list, and Add to Target "
                 + "Collection from the Photo menu and the palette",
-            claims: [.action(.addToTargetCollection)],
+            claims: [.action(.addToTargetCollection), .feature("library.collections")],
         ) { app in
             let scratch = try SourcesScratch(app, photos: ["A.jpg", "B.jpg"])
             defer {
@@ -163,6 +164,7 @@
             try app.wait("A marked", timeout: 30) { model in
                 model.library.item(for: a)?.metadata.mark == true
             }
+            app.covered(.feature("library.collections"), via: .menu)
         }
     }
 
@@ -171,7 +173,7 @@
             "library.smart-collection-editor",
             "The smart collection editor from the File menu and a smart collection's menu: rules added and given a "
                 + "field, a comparison and a value, its text written from them, and rules made again from the text",
-            claims: [.action(.newSmartCollection)],
+            claims: [.action(.newSmartCollection), .feature("library.collections")],
         ) { app in
             let scratch = try SourcesScratch(app, photos: ["A.jpg", "B.jpg", "C.jpg"])
             defer {
@@ -221,6 +223,7 @@
             try app.wait("its photo shown", timeout: 20) { model in
                 !model.librarySources.isListing && model.items.map(\.url) == [a]
             }
+            app.covered(.feature("library.collections"), via: .mouse)
         }
     }
 

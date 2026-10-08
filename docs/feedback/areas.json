@@ -390,12 +390,20 @@
           "title" : "Filter Bar and Sorting"
         },
         {
+          "id" : "library.library-panel",
+          "title" : "Library Panel and Library Health"
+        },
+        {
           "id" : "library.folders",
           "title" : "Folders Panel"
         },
         {
           "id" : "library.subfolders",
           "title" : "Show Photos in Subfolders"
+        },
+        {
+          "id" : "library.collections",
+          "title" : "Collections and Smart Collections"
         },
         {
           "id" : "library.filmstrip",

@@ -261,11 +261,27 @@ public extension FeedbackArea {
                     ["filter", "search", "find", "sort", "metadata", "attribute", "preset", "lock", "offline"],
                 ),
                 FeedbackFeature(
+                    "library-panel",
+                    "Library Panel and Library Health",
+                    [
+                        "all photographs", "previous import", "marked", "rejected", "quick collection",
+                        "library health", "duplicates", "damaged", "wrong extension", "unreadable", "summary",
+                    ],
+                ),
+                FeedbackFeature(
                     "folders",
                     "Folders Panel",
                     ["add folder", "remove folder", "locate", "missing folder"],
                 ),
                 FeedbackFeature("subfolders", "Show Photos in Subfolders", ["subfolders", "nested"]),
+                FeedbackFeature(
+                    "collections",
+                    "Collections and Smart Collections",
+                    [
+                        "collection", "collections", "collection set", "smart collection", "target collection",
+                        "album", "rules", "add to collection",
+                    ],
+                ),
                 FeedbackFeature(
                     "filmstrip",
                     "Filmstrip and Selecting Photos",
