@@ -33,6 +33,17 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
 >
 > This README is the project's primary status page and is kept up to date as work lands. *Last updated: 4 October 2026.*
 
+<!-- performance-card:begin -->
+<p align="center">
+  <a href="https://redlamp.app/performance">
+    <picture>
+      <source media="(prefers-color-scheme: light)" srcset="docs/images/performance-card-light.svg">
+      <img src="docs/images/performance-card.svg" width="880" alt="Redlamp's measured performance on an Apple M1 Ultra with a Release build, 29 Sep – 7 Oct 2026: 1.8 ms to render a slider change; 160 ms to open a 24 MP raw; 317 MB peak, browsing 50,000 photos (measured under load); 1.3 GB GPU, 1:1 with noise reduction; 21.7 MB to download; 54.2 MB installed.">
+    </picture>
+  </a>
+</p>
+<!-- performance-card:end -->
+
 ---
 
 ## Contents
@@ -188,7 +199,9 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 ### Measured performance
 
-Measured on an Apple M1 Ultra with a Release build. Every figure since 29 September, the benchmark harness's runs, and what's got faster or slower are at [redlamp.app/performance](https://redlamp.app/performance), from [`docs/performance/history.jsonl`](docs/performance/history.jsonl); `scripts/perf-record.sh` records a run.
+Measured on an Apple M1 Ultra with a Release build. Every figure since 29 September, the benchmark harness's runs, and what's got faster or slower are at [redlamp.app/performance](https://redlamp.app/performance), from [`docs/performance/history.jsonl`](docs/performance/history.jsonl); `scripts/perf-record.sh` records a run. The card at the top of this README is drawn from the same history by `scripts/perf-card.py`, each figure from its latest quiet record, and CI fails when the card falls behind the history.
+
+Each release's download and installed size is recorded from its zip on GitHub (`scripts/perf-history.py release`). 0.2.6 is a 21.7 MB download and 54.2 MB installed; the AI models download only when a feature first needs them. 0.2.5 added Generative Remove and its MLX frameworks and grew to 115.6 MB installed; 0.2.6 ships stripped of debugging symbols, with LibRaw built hidden so unused code is dropped and the decode service sharing the app's frameworks (AUD-11), and is smaller than 0.2.4 was. The release check fails a bundle with an Intel slice, debugging symbols or more than its size budget (`scripts/check-release-bundle.sh`).
 
 | Operation | Time |
 | --- | --- |
@@ -1054,7 +1067,8 @@ mise run render -- render ~/Pictures/DSC01234.ARW -o out.jpg --size 2048 \
 | `mise run release` | Build `origin/main` in a clean worktree, with the patch version bumped if it's been released, then sign, notarize and publish it as a GitHub release with its update feed (see [Releasing](#releasing)). `DRY_RUN=1` pushes nothing and stops after signing, and with it `REF=<commit>` builds another commit |
 | `mise run notarize -- <path>` | Notarize a signed `.app`, `.dmg` or `.zip`, then staple and check it with Gatekeeper |
 | `scripts/test-update.sh [--auto]` | Update an old copy of a dry run to the dry run itself through Sparkle, from a feed on 127.0.0.1 (see [Releasing](#releasing)) |
-| `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness and each frame's time from request to frame, with every panel open by default (`select=3,panel=all`); `REPORT_DIR` names where the run's reports go. `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
+| `scripts/perf-sweep.sh [Debug\|Release] [parameter] [script]` | Drag a slider for 3 s and report main-thread smoothness, each frame's time from request to frame and the app's CPU, with every panel open by default (`select=3,panel=all`); `REPORT_DIR` names where the run's reports go. `IDLE=<seconds>` then leaves the app alone that long with the photo open and reports its CPU, wakeups and memory; `PROFILE=1` adds a main-thread profile; `PANELS=swiftui` measures the SwiftUI panels |
+| `scripts/perf-card.py [--apply\|--check]` | Redraw the performance card at the top of this README (`docs/images/performance-card*.svg`) from `docs/performance/history.jsonl`; `scripts/perf-history.py` runs it whenever it adds a record |
 | `scripts/make-folder-fixture.sh <folder> [folders] [per-folder]` | Build a tree of photos (500 folders of 100 by default) from APFS clones of one sample raw, using no disk space. Put it in a folder ending in `.noindex` so Spotlight leaves it alone |
 | `--folders-perf <folder> [--folders-perf-warm N] [--folders-perf-quit]` (development builds) | Open a tree of photos in an editor of its own and measure listing, thumbnails, warming, the disk cache, the main thread while the filmstrip scrolls, the cores and memory; writes `/tmp/redlamp-perf.txt`, or `perf.txt` in the directory given with `--perf-report <directory>` |
 | `scripts/harness-capture.sh <scene> <png> [mode]` | Screenshot a harness scene; with `side` mode, `swift scripts/parity-diff.swift <png>` scores it and `scripts/parity-rows.swift` compares it row by row |

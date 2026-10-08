@@ -43,6 +43,9 @@ jobs:
       - name: Camera list in step with the decode tests and LibRaw
         run: scripts/camera-list.py --check
 
+      - name: Performance card in step with the history
+        run: scripts/perf-card.py --check
+
       - name: Cache vendored LibRaw
         uses: actions/cache@v4
         with:

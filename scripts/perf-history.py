@@ -3,13 +3,18 @@
 
 One record per line, oldest first. A record has the date, the commit, the machine, the load average
 before and after, whether that load made it noisy, where the numbers came from (`harness`, from
-scripts/perf-record.sh; `readme`, from the README's tables through scripts/perf-backfill.py) and
-its metrics by ID (docs/performance/metrics.json), each with a value and, where measured, the
-slowest and fastest file and the runs' spread.
+scripts/perf-record.sh; `readme`, from the README's tables through scripts/perf-backfill.py; `e2e`,
+from the regression suite; `release`, a release's sizes, which no machine or load changes) and its
+metrics by ID (docs/performance/metrics.json), each with a value and, where measured, the slowest
+and fastest file and the runs' spread.
 
     scripts/perf-history.py append --bench b.json --sweep s.json --folders f.json --load-before 3.1 --load-after 3.4
     scripts/perf-history.py report     # what changed in the latest run of each metric
     scripts/perf-history.py import record.json --commit abc1234 [--apply]   # a kit's record (perf-kit.sh)
+    scripts/perf-history.py release v0.2.6-prealpha [--zip Redlamp.zip] [--apply]   # a release's sizes
+
+Adding a record redraws the README's performance card (scripts/perf-card.py), so the card changes in
+the commit that records it.
 
 A metric got faster or slower when it moved by more than 10%, or by more than its runs' own spread
 if that's larger, against the previous record from the same source on the same machine. Noisy
@@ -19,9 +24,11 @@ records are kept but never compared. web/lib/performance.ts applies the same rul
 import argparse
 import datetime
 import json
+import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 HISTORY = ROOT / "docs/performance/history.jsonl"
@@ -62,6 +69,13 @@ def change(metric, older, newer):
     return ("slower" if worse else "faster"), ratio
 
 
+def word(metric, verdict):
+    """'less' and 'more' for memory and sizes, as the page says them."""
+    if metric["unit"] in ("MB", "GB"):
+        return {"faster": "less", "slower": "more"}.get(verdict, verdict)
+    return verdict
+
+
 def comparable(record, other):
     return (record["source"] == other["source"] and not other.get("noisy")
             and record["machine"].get("chip") == other["machine"].get("chip"))
@@ -85,7 +99,7 @@ def report(history, metrics):
         found = change(metric, earlier[-1]["metrics"][metric_id], latest["metrics"][metric_id])
         if found:
             verdict, ratio = found
-            lines.append(f"  {verdict.upper():6s} {metric['label']}: {earlier[-1]['metrics'][metric_id]['value']:.4g} → "
+            lines.append(f"  {word(metric, verdict).upper():6s} {metric['label']}: {earlier[-1]['metrics'][metric_id]['value']:.4g} → "
                          f"{latest['metrics'][metric_id]['value']:.4g} {metric['unit']} ({ratio:+.0%}, "
                          f"{earlier[-1]['commit']} → {latest['commit']})")
     return lines
@@ -128,6 +142,69 @@ def append(options, metrics):
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
     print(f"Recorded {len(entries)} metrics at {record['commit']}{' (uncommitted changes)' if dirty else ''}"
           f"{', noisy: load ' + format(max(options.load_before, options.load_after), '.1f') if record['noisy'] else ''}.")
+    redraw_card()
+
+
+def redraw_card():
+    subprocess.run([str(ROOT / "scripts/perf-card.py"), "--apply"], cwd=ROOT, check=False)
+
+
+def installed_bytes(app):
+    """What Finder counts as an app's size: its files' own sizes, symbolic links not followed."""
+    total = 0
+    for folder, _, files in os.walk(app):
+        for name in files:
+            path = pathlib.Path(folder) / name
+            if not path.is_symlink():
+                total += path.stat().st_size
+    return total
+
+
+def release(options, metrics):
+    """A release's download and installed size, from its zip on GitHub (or --zip), in date order."""
+    tag = options.tag if options.tag.startswith("v") else f"v{options.tag}"
+    version = tag[1:]
+    if any(record.get("version") == version for record in records()):
+        sys.exit(f"{version} is already in the history")
+    commit = git("rev-parse", "--short", f"{tag}^{{commit}}")
+    if not commit:
+        sys.exit(f"no tag {tag} here (git fetch --tags)")
+    name = f"Redlamp-{version}.zip"
+    found = subprocess.run(["gh", "release", "view", tag, "--json", "publishedAt"], cwd=ROOT, capture_output=True, text=True)
+    published = json.loads(found.stdout)["publishedAt"] if found.returncode == 0 else None
+    if not published and not options.zip:
+        sys.exit(f"{tag} isn't published on GitHub: give its zip with --zip")
+    with tempfile.TemporaryDirectory() as work:
+        archive = pathlib.Path(options.zip) if options.zip else pathlib.Path(work) / name
+        if not options.zip:
+            subprocess.run(["gh", "release", "download", tag, "--pattern", name, "--dir", work], cwd=ROOT, check=True)
+        subprocess.run(["ditto", "-x", "-k", str(archive), f"{work}/unzipped"], check=True)
+        app = pathlib.Path(work, "unzipped", "Redlamp.app")
+        if not app.is_dir():
+            sys.exit(f"{archive.name} holds no Redlamp.app")
+        download, installed = archive.stat().st_size, installed_bytes(app)
+    date = (datetime.datetime.fromisoformat(published.replace("Z", "+00:00")) if published
+            else datetime.datetime.now(datetime.timezone.utc)).astimezone()
+    record = {
+        "date": date.isoformat(timespec="seconds"),
+        "commit": commit,
+        "subject": git("log", "-1", "--format=%s", tag),
+        "source": "release",
+        "version": version,
+        "machine": {},
+        "noisy": False,
+        "metrics": {"app-size": {"value": round(installed / 1e6, 2)}, "download-size": {"value": round(download / 1e6, 2)}},
+    }
+    print(f"{version} at {commit}, {record['date']}: {download / 1e6:.1f} MB to download, {installed / 1e6:.1f} MB installed")
+    if not options.apply:
+        print("Dry run: --apply adds it.")
+        return
+    lines = [line for line in HISTORY.read_text().splitlines() if line.strip()]
+    position = sum(1 for line in lines if datetime.datetime.fromisoformat(json.loads(line)["date"]) <= date)
+    lines.insert(position, json.dumps(record, ensure_ascii=False))
+    HISTORY.write_text("\n".join(lines) + "\n")
+    print(f"Added to {HISTORY.relative_to(ROOT)}.")
+    redraw_card()
 
 
 def import_record(options, metrics):
@@ -162,11 +239,12 @@ def import_record(options, metrics):
         noisy = record.get("noisy") or earlier[-1].get("noisy")
         verdict = "noisy" if noisy and found else (found[0] if found else "same")
         ratio = (entry["value"] - old["value"]) / old["value"] if old["value"] else 0
-        print(f"  {verdict:6s} {metric['label']}: {old['value']:.4g} → {entry['value']:.4g} {metric['unit']} ({ratio:+.0%})")
+        print(f"  {word(metric, verdict):6s} {metric['label']}: {old['value']:.4g} → {entry['value']:.4g} {metric['unit']} ({ratio:+.0%})")
     if options.apply:
         with HISTORY.open("a") as handle:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         print(f"Appended to {HISTORY.relative_to(ROOT)}.")
+        redraw_card()
     else:
         print("Dry run: --apply appends it.")
 
@@ -187,11 +265,17 @@ def main():
     add.add_argument("--load-before", type=float, required=True)
     add.add_argument("--load-after", type=float, required=True)
     commands.add_parser("report", help="what changed in each metric's latest run")
+    sizes = commands.add_parser("release", help="a release's download and installed size; --apply adds them")
+    sizes.add_argument("tag", help="the release's tag, such as v0.2.6-prealpha")
+    sizes.add_argument("--zip", help="the release's zip, when it isn't on GitHub yet")
+    sizes.add_argument("--apply", action="store_true")
     options = parser.parse_args()
 
     metrics = registry()
     if options.command == "import":
         return import_record(options, metrics)
+    if options.command == "release":
+        return release(options, metrics)
     if options.command == "append":
         append(options, metrics)
     lines = report(records(), metrics)
