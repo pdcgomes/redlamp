@@ -7,51 +7,16 @@ struct FilmstripView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Parts of their own, each reading only what it shows: a step of a held arrow key changes the active
+            // photo, which only the last two read.
             HStack(spacing: 8) {
-                if let folder = model.folder {
-                    Label(folder.lastPathComponent, systemImage: "folder")
-                }
-                Text(photoCount)
-                    .foregroundStyle(Theme.tertiaryLabel)
-                    .help(filteredTotal == nil ? "" :
-                        "A filter hides some photos: \\ shows the filter bar in Library, ⌘L turns it off")
-                if let progress = model.settingsSync.progress {
-                    ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
-                        .frame(width: 80)
-                    Text("\(progress.title): \(progress.done) of \(progress.total)")
-                    Button("Cancel") { model.settingsSync.cancel() }
-                        .buttonStyle(.link)
-                } else if model.isMultiSelecting {
-                    Text("\(model.photoSelection.count) selected")
-                        .help("⌘-click adds or removes a photo, ⇧-click selects a range; ⌥⌘D keeps only this one")
-                    Button("Sync…") { model.chooseSettingsToSync() }
-                        .buttonStyle(.link)
-                        .help("This photo's settings onto the other selected photos (⇧⌘S)")
-                    Toggle("Auto Sync", isOn: Bindable(model.settingsSync).isAutoSyncing)
-                        .toggleStyle(.checkbox)
-                        .controlSize(.mini)
-                        .help("Every change to this photo repeats on the other selected photos (⌥⇧⌘A)")
-                }
-                if let report = model.settingsSync.report {
-                    Text(report)
-                        .foregroundStyle(Theme.tertiaryLabel)
-                        .lineLimit(1)
-                        .help(report)
-                }
-                if let suggestion = model.stackSuggestions.first {
-                    StackSuggestionBanner(suggestion: suggestion)
-                }
+                FilmstripFolder()
+                FilmstripCount()
+                FilmstripSync()
+                FilmstripSuggestion()
                 Spacer()
-                if let selection = model.selection, SupportedFormats.isStack(selection) {
-                    Button("Stack…") { model.openStackWorkspace(selection) }
-                        .buttonStyle(.link)
-                        .help("Change the stack's frames or method")
-                }
-                if let info = model.info {
-                    Text(info.fileName)
-                    Text("\(info.pixelSize.width) × \(info.pixelSize.height)  ·  \(info.sensorDescription)")
-                        .foregroundStyle(Theme.tertiaryLabel)
-                }
+                FilmstripStackButton()
+                FilmstripPhotoInfo()
             }
             .font(Theme.captionFont)
             .foregroundStyle(Theme.secondaryLabel)
@@ -75,6 +40,29 @@ struct FilmstripView: View {
         }
         .frame(height: PanelMetrics.filmstripHeight)
     }
+}
+
+/// The folder shown.
+private struct FilmstripFolder: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let folder = model.folder {
+            Label(folder.lastPathComponent, systemImage: "folder")
+        }
+    }
+}
+
+/// How many photos are shown, and of how many while a filter leaves some out.
+private struct FilmstripCount: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        Text(photoCount)
+            .foregroundStyle(Theme.tertiaryLabel)
+            .help(filteredTotal == nil ? "" :
+                "A filter hides some photos: \\ shows the filter bar in Library, ⌘L turns it off")
+    }
 
     private var photoCount: String {
         let subfolders = model.library.includesSubfolders ? ", with subfolders" : ""
@@ -87,6 +75,74 @@ struct FilmstripView: View {
         guard model.library.isFiltered, let listed = model.libraryFilters?.listed, listed.shown < listed.total
         else { return nil }
         return listed.total
+    }
+}
+
+/// A sync's progress, or with several photos selected, how many and Sync.
+private struct FilmstripSync: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let progress = model.settingsSync.progress {
+            ProgressView(value: Double(progress.done), total: Double(max(progress.total, 1)))
+                .frame(width: 80)
+            Text("\(progress.title): \(progress.done) of \(progress.total)")
+            Button("Cancel") { model.settingsSync.cancel() }
+                .buttonStyle(.link)
+        } else if model.isMultiSelecting {
+            Text("\(model.photoSelection.count) selected")
+                .help("⌘-click adds or removes a photo, ⇧-click selects a range; ⌥⌘D keeps only this one")
+            Button("Sync…") { model.chooseSettingsToSync() }
+                .buttonStyle(.link)
+                .help("This photo's settings onto the other selected photos (⇧⌘S)")
+            Toggle("Auto Sync", isOn: Bindable(model.settingsSync).isAutoSyncing)
+                .toggleStyle(.checkbox)
+                .controlSize(.mini)
+                .help("Every change to this photo repeats on the other selected photos (⌥⇧⌘A)")
+        }
+        if let report = model.settingsSync.report {
+            Text(report)
+                .foregroundStyle(Theme.tertiaryLabel)
+                .lineLimit(1)
+                .help(report)
+        }
+    }
+}
+
+/// The first focus stack found, to merge or dismiss.
+private struct FilmstripSuggestion: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let suggestion = model.stackSuggestions.first {
+            StackSuggestionBanner(suggestion: suggestion)
+        }
+    }
+}
+
+/// Stack… while the active photo is a stack document.
+private struct FilmstripStackButton: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let selection = model.selection, SupportedFormats.isStack(selection) {
+            Button("Stack…") { model.openStackWorkspace(selection) }
+                .buttonStyle(.link)
+                .help("Change the stack's frames or method")
+        }
+    }
+}
+
+/// The open photo's name, size and sensor.
+private struct FilmstripPhotoInfo: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let info = model.info {
+            Text(info.fileName)
+            Text("\(info.pixelSize.width) × \(info.pixelSize.height)  ·  \(info.sensorDescription)")
+                .foregroundStyle(Theme.tertiaryLabel)
+        }
     }
 }
 

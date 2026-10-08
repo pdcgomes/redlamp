@@ -141,19 +141,22 @@ final class LibraryToolbarView: NSView {
         if groupBy.indexOfSelectedItem != index {
             groupBy.selectItem(at: index)
         }
-        groupBy.isHidden = !inGrid
+        Self.set(groupBy, hidden: !inGrid)
         // The photos are listed again as the library starts showing the folder, which grouping needs.
         _ = model.library.count
-        groupBy.isEnabled = model.canGroupPhotos || state.groupKey != .ungrouped
+        let enabled = model.canGroupPhotos || state.groupKey != .ungrouped
+        if groupBy.isEnabled != enabled {
+            groupBy.isEnabled = enabled
+        }
         let moments = inGrid && state.groupKey.usesMoments
         for view in [looseness, tighter, looser] as [NSView] {
-            view.isHidden = !moments
+            Self.set(view, hidden: !moments)
         }
         if Int(looseness.doubleValue.rounded()) != state.looseness {
             looseness.doubleValue = Double(state.looseness)
         }
         let coverage = groups.coverage
-        unpicked.isHidden = !moments || coverage == nil
+        Self.set(unpicked, hidden: !moments || coverage == nil)
         if let coverage {
             let title = "\(coverage.unpicked.formatted()) of \(coverage.moments.formatted()) "
                 + "\(coverage.moments == 1 ? "moment" : "moments") without a pick"
@@ -165,7 +168,10 @@ final class LibraryToolbarView: NSView {
                 unpickedWidth = max((width / 40).rounded(.up) * 40, 120)
             }
         }
-        unpicked.state = groups.showsUnpicked ? .on : .off
+        let shown: NSControl.StateValue = groups.showsUnpicked ? .on : .off
+        if unpicked.state != shown {
+            unpicked.state = shown
+        }
     }
 
     override var isFlipped: Bool {
@@ -177,33 +183,49 @@ final class LibraryToolbarView: NSView {
         trackers.forEach { $0.cancel() }
         trackers = []
         guard window != nil else { return }
-        trackers = [Tracker { [weak self] in
-            guard let self else { return }
-            let state = model.libraryViews
-            let inGrid = model.libraryView == .grid
-            grid.isOn = inGrid
-            loupe.isOn = !inGrid
-            for (style, button) in styles {
-                button.isOn = state.cellStyle == style
-                button.isHidden = !inGrid
-            }
-            size.isHidden = !inGrid
-            size.value = state.thumbnailSize
-            fit.isOn = state.loupeZoom == .fit
-            actual.isOn = state.loupeZoom == .actual
-            fit.isHidden = inGrid
-            actual.isHidden = inGrid
-            let hasPhoto = model.selection != nil
-            develop.isEnabled = hasPhoto
-            finder.isEnabled = hasPhoto
-            loupe.isEnabled = hasPhoto
-            updateGroups(inGrid: inGrid)
-            let layout: [CGFloat] = [inGrid ? 1 : 0, looseness.isHidden ? 0 : 1, unpicked.isHidden ? 0 : unpickedWidth]
-            if layout != laidOut {
-                laidOut = layout
-                needsLayout = true
-            }
-        }]
+        trackers = [
+            Tracker { [weak self] in
+                guard let self else { return }
+                let state = model.libraryViews
+                let inGrid = model.libraryView == .grid
+                grid.isOn = inGrid
+                loupe.isOn = !inGrid
+                for (style, button) in styles {
+                    button.isOn = state.cellStyle == style
+                    Self.set(button, hidden: !inGrid)
+                }
+                Self.set(size, hidden: !inGrid)
+                size.value = state.thumbnailSize
+                fit.isOn = state.loupeZoom == .fit
+                actual.isOn = state.loupeZoom == .actual
+                Self.set(fit, hidden: inGrid)
+                Self.set(actual, hidden: inGrid)
+                updateGroups(inGrid: inGrid)
+                let layout: [CGFloat] = [
+                    inGrid ? 1 : 0, looseness.isHidden ? 0 : 1, unpicked.isHidden ? 0 : unpickedWidth,
+                ]
+                if layout != laidOut {
+                    laidOut = layout
+                    needsLayout = true
+                }
+            },
+            // Apart from the rest: every step of a held arrow key changes the selection.
+            Tracker { [weak self] in
+                guard let self else { return }
+                let hasPhoto = model.selection != nil
+                develop.isEnabled = hasPhoto
+                finder.isEnabled = hasPhoto
+                loupe.isEnabled = hasPhoto
+            },
+        ]
+    }
+
+    /// Shows or hides `view` only when that changes it: the trackers set every control again on each change
+    /// they read.
+    private static func set(_ view: NSView, hidden: Bool) {
+        if view.isHidden != hidden {
+            view.isHidden = hidden
+        }
     }
 
     override func layout() {
