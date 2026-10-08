@@ -115,18 +115,16 @@ enum FilmCommand {
         let folder = Repository.root.appendingPathComponent("packages/RedlampRecipes/Resources/BaseLooks")
         for look in looks {
             let package = try FilmLooks.bundledPackage(for: look, data: data)
-            let url = folder.appendingPathComponent(
-                look.version == 1 ? "stock-\(look.id).json" : "stock-\(look.id)@\(look.version).json",
-            )
-            if let existing = try? RecipeFile.decoder.decode(BaseLookPackage.self, from: Data(contentsOf: url)),
+            let name = look.version == 1 ? "stock-\(look.id)" : "stock-\(look.id)@\(look.version)"
+            if let existing = BuiltInBaseLooks.installed(name, in: folder),
                existing.version == package.version, existing.table?.sha256 != package.table?.sha256 {
                 throw CLIError(description: """
                 \(look.id): the look changed but its version didn't. Published looks never change; bump \
                 the look's version in FilmLookCatalog instead.
                 """)
             }
-            try RecipeFile.encoder.encode(package).write(to: url, options: .atomic)
-            print("installed \(package.id)@\(package.version) → \(url.lastPathComponent)")
+            try BuiltInBaseLooks.install(package, as: name, in: folder)
+            print("installed \(package.id)@\(package.version) → \(name).json.lzfse")
         }
         print("Regenerate the workspace (mise run generate) so the app bundles the new files.")
     }

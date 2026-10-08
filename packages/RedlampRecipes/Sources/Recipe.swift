@@ -1,5 +1,6 @@
 import Foundation
 import RedlampEngineAPI
+import Synchronization
 
 /// A shareable look: slider settings, optionally on top of a Base Look.
 ///
@@ -399,13 +400,91 @@ public struct LookTableFile: Codable, Sendable, Hashable {
     /// A `LookTableSpace` raw value; unknown spaces come from a newer Redlamp.
     public var space: String
     public var sha256: String
-    public var data: String
+    public var data: String {
+        get { contents.data }
+        set { contents = Contents(newValue) }
+    }
+
+    private var contents: Contents
+
+    /// A table's data, or how to read it the first time it's needed.
+    private final class Contents: Sendable {
+        private let read: (@Sendable () -> String)?
+        private let loaded: Mutex<String?>
+
+        init(_ data: String) {
+            read = nil
+            loaded = Mutex(data)
+        }
+
+        init(read: @escaping @Sendable () -> String) {
+            self.read = read
+            loaded = Mutex(nil)
+        }
+
+        var isRead: Bool {
+            loaded.withLock { $0 != nil }
+        }
+
+        var data: String {
+            if let data = loaded.withLock({ $0 }) {
+                return data
+            }
+            let data = read?() ?? ""
+            loaded.withLock { $0 = data }
+            return data
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case size, space, sha256, data
+    }
 
     public init(_ table: LookTable) {
         size = table.size
         space = table.space.rawValue
         sha256 = table.contentHash
-        data = table.littleEndianBytes.base64EncodedString()
+        contents = Contents(table.littleEndianBytes.base64EncodedString())
+    }
+
+    /// A table whose data `read` returns the first time it's needed.
+    init(size: Int, space: String, sha256: String, read: @escaping @Sendable () -> String) {
+        self.size = size
+        self.space = space
+        self.sha256 = sha256
+        contents = Contents(read: read)
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        size = try container.decode(Int.self, forKey: .size)
+        space = try container.decode(String.self, forKey: .space)
+        sha256 = try container.decode(String.self, forKey: .sha256)
+        contents = try Contents(container.decode(String.self, forKey: .data))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(size, forKey: .size)
+        try container.encode(space, forKey: .space)
+        try container.encode(sha256, forKey: .sha256)
+        try container.encode(data, forKey: .data)
+    }
+
+    /// Whether the data is in memory; a bundled look's is read when first used.
+    var isRead: Bool {
+        contents.isRead
+    }
+
+    public static func == (a: LookTableFile, b: LookTableFile) -> Bool {
+        a.size == b.size && a.space == b.space && a.sha256 == b
+            .sha256 && (a.contents === b.contents || a.data == b.data)
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(size)
+        hasher.combine(space)
+        hasher.combine(sha256)
     }
 
     public var isSupported: Bool {

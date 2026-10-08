@@ -42,8 +42,16 @@ public struct LookStore: Sendable {
 
 /// The Base Looks that ship with Redlamp: the parametric built-ins plus the LUT-backed
 /// looks in the framework's resources.
+///
+/// Each LUT-backed look is its JSON compressed with LZFSE (`.json.lzfse`), listed with its
+/// details in the folder's index, so listing the looks reads no table; a look's file is
+/// read the first time its table is used.
 public enum BuiltInBaseLooks {
     private final class BundleToken {}
+
+    static let bundle = Bundle(for: BundleToken.self)
+    private static let fileExtension = "json.lzfse"
+    private static let indexName = "BaseLooks.json"
 
     /// Every bundled look, built-ins first.
     public static let all: [BaseLookPackage] = parametric + resources
@@ -58,21 +66,92 @@ public enum BuiltInBaseLooks {
         )
     }
 
-    public static let resources: [BaseLookPackage] = {
-        let bundle = Bundle(for: BundleToken.self)
+    public static let resources: [BaseLookPackage] = read().sorted { ($0.slot ?? $0.id) < ($1.slot ?? $1.id) }
+
+    /// The bundled looks in file name order, their tables unread.
+    static func read() -> [BaseLookPackage] {
         // Xcode may flatten the BaseLooks folder into the bundle's root.
-        let nested = bundle.urls(forResourcesWithExtension: "json", subdirectory: "BaseLooks") ?? []
-        let urls = !nested.isEmpty ? nested
-            : (bundle.urls(forResourcesWithExtension: "json", subdirectory: nil) ?? [])
-            .filter { $0.lastPathComponent.hasPrefix("base-") || $0.lastPathComponent.hasPrefix("stock-") }
-        return urls.sorted { $0.lastPathComponent < $1.lastPathComponent }.compactMap { url in
-            guard let data = try? Data(contentsOf: url),
-                  let package = try? RecipeFile.decoder.decode(BaseLookPackage.self, from: data)
-            else { return nil }
+        let folder = bundle.url(forResource: "BaseLooks", withExtension: "json", subdirectory: "BaseLooks")
+            ?? bundle.url(forResource: "BaseLooks", withExtension: "json")
+        return folder.map { read(from: $0.deletingLastPathComponent()) } ?? []
+    }
+
+    /// The looks a folder's index lists, in file name order, their tables unread.
+    static func read(from folder: URL) -> [BaseLookPackage] {
+        guard let data = try? Data(contentsOf: folder.appending(path: indexName)),
+              let index = try? RecipeFile.decoder.decode([IndexEntry].self, from: data)
+        else { return [] }
+        return index.map { $0.package(in: folder) }
+    }
+
+    /// Writes `package` into a Resources/BaseLooks folder as `<name>.json.lzfse`, then lists
+    /// the folder's looks in its index again.
+    public static func install(_ package: BaseLookPackage, as name: String, in folder: URL) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let json = try RecipeFile.encoder.encode(package)
+        try ((json as NSData).compressed(using: .lzfse) as Data)
+            .write(to: folder.appending(path: "\(name).\(fileExtension)"), options: .atomic)
+        let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasSuffix(".\(fileExtension)") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        let index = try files.map { try IndexEntry(decode($0), file: $0.lastPathComponent) }
+        try RecipeFile.encoder.encode(index).write(to: folder.appending(path: indexName), options: .atomic)
+    }
+
+    /// The look installed as `<name>` in a Resources/BaseLooks folder.
+    public static func installed(_ name: String, in folder: URL) -> BaseLookPackage? {
+        try? decode(folder.appending(path: "\(name).\(fileExtension)"))
+    }
+
+    private static func decode(_ url: URL) throws -> BaseLookPackage {
+        let json = try (Data(contentsOf: url) as NSData).decompressed(using: .lzfse) as Data
+        return try RecipeFile.decoder.decode(BaseLookPackage.self, from: json)
+    }
+
+    /// A look as the index lists it: everything but its table's data.
+    private struct IndexEntry: Codable {
+        struct Table: Codable {
+            var size: Int
+            var space: String
+            var sha256: String
+        }
+
+        var file: String
+        var id: String
+        var version: Int
+        var name: String
+        var summary: String?
+        var slot: String?
+        var look: BaseLookParameters
+        var table: Table?
+
+        init(_ package: BaseLookPackage, file: String) {
+            self.file = file
+            id = package.id
+            version = package.version
+            name = package.name
+            summary = package.summary
+            slot = package.slot
+            look = package.parameters
+            table = package.table.map { Table(size: $0.size, space: $0.space, sha256: $0.sha256) }
+        }
+
+        func package(in folder: URL) -> BaseLookPackage {
+            var package = BaseLookPackage(
+                id: id, version: version, name: name, summary: summary, slot: slot, parameters: look,
+            )
+            if let table {
+                let url = folder.appending(path: file)
+                let sha256 = table.sha256
+                package.table = LookTableFile(size: table.size, space: table.space, sha256: sha256) {
+                    guard let stored = try? BuiltInBaseLooks.decode(url).table,
+                          stored.sha256 == sha256 else { return "" }
+                    return stored.data
+                }
+            }
             return package
         }
-        .sorted { ($0.slot ?? $0.id) < ($1.slot ?? $1.id) }
-    }()
+    }
 
     public static func package(id: String, version: Int) -> BaseLookPackage? {
         all.first { $0.id == id && $0.version == version }

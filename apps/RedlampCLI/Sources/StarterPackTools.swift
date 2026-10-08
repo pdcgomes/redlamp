@@ -10,19 +10,18 @@ enum StarterPackBuilder {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for slot in FilmSlot.allCases {
             let package = try StarterPackLooks.package(for: slot)
-            let url = folder.appendingPathComponent("base-\(slot.rawValue).json")
-            if let data = try? Data(contentsOf: url),
-               let existing = try? RecipeFile.decoder.decode(BaseLookPackage.self, from: data),
+            let name = "base-\(slot.rawValue)"
+            if let existing = BuiltInBaseLooks.installed(name, in: folder),
                existing.version == package.version, existing.table?.sha256 != package.table?.sha256 {
                 throw CLIError(description: """
                 \(slot.rawValue): the design changed but the version didn't. Published looks never change; \
                 bump StarterPackLooks.version (and the recipes that use it) instead.
                 """)
             }
-            try RecipeFile.encoder.encode(package).write(to: url, options: .atomic)
+            try BuiltInBaseLooks.install(package, as: name, in: folder)
             let stats = try LookTableStats(package.definition().table!)
             print(
-                "\(package.id)@\(package.version)  strength \(String(format: "%.3f", stats.strength))  neutral \(String(format: "%.4f", stats.neutralChroma))  → \(url.lastPathComponent)",
+                "\(package.id)@\(package.version)  strength \(String(format: "%.3f", stats.strength))  neutral \(String(format: "%.4f", stats.neutralChroma))  → \(name).json.lzfse",
             )
         }
         print("Regenerate the workspace (mise run generate) so the app bundles the new files.")

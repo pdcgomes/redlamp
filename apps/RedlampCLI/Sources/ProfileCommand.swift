@@ -90,7 +90,7 @@ enum ProfileCommand {
             print("  wrote \(file.lastPathComponent) and \(slot.rawValue)-sheet.jpg")
             if arguments.has("--install") {
                 let resources = Repository.root.appendingPathComponent("packages/RedlampRecipes/Resources/BaseLooks")
-                try FileManager.default.copyItem(at: file, to: resources.appendingPathComponent(file.lastPathComponent))
+                try BuiltInBaseLooks.install(package, as: "base-\(slot.rawValue)@\(version)", in: resources)
                 print("  installed into Resources/BaseLooks (regenerate the workspace to bundle it)")
             }
         }

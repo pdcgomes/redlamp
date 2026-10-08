@@ -1,0 +1,1201 @@
+[
+  {
+    "file" : "base-bleach.json.lzfse",
+    "id" : "redlamp/film/bleach",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Bleach",
+    "slot" : "bleach",
+    "summary" : "Bleach bypass: silvery, desaturated and contrasty.",
+    "table" : {
+      "sha256" : "02b43aa82327580470f89ce6f35976a6ea26f797dfdfec05650dcdf7e84fd28a",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-chrome.json.lzfse",
+    "id" : "redlamp/film/chrome",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Chrome",
+    "slot" : "chrome",
+    "summary" : "Muted, dense color with hard tone and cool, deep blues.",
+    "table" : {
+      "sha256" : "0a468d8a25ced0bb979710c6a348f90076b1b68552ec5662a58f17b9129178c2",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-chrome@2.json.lzfse",
+    "id" : "redlamp/film/chrome",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Chrome",
+    "slot" : "chrome",
+    "summary" : "Muted, dense color with hard tone and cool, deep blues. Measured from 4 cameras' own renderings.",
+    "table" : {
+      "sha256" : "8775c33b65c456dbab91469536a3c44c594d532c5dbeccd402ec21ddba58aecc",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "base-chrome@3.json.lzfse",
+    "id" : "redlamp/film/chrome",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Chrome",
+    "slot" : "chrome",
+    "summary" : "Muted, dense color with hard tone and cool, deep blues. Measured from 5 cameras' own renderings.",
+    "table" : {
+      "sha256" : "e4d0cc14b7e8319f328d5703aa74745ebf7a1adaaba9cfc12260a8e41ca37a6d",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 3
+  },
+  {
+    "file" : "base-cinema.json.lzfse",
+    "id" : "redlamp/film/cinema",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Cinema",
+    "slot" : "cinema",
+    "summary" : "Motion-picture look: flat, very muted, teal-leaning shadows.",
+    "table" : {
+      "sha256" : "5e4d136e7530a369c3459c7c74e18e0841de0e54098eb91cd6d23b4768802fab",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-monochrome-green.json.lzfse",
+    "id" : "redlamp/film/monochrome-green",
+    "look" : {
+      "contrast" : 1,
+      "monochrome" : true,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Monochrome + Green",
+    "slot" : "monochrome-green",
+    "summary" : "Black and white through a green filter: lighter foliage, fuller skin.",
+    "table" : {
+      "sha256" : "21fbfff057b53fa4ff1934d1de17b0232b7a1d3ea6f5900d23bc1065a0c6733a",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-monochrome-red.json.lzfse",
+    "id" : "redlamp/film/monochrome-red",
+    "look" : {
+      "contrast" : 1,
+      "monochrome" : true,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Monochrome + Red",
+    "slot" : "monochrome-red",
+    "summary" : "Black and white through a red filter: dramatic skies, pale skin.",
+    "table" : {
+      "sha256" : "b3840d36993184fcf18448be75575da1fba73f94a43840a230bdc16a22b383bd",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-monochrome-yellow.json.lzfse",
+    "id" : "redlamp/film/monochrome-yellow",
+    "look" : {
+      "contrast" : 1,
+      "monochrome" : true,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Monochrome + Yellow",
+    "slot" : "monochrome-yellow",
+    "summary" : "Black and white through a yellow filter: darker skies.",
+    "table" : {
+      "sha256" : "2e183598c220bbb62a726b9dfdd18f39194eb6bea58036dc1ffaac0b82c31259",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-monochrome.json.lzfse",
+    "id" : "redlamp/film/monochrome",
+    "look" : {
+      "contrast" : 1,
+      "monochrome" : true,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Monochrome",
+    "slot" : "monochrome",
+    "summary" : "Fine, neutral black and white.",
+    "table" : {
+      "sha256" : "c0c148898076cca5bd5593913789fe484b62939070d7d9b85b0184cb4750186b",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-negative-classic.json.lzfse",
+    "id" : "redlamp/film/negative-classic",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Classic Negative",
+    "slot" : "negative-classic",
+    "summary" : "Snapshot negative: hard shadows, cyan-green cast, magenta reds.",
+    "table" : {
+      "sha256" : "55024d76a3816fb13eaf8d53388e432828943f6ba6248570863334de259cb5e8",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-negative-high.json.lzfse",
+    "id" : "redlamp/film/negative-high",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Negative High",
+    "slot" : "negative-high",
+    "summary" : "Portrait negative with a little extra contrast.",
+    "table" : {
+      "sha256" : "194d2eb861d33ab31817fa3dc7ab76633cd0b86a6f01f1f1f3e970b3b73fb340",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-negative-nostalgic.json.lzfse",
+    "id" : "redlamp/film/negative-nostalgic",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Nostalgic Negative",
+    "slot" : "negative-nostalgic",
+    "summary" : "Warm, amber-tinted highlights and softly faded color.",
+    "table" : {
+      "sha256" : "d67cb5296aa302576923fdef1b76259918500dc508af8b18b11c87a2517fd733",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-negative-standard.json.lzfse",
+    "id" : "redlamp/film/negative-standard",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Negative Standard",
+    "slot" : "negative-standard",
+    "summary" : "Soft portrait negative, low contrast and natural skin.",
+    "table" : {
+      "sha256" : "89a8980f20810ed77537f3bc8991f60e93260f225cce7932959875ad4ba46992",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-sepia.json.lzfse",
+    "id" : "redlamp/film/sepia",
+    "look" : {
+      "contrast" : 1,
+      "monochrome" : true,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Sepia",
+    "slot" : "sepia",
+    "summary" : "Warm brown-toned monochrome.",
+    "table" : {
+      "sha256" : "c0b82bd54f88b10c10b6ce39743fb5337ad789d69537c340bb3adba322e5fc16",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-soft-slide.json.lzfse",
+    "id" : "redlamp/film/soft-slide",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Soft Slide",
+    "slot" : "soft-slide",
+    "summary" : "Soft slide film: gentle contrast and flattering skin.",
+    "table" : {
+      "sha256" : "a6efaa3da1effbfe5f72db70433412648e7c548b535a50d0e653d189285d1534",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-soft-slide@2.json.lzfse",
+    "id" : "redlamp/film/soft-slide",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Soft Slide",
+    "slot" : "soft-slide",
+    "summary" : "Soft slide film: gentle contrast and flattering skin. Measured from 3 cameras' own renderings.",
+    "table" : {
+      "sha256" : "9a11340377b527bbf6e3f6446dc9e0ccc7639d010d7f9db17556c16dfb81622c",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "base-standard.json.lzfse",
+    "id" : "redlamp/film/standard",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Standard",
+    "slot" : "standard",
+    "summary" : "Balanced slide-film color, the everyday default.",
+    "table" : {
+      "sha256" : "f5a6821737b902699ee9482127d7e8d42ba596533b21818b11a1a0c5b458c778",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-standard@2.json.lzfse",
+    "id" : "redlamp/film/standard",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Standard",
+    "slot" : "standard",
+    "summary" : "Balanced slide-film color, the everyday default. Measured from 28 cameras' own renderings.",
+    "table" : {
+      "sha256" : "c20e2719e0b35fbc01c3a8ed949ec515e1c22c4ec383b673021a797020508e26",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "base-standard@3.json.lzfse",
+    "id" : "redlamp/film/standard",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Standard",
+    "slot" : "standard",
+    "summary" : "Balanced slide-film color, the everyday default. Measured from 50 cameras' own renderings.",
+    "table" : {
+      "sha256" : "3d952af7d5cf3e78209b280edb4589eb671ce04eb84d7087fde74fd14c8b2877",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 3
+  },
+  {
+    "file" : "base-vivid-slide.json.lzfse",
+    "id" : "redlamp/film/vivid-slide",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Vivid Slide",
+    "slot" : "vivid-slide",
+    "summary" : "Saturated, contrasty slide film with deep blues and greens.",
+    "table" : {
+      "sha256" : "aabd02c4a1097987dfe6bab9e0dac6effd332933aaa2196d0607f042bbe3f1a2",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "base-vivid-slide@2.json.lzfse",
+    "id" : "redlamp/film/vivid-slide",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Vivid Slide",
+    "slot" : "vivid-slide",
+    "summary" : "Saturated, contrasty slide film with deep blues and greens. Measured from 10 cameras' own renderings.",
+    "table" : {
+      "sha256" : "75ae7a14afe0fd39d976fa94ed0bb11558806317399c786d8c229a403f400734",
+      "size" : 25,
+      "space" : "displayRec2020"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-cinestill-50d.json.lzfse",
+    "id" : "redlamp/stock/cinestill-50d/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "CineStill 50D",
+    "summary" : "Daylight cinema negative without anti-halation: fine grain, glowing highlights. Built from CineStill's published datasheet.",
+    "table" : {
+      "sha256" : "3158b56b9db340b9d564fb53c7d8b8888bbcb8aafd0b3b024f732019ccf1672d",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-cinestill-800t.json.lzfse",
+    "id" : "redlamp/stock/cinestill-800t/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "CineStill 800T",
+    "summary" : "Tungsten cinema negative without anti-halation: red glow around lights. Built from CineStill's published datasheet.",
+    "table" : {
+      "sha256" : "1a5f43665e46e4053efda5bedae04c032fbda7f07e2537a5c804c28d0f9eabc5",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-delta-100.json.lzfse",
+    "id" : "redlamp/stock/delta-100/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Delta 100",
+    "summary" : "Ilford's fine-grained modern black and white. Built from Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "2801e89aae5edf58dfd388c99231a2f613c7c7c840fdde6be2c688cc30ae6209",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-delta-3200.json.lzfse",
+    "id" : "redlamp/stock/delta-3200/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Delta 3200",
+    "summary" : "Ilford's fastest film: big, gritty grain for low light. Built from Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "0dd03f47f252dd5d7a20718da1303bf7cca53e81f100634930580c8c15cf0999",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-ektachrome-e100.json.lzfse",
+    "id" : "redlamp/stock/ektachrome-e100/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Ektachrome E100",
+    "summary" : "Kodak's clean, cool slide film. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "5488f774b2080dfa2c0a5b3062d09fa4ad9c93dfa4d5c65724f8676b90d0de65",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-ektachrome-e100@2.json.lzfse",
+    "id" : "redlamp/stock/ektachrome-e100/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Ektachrome E100",
+    "summary" : "Kodak's clean, cool slide film. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "7707f1eb4e93be3c754e43afff7952f9289aa1e186c39bcbb7c7e1465dc3a45b",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-ektar-100.json.lzfse",
+    "id" : "redlamp/stock/ektar-100/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Ektar 100",
+    "summary" : "Fine-grained, saturated colour negative. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "d5c406c842096706afd6ede10831899541f15917db714821761572ae82f61be2",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-ektar-100@2.json.lzfse",
+    "id" : "redlamp/stock/ektar-100/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Ektar 100",
+    "summary" : "Fine-grained, saturated colour negative. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "2cdc453593aec0af8606817865b2dd6afc957bb376321bf122cfde06f962626b",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-eterna-vivid-250d-2383.json.lzfse",
+    "id" : "redlamp/stock/eterna-vivid-250d-2383/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Eterna Vivid 250D · 2383",
+    "summary" : "Fujifilm's vivid daylight cinema negative, printed on 2383. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "036ca62be37977b69afaf329c49e9a6e80d754443005d88553939daa8e741600",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-fp4-plus.json.lzfse",
+    "id" : "redlamp/stock/fp4-plus/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "FP4 Plus",
+    "summary" : "Classic medium-speed black and white with a gentle shoulder. Built from Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "1151d9cd64affc8488c62bb756be4f29be6cf7d641bb77e93d074b9dae3b2d61",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-gold-200.json.lzfse",
+    "id" : "redlamp/stock/gold-200/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Gold 200",
+    "summary" : "Warm consumer colour negative with a little more grain. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "e8d619d2916dc0e5b6214ef7fed1b41c18d4b52b2395746a44363951c6591220",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-gold-200@2.json.lzfse",
+    "id" : "redlamp/stock/gold-200/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Gold 200",
+    "summary" : "Warm consumer colour negative with a little more grain. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "7b469eec9675b0e3411f5a5219d0ae58f8ea5c1983d43d703fe5aaf24eeafc15",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-hp5-plus.json.lzfse",
+    "id" : "redlamp/stock/hp5-plus/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "HP5 Plus",
+    "summary" : "Softer, grainier black and white, scanned. Built from Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "1c9387403b763a6044de05da342deafe6ac57ed9b0ed1201cfbc63c1f432aa32",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-kodachrome-64.json.lzfse",
+    "id" : "redlamp/stock/kodachrome-64/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Kodachrome 64",
+    "summary" : "The legendary K-14 slide: warm reds, deep blues, dense shadows. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "9ce919b1ed162ede2c08f3196c4c5b391ae8c0a9fb114960890763fd71590680",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-kodachrome-64@2.json.lzfse",
+    "id" : "redlamp/stock/kodachrome-64/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Kodachrome 64",
+    "summary" : "The legendary K-14 slide: warm reds, deep blues, dense shadows. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "beff0d8a6fe2c93a89fcf0c71e32574a364cee539d3bf602c36ac6f6fcaf390b",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-pan-f-plus.json.lzfse",
+    "id" : "redlamp/stock/pan-f-plus/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Pan F Plus",
+    "summary" : "Slow, ultra-fine black and white with rich contrast. Built from Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "6dd9423adb1d461add3633aa81ad9d77b298413df8078d4e975d19217050f845",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-portra-160.json.lzfse",
+    "id" : "redlamp/stock/portra-160/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Portra 160",
+    "summary" : "Portra's finer-grained, gentler sister. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "6e2ba54c7e84face9ab8ab198d3f5bab3c9a000da22521ac1d9da6b629ba3d61",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-portra-400-overexposed.json.lzfse",
+    "id" : "redlamp/stock/portra-400-overexposed/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Portra 400 · +2",
+    "summary" : "Portra overexposed two stops: airy, pastel and soft. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "e07367bc34115b75cc5a917af6e150c9d3ce7f76dbe088d408f540a70dd496eb",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-portra-400.json.lzfse",
+    "id" : "redlamp/stock/portra-400/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Portra 400",
+    "summary" : "Warm, gentle colour negative, as a Frontier scan renders it. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "9433137dd5a5a4c5fd4968e77a2897aebc452c7e76de4dbdbe6f74197bb852b9",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-portra-400@2.json.lzfse",
+    "id" : "redlamp/stock/portra-400/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Portra 400",
+    "summary" : "Warm, gentle colour negative, as a Frontier scan renders it. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "3f3760c00c1a40a378606f86186a807d418a2b139400a3dbb64c0fbbffdc2573",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-portra-800-1600.json.lzfse",
+    "id" : "redlamp/stock/portra-800-1600/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Portra 800 · Pushed to 1600",
+    "summary" : "Portra 800 rated at 1600 and pushed a stop: denser shadows, more contrast. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "9dba6ff798a15779c60c096ede333e83dd78a533d467cad67fb7648b48e1c255",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-portra-800.json.lzfse",
+    "id" : "redlamp/stock/portra-800/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Portra 800",
+    "summary" : "Fast Portra: warm and rich, with more grain. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "598e968bb84407546998184fa07bd60e4cec13406cd6573cf1b9bfccb98bf511",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-pro-400h.json.lzfse",
+    "id" : "redlamp/stock/pro-400h/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Pro 400H",
+    "summary" : "Fujifilm's pastel wedding film: soft contrast and minty greens. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "5f0a51962061be91e263238fc30e270570cf9cfd655954827b1557ed89911b08",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-provia-100f-cross.json.lzfse",
+    "id" : "redlamp/stock/provia-100f-cross/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Provia 100F · Cross-Processed",
+    "summary" : "Provia developed as a negative: contrasty, with cool shadows. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "0a3cc8055cfb70d326e630bdc08c8b2810424c4c938e56dc6d13a0c199aad8f7",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-provia-100f.json.lzfse",
+    "id" : "redlamp/stock/provia-100f/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Provia 100F",
+    "summary" : "Clean, natural slide film. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "76ee17c2b557922d3c36229c7210808d34e69daaeebd842ad04856260c8ffa0f",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-provia-100f@2.json.lzfse",
+    "id" : "redlamp/stock/provia-100f/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Provia 100F",
+    "summary" : "Clean, natural slide film. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "9912e2d86916a16afcfdc96bc614bff132a7a367f703fa46d552fa8f8890bbb8",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-superia-400.json.lzfse",
+    "id" : "redlamp/stock/superia-400/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Superia 400",
+    "summary" : "Cooler consumer colour negative with Fujifilm's greens. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "bce6eba3fd5f553d7e0aeb5813e85bbffd4caaed2d0630f0d9cc2923956d48f4",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-superia-400@2.json.lzfse",
+    "id" : "redlamp/stock/superia-400/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Superia 400",
+    "summary" : "Cooler consumer colour negative with Fujifilm's greens. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "a7361e2d86779c10bcc04978718915346a8304bb426facd3a2e56a5be9604f69",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-t-max-100.json.lzfse",
+    "id" : "redlamp/stock/t-max-100/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "T-Max 100",
+    "summary" : "Kodak's finest-grained black and white: smooth and sharp. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "69e07d8805df7541c5544287ad17a665e5d8322fccb3700df722d95f57da4d63",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-t-max-400.json.lzfse",
+    "id" : "redlamp/stock/t-max-400/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "T-Max 400",
+    "summary" : "Modern fast black and white: tight grain, long tonal range. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "3cb2e14110a434dc299efde62dcd3cec7ed600040670256412f43e549d9f84a4",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-tri-x-1600.json.lzfse",
+    "id" : "redlamp/stock/tri-x-1600/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Tri-X 400 · Pushed to 1600",
+    "summary" : "Tri-X rated at 1600 and push-processed: gritty and hard. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "6f8be97439e703a58bca874c6bea32eaae576b75af2a0dcdd6425846a4530d91",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-tri-x-400.json.lzfse",
+    "id" : "redlamp/stock/tri-x-400/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Tri-X 400",
+    "summary" : "Classic black and white, scanned. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "d5b4c9c652ba25e9e4cc7b904f94441c72e4f4fd6a2b403e72d4f8b9275845a6",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-tri-x-multigrade-hard.json.lzfse",
+    "id" : "redlamp/stock/tri-x-multigrade-hard/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Tri-X · Hard Print",
+    "summary" : "Tri-X printed on Multigrade paper at grade 4: deep blacks, bright whites. Built from Kodak · Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "bf017d7ccb4c8bfd32528cf4e6ffe8c51b009a70f70a5d64789503d109954385",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-tri-x-multigrade-hard@2.json.lzfse",
+    "id" : "redlamp/stock/tri-x-multigrade-hard/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Tri-X · Hard Print",
+    "summary" : "Tri-X printed on Multigrade paper at grade 4: deep blacks, bright whites. Built from Kodak · Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "6fbc740de1549c23e3a6e390034f9a0eadc5d9344dc2d045ed0c352432b28f64",
+      "size" : 49,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-tri-x-multigrade-soft.json.lzfse",
+    "id" : "redlamp/stock/tri-x-multigrade-soft/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Tri-X · Soft Print",
+    "summary" : "Tri-X printed on Multigrade paper at grade 1: gentle and open. Built from Kodak · Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "c65936dd128c8fb7dcfe9a8d1a451d1ce9d71c171d5b805e3756d018ccbeafb7",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-tri-x-multigrade.json.lzfse",
+    "id" : "redlamp/stock/tri-x-multigrade/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Tri-X · Darkroom Print",
+    "summary" : "Tri-X printed on Multigrade paper, grade 2. Built from Kodak · Ilford's published datasheet.",
+    "table" : {
+      "sha256" : "e950babca2a4b35939a4ff3ec8361961610530db53aff3f1c4fa9ff45e27f7f3",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-ultramax-400.json.lzfse",
+    "id" : "redlamp/stock/ultramax-400/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "UltraMax 400",
+    "summary" : "Punchy, warm everyday colour negative. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "d283d4583d95e17829042ed89e7ce75ce77d5627ef6ed7d737ad99420993ecc9",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-velvia-100.json.lzfse",
+    "id" : "redlamp/stock/velvia-100/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Velvia 100",
+    "summary" : "Velvia's faster, slightly gentler sibling. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "9389525525f005a7d25a4bc98bdd9d34bb568d51edccceddc771a02e788dcccd",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-velvia-100@2.json.lzfse",
+    "id" : "redlamp/stock/velvia-100/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Velvia 100",
+    "summary" : "Velvia's faster, slightly gentler sibling. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "847a40d606ed068c3ad1419072c3681134e7e3f6d5d932352739403b07507b7e",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-velvia-50-cross.json.lzfse",
+    "id" : "redlamp/stock/velvia-50-cross/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Velvia 50 · Cross-Processed",
+    "summary" : "Velvia developed as a negative: punchy, with wild colour shifts. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "7e91dde38943f42443fc331a10b656a5f3f793ecbc61ef8bd391209ad0caf601",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-velvia-50.json.lzfse",
+    "id" : "redlamp/stock/velvia-50/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Velvia 50",
+    "summary" : "Saturated, contrasty slide film. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "00d9f9ce6beb64b79dfdb898c8fd8fa2986699c9416ebc003331756db1ebeab5",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-velvia-50@2.json.lzfse",
+    "id" : "redlamp/stock/velvia-50/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Velvia 50",
+    "summary" : "Saturated, contrasty slide film. Built from Fujifilm's published datasheet.",
+    "table" : {
+      "sha256" : "eea9748f9229d0226eb0fa8b2a0d5daa4714a4808e2263698081856eb6a2f590",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-vision3-2383-bleach-bypass.json.lzfse",
+    "id" : "redlamp/stock/vision3-2383-bleach-bypass/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Vision3 500T · 2383 Bleach Bypass",
+    "summary" : "Cinema print with its silver left in: desaturated, dense and hard. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "b4bb7431d57ad8ce38120c61bf8e88cf664994bd8f952e3fad90c3d450ede44e",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-vision3-2383-bleach-bypass@2.json.lzfse",
+    "id" : "redlamp/stock/vision3-2383-bleach-bypass/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Vision3 500T · 2383 Bleach Bypass",
+    "summary" : "Cinema print with its silver left in: desaturated, dense and hard. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "ed0ac041820e086f7d8f3c424a083eda7b04fffa4b28d309766329c716d5ee3b",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-vision3-250d-2383.json.lzfse",
+    "id" : "redlamp/stock/vision3-250d-2383/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Vision3 250D · 2383",
+    "summary" : "Daylight cinema negative printed on 2383. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "ac9bb3dc3408a4603ec68fffabbe396a7ee24681fab97fb62a2fa058e6d1565a",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-vision3-500t-2383.json.lzfse",
+    "id" : "redlamp/stock/vision3-500t-2383/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Vision3 500T · 2383",
+    "summary" : "Cinema negative printed on 2383 print film. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "1ab9e3080ed9c8d7a2497fa2c9d5862df14234f1ed39f9e097264d5e1d33b2b3",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  },
+  {
+    "file" : "stock-vision3-500t-2383@2.json.lzfse",
+    "id" : "redlamp/stock/vision3-500t-2383/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Vision3 500T · 2383",
+    "summary" : "Cinema negative printed on 2383 print film. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "c1a148779a3e3cb4d2beaa8976e42b31358f9aa716dee12a347b6fbc4ded3d3b",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 2
+  },
+  {
+    "file" : "stock-vision3-50d-2383.json.lzfse",
+    "id" : "redlamp/stock/vision3-50d-2383/look",
+    "look" : {
+      "contrast" : 1,
+      "saturation" : 1,
+      "warmth" : 0
+    },
+    "name" : "Vision3 50D · 2383",
+    "summary" : "The finest-grained cinema negative, printed on 2383. Built from Kodak's published datasheet.",
+    "table" : {
+      "sha256" : "631b76556aca5138c9110c8192eda69ddfe1c42b3af4a6946e78442fef4617fa",
+      "size" : 33,
+      "space" : "sceneLog"
+    },
+    "version" : 1
+  }
+]
