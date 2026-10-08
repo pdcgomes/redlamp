@@ -160,8 +160,10 @@ cp -R "$PRODUCTS"/*.dSYM "$DSYMS/"
 ditto -c -k --keepParent "$DSYMS" "$DSYMS_ZIP"
 scripts/check-release-bundle.sh "$APP" "$DSYMS" || fail "the app isn't shaped for release; see above"
 # With no arguments the CLI prints its usage and exits 1; dyld failures print something else.
-grep -q 'usage: redlamp' <<<"$("$APP/Contents/Helpers/redlamp" 2>&1 || true)" \
-    || fail "the bundled CLI does not run (missing frameworks?)"
+CLI_STATUS=0
+CLI_OUTPUT="$("$APP/Contents/Helpers/redlamp" 2>&1)" || CLI_STATUS=$?
+grep -q 'usage: redlamp' <<<"$CLI_OUTPUT" \
+    || fail "the bundled CLI does not run (exit status $CLI_STATUS): ${CLI_OUTPUT:-no output}"
 
 # The regression suite (ARC-07): a passing run for this commit, made now on a test build of
 # the same worktree unless one was made earlier (mise run e2e -- --tier "$E2E_TIER"), then the
