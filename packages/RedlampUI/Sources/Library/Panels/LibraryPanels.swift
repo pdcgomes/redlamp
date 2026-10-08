@@ -283,7 +283,7 @@ public final class LibraryPanels {
     // MARK: - The keyword list and presets
 
     /// Reads the keyword list, its completion and the keyword sets again, once the read under way is done.
-    func refreshKeywords() {
+    @_spi(Harness) public func refreshKeywords() {
         guard let service = model?.library.service, service.isReady else {
             keywordsStale = true
             return

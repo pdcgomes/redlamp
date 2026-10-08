@@ -52,8 +52,19 @@
                 try app.main { model in model.librarySources.healthEntries.contains(.health(.damaged)) },
                 "Library Health's Damaged Files has the empty file",
             )
+            let tagged = KeywordPath(keyword)!
+            try app.main { model in
+                if !model.libraryPanels.isExpanded(.keywordList) {
+                    model.libraryPanels.toggle(.keywordList)
+                }
+            }
+            try app.wait("the Keyword List counting the folder's keyword", timeout: 60) { model in
+                model.libraryPanels.refreshKeywords()
+                return model.libraryPanels.keywordList?.keywords[tagged]?.photos == 1
+            }
 
-            // The root's menu removes it: everything the library shows leaves its photos out.
+            // The root's menu removes it: everything the library shows leaves its photos out, and the Library
+            // panel and the Keyword List count again on their own, as they count from the index.
             let row = "folders." + scratch.folder.standardizedFileURL.path
             try app.main { model in model.expandedSidebarSections.insert(.folders) }
             try app.wait("the folder's row in the Folders panel") { _ in
@@ -64,11 +75,11 @@
                 model.librarySources.shown == .allPhotographs
                     && Set(model.items.map(\.name)).isDisjoint(with: Set(names))
             }
-            try app.wait("the Library panel counting without them", timeout: 60) { model in
-                model.librarySources.recount()
+            try app.wait("the Library panel and the Keyword List counting without them", timeout: 60) { model in
                 let sources = model.librarySources
                 return sources.count(of: .allPhotographs) == all - names.count
                     && sources.count(of: .collection(CollectionPath(collection)!)) ?? 0 == 0
+                    && model.libraryPanels.keywordList?.keywords[tagged]?.photos ?? 0 == 0
             }
             let found = try app.photosFound("kw:\"\(keyword)\"")
             try app.expect(found == 0, "a search finds \(found) of the folder's photos")
@@ -93,6 +104,78 @@
             let back = try app.photosFound("kw:\"\(keyword)\" rating>=4")
             try app.expect(back == 1, "the rated photo with its keyword: \(back)")
             app.covered(.feature("library.collections"), via: .model)
+
+            // As the run had it.
+            let photos = app.photos
+            try app.main { model in
+                model.showFolder(photos)
+                model.showModule(.develop)
+            }
+            try app.wait("the photos folder again", timeout: 20) { $0.folder == photos && !$0.library.isListing }
+        }
+
+        /// ⌘Z after Remove from Folders: a culling change made in a folder that then left the library from its root's
+        /// menu reaches none of the photos of a folder added after it, which SQLite would have given its photos' IDs.
+        static let removedFolderUndo = Scenario(
+            "library.remove-folder-undo",
+            "⌘Z after Remove from Folders and another folder added: the change made in the folder that left reaches "
+                + "none of the new folder's photos",
+            claims: [.action(.undo), .feature("library.folders")],
+        ) { app in
+            let left = try SourcesScratch(app, photos: ["Left A.jpg", "Left B.jpg"])
+            let later = try SourcesScratch(app, photos: ["Later A.jpg", "Later B.jpg"])
+            defer {
+                left.remove(app)
+                later.remove(app)
+            }
+            func rated(_ scratch: SourcesScratch) -> Bool {
+                scratch.names.allSatisfy { SidecarStore().load(for: scratch.photo($0))?.metadata?.rating == 5 }
+            }
+
+            // Five stars on both of the first folder's photos from the keyboard: one culling change, on Undo.
+            try left.index(app)
+            try app.choose(.selectAllPhotos)
+            try app.wait("both photos selected") { $0.selectedPhotos.count == 2 }
+            try app.press(.rating5)
+            try app.waitWritten()
+            try app.wait("their sidecars rated", timeout: 15) { _ in rated(left) }
+
+            // The folder leaves the library from its root's menu; its rows are swept.
+            let row = "folders." + left.folder.standardizedFileURL.path
+            try app.main { model in model.expandedSidebarSections.insert(.folders) }
+            try app.wait("the folder's row in the Folders panel") { _ in
+                Views.editorWindow.flatMap { Views.find(row, in: $0) } != nil
+            }
+            try app.rightClickRow(row, choosing: "Remove from Folders")
+            try app.run("the folder's rows swept", timeout: 120) { model in
+                await model.library.service?.removalsSwept()
+            }
+
+            // A folder whose photos have five stars already is added after it.
+            for name in later.names {
+                try SidecarStore().save(
+                    Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(rating: 5)), for: later.photo(name),
+                )
+            }
+            try later.index(app)
+            try app.wait("the new folder's photos with their stars") { model in
+                Set(model.items.map(\.name)) == Set(later.names) && model.items.allSatisfy { $0.metadata.rating == 5 }
+            }
+
+            // ⌘Z takes back the change made in the folder that left: the new folder's photos keep their stars.
+            try app.wait("the change on Library's Undo") { $0.canPerform(.undo) }
+            try app.press(.undo)
+            try app.waitWritten()
+            try app.run("the library caught up with the Undo", timeout: 60) { model in
+                await model.library.service?.settled()
+            }
+            try app.expect(rated(later), "the new folder's sidecars kept their stars")
+            try app.expect(
+                try app.main { model in model.items.allSatisfy { $0.metadata.rating == 5 } },
+                "the grid shows their stars",
+            )
+            app.covered(.action(.undo), via: .key)
+            app.covered(.feature("library.folders"), via: .mouse)
 
             // As the run had it.
             let photos = app.photos

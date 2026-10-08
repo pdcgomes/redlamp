@@ -13,6 +13,7 @@
         static let all: [Scenario] = [
             libraryPanel,
             removedFolder,
+            removedFolderUndo,
             previousImportFollows,
             removeFolderPerformance,
             removeFolderAllPerformance,
