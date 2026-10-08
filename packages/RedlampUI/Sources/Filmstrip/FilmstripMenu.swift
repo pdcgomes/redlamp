@@ -17,7 +17,7 @@ enum FilmstripMenu {
         let menu = NSMenu()
         if culling {
             add(LibraryGridMenu.culling(for: photo, model: model), to: menu)
-            if !model.isModalDialogOpen {
+            if model.module == .library, !model.isModalDialogOpen {
                 add([LibraryGridMenu.stacking(for: photo, model: model)], to: menu)
             }
         }
