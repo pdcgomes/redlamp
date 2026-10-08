@@ -34,9 +34,12 @@ public struct BenchLibrary: Sendable {
     }
 
     public let root: URL
+    private let kitOverride: URL?
 
-    public init(root: URL) {
+    /// `kit` is the capture kit's folder when it isn't the library's own (the Mac's template).
+    public init(root: URL, kit: URL? = nil) {
         self.root = root
+        kitOverride = kit
     }
 
     public var tasksURL: URL {
@@ -48,7 +51,7 @@ public struct BenchLibrary: Sendable {
     }
 
     public var kitURL: URL {
-        root.appending(path: "Kit/\(BenchStore.lookKitID)", directoryHint: .isDirectory)
+        kitOverride ?? root.appending(path: "Kit/\(BenchStore.lookKitID)", directoryHint: .isDirectory)
     }
 
     // MARK: - Settings and queue
@@ -172,7 +175,13 @@ public struct BenchLibrary: Sendable {
         manifest.look?.settingsScreenshot = nil
         let new = try assets.map { asset in
             guard let file = kit.file(asset.file) else { throw BenchError.outsideFolder(asset.file) }
-            return BenchFolder.NewAsset(file: file, id: asset.id, label: asset.label, chart: asset.chart)
+            return BenchFolder.NewAsset(
+                file: file,
+                id: asset.id,
+                label: asset.label,
+                chart: asset.chart,
+                tiles: asset.tiles,
+            )
         }
         try FileManager.default.createDirectory(at: looksURL, withIntermediateDirectories: true)
         var folder = try BenchFolder.create(manifest, assets: new, in: looksURL)

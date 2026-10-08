@@ -19,6 +19,11 @@ enum TaskCommands {
       show <ID> [--json]       A task's results and how each paired, from Done or the outbox
       wait <ID> [--timeout S]  Returns once the task is back in Done and complete (exit 2 on timeout)
       withdraw <ID>            Takes a task back; the phone drops it unless it has results
+      look --app A --filter F [--variant V] [--settings "…"] [--set quick|standard|full] [--in DIR]
+                               A look reference from the kit template, as New Look makes on the
+                               phone, for a filter in a Mac app (default DIR: the current folder)
+      add <folder> <files…>    Files exports into a task or look reference and pairs them, as the
+                               iPhone app's share extension does
       serve [--port N]         The Lab's hub without the Lab, until interrupted: prints the pairing
                                code and what arrives (look references aren't fitted here)
     The folders are in \(BenchStore.standardRoot.path).
@@ -26,7 +31,7 @@ enum TaskCommands {
 
     static let valued: Set<String> = [
         "--title", "--app", "--kind", "--step", "--workstream", "--tracker", "--issue", "--note", "--question",
-        "--draft", "--timeout", "--id", "--port",
+        "--draft", "--timeout", "--id", "--port", "--filter", "--variant", "--settings", "--set", "--in",
     ]
 
     static func run(_ arguments: [String]) async throws {
@@ -43,6 +48,8 @@ enum TaskCommands {
         case "show": try show(arguments, store: store)
         case "wait": try await wait(arguments, store: store)
         case "serve": try await serve(arguments, store: store)
+        case "look": try look(arguments, store: store)
+        case "add": try add(arguments, store: store)
         case "withdraw":
             guard let id = arguments.positional.first else { throw CLIError(description: "withdraw needs a task ID") }
             try store.withdraw(id)
@@ -250,6 +257,46 @@ enum TaskCommands {
         if let note = folder.results.note {
             print("  note: \(note)")
         }
+    }
+
+    static func look(_ arguments: Arguments, store: BenchStore) throws {
+        guard let filter = arguments.value("--filter") else { throw CLIError(description: "look needs --filter") }
+        let kitSet = try arguments.value("--set").map { name in
+            guard let set = BenchManifest.LookReference.KitSet(rawValue: name) else {
+                throw CLIError(description: "--set is quick, standard or full")
+            }
+            return set
+        } ?? .standard
+        let parent = URL(fileURLWithPath: arguments.value("--in") ?? FileManager.default.currentDirectoryPath)
+        let library = BenchLibrary(
+            root: parent.appending(path: ".bench-looks"),
+            kit: store.url(.templates).appending(path: BenchStore.lookKitID),
+        )
+        let look = BenchManifest.LookReference(
+            app: arguments.value("--app") ?? "", filter: filter, variant: arguments.value("--variant"),
+            settings: arguments.value("--settings"), kitSet: kitSet,
+        )
+        let made = try library.newLook(look)
+        let destination = parent.appending(path: made.id, directoryHint: .isDirectory)
+        try FileManager.default.moveItem(at: made.url, to: destination)
+        try? FileManager.default.removeItem(at: library.root)
+        print("made \(made.id) with \(made.manifest.assets.count) kit images in \(destination.path)")
+    }
+
+    static func add(_ arguments: Arguments, store: BenchStore) throws {
+        var folder = try folder(arguments.positional.first, store: store)
+        let files = arguments.positional.dropFirst().map { URL(fileURLWithPath: $0) }
+        guard !files.isEmpty else { throw CLIError(description: "add needs the files to file") }
+        let pairer = BenchPairer(folder: folder)
+        for file in files {
+            let result = try folder.addResult(copying: file, pairer: pairer)
+            let how = result.pairedBy
+                .map { $0 == .similarity ? "similarity \(String(format: "%.2f", result.score ?? 0))" : $0.rawValue }
+            print("\(file.lastPathComponent) → \(result.asset ?? "unpaired")\(how.map { " (by \($0))" } ?? "")")
+        }
+        print(folder
+            .isComplete ? "\(folder.id) is complete" :
+            "\(folder.id) waits for: \(folder.missing.joined(separator: ", "))")
     }
 
     static func serve(_ arguments: Arguments, store: BenchStore) async throws {

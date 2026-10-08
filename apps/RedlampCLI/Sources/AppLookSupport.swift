@@ -100,16 +100,22 @@ extension AppLookCommands {
             return originals
         }
 
-        func analyse(_ matches: [PhotoMatch], table: LookTable) -> [AppLookReport.Photo] {
-            matches.compactMap { match in
-                let kitPhoto = kitPhotos[match.kit], export = photos[match.export]
-                return PhotoPairAnalysis.analyse(kit: kitPhoto.image, export: export.image, table: table).map {
-                    AppLookReport.Photo(
-                        file: export.name, kitPhoto: kitPhoto.file.file, matchedBy: match.by,
-                        similarity: match.similarity, measures: $0,
+        /// The session as the importer's inputs, with the photos paired by `matches`.
+        func inputs(_ matches: [PhotoMatch], provenance: AppLookReport.Provenance) -> CaptureInputs {
+            CaptureInputs(
+                charts: charts, originals: originals(),
+                photos: matches.map { match in
+                    let kitPhoto = kitPhotos[match.kit], export = photos[match.export]
+                    return CaptureInputs.PhotoPair(
+                        export: export.name, exportImage: export.image, kitPhoto: kitPhoto.file.file,
+                        kitImage: kitPhoto.image, kitFile: kitPhoto.url, matchedBy: match.by,
+                        similarity: match.similarity,
                     )
-                }
-            }
+                },
+                unmatched: photos.indices.filter { photo in !matches.contains { $0.export == photo } }
+                    .map { photos[$0].name },
+                provenance: provenance,
+            )
         }
     }
 

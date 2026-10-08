@@ -1,6 +1,7 @@
 import CoreGraphics
 import CryptoKit
 import Foundation
+import RedlampBench
 import RedlampEngineAPI
 import RedlampRecipes
 import RedlampServices
@@ -31,7 +32,7 @@ enum AppLookCommands {
     static let photoList = "research/app-looks/kit-photos.json"
     static let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "heif", "tif", "tiff"]
     static let apps: Set<String> = ["prequel", "lightroom"]
-    static let valued: Set<String> = ["--app", "--filter", "--kit"]
+    static let valued: Set<String> = ["--app", "--filter", "--kit", "--compact-kit"]
 
     static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
@@ -52,6 +53,9 @@ enum AppLookCommands {
     }
 
     static func kit(_ context: RecipeCommands.Context) async throws {
+        if context.arguments.has("--task") {
+            return try publishTemplate(context)
+        }
         if context.arguments.has("--compact") {
             return try await compactKit(context)
         }
@@ -122,6 +126,26 @@ enum AppLookCommands {
         try encoder.encode(CaptureKitManifest(layout: layout, files: files))
             .write(to: folder.appendingPathComponent(CaptureKitManifest.fileName), options: .atomic)
         print("wrote \(url.path) \(image.width)x\(image.height), README.txt and kit.json")
+    }
+
+    /// The kits already written, as the bench hub's `look-kit` template (TON-36), so the iPhone app's
+    /// new look references copy exactly these images.
+    static func publishTemplate(_ context: RecipeCommands.Context) throws {
+        let root = Repository.root
+        func folder(_ option: String, _ fallback: String) -> URL? {
+            let url = context.arguments.value(option).map { URL(fileURLWithPath: $0) } ?? root
+                .appendingPathComponent(fallback)
+            return FileManager.default
+                .fileExists(atPath: url.appendingPathComponent(CaptureKitManifest.fileName).path) ? url : nil
+        }
+        let full = folder("--kit", kitFolder), compact = folder("--compact-kit", compactKitFolder)
+        guard full != nil || compact != nil else {
+            throw CLIError(
+                description: "no kit to publish: run `redlamp recipe app-kit` (and --compact) first, or pass --kit",
+            )
+        }
+        let template = try BenchCapture.publishKit(full: full, compact: compact, in: BenchStore())
+        print("published \(template.manifest.assets.count) kit images as \(template.url.path)")
     }
 
     static func writeCharts(into folder: URL) throws -> [CaptureKitManifest.File] {
@@ -215,17 +239,14 @@ enum AppLookCommands {
         guard let path = arguments.positional.first, let name = arguments.value("--name") else {
             throw CLIError(description: "app-import needs <folder or compact export> --name <Redlamp name>")
         }
-        let provenance = try provenance(arguments, name: name)
-        let session = try Session.load(
-            path: URL(fileURLWithPath: path), kit: arguments.value("--kit").map { URL(fileURLWithPath: $0) },
-        )
-        var result = try AppLookImport.read(session.charts, sources: session.originals())
-        let matches = match(session.photos, session.kitPhotos)
-        result.report.add(photos: session.analyse(matches, table: result.table))
-        for photo in session.photos.indices where !matches.contains(where: { $0.export == photo }) {
-            result.report.warnings.append("\(session.photos[photo].name) doesn't match any kit photo")
+        let url = URL(fileURLWithPath: path)
+        if let reference = try? BenchFolder.load(url), reference.manifest.look != nil {
+            return try await importReference(reference, name: name, context: context)
         }
-        result.report.provenance = provenance
+        let provenance = try provenance(arguments, name: name)
+        let session = try Session.load(path: url, kit: arguments.value("--kit").map { URL(fileURLWithPath: $0) })
+        let matches = match(session.photos, session.kitPhotos)
+        let result = try session.inputs(matches, provenance: provenance).read()
 
         var recipe = try AppLookRecipe.make(result, name: name)
         let out = Repository.root.appendingPathComponent(outFolder).appendingPathComponent(slug(name))
@@ -244,13 +265,54 @@ enum AppLookCommands {
         }
     }
 
+    /// A look reference made on the iPhone (TON-36): its own kit images are the originals, and its
+    /// app, filter, variant and settings the provenance.
+    static func importReference(_ reference: BenchFolder, name: String, context: RecipeCommands.Context) async throws {
+        let look = try reference.manifest.look.map { look in
+            try provenance(name: name, app: look.app, filter: look.filter)
+            return look
+        }
+        let inputs = try BenchCapture.inputs(reference)
+        let result = try inputs.read()
+        var recipe = try AppLookRecipe.make(result, name: name)
+        let out = Repository.root.appendingPathComponent(outFolder).appendingPathComponent(slug(name))
+        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        let recipeURL = out.appendingPathComponent("\(slug(name)).\(Recipe.fileExtension)")
+        try RecipeFile.write(recipe, to: recipeURL)
+        try encoder.encode(result.report).write(to: out.appendingPathComponent("report.json"), options: .atomic)
+        try Data(result.report.summary.utf8).write(to: out.appendingPathComponent("report.txt"), options: .atomic)
+        let vignette = result.report.vignette?.model
+        func preview(_ image: PixelImage) -> CGImage? {
+            let small = image.cgImage().flatMap { PixelImage($0, maxLongEdge: 720) } ?? image
+            return PhotoPairAnalysis.preview(small, table: result.table, vignette: vignette).cgImage()
+        }
+        var rows: [[CGImage?]] = []
+        if let chart = inputs.charts.first,
+           let original = inputs.originals.compact ?? inputs.originals.charts.values.first {
+            rows.append([original.cgImage(), chart.image.cgImage(), preview(original)])
+        }
+        rows += inputs.photos.map { [$0.kitImage.cgImage(), $0.exportImage.cgImage(), preview($0.kitImage)] }
+        let sheet = try grid(rows, titles: ["Kit original", "App export", "Redlamp: \(recipe.name)"])
+        try ImageFile.write(sheet, to: out.appendingPathComponent("contact-sheet.jpg"))
+        print("\(look?.title ?? reference.id): \(result.report.summary)")
+        print("wrote \(recipeURL.path), report.json, report.txt and contact-sheet.jpg")
+        if context.arguments.has("--install") {
+            recipe = try context.library.install(contentsOf: recipeURL).recipe
+            print("installed \(recipe.id) (\(recipe.name))")
+        }
+    }
+
     /// The app and filter, kept privately; the recipe's name must be Redlamp's own.
     static func provenance(_ arguments: Arguments, name: String) throws -> AppLookReport.Provenance {
         let app = arguments.value("--app")?.lowercased()
         if let app, !apps.contains(app) {
             throw CLIError(description: "--app is prequel or lightroom")
         }
-        let filter = arguments.value("--filter")
+        return try provenance(name: name, app: app, filter: arguments.value("--filter"))
+    }
+
+    @discardableResult
+    static func provenance(name: String, app: String?, filter: String?) throws -> AppLookReport.Provenance {
         let forbidden = [app, filter].compactMap { $0?.lowercased() } + apps.sorted()
         if forbidden.contains(where: { !$0.isEmpty && name.lowercased().contains($0) }) {
             throw CLIError(description: "--name must be Redlamp's own name, not the app's or the filter's")

@@ -72,6 +72,8 @@ public struct BenchManifest: Sendable, Hashable {
         /// The number a capture-kit chart's barcode carries (1–3 for the full charts, 9 for the
         /// one-image kit), so a filtered export pairs with its chart.
         public var chart: Int?
+        /// The one-image kit's photo tiles, in order: what each shows.
+        public var tiles: [String]?
         /// Whether the task is complete only once this asset has a result.
         public var counts: Bool
 
@@ -82,6 +84,7 @@ public struct BenchManifest: Sendable, Hashable {
             sha256: String,
             bytes: Int,
             chart: Int? = nil,
+            tiles: [String]? = nil,
             counts: Bool = true,
         ) {
             self.id = id
@@ -90,11 +93,12 @@ public struct BenchManifest: Sendable, Hashable {
             self.sha256 = sha256
             self.bytes = bytes
             self.chart = chart
+            self.tiles = tiles
             self.counts = counts
         }
 
         enum CodingKeys: String, CodingKey {
-            case id, file, label, sha256, bytes, chart, counts
+            case id, file, label, sha256, bytes, chart, tiles, counts
         }
 
         public init(from decoder: Decoder) throws {
@@ -105,6 +109,7 @@ public struct BenchManifest: Sendable, Hashable {
             sha256 = try container.decode(String.self, forKey: .sha256)
             bytes = try container.decode(Int.self, forKey: .bytes)
             chart = try container.decodeIfPresent(Int.self, forKey: .chart)
+            tiles = try container.decodeIfPresent([String].self, forKey: .tiles)
             counts = try container.decodeIfPresent(Bool.self, forKey: .counts) ?? true
         }
     }

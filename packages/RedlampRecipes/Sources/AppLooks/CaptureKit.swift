@@ -135,8 +135,8 @@ public extension AppLookReport.Photo {
 }
 
 public extension AppLookReport.Provenance {
-    init(app: String?, filter: String?) {
-        self.init(app: app, filter: filter, captured: Date())
+    init(app: String?, filter: String?, variant: String? = nil, settings: String? = nil) {
+        self.init(app: app, filter: filter, captured: Date(), variant: variant, settings: settings)
     }
 }
 
@@ -213,6 +213,12 @@ public enum AppLookRecipe {
         }
         if let filter = report.provenance?.filter {
             provenance["filter"] = .string(filter)
+        }
+        if let variant = report.provenance?.variant {
+            provenance["variant"] = .string(variant)
+        }
+        if let settings = report.provenance?.settings {
+            provenance["settings"] = .string(settings)
         }
         if let captured = report.provenance?.captured {
             provenance["captured"] = .string(ISO8601DateFormatter().string(from: captured))

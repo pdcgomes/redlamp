@@ -90,13 +90,22 @@ public struct BenchFolder: Sendable {
         public var id: String?
         public var label: String?
         public var chart: Int?
+        public var tiles: [String]?
         public var counts: Bool
 
-        public init(file: URL, id: String? = nil, label: String? = nil, chart: Int? = nil, counts: Bool = true) {
+        public init(
+            file: URL,
+            id: String? = nil,
+            label: String? = nil,
+            chart: Int? = nil,
+            tiles: [String]? = nil,
+            counts: Bool = true,
+        ) {
             self.file = file
             self.id = id
             self.label = label
             self.chart = chart
+            self.tiles = tiles
             self.counts = counts
         }
     }
@@ -130,7 +139,8 @@ public struct BenchFolder: Sendable {
             return try BenchManifest.Asset(
                 id: id, file: relative, label: asset.label,
                 sha256: BenchFile.sha256(staging.appending(path: relative)),
-                bytes: BenchFile.size(staging.appending(path: relative)), chart: asset.chart, counts: asset.counts,
+                bytes: BenchFile.size(staging.appending(path: relative)), chart: asset.chart, tiles: asset.tiles,
+                counts: asset.counts,
             )
         }
         if !pictures.isEmpty {

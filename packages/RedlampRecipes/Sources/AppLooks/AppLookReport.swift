@@ -117,6 +117,10 @@ public struct AppLookReport: Codable, Sendable {
         public var app: String?
         public var filter: String?
         public var captured: Date
+        /// The filter's variant, when it has several.
+        public var variant: String?
+        /// The settings used, as the owner noted them.
+        public var settings: String?
     }
 
     public var kitVersion: Int
