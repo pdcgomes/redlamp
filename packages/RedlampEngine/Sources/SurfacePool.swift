@@ -36,6 +36,11 @@ final class SurfacePool {
     /// Surfaces made so far, for tests.
     private(set) var surfacesMade = 0
 
+    /// The targets' textures, for tests.
+    var textures: [any MTLTexture] {
+        slots.compactMap { $0?.target.texture }
+    }
+
     init(device: any MTLDevice) {
         self.device = device
     }

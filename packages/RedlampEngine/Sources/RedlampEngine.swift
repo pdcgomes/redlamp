@@ -66,6 +66,12 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         session.withLock { $0 }
     }
 
+    /// The textures the stages and surface rings hold, for tests. On `renderQueue` only.
+    var heldTextures: [any MTLTexture] {
+        detailStage.heldTextures + masks.heldTextures
+            + [surfaces, overviews, comparisons, comparisonOverviews].flatMap(\.textures)
+    }
+
     let sessions: SessionCache
     /// Lets go of cached sessions when the system runs short of memory.
     private let memoryPressure: any DispatchSourceMemoryPressure

@@ -19,6 +19,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// decode hasn't started, throws `CancellationError`.
     func prefetch(_ urls: [URL])
 
+    /// Lets go of every photo and what was kept for them (the editor window closed). Nothing
+    /// is open afterwards: `open(_:)` decodes the photo again.
+    func releaseResources() async
+
     /// Schedules an interactive render. Non-blocking; if a render is in flight, the
     /// newest request replaces any pending one.
     func render(_ request: RenderRequest)
@@ -268,4 +272,6 @@ public extension EditingEngine {
     }
 
     func releaseGenerativeFill() async {}
+
+    func releaseResources() async {}
 }

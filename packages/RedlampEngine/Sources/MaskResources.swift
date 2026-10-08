@@ -512,6 +512,12 @@ final class MaskResources {
         parked.flatMap(\.textures)
     }
 
+    /// Every photo's textures: the current one's, those kept aside, and edge and colour maps.
+    var heldTextures: [any MTLTexture] {
+        [rasters, scratch, paintBase?.texture, editGuide?.texture, analysisGuide].compactMap(\.self) + parkedTextures
+            + edgeMaps.compactMap(\.texture) + colorMaps.compactMap(\.texture)
+    }
+
     /// Fits the photo within its share, dropping in order unused slices, the painting cache, the
     /// guides (each one render) and then the least recently used slices (each maybe a PNG decode).
     private func park(_ session: ImageSession, queue: (any MTLCommandQueue)?) {

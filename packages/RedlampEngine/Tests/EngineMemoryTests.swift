@@ -658,6 +658,47 @@ struct EngineMemoryTests {
         #expect(retouched == nil)
     }
 
+    /// The editor window closed after a retouched, masked photo and the next one, which is
+    /// prefetched with it: the engine keeps no photo, and no texture for one.
+    @Test(.enabled(if: EngineSmokeTests.canRender && closed != nil && next != nil))
+    func `releasing the engine's resources frees every photo`() async throws {
+        let engine = try RedlampEngine()
+        let (closed, next) = try (#require(Self.closed), #require(Self.next))
+        weak var first: ImageSession?
+        weak var retouched: ImageSession?
+        weak var second: ImageSession?
+        do {
+            let info = try await engine.open(closed)
+            var recipe = try ProcessStabilityTests.retouchEdit(process: EditRecipe.currentProcessVersion)
+            recipe.spots.append(RetouchSpot(
+                mode: .remove, center: ImagePoint(x: 0.7, y: 0.3), source: ImagePoint(x: 0.7, y: 0.3), radius: 0.03,
+            ))
+            try await Self.frame(engine, recipe)
+            _ = try await ProcessStabilityTests.measure(engine, info: info, recipe: recipe)
+            first = engine.currentSession()
+            engine.prefetch([next, closed])
+            _ = try await engine.open(next)
+            try await Self.frame(engine, recipe)
+            second = engine.currentSession()
+            retouched = engine.retouch.retouchedSessions.last
+        }
+        #expect(first != nil && retouched != nil && second != nil)
+        await engine.releaseResources()
+        // A retouched copy's maps are made in the background after its frame.
+        for _ in 0 ..< 150 where first != nil || retouched != nil || second != nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let held = engine.renderQueue.sync { engine.heldTextures.reduce(0) { $0 + $1.allocatedSize } }
+        withKnownIssue("MEM-09: closing the editor window releases nothing") {
+            #expect(first == nil)
+            #expect(retouched == nil)
+            #expect(second == nil)
+            #expect(engine.currentSession() == nil)
+            #expect(engine.sessions.bytesCached == 0)
+            #expect(held == 0, "\(held >> 20) MB of textures held")
+        }
+    }
+
     /// The photo open now, fitted in a canvas.
     static func frame(_ engine: RedlampEngine, _ recipe: EditRecipe) async throws {
         var frames = engine.frames().makeAsyncIterator()
