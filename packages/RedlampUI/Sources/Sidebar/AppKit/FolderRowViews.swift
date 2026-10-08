@@ -134,15 +134,9 @@ enum FolderActions {
 
     /// Remove from Folders: the root leaves Folders and the library, with its photos, as Lightroom Classic's
     /// Remove does; nothing on disk changes, and Add Folder… brings them back with what their sidecars hold.
-    /// Like Folders' other changes, it isn't on Undo. Once the library's lists leave its photos out, the Keyword
-    /// List and the Library panel count again, as they count from the index.
+    /// Like Folders' other changes, it isn't on Undo.
     static func remove(_ root: WorkingFolder, model: EditorModel) {
-        guard let removal = model.library.remove(root) else { return }
-        Task { [weak model] in
-            await removal.value
-            model?.libraryPanels.refreshKeywords()
-            model?.librarySources.recount()
-        }
+        model.library.remove(root)
     }
 
     static func locate(_ root: WorkingFolder, model: EditorModel) {

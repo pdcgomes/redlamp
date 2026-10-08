@@ -80,6 +80,15 @@ public extension EditorModel {
             guard let self else { return }
             stackSuggestions = found.filter { !dismissedStacks.contains($0) }
         }
+        library.onRemoved = { [weak self] in self?.libraryLostFolder() }
+    }
+
+    /// A folder left the library, from Folders or as the library opened: what counts from the index counts again,
+    /// the Keyword List, the Library panel and the custom labels.
+    private func libraryLostFolder() {
+        libraryPanels.refreshKeywords()
+        librarySources.recount()
+        refreshCustomLabels()
     }
 
     private func libraryChanged(_ diff: LibraryDiff) {

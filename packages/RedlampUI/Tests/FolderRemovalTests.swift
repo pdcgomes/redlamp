@@ -124,6 +124,72 @@ struct FolderRemovalTests {
         #expect(model.librarySources.count(of: .allPhotographs) == 1)
     }
 
+    /// The photos the Keyword List counts for Lisbon's keyword; nil until it's read.
+    static func lisbonKeyword(_ model: EditorModel) -> Int? {
+        model.libraryPanels.keywords.map { $0.list.keywords[KeywordPath("Places/Lisbon")!]?.photos ?? 0 }
+    }
+
+    @Test func `a folder taken out of Folders other than from its menu leaves the panels' counts too`() async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["A.jpg"])
+        let trip = try Self.trip(in: sandbox)
+        try SidecarStore().save(
+            Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(customLabel: "Hero")),
+            for: trip.appending(path: "Day 2/C.jpg"),
+        )
+        let model = try await sandbox.open()
+        let service = try #require(sandbox.service)
+        try await Self.add(trip, to: model.library, service: service)
+        let sources = model.librarySources
+        try await sandbox.counts { $0.count(of: .collection(Self.lisbon)) == 1 }
+        model.libraryPanels.refreshKeywords()
+        model.refreshCustomLabels()
+        try await sandbox.eventually { Self.lisbonKeyword(model) == 1 && !model.customLabelCounts.isEmpty }
+        try #require(Self.lisbonKeyword(model) == 1 && model.customLabelCounts.map(\.name) == ["Hero"])
+
+        // Taken out through the library itself, as Locate… and the scenarios take a root out.
+        try model.library.remove(#require(model.library.root(containing: trip)))
+        try await sandbox.eventually(seconds: 20) {
+            sources.count(of: .collection(Self.lisbon)) ?? 0 == 0 && Self.lisbonKeyword(model) == 0
+                && model.customLabelCounts.isEmpty
+        }
+        #expect(sources.count(of: .collection(Self.lisbon)) ?? 0 == 0, "the Library panel counted again")
+        #expect(sources.count(of: .allPhotographs) == 1)
+        #expect(Self.lisbonKeyword(model) == 0, "the Keyword List was read again")
+        #expect(model.customLabelCounts.isEmpty, "and the custom labels")
+    }
+
+    @Test func `the folders the library takes out as it opens leave the panels' counts`() async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["A.jpg"])
+        let trip = try Self.trip(in: sandbox)
+        let first = try await sandbox.open()
+        try await Self.add(trip, to: first.library, service: #require(sandbox.service))
+        sandbox.service?.close()
+
+        // Folders kept without Trip, as the library was off when it lost it.
+        let suite = "folder-removal-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { UserDefaults().removePersistentDomain(forName: suite) }
+        FolderLibrary(defaults: defaults).add([sandbox.root])
+        let library = FolderLibrary(defaults: defaults)
+        let model = EditorModel(engine: StubEngine(), library: library)
+        let paths = LibraryPaths(root: sandbox.base.appending(path: "Library", directoryHint: .isDirectory))
+        let service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
+            StoreThumbnailMaker.imageIO(url, nil, size)
+        }
+        library.attach(service)
+        defer { service.close() }
+        try await sandbox.eventually(seconds: 30) {
+            model.librarySources.isCounted && model.libraryPanels.keywords != nil
+        }
+        #expect(model.librarySources.count(of: .allPhotographs) == 1, "the Library panel counted without Trip")
+        #expect(model.librarySources.count(of: .collection(Self.lisbon)) ?? 0 == 0)
+        #expect(Self.lisbonKeyword(model) == 0, "so did the Keyword List")
+    }
+
     /// The view carrying `identifier` in `view`'s tree.
     static func view(_ identifier: String, in view: NSView?) -> NSView? {
         guard let view else { return nil }

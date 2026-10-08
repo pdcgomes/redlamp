@@ -151,6 +151,8 @@ public final class FolderLibrary {
     @ObservationIgnored var onReopened: (@MainActor ([LibraryItem]) -> Void)?
     /// Focus stacks found in the shown directories.
     @ObservationIgnored var onStacks: (@MainActor ([StackSuggestion]) -> Void)?
+    /// Called once a folder has left the library, from Folders or as the library opened (`LibraryService.removed`).
+    @ObservationIgnored var onRemoved: (@MainActor () -> Void)?
     /// What stacks are found from: the engine's reader, which in the Mac app reads in the decode
     /// service. Until it is set, no stacks are found.
     @ObservationIgnored var files: any FileInspecting = UnreadableFiles()

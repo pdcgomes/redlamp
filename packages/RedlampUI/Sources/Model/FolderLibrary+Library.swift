@@ -57,6 +57,7 @@ public extension FolderLibrary {
             self?.countFolders()
             self?.followTrash()
         }
+        service.removed = { [weak self] in self?.onRemoved?() }
         service.start(following: roots.map(\.url), removingOthers: hasSavedRoots)
     }
 

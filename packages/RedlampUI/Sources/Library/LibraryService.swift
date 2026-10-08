@@ -79,6 +79,10 @@ public final class LibraryService {
     @ObservationIgnored private var waitingRemovals: [(root: URL, kept: [URL])] = []
     /// As it opens, the library takes out the roots Folders doesn't have (`start`).
     @ObservationIgnored private var removesOthers = false
+    /// Called once a folder has left the library, however it was taken out (`remove`, and as the library opens):
+    /// its photos are out of every list, and of the counts made from keywords and collections, which the panels
+    /// read from the index again.
+    @ObservationIgnored var removed: (@MainActor () -> Void)?
     @ObservationIgnored private var writingAllXMP: Task<Void, Never>?
     @ObservationIgnored private var memoryPressure: DispatchSourceMemoryPressure?
     /// Roots whose volumes change tracking has caught up with since launch, and that answer still.
@@ -327,7 +331,9 @@ public final class LibraryService {
             await previous?.value
             await core.recovered()
             do {
-                try await core.roots.remove(root, keeping: roots)
+                if try await core.roots.remove(root, keeping: roots) != nil {
+                    await self?.removedFromLibrary()
+                }
             } catch {
                 let reason = String(describing: error)
                 Self.log.error("A folder wasn't taken out of the library: \(reason, privacy: .public)")
@@ -339,6 +345,11 @@ public final class LibraryService {
         }
         removal = task
         return task
+    }
+
+    /// Tells `removed` that a folder has left the library.
+    private func removedFromLibrary() {
+        removed?()
     }
 
     /// Takes out the roots the library has that none of the roots followed is, holds or is inside, but the
@@ -357,6 +368,9 @@ public final class LibraryService {
                     Self.log.notice(
                         "A folder Folders doesn't have left the library, with \(removal.photos.count) photos",
                     )
+                }
+                if !removed.isEmpty {
+                    await self?.removedFromLibrary()
                 }
             } catch {
                 let reason = String(describing: error)
@@ -738,6 +752,12 @@ public final class LibraryService {
     /// Returns once the XMP syncs asked for so far are done.
     @_spi(Harness) public func xmpSynced() async {
         await core?.xmpSynced()
+    }
+
+    /// Returns once the folders taken out of the library so far have left it and their rows are swept.
+    @_spi(Harness) public func removalsSwept() async {
+        await removal?.value
+        await core?.roots.swept()
     }
 
     /// Runs `plan`, telling the lists of its photos once the index holds it (when its first sidecar is
