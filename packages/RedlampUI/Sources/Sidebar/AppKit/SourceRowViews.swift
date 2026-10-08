@@ -104,10 +104,16 @@ extension SidebarCellView {
             menu.addItem(NSMenuItem(title: "New Collection Inside…") {
                 CollectionSheets.create(.collection, inside: path, model: model)
             })
+            menu.addItem(NSMenuItem(title: "New Smart Collection Inside…") {
+                SmartCollectionSheet.create(inside: path, model: model)
+            })
             menu.addItem(NSMenuItem(title: "New Collection Set Inside…") {
                 CollectionSheets.create(.set, inside: path, model: model)
             })
             menu.addItem(.separator())
+        }
+        if kind == .smart {
+            menu.addItem(NSMenuItem(title: "Edit Smart Collection…") { SmartCollectionSheet.edit(path, model: model) })
         }
         menu.addItem(NSMenuItem(title: "Rename…") { CollectionSheets.rename(path, model: model) })
         let move = NSMenuItem(title: "Move To", action: nil, keyEquivalent: "")

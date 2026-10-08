@@ -5,9 +5,10 @@
 
     /// The left panel's Collections section (LIB-23): sets and collections made from the File menu, ⌘N and a
     /// set's menu, renamed, moved into a set and deleted with Undo; the selection's photos put in a collection from
-    /// the Photo menu and the palette and taken out of the one shown with ⌫; and the target collection.
+    /// the Photo menu and the palette and taken out of the one shown with ⌫; the target collection; and the smart
+    /// collection editor.
     enum CollectionScenarios {
-        static let all: [Scenario] = [collections, targetCollection]
+        static let all: [Scenario] = [collections, targetCollection, smartCollectionEditor]
 
         static let collections = Scenario(
             "library.collections",
@@ -165,7 +166,77 @@
         }
     }
 
+    extension CollectionScenarios {
+        static let smartCollectionEditor = Scenario(
+            "library.smart-collection-editor",
+            "The smart collection editor from the File menu and a smart collection's menu: rules added and given a "
+                + "field, a comparison and a value, its text written from them, and rules made again from the text",
+            claims: [.action(.newSmartCollection)],
+        ) { app in
+            let scratch = try SourcesScratch(app, photos: ["A.jpg", "B.jpg", "C.jpg"])
+            defer {
+                app.removeCollectionsMade()
+                scratch.remove(app)
+            }
+            try scratch.index(app)
+            let (a, b) = (scratch.photo("A.jpg"), scratch.photo("B.jpg"))
+            try app.main { model in
+                model.select(a)
+                model.click(b, toggling: true)
+            }
+            try app.press(.flagPick)
+            try app.main { $0.select(a) }
+            try app.press(.rating3)
+            let picked = "Picked \(scratch.folder.lastPathComponent.suffix(8))"
+
+            // New: the picks rule it starts with, and a rule added for photos not edited.
+            try app.choose(.newSmartCollection)
+            try app.waitForSheet("New Smart Collection")
+            try app.replaceInSheet("smart.name", with: picked)
+            try app.expect(try app.smartSheetValue("smart.text") == "flag:pick", "it starts with the picks")
+            try app.pressInSheet("smart.addRule")
+            try app.chooseInCollectionSheet("smart.rule.1.field", "Edited")
+            try app.replaceInSheet("smart.rule.1.value", with: "no")
+            try app.wait("the rules' text") { _ in (try? app.smartSheetValue("smart.text")) == "flag:pick edited:no" }
+            try app.confirmSheet("New Smart Collection")
+            try app.wait("the smart collection counting the two picks", timeout: 30) { _ in
+                app.sourceRowLabel("collections.\(picked)") == "\(picked), 2 photos"
+            }
+
+            // Edited: its rules read from its query; the text typed makes them again.
+            try app.rightClick(.identifier("collections.\(picked)"), choosing: "Edit Smart Collection…")
+            try app.waitForSheet("Edit Smart Collection")
+            try app.expect(try app.smartSheetValue("smart.rule.1.field") == "Edited", "its second rule is on Edited")
+            try app.replaceInSheet("smart.text", with: "flag:pick rating>=3")
+            try app.wait("the rules made again from the text") { _ in
+                (try? app.smartSheetValue("smart.rule.1.field")) == "Rating"
+                    && (try? app.smartSheetValue("smart.rule.1.comparison")) == "≥"
+                    && (try? app.smartSheetValue("smart.rule.1.value")) == "3"
+            }
+            try app.confirmSheet("Edit Smart Collection")
+            try app.wait("the smart collection counting the rated pick", timeout: 30) { _ in
+                app.sourceRowLabel("collections.\(picked)") == "\(picked), 1 photo"
+            }
+            try app.click(.identifier("collections.\(picked)"))
+            try app.wait("its photo shown", timeout: 20) { model in
+                !model.librarySources.isListing && model.items.map(\.url) == [a]
+            }
+        }
+    }
+
     extension RunningApp {
+        /// The text of the field, or the title chosen in the pop-up, carrying `identifier` in the sheet in front.
+        func smartSheetValue(_ identifier: String) throws -> String? {
+            try main { _ in
+                guard let sheet = NSApp.modalWindow ?? Views.editorWindow?.attachedSheet,
+                      let content = sheet.contentView,
+                      let view = Views.all(NSControl.self, in: content)
+                      .first(where: { $0.accessibilityIdentifier() == identifier })
+                else { return nil }
+                return (view as? NSPopUpButton)?.titleOfSelectedItem ?? view.stringValue
+            }
+        }
+
         /// Chooses `title` in the pop-up `identifier` of the sheet in front, as a click in its menu does.
         func chooseInCollectionSheet(_ identifier: String, _ title: String) throws {
             try main { _ in
@@ -176,6 +247,9 @@
                       let item = popUp.item(withTitle: title)
                 else { throw ScenarioFailure("\(identifier) in the sheet has no \(title)") }
                 popUp.select(item)
+                if let action = popUp.action {
+                    NSApp.sendAction(action, to: popUp.target, from: popUp)
+                }
             }
             pause(0.1)
         }
@@ -225,7 +299,8 @@
             try? main { model in
                 let sources = model.librarySources
                 for place in sources.collections(inside: nil)
-                    where ["Clients ", "Portfolio ", "Best ", "Picks "].contains(where: place.path.name.hasPrefix) {
+                    where ["Clients ", "Portfolio ", "Best ", "Picks ", "Picked "]
+                    .contains(where: place.path.name.hasPrefix) {
                     sources.delete(place.path)
                 }
             }

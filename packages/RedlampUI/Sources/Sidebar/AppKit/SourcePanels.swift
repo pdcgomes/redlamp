@@ -30,7 +30,7 @@ enum SourcePanels {
     static func newMenu(model: EditorModel) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        for action in [ShortcutAction.newCollection, .newCollectionSet] {
+        for action in [ShortcutAction.newCollection, .newSmartCollection, .newCollectionSet] {
             let item = NSMenuItem(title: action.title) { model.perform(action) }
             item.isEnabled = model.library.service?.isReady == true
             menu.addItem(item)

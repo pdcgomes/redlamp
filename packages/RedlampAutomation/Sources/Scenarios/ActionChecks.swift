@@ -178,6 +178,11 @@
                     action: action,
                     unavailable: "makes a collection in a sheet, or needs one: checked by library.collections",
                 )
+            case .newSmartCollection:
+                ActionCheck(
+                    action: action,
+                    unavailable: "opens the smart collection editor: checked by library.smart-collection-editor",
+                )
             case .addToTargetCollection:
                 ActionCheck(
                     action: action,

@@ -45,6 +45,27 @@ public extension LibrarySources {
         return true
     }
 
+    /// Makes a smart collection of the photos `query` finds, named `name` inside `set`; with `editing`, gives the
+    /// smart collection at that path the query, the name and the set. One change with Undo.
+    @discardableResult
+    func saveSmart(_ query: String, named name: String, inside set: CollectionPath?, editing: CollectionPath? = nil)
+        -> Bool {
+        guard problem(naming: name, inside: set, renaming: editing) == nil, let path = place(named: name, inside: set)
+        else { return false }
+        var changes: [PanelChange] = []
+        if let editing, editing != path {
+            changes.append(.collections(.rename(editing, to: path)))
+        }
+        changes.append(.collections(.smart(path, query: query)))
+        let title = editing == nil ? "New smart collection “\(path.displayName)”" : "Edit “\(path.displayName)”"
+        let reshow = editing.map { shown == .collection($0) && $0 != path } ?? false
+        return make(changes, title: title) { [weak self] in
+            if reshow {
+                self?.show(.collection(path))
+            }
+        }
+    }
+
     /// Renames the set or collection at `path` within its set, everything inside it following; the source shown
     /// within it is shown again under its new name.
     @discardableResult

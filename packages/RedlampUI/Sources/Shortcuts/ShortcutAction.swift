@@ -110,7 +110,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case cycleGridStyle, largerThumbnails, smallerThumbnails, showInFinder, showPhotosInSubfolders
     case showRecentlyTrashed, putBack, putBackBatch
     case showAllPhotographs, showPreviousImport, showMarked, showRejected
-    case newCollection, newCollectionSet, addToCollection, addToTargetCollection, removeFromCollection
+    case newCollection, newSmartCollection, newCollectionSet, addToCollection, addToTargetCollection
+    case removeFromCollection
     case toggleFilterBar, toggleFilters, lockFilters
     case sortByFolder, sortByCaptureTime, sortByName, sortByRating, sortByEditTime, sortByModified, sortByFileSize
     case reverseSort
@@ -173,7 +174,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .cycleGridStyle, .largerThumbnails, .smallerThumbnails, .showInFinder, .showPhotosInSubfolders,
              .showRecentlyTrashed, .putBack, .putBackBatch,
              .showAllPhotographs, .showPreviousImport, .showMarked, .showRejected,
-             .newCollection, .newCollectionSet, .addToCollection, .addToTargetCollection, .removeFromCollection,
+             .newCollection, .newSmartCollection, .newCollectionSet, .addToCollection, .addToTargetCollection,
+             .removeFromCollection,
              .toggleFilterBar, .toggleFilters, .lockFilters, .sortByFolder, .sortByCaptureTime, .sortByName,
              .sortByRating, .sortByEditTime, .sortByModified, .sortByFileSize, .reverseSort,
              .groupByNone, .groupByMoment, .groupByDay, .groupByFolder, .groupByCamera, .groupByLens,
@@ -239,6 +241,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .showMarked: "Show Marked"
         case .showRejected: "Show Rejected"
         case .newCollection: "New Collection…"
+        case .newSmartCollection: "New Smart Collection…"
         case .newCollectionSet: "New Collection Set…"
         case .addToCollection: "Add to Collection…"
         case .addToTargetCollection: "Add to Target Collection"
@@ -411,7 +414,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         // Lightroom Classic's, in Library, where Develop's New Snapshot and Delete Mask don't reach.
         case .newCollection: [.char("n", command: true)]
         case .removeFromCollection: [KeyCombo(.delete)]
-        case .newCollectionSet, .addToCollection, .addToTargetCollection: []
+        case .newSmartCollection, .newCollectionSet, .addToCollection, .addToTargetCollection: []
         // Lightroom Classic's keys for the active keyword set's nine keywords.
         case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9:

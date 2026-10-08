@@ -24,6 +24,7 @@ extension ShortcutAction {
         .showMarked: ["marked", "quick collection", "mark", "b", "library"],
         .showRejected: ["rejects", "rejected", "flagged", "x", "library"],
         .newCollection: ["collection", "album", "new", "make", "group", "library"],
+        .newSmartCollection: ["smart collection", "saved search", "rules", "query", "new", "library"],
         .newCollectionSet: ["collection set", "set", "folder", "group", "new", "library"],
         .addToCollection: ["collection", "album", "add", "put in", "selection", "library"],
         .addToTargetCollection: ["target", "collection", "add", "quick collection", "library"],
@@ -194,6 +195,7 @@ extension ShortcutAction {
         case .showMarked: "circle.inset.filled"
         case .showRejected: "xmark.circle"
         case .newCollection, .addToCollection: "rectangle.stack.badge.plus"
+        case .newSmartCollection: "gearshape"
         case .newCollectionSet: "square.stack.3d.up"
         case .addToTargetCollection: "plus.rectangle.on.rectangle"
         case .removeFromCollection: "rectangle.stack.badge.minus"

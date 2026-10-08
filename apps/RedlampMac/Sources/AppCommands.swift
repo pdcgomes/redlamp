@@ -31,6 +31,7 @@ struct AppCommands: Commands {
             // ⌘N is New Collection's in Library and New Snapshot's in Develop: AppKit gives a key to the first item
             // that has it, enabled or not.
             item(.newCollection, keyed: model.module == .library)
+            item(.newSmartCollection)
             item(.newCollectionSet)
             Divider()
             item(.export, perform: onExport)

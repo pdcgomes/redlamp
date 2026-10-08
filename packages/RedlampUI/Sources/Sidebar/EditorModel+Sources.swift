@@ -16,6 +16,8 @@ extension EditorModel {
             return true
         case .newCollection:
             return CollectionSheets.create(.collection, model: self)
+        case .newSmartCollection:
+            return SmartCollectionSheet.create(model: self)
         case .newCollectionSet:
             return CollectionSheets.create(.set, model: self)
         case .addToCollection:
@@ -36,7 +38,7 @@ extension EditorModel {
         }
         switch action {
         case .showPhotosInSubfolders: return true
-        case .newCollection, .newCollectionSet: return library.service?.isReady == true
+        case .newCollection, .newSmartCollection, .newCollectionSet: return library.service?.isReady == true
         case .addToCollection: return librarySources.canAdd && !librarySources.collectionsTakingPhotos.isEmpty
         case .addToTargetCollection: return librarySources.canAdd
         case .removeFromCollection: return librarySources.canRemove
