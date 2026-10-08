@@ -1,8 +1,10 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import Observation
 import RedlampCanvas
 import RedlampEngineAPI
+import SwiftUI
 import Testing
 @testable import RedlampUI
 
@@ -22,23 +24,41 @@ struct FilmstripHidingTests {
         UserDefaults().removePersistentDomain(forName: suite)
     }
 
-    /// An editor on a folder of three photos.
-    private func editor() async throws -> EditorModel {
+    /// An editor on a folder of `count` photos.
+    private func editor(photos count: Int = 3) async throws -> EditorModel {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for index in 0 ..< 3 {
+        for index in 0 ..< count {
             FileManager.default.createFile(
-                atPath: folder.appending(path: "IMG_000\(index).ARW").path,
+                atPath: folder.appending(path: String(format: "IMG_%04d.ARW", index)).path,
                 contents: Data([1]),
             )
         }
         let defaults = try #require(UserDefaults(suiteName: suite))
         let model = EditorModel(engine: StubEngine(), library: FolderLibrary(defaults: defaults))
         model.open([folder])
-        for _ in 0 ..< 400 where model.library.count < 3 {
+        for _ in 0 ..< 400 where model.library.count < count || model.selection == nil {
             try await Task.sleep(for: .milliseconds(5))
         }
-        try #require(model.library.count == 3)
+        try #require(model.library.count == count)
         return model
+    }
+
+    private static func views<T: NSView>(_: T.Type, in view: NSView?) -> [T] {
+        guard let view else { return [] }
+        return ((view as? T).map { [$0] } ?? []) + view.subviews.flatMap { views(T.self, in: $0) }
+    }
+
+    /// The filmstrip's photos where they can be seen in `window`, laid out.
+    private static func shownStrip(in window: NSWindow) -> FilmstripStripView? {
+        guard let content = window.contentView else { return nil }
+        content.layoutSubtreeIfNeeded()
+        return views(FilmstripStripView.self, in: content).first { strip in
+            strip.layoutSubtreeIfNeeded()
+            return !strip.isHiddenOrHasHiddenAncestor
+                && sequence(first: strip as NSView, next: \.superview).allSatisfy { $0.alphaValue > 0 }
+                && content.bounds.intersects(strip.convert(strip.bounds, to: content))
+                && strip.collectionView.frame.width > strip.scrollView.contentView.bounds.width
+        }
     }
 
     @Test func `Hide Automatically is on until it's turned off, and the next launch reads it back`() throws {
@@ -134,5 +154,62 @@ struct FilmstripHidingTests {
 
         other.filmstripHidesAutomatically = true
         #expect(model.filmstripHidesAutomatically && !model.makesRoomForFilmstrip)
+    }
+
+    /// #344: the filmstrip that slid away once the pointer left it comes back as it was left, scrolled
+    /// to the photo picked there, not at the first photo.
+    @Test func `hidden and shown again, the filmstrip comes back scrolled where it was`() async throws {
+        defer { cleanUp() }
+        let kept = FilmstripPreference.shared.hidesAutomatically
+        defer { FilmstripPreference.shared.hidesAutomatically = kept }
+        let model = try await editor(photos: 200)
+        model.filmstripHidesAutomatically = false
+        _ = NSApplication.shared
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1200, height: 700), styleMask: [.titled],
+            backing: .buffered, defer: false,
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(
+            rootView: EditorContentView(model: model, theme: ThemeSettings(), onOpen: {}),
+        )
+        defer { window.contentView = nil }
+        func eventually(_ condition: () -> Bool) async throws {
+            for _ in 0 ..< 400 where !condition() {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+        }
+        /// As the pointer leaving or coming back does, without waiting for the slide.
+        func hidesAutomatically(_ hides: Bool) {
+            withTransaction(\.disablesAnimations, true) { model.filmstripHidesAutomatically = hides }
+        }
+
+        try await eventually { Self.shownStrip(in: window) != nil }
+        let strip = try #require(Self.shownStrip(in: window))
+        let clip = strip.scrollView.contentView
+        let picked = 120
+        let frame = try #require(strip.collectionView.layoutAttributesForItem(at: IndexPath(item: picked, section: 0)))
+            .frame
+        clip.scroll(to: CGPoint(x: frame.midX - clip.bounds.width / 2, y: 0))
+        strip.scrollView.reflectScrolledClipView(clip)
+        let place = clip.bounds.origin.x
+        #expect(place > 0 && clip.bounds.contains(frame))
+        model.click(model.items[picked].url, toggling: false, extending: false)
+        try await eventually { model.selection == model.items[picked].url }
+        let middle = strip.convert(CGPoint(x: strip.bounds.midX, y: strip.bounds.midY), to: nil)
+
+        hidesAutomatically(true)
+        try await eventually { Self.shownStrip(in: window) == nil }
+        #expect(Self.shownStrip(in: window) == nil, "it slid away")
+        #expect(
+            window.contentView?.superview?.hitTest(middle) is CanvasMetalView,
+            "a click where it was is the photo's",
+        )
+        hidesAutomatically(false)
+        try await eventually { Self.shownStrip(in: window) != nil }
+        let shown = try #require(Self.shownStrip(in: window))
+        let bounds = shown.scrollView.contentView.bounds
+        #expect(abs(bounds.origin.x - place) < 0.5, "at \(bounds.origin.x), where it was left at \(place)")
+        #expect(bounds.contains(frame), "the photo picked is in view")
     }
 }

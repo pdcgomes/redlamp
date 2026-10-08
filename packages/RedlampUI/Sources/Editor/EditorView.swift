@@ -154,21 +154,23 @@ private struct FloatingFilmstrip: View {
                     overEdge = inside
                     hoverChanged()
                 }
-            if shown {
-                FilmstripView()
-                    .modifier(FloatingPane(opacity: theme.panelOpacity))
-                    // On the pane, so its empty parts take it too; a photo's cell has its own.
-                    .contextMenu {
-                        Toggle("Hide Automatically", isOn: $model.filmstripHidesAutomatically)
-                    }
-                    .onHover { inside in
-                        overStrip = inside
-                        hoverChanged()
-                    }
-                    .padding(.horizontal, PanelMetrics.inset)
-                    .padding(.bottom, PanelMetrics.inset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            FilmstripView()
+                .modifier(FloatingPane(opacity: theme.panelOpacity))
+                // On the pane, so its empty parts take it too; a photo's cell has its own.
+                .contextMenu {
+                    Toggle("Hide Automatically", isOn: $model.filmstripHidesAutomatically)
+                }
+                .onHover { inside in
+                    overStrip = inside
+                    hoverChanged()
+                }
+                .padding(.horizontal, PanelMetrics.inset)
+                .padding(.bottom, PanelMetrics.inset)
+                // Slid out of the window rather than removed: a new strip starts at the first photo.
+                .offset(y: shown ? 0 : PanelMetrics.filmstripHeight + PanelMetrics.inset)
+                .opacity(shown ? 1 : 0)
+                .allowsHitTesting(shown)
+                .accessibilityHidden(!shown)
         }
         .ignoresSafeArea(edges: .bottom)
         .animation(.snappy(duration: 0.25), value: shown)
