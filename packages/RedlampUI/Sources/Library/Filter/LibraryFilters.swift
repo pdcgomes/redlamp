@@ -13,7 +13,9 @@ import RedlampLibrary
 /// of the source, which works out the photos off the main thread, the latest filter winning
 /// (`LibraryFolderList`, `LibrarySourceList`). The metadata columns are counted once the list is
 /// shown, each over the photos of the filter but its own choice and those of the columns after it, so
-/// choosing in one narrows the next.
+/// choosing in one narrows the next. A filter that finds none of the source's photos gets two offers,
+/// each going with the query it was found for: the term whose removal brings back the most photos,
+/// and a name a typo or two from a word of a term.
 @MainActor
 @Observable
 public final class LibraryFilters {
@@ -40,6 +42,11 @@ public final class LibraryFilters {
     /// While the filter finds none of the source's photos: the term whose removal brings back the
     /// most of them, which the bar offers to take out.
     public private(set) var removal: QueryRemoval?
+    /// Meanwhile, a name of the library's a typo or two from a word of one of the terms, which the bar
+    /// offers to put in the word's place ("Did you mean Lisbon?").
+    public private(set) var suggestion: QuerySuggestion?
+    /// How long the last suggestion took from the list that found nothing, for the harness.
+    @ObservationIgnored @_spi(Harness) public private(set) var lastSuggesting: Duration?
     /// Counts the lists the library handed over, and the filter of the last, for the harness.
     @ObservationIgnored @_spi(Harness) public private(set) var listings = 0
     @ObservationIgnored @_spi(Harness) public private(set) var lastListed: LibraryListFilterSummary?
@@ -59,6 +66,7 @@ public final class LibraryFilters {
     @ObservationIgnored private var counting: Task<Void, Never>?
     @ObservationIgnored private var completing: Task<Void, Never>?
     @ObservationIgnored private var findingRemoval: Task<Void, Never>?
+    @ObservationIgnored private var findingSuggestion: Task<Void, Never>?
     @ObservationIgnored private var countAgain = false
     @ObservationIgnored private var lastChange = ContinuousClock.now
     /// The text has the keyboard: the active photo stays as it is until it's given back.
@@ -129,6 +137,9 @@ public final class LibraryFilters {
 
     private func follow(_ key: String?, photos: PhotoSource?) {
         self.photos = photos
+        if isBarShown {
+            service?.engine?.prepareNames()
+        }
         guard key != source else { return }
         source = key
         let kept = key.flatMap { key in sources.last { $0.source == key } }
@@ -140,7 +151,7 @@ public final class LibraryFilters {
         listed = nil
         columns = [:]
         completions = []
-        withdrawRemoval()
+        withdrawOffers()
         remember()
     }
 
@@ -244,6 +255,7 @@ public final class LibraryFilters {
         isBarShown = shown
         remember()
         if shown {
+            service?.engine?.prepareNames()
             countColumns()
         }
     }
@@ -266,7 +278,7 @@ public final class LibraryFilters {
     }
 
     private func changed() {
-        withdrawRemoval()
+        withdrawOffers()
         remember()
         apply()
     }
@@ -350,20 +362,21 @@ public final class LibraryFilters {
             listed = (listing.shown, listing.total)
         }
         countColumns()
-        findRemoval(after: listing)
+        findOffers(after: listing)
     }
 
     // MARK: - A filter that finds nothing
 
-    /// When the list the filter made is empty and the source isn't: the term to offer to take out,
-    /// found off the main thread. Any other list takes the offer back.
-    private func findRemoval(after listing: LibraryListing) {
+    /// When the list the filter made is empty and the source isn't: the term to offer to take out, and a name
+    /// to offer in a misspelt word's place, each found off the main thread. Any other list takes them back.
+    private func findOffers(after listing: LibraryListing) {
         findingRemoval?.cancel()
-        findingRemoval = nil
+        findingSuggestion?.cancel()
+        (findingRemoval, findingSuggestion) = (nil, nil)
         guard listing.shown == 0, listing.total > 0, let query = listing.filter.query, let photos,
               let engine = service?.engine
         else {
-            withdrawRemoval()
+            withdrawOffers()
             return
         }
         findingRemoval = Task { [weak self] in
@@ -373,14 +386,41 @@ public final class LibraryFilters {
                 removal = found
             }
         }
+        let started = ContinuousClock.now
+        findingSuggestion = Task { [weak self] in
+            let found = try? await engine.suggestion(for: query, in: photos)
+            guard !Task.isCancelled, let self else { return }
+            if suggestion != found {
+                suggestion = found
+            }
+            lastSuggesting = .now - started
+        }
     }
 
-    /// The filter changed: the offer, and the search for one, go.
-    private func withdrawRemoval() {
+    /// The filter changed: the offers, and the search for them, go.
+    private func withdrawOffers() {
         findingRemoval?.cancel()
-        findingRemoval = nil
+        findingSuggestion?.cancel()
+        (findingRemoval, findingSuggestion) = (nil, nil)
         if removal != nil {
             removal = nil
+        }
+        if suggestion != nil {
+            suggestion = nil
+        }
+    }
+
+    /// Puts the name the bar offers in the misspelt word's place.
+    public func takeSuggestion() {
+        guard let suggestion else { return }
+        edit { rules in
+            guard rules.rules.indices.contains(suggestion.index),
+                  rules.rules[suggestion.index] == suggestion.rule else {
+                return rules
+            }
+            var rules = rules
+            rules.rules[suggestion.index] = suggestion.replacement
+            return rules
         }
     }
 
@@ -472,6 +512,56 @@ public final class LibraryFilters {
     }
 }
 
+/// What the bar offers while the filter finds none of the source's photos (LIB-18): a name of the library's in a
+/// misspelt word's place, and the term whose removal brings back the most photos. Each is made from the query and
+/// changes it, so it can be shown wherever the query's text is.
+public struct FilterOffer: Sendable, Hashable {
+    public enum Kind: Sendable, Hashable {
+        case suggestion, removal
+    }
+
+    public let kind: Kind
+    /// What its button says: `Did you mean Lisbon? 2 photos`, `Remove kw:zzzz: 12 photos`.
+    public let title: String
+    /// What it does, for its help.
+    public let help: String
+}
+
+public extension LibraryFilters {
+    /// The offers for the filter while it finds none of the source's photos, the suggestion first.
+    var offers: [FilterOffer] {
+        var offers: [FilterOffer] = []
+        if let suggestion {
+            let photos = Self.photos(suggestion.count)
+            offers.append(FilterOffer(
+                kind: .suggestion, title: "Did you mean \(suggestion.name)? \(photos)",
+                help: "No photo matches every term of the filter; with \(suggestion.term) in place of "
+                    + "\(LibraryQuery(suggestion.rule).description) it finds \(photos)",
+            ))
+        }
+        if let removal {
+            let photos = Self.photos(removal.count)
+            offers.append(FilterOffer(
+                kind: .removal, title: "Remove \(removal.term): \(photos)",
+                help: "No photo matches every term of the filter; without \(removal.term) it finds \(photos)",
+            ))
+        }
+        return offers
+    }
+
+    /// Takes the offer of `kind`: the name in the misspelt word's place, or the term out of the filter.
+    func take(_ kind: FilterOffer.Kind) {
+        switch kind {
+        case .suggestion: takeSuggestion()
+        case .removal: takeOutRemoval()
+        }
+    }
+
+    private static func photos(_ count: Int) -> String {
+        count == 1 ? "1 photo" : "\(count.formatted()) photos"
+    }
+}
+
 /// A list the library handed over for the source the bar shows, made by its filter or sort.
 struct LibraryListing {
     /// The photos the filter found, of the source's.
@@ -494,7 +584,7 @@ struct LibraryListing {
 public struct FilterCompletion: Sendable, Hashable {
     /// What the row shows: `Places › Portugal`, `Fujifilm X-T5`, `rating:`, `Long Exposure`.
     public var title: String
-    /// What it is: `Keyword`, `Camera`, `Field`, `Trait`.
+    /// What it is: `Keyword`, `Camera`, `Field`, `Trait`, `City`.
     public var kind: String
     /// What replaces the term: a term of the language, then a space, or a field's name and `:`.
     public var text: String
@@ -526,6 +616,10 @@ public struct FilterCompletion: Sendable, Hashable {
         case .collection: "Collection"
         case .trait: "Trait"
         case .orientation: "Orientation"
+        case .sublocation: "Sublocation"
+        case .city: "City"
+        case .state: "State or Province"
+        case .country: "Country"
         default: completion.field.rawValue
         }
         self.init(title: title, kind: kind, text: completion.term + " ", count: completion.count)

@@ -120,7 +120,7 @@
     }
 
     enum FilterScenarios {
-        static let all: [Scenario] = [text, columns, sources, empty]
+        static let all: [Scenario] = [text, columns, sources, empty, suggestion]
 
         private static let raws: Set<String> = ["arw", "raf", "cr3", "nef", "dng", "orf", "pef", "rw2", "3fr"]
 
@@ -333,6 +333,53 @@
                 try app.wait("the raws back, the keyword taken out") { model in
                     model.libraryFilters?.filter.text == "ext:raw" && model.items.count == raws.count
                         && model.libraryFilters?.removal == nil
+                }
+                app.covered(.feature("library.filter"), via: .mouse)
+            }
+        }
+
+        static let suggestion = Scenario(
+            "library.filter-suggestion",
+            "A filter that finds nothing offers a name of the library's a typo from a word typed, with the photos it "
+                + "finds, beside the removal's button; its button puts the name in the word's place",
+            claims: [.feature("library.filter")],
+        ) { app in
+            defer { try? app.resetFilter() }
+            try app.withCollection(of: ["A.jpg", "B.jpg", "C.jpg"]) { scratch, _ in
+                // Two of the collection's photos given a keyword, as the scenario's set-up.
+                let (a, b) = (scratch.photo("A.jpg"), scratch.photo("B.jpg"))
+                try app.main { model in
+                    model.libraryPanels.follow()
+                    model.select(a)
+                    model.click(b, toggling: true)
+                }
+                try app.wait("the panels on the two") { $0.libraryPanels.selection.ids.count == 2 }
+                guard let lisbon = KeywordPath("E2E Lisbon") else { throw ScenarioFailure("No keyword path") }
+                try app.main { _ = $0.libraryPanels.add([lisbon]) }
+                try app.waitForPanels()
+
+                try app.press(.toggleFilterBar)
+                try app.wait("the filter bar's text to take the keyboard") { _ in
+                    (Views.editorWindow?.firstResponder as? NSTextView)?.delegate is NSTextField
+                }
+                try app.typeQuery("lisbom")
+                try app.wait("no photo, and Lisbon offered with the two", timeout: 20) { model in
+                    model.items.isEmpty && model.libraryFilters?.suggestion.map { $0.name == "Lisbon" && $0.count == 2 }
+                        == true
+                }
+                try app.wait("its button beside the removal's") { _ in
+                    guard let window = Views.editorWindow, let root = window.contentView?.superview,
+                          let button = Views.all(NSView.self, in: root)
+                          .first(where: { $0.accessibilityIdentifier() == "library.filter.suggestion" }),
+                          Views.find("library.filter.removal", in: window) != nil
+                    else { return false }
+                    return !button.isHiddenOrHasHiddenAncestor
+                        && button.accessibilityLabel() == "Did you mean Lisbon? 2 photos"
+                }
+                try app.clickView("library.filter.suggestion")
+                try app.wait("Lisbon in place of lisbom, and its two photos") { model in
+                    model.libraryFilters?.filter.text == "Lisbon" && Set(model.items.map(\.url)) == [a, b]
+                        && model.libraryFilters?.suggestion == nil
                 }
                 app.covered(.feature("library.filter"), via: .mouse)
             }

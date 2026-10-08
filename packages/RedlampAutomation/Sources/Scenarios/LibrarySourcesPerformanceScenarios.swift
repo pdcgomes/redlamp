@@ -165,7 +165,7 @@
             try app.main { _ in made.openModules() }
             try app.run("Group By on the collection", timeout: 300) { _ in await made.measureGrouping() }
             try app.run("typing in the filter bar on the collection", timeout: 900) { _ in await made.measureTyping() }
-            let (measured, turns) = try app.main { _ in (made.measured, made.turns) }
+            let (measured, turns, suggested) = try app.main { _ in (made.measured, made.turns, made.suggested) }
             func sorted(_ name: String) -> [Double] {
                 (measured[name] ?? []).sorted()
             }
@@ -189,11 +189,13 @@
             app.record("e2e-collection-grouping-p99", turns["grouping"]?.p99 ?? .infinity)
             app.record("e2e-collection-typing-p95", percentile("typing", 0.95))
             app.record("e2e-collection-typing-p99", turns["typing"]?.p99 ?? .infinity)
+            app.record("e2e-collection-suggestion-max", sorted("suggestion").last ?? .infinity)
             var note = "10,000 photos: the panels following the selection \(described("panels")), the first "
             note += String(format: "%.1f ms", measured["panels"]?.first ?? 0)
             note += "; Group By and the setting on screen \(described("grouping")), \(mainThread("grouping")), "
             note += String(format: "the first grouping %.0f ms", measured["grouping-first"]?.first ?? 0)
             note += "; typing, a key's photos on screen \(described("typing")), \(mainThread("typing"))"
+            note += "; the suggestion on screen \(described("suggestion")) (\(suggested.joined(separator: ", ")))"
             note += "; load \(ProcessInfo.processInfo.loadAverage)"
             app.recorder.write("note", ["collection-views": note])
         }
@@ -270,6 +272,8 @@
         /// What's measured on the collection, in milliseconds, by part, and the main thread over each part.
         private(set) var measured: [String: [Double]] = [:]
         private(set) var turns: [String: MainThreadMonitor.Summary] = [:]
+        /// The suggestions shown, each after the text typed.
+        private(set) var suggested: [String] = []
 
         /// The editor's own module views in a window of their own, behind the others, for what's timed on screen.
         func openModules() {
@@ -372,7 +376,8 @@
 
         /// The fixture's queries typed in the filter bar a character at a time, a key every 60 ms, the metadata
         /// columns shown: for each key that changes what the filter finds, its time until the photos it finds are
-        /// drawn and committed, and the main thread meanwhile, as `--library-perf` times them on folders.
+        /// drawn and committed, and the main thread meanwhile, as `--library-perf` times them on folders. Then
+        /// misspelt names, each one's last key timed until the suggestion is drawn.
         func measureTyping() async {
             guard let editor, let window = modules, let filters = editor.libraryFilters else { return }
             filters.setFilter(LibraryFilter(sections: [.text, .metadata]))
@@ -417,6 +422,28 @@
                 turns["typing"] = summary
             }
             measured["typing"] = onScreen
+
+            var suggestions: [Double] = []
+            for text in ["kw:birdz", "sunzet", "camera:canom"] {
+                LibraryFilterBars.clear(in: window)
+                _ = await listed("", since: .now)
+                LibraryFilterBars.type(String(text.dropLast()), in: window)
+                _ = await listed(String(text.dropLast()), since: .now)
+                try? await Task.sleep(for: .milliseconds(300))
+                let started = ContinuousClock.now
+                guard LibraryFilterBars.type(String(text.suffix(1)), in: window),
+                      await listed(text, since: started), filters.listed?.shown == 0
+                else { continue }
+                while filters.suggestion == nil, ContinuousClock.now - started < .seconds(1) {
+                    try? await Task.sleep(for: .microseconds(250))
+                }
+                guard let suggestion = filters.suggestion else { continue }
+                window.displayIfNeeded()
+                CATransaction.flush()
+                suggestions.append(Self.milliseconds(ContinuousClock.now - started))
+                suggested.append("\(text) → \(suggestion.term)")
+            }
+            measured["suggestion"] = suggestions
             filters.setFilter(LibraryFilter())
             filters.setBarShown(false)
         }

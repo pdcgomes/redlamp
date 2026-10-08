@@ -410,6 +410,67 @@ struct LibraryFilterTests {
         #expect(filters.removal == nil)
     }
 
+    @Test func `a filter that finds nothing offers a name a typo away, as a button that puts it in the word's place`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        let filters = try #require(model.libraryFilters)
+        filters.setFilter(LibraryFilter(text: "", sections: [.text]))
+        model.showLibrary(.grid)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+        window.setContentSize(NSSize(width: 1600, height: 1000))
+        defer { window.contentViewController = nil }
+        model.perform(.toggleFilterBar)
+        let bar = try #require(Self.find(LibraryFilterBarView.self, in: window.contentView))
+
+        try await filtered(model, "lisbao")
+        #expect(model.items.isEmpty)
+        try await eventually { filters.suggestion != nil && filters.removal != nil }
+        let suggestion = try #require(filters.suggestion)
+        #expect(suggestion.name == "Lisboa" && suggestion.term == "Lisboa" && suggestion.count == 1, "IMG_0001's city")
+        #expect(filters.offers.map(\.title) == ["Did you mean Lisboa? 1 photo", "Remove lisbao: 5 photos"])
+        let button = try #require(Self.view("library.filter.suggestion", in: bar))
+        let removal = try #require(Self.view("library.filter.removal", in: bar))
+        try await eventually { !button.isHidden && !removal.isHidden }
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!button.isHidden && button.frame.width > 100, "the suggestion's button")
+        #expect(button.frame.maxX <= removal.frame.minX, "beside the removal's")
+        #expect(button.accessibilityLabel() == "Did you mean Lisboa? 1 photo")
+
+        try click("library.filter.suggestion", in: window)
+        try await listed(model)
+        #expect(filters.filter.text == "Lisboa" && names(model) == ["IMG_0001.JPG"], "the word replaced")
+        try await eventually { button.isHidden }
+        #expect(button.isHidden && filters.suggestion == nil && filters.removal == nil)
+
+        // A field's value, the filter's other terms kept.
+        try await filtered(model, "rating>=3 camera:canom")
+        try await eventually { filters.suggestion != nil }
+        #expect(filters.suggestion?.term == "camera:Canon" && filters.suggestion?.count == 1, "DSC_0005, rated 4")
+        filters.take(.suggestion)
+        try await listed(model)
+        #expect(filters.filter.text == "rating>=3 camera:Canon" && names(model) == ["DSC_0005.JPG"])
+    }
+
+    @Test func `completions of places say which field each is`() async throws {
+        let kinds: [(LibraryQuery.Field, String)] = [
+            (.city, "City"), (.country, "Country"), (.state, "State or Province"), (.sublocation, "Sublocation"),
+        ]
+        for (field, kind) in kinds {
+            #expect(FilterCompletion(QueryCompletion(field: field, value: "Lisboa")).kind == kind, "\(field)")
+        }
+        defer { cleanUp() }
+        let (model, _) = try await open()
+        let filters = try #require(model.libraryFilters)
+        filters.complete("lisb", cursor: 4)
+        try await eventually { filters.completions.contains { $0.kind == "City" } }
+        #expect(filters.completions.contains { $0.kind == "City" && $0.text == "city:Lisboa " && $0.title == "Lisboa" })
+    }
+
     @Test func `the text and the bar's attributes and columns are one query, each written by the other`() async throws {
         defer { cleanUp() }
         let (model, _) = try await open()
