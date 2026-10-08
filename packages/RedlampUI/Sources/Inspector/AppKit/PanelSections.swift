@@ -15,17 +15,15 @@ extension PanelSectionView {
             rows: rows,
             actions: Actions(
                 isExpanded: { model.expandedPanels.contains(panel) },
-                isEdited: { panel.parameters.contains(where: model.isEdited) },
+                isEdited: { model.isEdited(panel) },
                 toggle: { solo in model.togglePanel(panel, solo: solo) },
-                reset: { model.resetParameters(panel.parameters, name: "Reset \(panel.title)") },
+                reset: { model.resetPanel(panel) },
             ),
         )
         identify(as: "panel.\(panel.rawValue)")
         headerMenu = {
             let menu = NSMenu()
-            menu.addItem(NSMenuItem(title: "Reset \(panel.title)") {
-                model.resetParameters(panel.parameters, name: "Reset \(panel.title)")
-            })
+            menu.addItem(NSMenuItem(title: "Reset \(panel.title)") { model.resetPanel(panel) })
             menu.addItem(.separator())
             menu.addItem(NSMenuItem(title: "Solo Mode", state: model.soloMode ? .on : .off) { model.soloMode.toggle() })
             menu.addItem(NSMenuItem(title: "Expand All Panels") { model.expandedPanels = Set(PanelID.allCases) })

@@ -42,14 +42,14 @@ struct PanelSection<Content: View>: View {
             .frame(height: 32)
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
-            .onTapGesture(count: 2) { model.resetParameters(panel.parameters, name: "Reset \(panel.title)") }
+            .onTapGesture(count: 2) { model.resetPanel(panel) }
             .onTapGesture {
                 withAnimation(.snappy(duration: 0.2)) {
                     model.togglePanel(panel, solo: NSEvent.modifierFlags.contains(.option))
                 }
             }
             .contextMenu {
-                Button("Reset \(panel.title)") { model.resetParameters(panel.parameters, name: "Reset \(panel.title)") }
+                Button("Reset \(panel.title)") { model.resetPanel(panel) }
                 Divider()
                 Toggle("Solo Mode", isOn: Bindable(model).soloMode)
                 Button("Expand All Panels") { model.expandedPanels = Set(PanelID.allCases) }
@@ -77,7 +77,7 @@ private struct EditedDot: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
-        if panel.parameters.contains(where: model.isEdited) {
+        if model.isEdited(panel) {
             Circle()
                 .fill(Theme.editedDot)
                 .frame(width: 4, height: 4)

@@ -1565,6 +1565,27 @@ public final class EditorModel {
 
     // MARK: - Panels
 
+    /// Whether a panel has edits, for the dot on its header. The Tone Curve's point curve is one,
+    /// though it isn't a parameter.
+    public func isEdited(_ panel: PanelID) -> Bool {
+        if panel == .toneCurve, pointCurve != EditRecipe.linearPointCurve {
+            return true
+        }
+        return panel.parameters.contains(where: isEdited)
+    }
+
+    /// Resets a panel from its header, in one step: the Tone Curve's point curve with its sliders.
+    public func resetPanel(_ panel: PanelID) {
+        guard panel == .toneCurve else {
+            resetParameters(panel.parameters, name: "Reset \(panel.title)")
+            return
+        }
+        var next = recipe
+        next.reset(panel.parameters)
+        next.pointCurve = EditRecipe.linearPointCurve
+        commit(next, .reset, "Reset \(panel.title)")
+    }
+
     public func togglePanel(_ panel: PanelID, solo: Bool) {
         if solo || soloMode {
             expandedPanels = expandedPanels.contains(panel) && expandedPanels.count == 1 ? [] : [panel]
