@@ -37,6 +37,15 @@ import RedlampLibrary
         grid.collectionView.indexPathsForVisibleItems().count
     }
 
+    /// The library's metadata presets the window offers, and the one chosen.
+    var presetNames: [String] {
+        model.metadataPresets.map(\.name)
+    }
+
+    var presetChosen: String? {
+        model.preset?.name
+    }
+
     /// The names of the photos given `rating` stars.
     func ratedNames(rating: Int) -> [String] {
         model.photos.filter { $0.choices.rating == rating }.map(\.primary.name)

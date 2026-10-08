@@ -3,6 +3,7 @@
     import RedlampDesign
     import RedlampDocument
     import RedlampEngineAPI
+    import RedlampLibrary
     @_spi(Harness) import RedlampUI
 
     /// The import window (LIB-27), from copies of the run's raws in a folder of the run's own: never a
@@ -12,13 +13,20 @@
 
         static let fromFolder = Scenario(
             "import.from-folder",
-            "Import Photos… copies a folder's photos, rated, flagged and labelled from the grid's keys, to a "
-                + "destination and a backup, and Library shows them selected",
+            "Import Photos… copies a folder's photos, rated, flagged and labelled from the grid's keys and given a "
+                + "metadata preset chosen in To, to a destination and a backup, and Library shows them selected",
             claims: [.action(.importPhotos), .feature("library.import")],
         ) { app in
             try app.openWorking()
             let scratch = try ImportScratch(app, photos: 3)
             defer { scratch.remove(app) }
+            let preset = MetadataPreset(name: "E2E Import", fields: [
+                .caption: MetadataPreset.Entry("E2E imported"), .copyright: MetadataPreset.Entry("© E2E"),
+            ])
+            try app.run("a metadata preset made in the library") { _ = await $0.libraryPanels.save(preset) }
+            defer {
+                try? app.run("the preset removed") { _ = await $0.libraryPanels.deletePreset(named: preset.name) }
+            }
             try app.main { _ in ImportWindowController.ignoresVolumes = true }
             // ⇧⌘I: synthetic events don't reach SwiftUI's handling of ⇧⌘ keys, so its item runs from the menu.
             try app.expectKeyBinding(.importPhotos)
@@ -32,6 +40,11 @@
                     names: "{name}",
                 )
             }
+            try app.wait("the library's presets in To") { _ in
+                ImportWindowController.current?.presetNames.contains(preset.name) == true
+            }
+            try app.chooseInImportWindow(preset.name, inPopUp: "import.preset")
+            try app.wait("the preset chosen") { _ in ImportWindowController.current?.presetChosen == preset.name }
             try app
                 .run("adding the folder") { _ in try? await ImportWindowController.current?.add(folder: scratch.card) }
             try app.wait("the folder browsed", timeout: 60) { _ in
@@ -68,6 +81,14 @@
                     "\(name)'s sidecar at the destination holds \(String(describing: metadata))",
                 )
             }
+            for name in scratch.names {
+                let metadata = sidecars.load(for: folder.appending(path: name))?.metadata
+                try app.expect(
+                    metadata?.caption == "E2E imported" && metadata?.copyright == "© E2E",
+                    "\(name)'s sidecar holds the preset's fields: \(String(describing: metadata))",
+                )
+            }
+            try app.chooseInImportWindow("None", inPopUp: "import.preset")
             try app.wait("Library showing the photos imported, selected", timeout: 30) { model in
                 model.folder?.standardizedFileURL.path == folder.standardizedFileURL.path
                     && model.selectedPhotos.count == 3 && model.module == .library
@@ -230,6 +251,22 @@
                 }
             }
             pause(0.05)
+        }
+
+        /// Chooses `title` in the import window's pop-up button `identifier`, as a click in its menu does: the item
+        /// selected, and the button's action sent.
+        func chooseInImportWindow(_ title: String, inPopUp identifier: String) throws {
+            try inImportWindow { window in
+                guard let content = window.window?.contentView,
+                      let button = Self.view(identifier, in: content) as? NSPopUpButton
+                else { throw ScenarioFailure("\(identifier) isn't in the import window") }
+                guard let index = button.itemArray.firstIndex(where: { $0.title == title }) else {
+                    throw ScenarioFailure("\(identifier) has no \(title): \(button.itemTitles)")
+                }
+                button.selectItem(at: index)
+                button.sendAction(button.action, to: button.target)
+            }
+            pause(0.1)
         }
 
         /// Clicks the control carrying `identifier` in the import window through the window, as the mouse does.

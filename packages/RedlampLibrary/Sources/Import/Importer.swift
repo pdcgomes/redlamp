@@ -524,10 +524,16 @@ public final class Importer: Sendable {
     /// photo given a new name, the name it had. Returns how many were written.
     private func writeSidecars(_ item: ImportPlan.Item, plan: ImportPlan, locator: SidecarLocator) async throws -> Int {
         let preset = plan.settings.metadata
+        let edits = preset.edits
         let renamed = item.photos.contains { $0.name != $0.sourceName }
         guard !item.choices.given.isEmpty || !preset.isEmpty || renamed else { return 0 }
         let destination = LibraryIndexer.path(plan.settings.destination)
         let store = SidecarStore(locator: locator)
+        let fields = item.fields
+        let ownFields = PhotoMetadata(
+            title: fields?.title, caption: fields?.caption, creator: fields?.creator, copyright: fields?.copyright,
+            location: fields?.location,
+        ).values(edits.touched)
         return try await LibraryIndex.offCaller {
             var written = 0
             for copy in item.photos {
@@ -544,6 +550,11 @@ public final class Importer: Sendable {
                 metadata.label = given.contains(.label) ? item.choices.label : preset.label ?? own.2
                 if !preset.keywords.isEmpty {
                     metadata.keywords = KeywordPath.texts((metadata.keywords ?? item.keywords) + preset.keywords)
+                }
+                if !edits.isEmpty {
+                    let current = PhotoMetadata.canonical(metadata.values(edits.touched))
+                    let after = PhotoMetadata.canonical(edits.applied(to: current, fallback: ownFields))
+                    metadata = metadata.setting(after) ?? metadata
                 }
                 if copy.name != copy.sourceName, metadata.originalName == nil {
                     metadata.originalName = copy.sourceName

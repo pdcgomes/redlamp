@@ -145,6 +145,11 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         }
     }
 
+    /// Presets made or changed in Library's Metadata panel meanwhile are offered.
+    public func windowDidBecomeKey(_: Notification) {
+        Task { await model.readPresets() }
+    }
+
     public func windowWillClose(_: Notification) {
         guard model.phase != .copying, model.phase != .planning else { return }
         model.close()

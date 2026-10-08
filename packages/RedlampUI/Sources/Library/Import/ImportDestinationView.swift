@@ -4,8 +4,8 @@ import RedlampLibrary
 /// The import window's To (LIB-27): the destination, the folder template and the name template (each a
 /// preset or typed in the field Rename Photos shares, `NamingTemplateField`, its error said in words), the
 /// texts they use, a live example from the first photo chosen, a backup, raw only, keywords completed from
-/// the library's, metadata presets' place, and Eject after Import; while copying and after, each
-/// destination's count.
+/// the library's, one of the library's metadata presets (LIB-22), and Eject after Import; while copying and
+/// after, each destination's count.
 @MainActor
 final class ImportDestinationViewController: NSViewController, NSTextFieldDelegate, NSTokenFieldDelegate {
     let model: ImportWindowModel
@@ -32,6 +32,8 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
     private let backupChoose = NSButton(title: "Choose…", target: nil, action: nil)
     private let rawOnly = NSButton(checkboxWithTitle: "Raw files only", target: nil, action: nil)
     private let keywords = NSTokenField()
+    private let presets = NSPopUpButton()
+    private let presetNote = ImportDestinationViewController.note("")
     private let ejects = NSButton(checkboxWithTitle: "Eject cards after importing", target: nil, action: nil)
     private let destinations = NSTextField(wrappingLabelWithString: "")
     private var textFields: [String: NSTextField] = [:]
@@ -79,10 +81,10 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         keywords.tokenizingCharacterSet = CharacterSet(charactersIn: ",")
         keywords.placeholderString = "Keywords, separated by commas"
         keywords.setAccessibilityIdentifier("import.keywords")
-        let presets = NSPopUpButton()
-        presets.addItem(withTitle: "None")
-        presets.isEnabled = false
-        let presetsNote = Self.note("Metadata presets (creator, copyright, captions) come with the metadata panel.")
+        presets.target = self
+        presets.action = #selector(presetChosen)
+        presets.setAccessibilityIdentifier("import.preset")
+        presetNote.setAccessibilityIdentifier("import.preset.note")
 
         ejects.target = self
         ejects.action = #selector(ejectsToggled)
@@ -100,7 +102,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
             Self.heading("Backup"), backupBox, backup, backupChoose,
             Self.heading("Files"), rawOnly, rawNote,
             Self.heading("Keywords"), keywords,
-            Self.heading("Metadata Preset"), presets, presetsNote,
+            Self.heading("Metadata Preset"), presets, presetNote,
             Self.heading("Card"), ejects,
             destinations,
         ])
@@ -180,6 +182,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         if keywords.currentEditor() == nil {
             keywords.objectValue = settings.metadata.keywords
         }
+        updatePresets()
         ejects.state = model.preferences.ejectsAfterImport ? .on : .off
         let lines = model.destinationLines
         destinations.stringValue = lines.joined(separator: "\n")
@@ -191,6 +194,45 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         folders.isEditable = !busy
         names.isEditable = !busy
         keywords.isEditable = !busy
+        presets.isEnabled = !busy && !model.metadataPresets.isEmpty
+    }
+
+    /// None, then the library's presets, the one chosen selected, and what it fills in.
+    private func updatePresets() {
+        let names = model.metadataPresets.map(\.name)
+        if presets.itemArray.compactMap({ $0.representedObject as? String }) != names {
+            presets.removeAllItems()
+            presets.addItem(withTitle: "None")
+            for name in names {
+                let item = NSMenuItem(title: name, action: nil, keyEquivalent: "")
+                item.representedObject = name
+                presets.menu?.addItem(item)
+            }
+        }
+        let chosen = model.preset
+        if let item = presets.itemArray.first(where: { $0.representedObject as? String == chosen?.name }) {
+            presets.select(item)
+        } else {
+            presets.selectItem(at: 0)
+        }
+        presetNote.stringValue = chosen.map(Self.describe)
+            ?? (names.isEmpty ? "Presets are made in Library's Metadata panel." : "Only the keywords above are added.")
+    }
+
+    /// `Fills in Title, Caption (Append) and City.`
+    static func describe(_ preset: MetadataPreset) -> String {
+        let fields = MetadataPreset.Field.allCases.compactMap { field -> String? in
+            guard let entry = preset.fields[field] else { return nil }
+            let title = MetadataPanelView.title(of: field)
+            return switch entry.mode {
+            case .replace: title
+            case .append: title + " (Append)"
+            case .prefix: title + " (Prefix)"
+            }
+        }
+        guard let last = fields.last else { return "Fills in nothing." }
+        let listed = fields.count == 1 ? last : fields.dropLast().joined(separator: ", ") + " and " + last
+        return "Fills in \(listed)."
     }
 
     /// A field for each text the templates use: Shoot Name for `{text:shoot}`, Text for `{text}`.
@@ -263,6 +305,10 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
 
     @objc private func ejectsToggled() {
         model.setEjectsAfterImport(ejects.state == .on)
+    }
+
+    @objc private func presetChosen() {
+        model.setPreset(named: presets.selectedItem?.representedObject as? String)
     }
 }
 

@@ -1,25 +1,79 @@
 import Foundation
 import RedlampDocument
+import RedlampEngineAPI
 
-/// A metadata preset an import applies to every photo it brings in: keywords added to its own, and a
-/// rating and a label for those the user gave none while browsing. IPTC's fields (creator, copyright,
-/// captions) join when the sidecar holds them (LIB-22).
+/// A metadata preset an import applies to every photo it brings in: keywords added to its own, a rating
+/// and a label for those the user gave none while browsing, and the IPTC Core fields a metadata preset
+/// ticks (LIB-22), each replacing, appending to or prefixing what the photo has.
 public struct ImportMetadata: Sendable, Hashable, Codable {
+    /// The metadata preset's name.
     public var name: String
     /// Keywords by path, `Places/Portugal/Lisbon`.
     public var keywords: [String]
     public var rating: Int?
     public var label: ColorLabel?
+    /// The fields the preset ticks, their texts as they're written at the destination, codes expanded
+    /// already. What a photo has is what its file and other apps' `.xmp` hold, or a `.redlamp` copied
+    /// with it.
+    public var fields: [MetadataPreset.Field: MetadataPreset.Entry]
 
-    public init(name: String = "", keywords: [String] = [], rating: Int? = nil, label: ColorLabel? = nil) {
+    public init(
+        name: String = "", keywords: [String] = [], rating: Int? = nil, label: ColorLabel? = nil,
+        fields: [MetadataPreset.Field: MetadataPreset.Entry] = [:],
+    ) {
         self.name = name
         self.keywords = KeywordPath.texts(keywords)
         self.rating = rating.map { min(max($0, 0), 5) }
         self.label = label
+        self.fields = fields
+    }
+
+    /// `preset`'s name and fields, `codes` expanded in its texts.
+    public init(_ preset: MetadataPreset, codes: CodeReplacements = CodeReplacements(), keywords: [String] = []) {
+        self.init(name: preset.name, keywords: keywords, fields: preset.fields.mapValues { entry in
+            var expanded = entry
+            expanded.text = codes.expanded(entry.text)
+            return expanded
+        })
     }
 
     public var isEmpty: Bool {
-        keywords.isEmpty && rating == nil && label == nil
+        keywords.isEmpty && rating == nil && label == nil && fields.isEmpty
+    }
+
+    /// What its fields do to each photo's sidecar fields.
+    var edits: [String: FieldEdit] {
+        MetadataPreset(name: name, fields: fields).edits(codes: CodeReplacements())
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, keywords, rating, label, fields
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
+        rating = try container.decodeIfPresent(Int.self, forKey: .rating)
+        label = try container.decodeIfPresent(ColorLabel.self, forKey: .label)
+        let fields = try container.decodeIfPresent(JSONValue.self, forKey: .fields)
+        self.fields = fields.flatMap { MetadataPreset(json: .object(["name": .string(""), "fields": $0]))?.fields }
+            ?? [:]
+    }
+
+    /// The fields as the presets file writes them, and only when there are some.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(keywords, forKey: .keywords)
+        try container.encodeIfPresent(rating, forKey: .rating)
+        try container.encodeIfPresent(label, forKey: .label)
+        if !fields.isEmpty {
+            try container.encodeIfPresent(
+                MetadataPreset(name: name, fields: fields).json.objectValue?["fields"],
+                forKey: .fields,
+            )
+        }
     }
 }
 

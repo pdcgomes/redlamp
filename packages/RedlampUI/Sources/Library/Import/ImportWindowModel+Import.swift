@@ -60,7 +60,8 @@ extension ImportWindowModel {
         let importer = importer
         importing = Task { [weak self] in
             do {
-                let plan = try await together.plan(settings, destinationFileSystem: destinationFileSystem)
+                let planned = await self?.withPreset(settings) ?? settings
+                let plan = try await together.plan(planned, destinationFileSystem: destinationFileSystem)
                 try Task.checkCancellation()
                 guard let self else { return }
                 self.plan = plan

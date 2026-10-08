@@ -78,6 +78,9 @@ public struct ImportPlan: Sendable, Hashable {
         public var numbered: Int?
         /// The name tokens that came out empty for it.
         public var emptyTokens: [String]
+        /// Its own title, caption, creator, copyright and location, from its file and other apps' `.xmp`,
+        /// which the metadata preset's fields add to (LIB-22); nil when the import ticks none.
+        public var fields: XMPFields?
 
         /// Its photo files: a raw, its JPEG.
         public var photos: [Copy] {
@@ -330,6 +333,7 @@ struct ImportPlanner {
             items.append(ImportPlan.Item(
                 photo: photo.id, source: photo.source, captured: photo.captured, copies: copies,
                 choices: photo.choices, keywords: Self.ownKeywords(of: photo), numbered: numbered, emptyTokens: empty,
+                fields: settings.metadata.fields.isEmpty ? nil : Self.ownFields(of: photo),
             ))
         }
         let sourceOf = Dictionary(photos.map { ($0.id, $0.source) }) { first, _ in first }
@@ -402,6 +406,14 @@ struct ImportPlanner {
 
     static func ownKeywords(of photo: ImportPhoto) -> [String] {
         LibraryIndexer.Run.organising(photo.metadata, sidecar: nil, xmp: photo.xmp).fields.keywords ?? []
+    }
+
+    static func ownFields(of photo: ImportPhoto) -> XMPFields {
+        let own = LibraryIndexer.Run.organising(photo.metadata, sidecar: nil, xmp: photo.xmp).fields
+        return XMPFields(
+            title: own.title, caption: own.caption, creator: own.creator, copyright: own.copyright,
+            location: own.location,
+        )
     }
 
     static func join(_ folder: String, _ path: String) -> String {

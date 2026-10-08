@@ -156,6 +156,56 @@ struct ImportCopyTests {
         updates.close()
     }
 
+    @Test func `a metadata preset's ticked fields are written at the destination, each replacing, appending or prefixing`(
+    ) async throws {
+        let sandbox = try await ImportSandbox.make()
+        defer { sandbox.remove() }
+        var shots = Self.jpegs(2)
+        shots[0].sidecars = ["IMG_0001.xmp": Data(MetadataIndexTests.packet(
+            #"photoshop:City="Lisbon" photoshop:Country="Portugal""#,
+            """
+            <dc:description><rdf:Alt><rdf:li xml:lang="x-default">On the card</rdf:li></rdf:Alt></dc:description>
+            <dc:creator><rdf:Seq><rdf:li>Ana Sousa</rdf:li></rdf:Seq></dc:creator>
+            <dc:rights><rdf:Alt><rdf:li xml:lang="x-default">© Ana Sousa</rdf:li></rdf:Alt></dc:rights>
+            """,
+        ).utf8)]
+        let source = try sandbox.card("CARD", shots)
+        let session = sandbox.session([source])
+        _ = await session.browsed()
+        let preset = MetadataPreset(name: "Wedding", fields: [
+            .title: MetadataPreset.Entry("Wedding"),
+            .caption: MetadataPreset.Entry(#"at the \ch\"#, mode: .append),
+            .creator: MetadataPreset.Entry("Studio Lumen", mode: .prefix),
+            .city: MetadataPreset.Entry("Sintra"),
+        ])
+        let metadata = ImportMetadata(preset, codes: CodeReplacements(text: "ch\tchapel"), keywords: ["Weddings"])
+        #expect(metadata.name == "Wedding" && metadata.fields[.caption]?.text == "at the chapel")
+        let settings = try sandbox.settings(metadata: metadata)
+        let journaled = try JSONDecoder().decode(ImportSettings.self, from: JSONEncoder().encode(settings))
+        #expect(journaled.metadata == metadata, "the plan's preset is kept as the journal writes it")
+
+        let outcome = try await session.importer().run(session.plan(settings))
+        #expect(outcome.sidecars == 2 && outcome.isSafeToErase)
+        let folder = sandbox.destination.appending(path: "2026/2026-10-05")
+        let written = try (1 ... 2).map { number in
+            try #require(SidecarStore().load(for: folder.appending(path: String(format: "IMG_%04d.JPG", number)))?
+                .metadata)
+        }
+        #expect(written[0].title == "Wedding", "replacing")
+        #expect(written[0].caption == "On the card at the chapel", "appended to the caption it came with")
+        #expect(written[0].creator == "Studio Lumen; Ana Sousa", "put before its creator")
+        #expect(written[0].location == PhotoLocation(country: "Portugal", city: "Sintra"), "its city replaced")
+        #expect(written[0].copyright == nil, "a field the preset doesn't tick is left to the photo's own")
+        #expect(written[0].keywords == ["Weddings"])
+        #expect(written[1].title == "Wedding" && written[1].caption == "at the chapel")
+        #expect(written[1].creator == "Studio Lumen" && written[1].location == PhotoLocation(city: "Sintra"))
+
+        let rows = try await sandbox.rows(below: sandbox.destination)
+        let first = rows["2026/2026-10-05/IMG_0001.JPG"]
+        #expect(first?.caption == "On the card at the chapel" && first?.copyright == "© Ana Sousa")
+        #expect(rows["2026/2026-10-05/IMG_0002.JPG"]?.title == "Wedding")
+    }
+
     @Test func `several cards are browsed and copied at once, each through its own readers`() async throws {
         let sandbox = try await ImportSandbox.make(profile: .cardReader)
         defer { sandbox.remove() }

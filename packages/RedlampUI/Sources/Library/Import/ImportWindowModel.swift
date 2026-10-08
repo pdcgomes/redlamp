@@ -12,7 +12,8 @@ import Synchronization
 ///   previews are read. The choices (which go, the rating, flag and label each gets) are kept in its
 ///   session, and written in each photo's `.redlamp` at the destination.
 /// - **To:** the destination, the folder and name templates with a live example and their errors in
-///   words, a backup, raw only and keywords, kept from one import to the next (`ImportPreferences`).
+///   words, a backup, raw only, keywords and a metadata preset, kept from one import to the next
+///   (`ImportPreferences`).
 /// - **Import:** the photos of every source included, planned together so collisions are numbered in
 ///   capture order across them, and copied by one journaled `Importer` run off the main thread, with
 ///   each source's part as it goes; Cancel stops it once the photos being copied are done. A run a
@@ -116,6 +117,8 @@ final class ImportWindowModel {
     var interrupted: [ImportJournal.Entry] = []
     /// The library's keywords, for completing those typed.
     private(set) var keywordCompletion: KeywordCompletion?
+    /// The library's metadata presets, by name, as last read (`ImportWindowModel+Presets`).
+    var metadataPresets: [MetadataPreset] = []
 
     private var browsing: [String: Task<Void, Never>] = [:]
     var importing: Task<Void, Never>?
@@ -181,6 +184,9 @@ final class ImportWindowModel {
             Task {
                 keywordCompletion = try? await keywords.completion()
             }
+        }
+        Task {
+            await readPresets()
         }
     }
 

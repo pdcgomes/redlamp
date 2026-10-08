@@ -348,6 +348,49 @@ struct ImportWindowTests {
         #expect(window.folderText == "{date:yyyy}" && window.namesText == "{date:yyyyMMdd}-{sequence:3}")
     }
 
+    @Test func `a metadata preset chosen in To is written at the destination, its codes expanded, and kept for the next`(
+    ) async throws {
+        let fixture = try await ImportWindowFixture.make()
+        defer { fixture.remove() }
+        let metadata = LibraryMetadata(index: fixture.index, paths: fixture.paths)
+        try await metadata.save(MetadataPreset(name: "Wedding", fields: [
+            .caption: MetadataPreset.Entry(#"at \ch\"#, mode: .append), .creator: MetadataPreset.Entry("Studio Lumen"),
+            .city: MetadataPreset.Entry("Sintra"),
+        ]))
+        try await metadata.save(MetadataPreset(name: "Studio", fields: [.copyright: MetadataPreset.Entry("© Lumen")]))
+        try await metadata.saveCodeReplacements("ch\tthe chapel\n")
+        let model = fixture.model()
+        await model.readPresets()
+        #expect(model.metadataPresets.map(\.name) == ["Studio", "Wedding"] && model.preset == nil)
+        try await model.addFolder(fixture.folder("Card", count: 2))
+        await model.browsed()
+        fixture.settle(model)
+        model.setPreset(named: "Wedding")
+        #expect(model.preset?.name == "Wedding")
+        #expect(try ImportDestinationViewController.describe(#require(model.preset))
+            == "Fills in Caption (Append), Creator and City.")
+        model.startImport()
+        await model.imported()
+        #expect(model.outcome?.verified == 2 && model.failure == nil)
+        let sidecars = SidecarStore(locator: .besidePhotos)
+        for number in 0 ..< 2 {
+            let written = sidecars.load(
+                for: fixture.destination.appending(path: "2026/2026-10-05/" + ImportWindowFixture.name(number)),
+            )?.metadata
+            #expect(written?.caption == "at the chapel" && written?.creator == "Studio Lumen")
+            #expect(written?.location == PhotoLocation(city: "Sintra") && written?.copyright == nil)
+        }
+        #expect(ImportPreferences(defaults: fixture.defaults).settings.metadata.name == "Wedding", "kept")
+        #expect(model.settings.metadata.fields.isEmpty, "read from the library at each import, not kept")
+
+        try await metadata.removePreset(named: "Wedding")
+        let next = fixture.model()
+        await next.readPresets()
+        #expect(next.metadataPresets.map(\.name) == ["Studio"] && next.preset == nil, "gone from the library")
+        next.setPreset(named: nil)
+        #expect(ImportPreferences(defaults: fixture.defaults).settings.metadata.name.isEmpty)
+    }
+
     @Test func `keywords typed are completed from the library's`() async throws {
         let fixture = try await ImportWindowFixture.make()
         defer { fixture.remove() }
