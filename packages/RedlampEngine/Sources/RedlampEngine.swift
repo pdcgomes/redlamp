@@ -62,6 +62,10 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     /// The warm-up started last, for tests to wait on.
     let warmUp = Mutex<Task<Void, Never>?>(nil)
     let analysisWork = Mutex(AnalysisWork())
+    /// The analysis renders of the photos visited last, newest last.
+    let keptAnalyses = Mutex<[KeptAnalysis]>([])
+    /// The Segment Anything model whose decoder the warm-up has run once.
+    let preparedDecoder = Mutex<ObjectIdentifier?>(nil)
     /// What generative fill runs on, once loaded, and the model folder it was loaded from.
     let generativeFiller = Mutex<(directory: URL, filler: any GenerativeFiller)?>(nil)
 

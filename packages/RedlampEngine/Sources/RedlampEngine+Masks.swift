@@ -776,15 +776,32 @@ extension RedlampEngine {
         }
     }
 
+    /// The photos visited last whose analysis renders are kept, so going back to one doesn't
+    /// render and hash it again.
+    static let keptAnalysesLimit = 4
+
     /// The analysis render kept for `session`, if any.
     func keptAnalysis(for session: ImageSession) -> (image: CGImage, hash: String)? {
-        analysisCache.withLock { $0?.session === session ? $0.map { ($0.image, $0.hash) } : nil }
+        if let current = analysisCache.withLock({ $0 }), current.session === session {
+            return (current.image, current.hash)
+        }
+        return keptAnalyses.withLock { kept in
+            kept.removeAll { $0.session == nil }
+            return kept.last { $0.session === session }.map { ($0.image, $0.hash) }
+        }
     }
 
-    /// The current photo with the default develop, as AI models see it, and a hash of its pixels.
+    /// The current photo with the default develop, as AI models see it, and a hash of its pixels;
+    /// rendered once for each of the photos visited last.
     func analysisImage(for session: ImageSession) async throws -> (image: CGImage, hash: String) {
-        if let cached = analysisCache.withLock({ $0 }), cached.session === session {
-            return (cached.image, cached.hash)
+        if let kept = keptAnalysis(for: session) {
+            analysisCache.withLock { $0 = AnalysisCache(session: session, image: kept.image, hash: kept.hash) }
+            keptAnalyses.withLock { kept in
+                if let index = kept.lastIndex(where: { $0.session === session }) {
+                    kept.append(kept.remove(at: index))
+                }
+            }
+            return kept
         }
         analysisWork.withLock { $0.analysisRenders += 1 }
         let image: CGImage = try await withCheckedThrowingContinuation { continuation in
@@ -800,6 +817,11 @@ extension RedlampEngine {
         let bytes = image.dataProvider?.data as Data? ?? Data()
         let hash = SHA256.hash(data: bytes).prefix(16).map { String(format: "%02x", $0) }.joined()
         analysisCache.withLock { $0 = AnalysisCache(session: session, image: image, hash: hash) }
+        keptAnalyses.withLock { kept in
+            kept.removeAll { $0.session == nil || $0.session === session }
+            kept.append(KeptAnalysis(session: session, image: image, hash: hash))
+            kept.removeFirst(max(0, kept.count - Self.keptAnalysesLimit))
+        }
         return (image, hash)
     }
 
@@ -841,6 +863,7 @@ extension RedlampEngine {
         unloadMaskModels()
     }
 
+    /// Frees the models, and the analysis renders kept for photos visited before.
     func unloadMaskModels() {
         segmenter.unload()
         depthModel.unload()
@@ -848,6 +871,7 @@ extension RedlampEngine {
         sam3Model.unload()
         vitMatteModel.unload()
         thingFinder.unload()
+        keptAnalyses.withLock { $0.removeAll() }
     }
 
     func warmIfWanted(_ session: ImageSession) {
@@ -856,38 +880,33 @@ extension RedlampEngine {
         }
     }
 
-    /// The renders, models and embeddings `session`'s AI masks need, each cached, at low priority
-    /// and after a moment, so the canvas's own frame goes first. Stops if another photo opens or
-    /// the Masking tool closes.
+    /// What `session`'s first AI mask needs, each kept: its analysis render, and with Segment
+    /// Anything on this Mac its embedding and, once for each model loaded, a decode, so hovering
+    /// with Objects answers at once. The matte, Depth Anything 3 and SAM 3 wait for a mask that
+    /// needs them. At low priority and after a moment, so the canvas's own frame goes first;
+    /// stops if another photo opens or the Masking tool closes.
     func warm(_ session: ImageSession) {
         let task = Task.detached(priority: .utility) { [self] in
             func warming() -> Bool {
                 masksWanted.withLock { $0 } && currentSession() === session
             }
-            func ran() {
-                analysisWork.withLock { $0.modelRuns += 1 }
-            }
             try? await Task.sleep(for: .milliseconds(400))
-            guard warming(), let analysis = try? await analysisImage(for: session) else { return }
-            guard warming(), await (try? matteImage(for: session)) != nil else { return }
-            if await isReady(Self.modelID(for: .objects)), warming(),
-               let segmenter = try? await objectSegmenter(),
-               let embedding = try? await objectEmbedding(analysis, segmenter: segmenter) {
-                // One throwaway decode: Core ML prepares the decoder's GPU work on its first.
-                ran()
-                _ = try? segmenter.mask(
-                    embedding, included: [ImagePoint(x: 0.5, y: 0.5)], excluded: [],
-                    size: PixelSize(width: 64, height: 64),
-                )
+            guard warming(), let analysis = try? await analysisImage(for: session),
+                  await isReady(Self.modelID(for: .objects)), warming(),
+                  let segmenter = try? await objectSegmenter(),
+                  let embedding = try? await objectEmbedding(analysis, segmenter: segmenter)
+            else { return }
+            let first = preparedDecoder.withLock { prepared in
+                defer { prepared = ObjectIdentifier(segmenter) }
+                return prepared != ObjectIdentifier(segmenter)
             }
-            if warming(), let model = await depthAnything3() {
-                ran()
-                _ = try? await depthAnything3Result(analysis, model: model)
-            }
-            if await isReady(Self.sam3ID), warming(), let model = await sam3() {
-                ran()
-                _ = try? await landscapeClasses(analysis, model: model)
-            }
+            guard first else { return }
+            // A throwaway decode: Core ML prepares the decoder's GPU work on its first.
+            analysisWork.withLock { $0.modelRuns += 1 }
+            _ = try? segmenter.mask(
+                embedding, included: [ImagePoint(x: 0.5, y: 0.5)], excluded: [],
+                size: PixelSize(width: 64, height: 64),
+            )
         }
         warmUp.withLock { $0 = task }
     }
@@ -897,6 +916,13 @@ struct ModelNotInstalled: Error {}
 
 struct AnalysisCache: @unchecked Sendable {
     let session: ImageSession
+    let image: CGImage
+    let hash: String
+}
+
+/// An analysis render kept while its photo's session lives.
+struct KeptAnalysis: @unchecked Sendable {
+    weak var session: ImageSession?
     let image: CGImage
     let hash: String
 }

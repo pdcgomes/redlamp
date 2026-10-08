@@ -1056,8 +1056,8 @@ struct MaskRenderTests {
 }
 
 extension MaskRenderTests {
-    /// Opening the Masking tool gets the open photo's mask renders ready in the background, and
-    /// those of the photo opened next.
+    /// Opening the Masking tool gets the open photo's analysis render ready in the background, with
+    /// Segment Anything its embedding too, and those of the photo opened next.
     @Test(.enabled(if: EngineSmokeTests.canRender && EngineSmokeTests.fixtures.count >= 2))
     func `warming up prepares the mask renders, for the next photo too`() async throws {
         let engine = try RedlampEngine()
@@ -1065,8 +1065,8 @@ extension MaskRenderTests {
             let deadline = ContinuousClock.now + .seconds(seconds)
             while ContinuousClock.now < deadline {
                 if let session = engine.currentSession(),
-                   engine.matteCache.withLock({ $0?.session === session }),
-                   engine.analysisCache.withLock({ $0?.session === session }) {
+                   let analysis = engine.analysisCache.withLock({ $0?.session === session ? $0 : nil }),
+                   !Self.samIsInstalled || engine.objectEmbeddingCache.withLock({ $0?.hash == analysis.hash }) {
                     return true
                 }
                 try await Task.sleep(for: .milliseconds(100))
@@ -1100,13 +1100,14 @@ extension MaskRenderTests {
         let again = try await visit(0)
         let after = engine.analysisWork.withLock { $0 }
         #expect(engine.keptAnalysis(for: again)?.hash == hash)
-        withKnownIssue("PIPE-08: each visit analyses the photo again and runs every model") {
-            #expect(after.analysisRenders == before.analysisRenders, "analysed again")
-            #expect(after.modelRuns == before.modelRuns, "\(after.modelRuns - before.modelRuns) models run again")
-            #expect(after.matteRenders == 0, "\(after.matteRenders) mattes rendered with no mask asking")
-            #expect(engine.depthAnything3Cache.withLock { $0 == nil }, "Depth Anything 3 ran")
-            #expect(engine.sam3Features.withLock { $0 == nil }, "SAM 3 ran")
-        }
+        #expect(after.analysisRenders == before.analysisRenders, "analysed again")
+        #expect(after.modelRuns == before.modelRuns, "\(after.modelRuns - before.modelRuns) models run again")
+        #expect(after.matteRenders == 0, "\(after.matteRenders) mattes rendered with no mask asking")
+        #expect(engine.depthAnything3Cache.withLock { $0 == nil }, "Depth Anything 3 ran")
+        #expect(engine.sam3Features.withLock { $0 == nil }, "SAM 3 ran")
+
+        await engine.releaseMaskModels()
+        #expect(engine.keptAnalyses.withLock { $0.isEmpty }, "closing the Masking tool lets go of the kept analyses")
     }
 
     /// A stand-in for a model, and how many were made.
