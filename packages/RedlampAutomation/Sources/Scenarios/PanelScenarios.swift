@@ -69,6 +69,18 @@
             return try main { model in model.library.sidecars.store(for: url).load(for: url)?.metadata }
         }
 
+        /// The `metadata` object of `name`'s sidecar as its file holds it, key for key; nil when it holds none.
+        func writtenMetadata(_ name: String) throws -> [String: JSONValue]? {
+            let url = try main { model in model.items.first { $0.url.lastPathComponent == name }?.url }
+            guard let url else { throw ScenarioFailure("\(name) isn't shown") }
+            let edit = try main { model in model.library.sidecars.store(for: url).editURL(for: url) }
+            guard let data = try? Data(contentsOf: edit) else { return nil }
+            guard case let .object(sidecar) = try JSONDecoder().decode(JSONValue.self, from: data),
+                  case let .object(metadata)? = sidecar["metadata"]
+            else { return nil }
+            return metadata
+        }
+
         /// Clicks the AppKit control carrying `identifier` (a button, a checkbox, a text field) in the editor window,
         /// or in the sheet in front of it, as the mouse does: the release waits in the queue, where a control that
         /// tracks the press takes it from, and in a window that isn't key the press goes to the control under the
@@ -517,7 +529,11 @@
                 try app.wait("\(names[dated]) alone, with its capture time") { model in
                     model.libraryPanels.selection.ids.count == 1 && model.libraryPanels.selection.fields.captured != nil
                 }
+                try app.wait("\(names[dated]) open in Develop") { model in
+                    model.info != nil && model.selection?.lastPathComponent == names[dated]
+                }
                 let before = try app.main { $0.libraryPanels.selection.fields.captured?.lowerBound }
+                let written = try app.writtenMetadata(names[dated])
                 try app.choose(.editCaptureTime)
                 try app.waitForSheet("Edit Capture Time")
                 try app.replaceInSheet("captureTime.hours", with: "2", across: 0.97)
@@ -530,12 +546,14 @@
                 )
                 try app.press(.undo)
                 try app.waitForPanels()
-                let undone = try app.sidecarMetadata(names[dated])?.captureShift
+                // Develop saves the photo it has open as it is now, over the sidecar the Undo wrote.
+                try app.main { _ = $0.saveBeforeQuitting(within: .seconds(10)) }
+                let undone = try app.writtenMetadata(names[dated])
                 let left = try app.main { $0.libraryPanels.undoCount }
                 try app.expect(
-                    // Develop's open photo, saved before the Undo, keeps a shift of none as 0.
-                    (undone ?? 0) == 0,
-                    "⌘Z put it back: \(String(describing: undone)), \(left) left to undo; " + app.panelErrors(),
+                    undone == written,
+                    "⌘Z left \(names[dated])'s sidecar as it was: \(String(describing: written)) became "
+                        + "\(String(describing: undone)), \(left) left to undo; " + app.panelErrors(),
                 )
                 app.covered([.action(.editCaptureTime), .feature("library.metadata")], via: .menu)
             }

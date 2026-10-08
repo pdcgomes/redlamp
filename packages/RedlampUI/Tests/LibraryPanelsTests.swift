@@ -475,6 +475,39 @@ struct LibraryPanelsTests {
         #expect(shown() == "2008-01-02 03:03:05 2008-01-02 03:04:05", "the active photo set, the other shifted as much")
     }
 
+    @Test func `Undo of a capture-time change on Develop's open photo leaves its sidecar's metadata as it was`(
+    ) async throws {
+        let folder = Folder()
+        defer { folder.close() }
+        try await folder.open(count: 2)
+        let panels = folder.panels
+        func written(_ number: Int) throws -> [String: JSONValue]? {
+            let url = SidecarStore().editURL(for: folder.photos[number])
+            guard let data = try? Data(contentsOf: url),
+                  case let .object(sidecar) = try JSONDecoder().decode(JSONValue.self, from: data),
+                  case let .object(metadata)? = sidecar["metadata"]
+            else { return nil }
+            return metadata
+        }
+        // One photo's sidecar holds metadata already, the other's none.
+        try await folder.select([0])
+        #expect(panels.set(.title, to: "Trams"))
+        try await folder.written()
+        for number in [0, 1] {
+            try await folder.select([number])
+            try await folder.eventually { folder.model.info != nil && folder.model.selection == folder.photos[number] }
+            let before = try written(number)
+            #expect(panels.shiftCaptureTime(by: 3600))
+            try await folder.written()
+            #expect(try written(number)?["captureShift"] == .number(3600))
+            #expect(folder.model.perform(.undo))
+            try await folder.written()
+            // Develop saves the photo it has open over the sidecar the Undo wrote.
+            _ = folder.model.saveBeforeQuitting()
+            #expect(try written(number) == before, "photo \(number), open in Develop")
+        }
+    }
+
     // MARK: - The column
 
     @Test func `the right column's panels open and close, kept between launches`() async throws {
