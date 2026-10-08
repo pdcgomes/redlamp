@@ -30,14 +30,17 @@ struct ExportFieldsTests {
         var settings = ExportSettings()
         settings.setFormat(format)
         settings.destinationFolder = folder
-        let url = ExportDestination.url(for: source, settings: settings)
-        let metadata = ExportMetadata.properties(from: source, policy: policy, recipe: recipe, fields: fields)
+        let url = ExportDestination.url(for: source, settings: settings, reading: ImageIOFiles())
+        let metadata = ExportMetadata.properties(
+            from: source, reading: ImageIOFiles(), policy: policy, recipe: recipe, fields: fields,
+        )
         try ImageExporter.write(
             ExportWriterTests.image(),
             to: url,
             settings: settings,
             metadata: metadata,
             source: source,
+            reading: ImageIOFiles(),
         )
         return try Data(contentsOf: url)
     }
@@ -314,9 +317,11 @@ struct ExportFieldsTests {
         let (folder, cleanup) = try ExportWriterTests.temporaryFolder()
         defer { cleanup() }
         let source = try EmbeddedEditTests.source(in: folder)
-        let before = ExportMetadata.properties(from: source, policy: policy, recipe: EmbeddedEditTests.recipe)
+        let before = ExportMetadata.properties(
+            from: source, reading: ImageIOFiles(), policy: policy, recipe: EmbeddedEditTests.recipe,
+        )
         let after = ExportMetadata.properties(
-            from: source, policy: policy, recipe: EmbeddedEditTests.recipe, fields: nil,
+            from: source, reading: ImageIOFiles(), policy: policy, recipe: EmbeddedEditTests.recipe, fields: nil,
         )
         #expect(NSDictionary(dictionary: before) == NSDictionary(dictionary: after))
         #expect(before[ExportMetadata.Fields.propertyKey] == nil)

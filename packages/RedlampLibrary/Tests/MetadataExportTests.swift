@@ -6,6 +6,25 @@ import RedlampEngineAPI
 import Testing
 @testable import RedlampLibrary
 
+/// Reads a file's ImageIO properties, as the decode service does for the app's exports.
+private struct ImageIOFiles: FileInspecting {
+    func captures(of urls: [URL], concurrently _: Bool) -> [CaptureSettings?] {
+        urls.map { _ in nil }
+    }
+
+    func focusThumbnails(of urls: [URL], concurrently _: Bool) -> [GreyThumbnail?] {
+        urls.map { _ in nil }
+    }
+
+    func imageProperties(of urls: [URL]) -> [ImageProperties?] {
+        urls.map { url in
+            CGImageSourceCreateWithURL(url as CFURL, nil)
+                .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] }
+                .flatMap(ImageProperties.init)
+        }
+    }
+}
+
 /// What exports carry of a photo's own (LIB-22, LIB-21): its keywords as `Keywords.json` says each is
 /// exported, and its fields as the library shows them, merged from its `.redlamp` and other apps'.
 struct MetadataExportTests {
@@ -39,11 +58,13 @@ struct MetadataExportTests {
         let folder = try TemporaryFolder()
         var settings = ExportSettings()
         settings.destinationFolder = folder.url
-        let url = ExportDestination.url(for: photo, settings: settings)
-        let metadata = ExportMetadata.properties(from: photo, policy: .all, recipe: EditRecipe(), fields: fields)
+        let url = ExportDestination.url(for: photo, settings: settings, reading: ImageIOFiles())
+        let metadata = ExportMetadata.properties(
+            from: photo, reading: ImageIOFiles(), policy: .all, recipe: EditRecipe(), fields: fields,
+        )
         try ImageExporter.write(
             PhotoMetadataReaderTests.image(width: 16, height: 12), to: url, settings: settings, metadata: metadata,
-            source: photo,
+            source: photo, reading: ImageIOFiles(),
         )
         let data = try Data(contentsOf: url)
         let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
