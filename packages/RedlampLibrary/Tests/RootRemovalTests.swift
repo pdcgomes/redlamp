@@ -138,6 +138,37 @@ struct RootRemovalTests {
         #expect(try await mapped.list(.allPhotographs).ids == [home])
     }
 
+    @Test func `a root taken out while it's being indexed leaves none of its photos once the run is over`(
+    ) async throws {
+        let library = try TemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: library.url) }
+        let index = try await LibraryIndex.open(at: library.url.appending(path: "Index.sqlite"), readers: 2)
+        defer { index.closeAndWait() }
+        let folder = URL(fileURLWithPath: "/Volumes/Listed/Card", isDirectory: true)
+        let indexer = LibraryIndexer(
+            index: index, fileSystem: ListedPhotos(in: folder, count: 3000), configuration: .testing(batchSize: 200),
+        )
+        let engine = QueryEngine(index: index)
+        try await engine.load()
+        let live = LibraryLive(engine: engine)
+        let roots = LibraryRoots(index: index, indexer: indexer, live: live)
+        let indexing = Task {
+            for await event in indexer.index([folder]) {
+                live.receive(event)
+            }
+        }
+        for _ in 0 ..< 2000 where try await index.read({ try $0.photoCount() }) == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(try await roots.remove(folder, keeping: []) != nil, "taken out partway through its run")
+        await indexing.value
+        await roots.swept()
+        await live.settle()
+        let left = try await index.read { reader in try (reader.photoCount(), reader.roots(), reader.folderCount()) }
+        #expect(left.0 == 0 && left.1.isEmpty && left.2 == 0)
+        #expect(try await engine.list(.allPhotographs).isEmpty)
+    }
+
     @Test func `roots none followed is, holds or is inside leave, but an import's destination stays`() async throws {
         let (sandbox, indexer) = try await Self.library()
         defer { sandbox.remove() }

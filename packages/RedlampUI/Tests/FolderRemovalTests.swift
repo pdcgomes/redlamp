@@ -184,6 +184,45 @@ struct FolderRemovalTests {
         #expect(try await Self.ids("", service).count == 1)
     }
 
+    @Test func `a removal a quit cut short shows none of the folder at the next launch, which finishes it`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["A.jpg"])
+        let trip = try Self.trip(in: sandbox)
+        let first = try await sandbox.open()
+        try await Self.add(trip, to: first.library, service: #require(sandbox.service))
+        sandbox.service?.close()
+
+        // Marked, and one photo swept, when the app quit.
+        let paths = LibraryPaths(root: sandbox.base.appending(path: "Library", directoryHint: .isDirectory))
+        let quitting = try await LibraryIndex.open(at: paths.index)
+        let path = LibraryService.path(trip)
+        _ = try await quitting.write { try $0.markRemoved(path, keeping: []) }
+        _ = try await quitting.write { try $0.sweepRemoved(limit: 1) }
+        await quitting.close()
+
+        let library = FolderLibrary()
+        library.add([sandbox.root])
+        let service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
+            StoreThumbnailMaker.imageIO(url, nil, size)
+        }
+        library.attach(service)
+        defer { service.close() }
+        for _ in 0 ..< 2000 where !service.isReady {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(try await Self.ids("", service).count == 1, "none of Trip's photos as the library opens")
+        let core = try #require(service.core)
+        var swept = false
+        for _ in 0 ..< 1000 where !swept {
+            swept = try await core.index.read { try $0.removedRoots().isEmpty }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(swept, "the sweep finished")
+        #expect(try await core.index.read { try $0.root(path: path) } == nil)
+    }
+
     @Test func `a root that can't be found stays in Folders and in the library`() async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }
