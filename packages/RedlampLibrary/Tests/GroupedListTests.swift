@@ -128,6 +128,37 @@ struct GroupedListTests {
         #expect(byFolder.count == library.photos.count - 6 + 1, "every photo in one folder, each stack one cell")
     }
 
+    @Test func `every stack opens and closes in every group, and the stacks open in another list open here`() {
+        let (library, id) = Self.library()
+        var grouped = library.grouping().grouped(library.list, by: .moment)
+        grouped.close(2)
+        var before = Array(grouped)
+        var diff = grouped.openAllStacks()
+        #expect(grouped.applying(diff, to: before) == Array(grouped))
+        #expect(grouped.stacked.stacksShown == (open: 5, closed: 0) && grouped.index(of: id("jpeg2")) == 6)
+        #expect(diff.updated == [1, 10] && diff.removed.isEmpty, "the burst's and the pair's first cells")
+
+        before = Array(grouped)
+        diff = grouped.closeAllStacks()
+        #expect(grouped.applying(diff, to: before) == Array(grouped))
+        #expect(Array(grouped) == Array(library.grouping().grouped(library.list, by: .moment)).filter { item in
+            if case let .photo(photo) = item {
+                return grouped.isVisible(photo)
+            }
+            return true
+        })
+
+        var other = StackedList(library.list, stacks: library.grouping().stacks)
+        other.open(id("raw0"))
+        other.open(id("pRaw"))
+        before = Array(grouped)
+        diff = grouped.openStacks(as: other)
+        #expect(grouped.applying(diff, to: before) == Array(grouped))
+        #expect(grouped.index(of: id("raw1")) == 2 && grouped.index(of: id("jpeg1")) == nil)
+        #expect(grouped.stacked.badges(of: id("pRaw")).pair?.isOpen == true)
+        #expect(grouped.openStacks(as: other).isEmpty, "opened alike, nothing changes")
+    }
+
     @Test func `a list changing under its groups keeps what's open and selected, with a diff from what changed`() {
         var (library, id) = Self.library()
         var grouped = library.grouping().grouped(library.list, by: .moment)

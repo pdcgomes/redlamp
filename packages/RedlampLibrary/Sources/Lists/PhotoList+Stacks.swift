@@ -328,6 +328,50 @@ public struct StackedList: Sendable, RandomAccessCollection {
         stacks.groupIndex(of: id) != nil || stacks.pairIndex(of: id) != nil
     }
 
+    /// How many stacks the list shows as one are open and closed: those it holds two or more photos of,
+    /// a pair inside a closed burst or manual stack not counted.
+    public var stacksShown: (open: Int, closed: Int) {
+        var shown = (open: 0, closed: 0)
+        for stack in stacks.pairs.lowerBound ..< stacks.groups.upperBound where places[stack] >= 0 {
+            guard stacks.groups.contains(stack) || isVisible(pair: stack) else { continue }
+            if opened.contains(stack) {
+                shown.open += 1
+            } else {
+                shown.closed += 1
+            }
+        }
+        return shown
+    }
+
+    /// The stacks shown as one that hold photo `id`, outermost first: the burst or manual stack, then the
+    /// pair, unless a closed burst or manual stack stands for it. Each is its first cell, its kind and
+    /// whether it's open.
+    public func shownStacks(of id: Int64) -> [(first: Int64, kind: Stack.Kind, isOpen: Bool)] {
+        guard list.contains(id) else { return [] }
+        var shown: [(first: Int64, kind: Stack.Kind, isOpen: Bool)] = []
+        if let group = stacks.groupIndex(of: id), places[group] >= 0 {
+            shown.append((list.ids[Int(places[group])], stacks.kinds[group], opened.contains(group)))
+            guard opened.contains(group) else { return shown }
+        }
+        if let pair = stacks.pairIndex(of: id), places[pair] >= 0 {
+            shown.append((list.ids[Int(places[pair])], .pair, opened.contains(pair)))
+        }
+        return shown
+    }
+
+    /// Calls `body` with each closed stack's cell and the photos it stands for, the cell's first.
+    func forEachClosedStack(_ body: (Int64, ContiguousArray<Int64>) -> Void) {
+        var photos = ContiguousArray<Int64>()
+        for stack in stacks.pairs.lowerBound ..< stacks.groups.upperBound
+            where places[stack] >= 0 && !opened.contains(stack) {
+            guard stacks.groups.contains(stack) || isVisible(pair: stack) else { continue }
+            let cell = list.ids[Int(places[stack])]
+            photos.removeAll(keepingCapacity: true)
+            appendPhotos(of: cell, to: &photos)
+            body(cell, photos)
+        }
+    }
+
     /// The open stacks' cells at `place`; nil for a place without.
     private func openCells(at place: Int) -> ArraySlice<Int64>? {
         let start = Int(openStarts[place])
@@ -451,6 +495,20 @@ public struct StackedList: Sendable, RandomAccessCollection {
         let cells = Array(openCells(at: place) ?? [first])
         removeOpenCells(at: place, count: cells.count)
         return shrink(slot: place, at: 0, first: first, removing: Array(cells.dropFirst()), selection: &selection)
+    }
+
+    /// Opens every stack, the diff inserting their cells.
+    @discardableResult
+    public mutating func openAll() -> PhotoListDiff {
+        var selection = StackSelection()
+        return openAll(selection: &selection)
+    }
+
+    /// Closes every stack, the diff removing their cells but the first.
+    @discardableResult
+    public mutating func closeAll() -> PhotoListDiff {
+        var selection = StackSelection()
+        return closeAll(selection: &selection)
     }
 
     /// Opens every stack, the diff inserting their cells.

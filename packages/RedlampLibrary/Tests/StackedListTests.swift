@@ -62,6 +62,76 @@ struct StackedListTests {
         #expect(stacked.open(id("jpeg0")).isEmpty, "a photo inside a closed stack has no cell")
     }
 
+    @Test func `stacks relabelled with a view's own IDs show its list as the library's IDs show the library's`() throws {
+        let (library, choices, ids) = Self.library()
+        let id = { (name: String) in ids[name]! }
+        let stacks = library.find(choices)
+        let shown = ["raw0", "raw1", "jpeg1", "jpeg2", "between", "pairJPEG", "pairRaw", "last"].map(id)
+        let own = Dictionary(uniqueKeysWithValues: shown.enumerated().map { ($1, Int64($0) * 3 + 10) })
+        let largest = try #require(own.values.max())
+        let relabelled = stacks.relabelled(above: largest) { own[$0] }
+        #expect(relabelled.count(of: .pair) == 4 && relabelled.count(of: .burst) == 1)
+        #expect(relabelled.count(of: .manual) == 1, "the manual stack keeps its photo from the other folder")
+        #expect(relabelled.allSatisfy { stack in stack.photos.allSatisfy { photo in
+            own.values.contains(photo) || photo > largest
+        } })
+
+        let list = PhotoList(source: .allPhotographs, ids: ContiguousArray(library.list.ids.filter(own.keys.contains)))
+        let ownList = PhotoList(source: .allPhotographs, ids: ContiguousArray(list.ids.map { own[$0]! }))
+        var theirs = StackedList(list, stacks: stacks)
+        var mine = StackedList(ownList, stacks: relabelled)
+        #expect(Array(mine) == Array(theirs).map { own[$0]! })
+        #expect(try mine.badges(of: #require(own[id("raw0")])) == theirs.badges(of: id("raw0")))
+        #expect(try mine.photos(of: #require(own[id("raw0")])) == theirs.photos(of: id("raw0")).map { own[$0]! })
+        theirs.openAll()
+        mine.openAll()
+        #expect(Array(mine) == Array(theirs).map { own[$0]! })
+        #expect(stacks.relabelled(above: 0) { _ in nil }.isEmpty, "stacks none of whose photos are shown go")
+    }
+
+    @Test func `the stacks shown are counted open and closed, a pair inside a closed burst not counted`() {
+        let (library, choices, ids) = Self.library()
+        let id = { (name: String) in ids[name]! }
+        var stacked = StackedList(library.list, stacks: library.find(choices))
+        #expect(stacked.stacksShown == (open: 0, closed: 3))
+        stacked.open(id("raw0"))
+        #expect(stacked.stacksShown == (open: 1, closed: 5), "the burst's three pairs are shown, closed")
+        stacked.openAll()
+        #expect(stacked.stacksShown == (open: 6, closed: 0))
+    }
+
+    @Test func `a selection of cells covers each closed stack's photos, and only those whose cell is selected`() {
+        let (library, choices, ids) = Self.library()
+        let id = { (name: String) in ids[name]! }
+        let list = library.list
+        var stacked = StackedList(list, stacks: library.find(choices))
+        let burst = ["raw0", "jpeg0", "raw1", "jpeg1", "raw2", "jpeg2"].map(id)
+
+        var selection = PhotoSelection()
+        selection.select(id("raw0"), in: list)
+        var covered = selection.covering(stacked, active: id("raw0"))
+        #expect(covered.map { Set($0.ids(in: list)) } == Set(burst) && covered?.active == id("raw0"))
+        #expect(covered?.covering(stacked, active: id("raw0")) == nil, "covered once, it's covered")
+
+        selection.select([id("jpeg1"), id("between")], active: id("between"), in: list)
+        covered = selection.covering(stacked, active: id("between"))
+        #expect(covered.map { $0.ids(in: list) } == [id("between")], "a photo out of sight isn't selected alone")
+
+        selection.select(id("jpeg2"), in: list)
+        covered = selection.covering(stacked, active: id("jpeg2"))
+        #expect(covered.map { Set($0.ids(in: list)) } == Set(burst) && covered?.active == id("raw0"))
+
+        selection = PhotoSelection()
+        covered = selection.covering(stacked, active: id("pairJPEG"))
+        #expect(covered.map { $0.ids(in: list) } == [id("pairRaw"), id("pairJPEG")] && covered?.active == id("pairRaw"))
+        #expect(selection.covering(stacked, active: id("between")) == nil)
+
+        stacked.open(id("raw0"))
+        selection.select(id("raw1"), in: list)
+        covered = selection.covering(stacked, active: id("raw1"))
+        #expect(covered.map { $0.ids(in: list) } == [id("raw1"), id("jpeg1")], "an open burst's pair is closed")
+    }
+
     @Test func `a list holding only some of a stack's photos shows the first it has, and a lone one as itself`() {
         let (library, choices, ids) = Self.library()
         let id = { (name: String) in ids[name]! }

@@ -43,6 +43,13 @@ public struct GroupedList: Sendable, RandomAccessCollection {
         self.stacked = stacked
         self.opened = opened
         self.opensNew = opensNew
+        tree = CellTree([])
+        count = 0
+        countItems()
+    }
+
+    /// Counts each group's items again, for its cells as `stacked` has them now.
+    private mutating func countItems() {
         var sizes = ContiguousArray<Int32>(repeating: 1, count: groups.count)
         var before = 0
         for group in groups.indices {
@@ -352,6 +359,56 @@ public struct GroupedList: Sendable, RandomAccessCollection {
         let before = stacked.count
         let diff = stacked.close(id, selection: &selection)
         return items(diff, inGroup: group, growingBy: stacked.count - before)
+    }
+
+    /// Opens every stack in every group: the diff inserts their cells and updates their first.
+    @discardableResult
+    public mutating func openAllStacks() -> PhotoListDiff {
+        let old = self
+        stacked.openAll()
+        countItems()
+        return Self.stackDiff(from: old, to: self)
+    }
+
+    /// Closes every stack in every group: the diff removes their cells but the first, which it updates.
+    @discardableResult
+    public mutating func closeAllStacks() -> PhotoListDiff {
+        let old = self
+        stacked.closeAll()
+        countItems()
+        return Self.stackDiff(from: old, to: self)
+    }
+
+    /// Opens the stacks `other` has open, a list of the same stacks, and closes the others, as the grid's groups
+    /// and the filmstrip show the same stacks: the diff of the items. A pass over the photos.
+    @discardableResult
+    public mutating func openStacks(as other: StackedList) -> PhotoListDiff {
+        let old = self
+        stacked = other.remade(list: stacked.list, stacks: stacked.stacks)
+        countItems()
+        return Self.stackDiff(from: old, to: self)
+    }
+
+    /// The diff from `old` to `new`, the same groups open with other stacks open: the cells that went and
+    /// came, and the stacks' first cells whose badges changed.
+    static func stackDiff(from old: GroupedList, to new: GroupedList) -> PhotoListDiff {
+        var removed = CellRuns()
+        old.forEachItem { index, item in
+            if case let .photo(cell) = item, !new.stacked.isShown(cell) {
+                removed.add(index)
+            }
+        }
+        var inserted = CellRuns()
+        var updated = CellRuns()
+        new.forEachItem { index, item in
+            guard case let .photo(cell) = item else { return }
+            if !old.stacked.isShown(cell) {
+                inserted.add(index)
+            } else if new.stacked.isStacked(cell), old.stacked.badges(of: cell) != new.stacked.badges(of: cell) {
+                updated.add(index)
+            }
+        }
+        return PhotoListDiff(removed: removed.set, inserted: inserted.set, updated: updated.set)
     }
 
     /// `diff`, of `stacked`'s cells in open group `group`, as items, the group having `extra` more cells.

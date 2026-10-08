@@ -115,6 +115,66 @@ public struct Stacks: Sendable, RandomAccessCollection {
         return stack.photos.flatMap(frame(of:))
     }
 
+    /// These stacks over other IDs: each photo `id` gives one has that one, and the stacks holding none of
+    /// those photos are left out. A kept stack keeps its other photos, which take IDs after `largest`, the
+    /// largest `id` gives, and a kept burst or manual stack keeps its frames' pairs, so a list of the photos
+    /// `id` gives shows the stacks as one of the library's own IDs does. For a view whose photos have IDs of
+    /// their own; call it off the main thread.
+    public func relabelled(above largest: Int64, by id: (Int64) -> Int64?) -> Stacks {
+        func isShown(frame top: Int64) -> Bool {
+            guard let pair = pairIndex(of: top) else { return id(top) != nil }
+            return members(of: pair).contains { id($0) != nil }
+        }
+        var kept = [Bool](repeating: false, count: count)
+        for pair in pairs {
+            kept[pair] = members(of: pair).contains { id($0) != nil }
+        }
+        for stack in groups.lowerBound ..< kinds.count where members(of: stack).contains(where: isShown(frame:)) {
+            kept[stack] = true
+            for top in members(of: stack) {
+                if let pair = pairIndex(of: top) {
+                    kept[pair] = true
+                }
+            }
+        }
+        var given: [Int64: Int64] = [:]
+        var next = largest + 1
+        func relabelled(_ photo: Int64) -> Int64 {
+            if let shown = id(photo) {
+                return shown
+            }
+            if let earlier = given[photo] {
+                return earlier
+            }
+            given[photo] = next
+            next += 1
+            return next - 1
+        }
+        var made = (
+            members: ContiguousArray<Int64>(), starts: ContiguousArray<Int32>([0]),
+            kinds: ContiguousArray<Stack.Kind>(), ids: [Int32: UUID](), pairs: 0, groups: 0,
+        )
+        for stack in 0 ..< count where kept[stack] {
+            for photo in members(of: stack) {
+                made.members.append(relabelled(photo))
+            }
+            made.starts.append(Int32(made.members.count))
+            if let uuid = ids[Int32(stack)] {
+                made.ids[Int32(made.kinds.count)] = uuid
+            }
+            made.kinds.append(kinds[stack])
+            if pairs.contains(stack) {
+                made.pairs += 1
+            } else if groups.contains(stack) {
+                made.groups += 1
+            }
+        }
+        return Stacks(
+            members: made.members, starts: made.starts, kinds: made.kinds, ids: made.ids, pairs: made.pairs,
+            groups: made.groups, photos: Int((made.members.max() ?? -1) + 1),
+        )
+    }
+
     /// Bytes its arrays hold, as allocated.
     public var memoryFootprint: Int {
         func bytes<T>(_ array: ContiguousArray<T>) -> Int {

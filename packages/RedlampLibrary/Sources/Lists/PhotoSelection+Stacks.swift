@@ -207,3 +207,32 @@ public struct StackSelection: Sendable, Equatable {
         }
     }
 }
+
+public extension PhotoSelection {
+    /// This selection of `stacked`'s list's photos as its cells select them: each closed stack's photos
+    /// selected when its cell is, and only then, so a change to what's selected reaches all of a stack
+    /// and nothing out of sight is selected alone. `active`, the photo shown, counts as selected, and one
+    /// inside a closed stack gives way to the stack's cell, which is then active. With `anyPhoto`, a closed
+    /// stack is selected when any of its photos is, as stacks just closed are. Nil when the selection is
+    /// that already. A pass over the closed stacks.
+    func covering(_ stacked: StackedList, active: Int64?, anyPhoto: Bool = false) -> PhotoSelection? {
+        let activeCell = active.flatMap { stacked.isShown($0) ? $0 : stacked.cell(for: $0) }
+        var flipped: [Int64] = []
+        stacked.forEachClosedStack { cell, photos in
+            let selected = cell == activeCell || (anyPhoto ? photos.contains(where: contains) : contains(cell))
+            for photo in photos where contains(photo) != selected {
+                flipped.append(photo)
+            }
+        }
+        let moved = activeCell != nil && activeCell != active
+        guard !flipped.isEmpty || moved else { return nil }
+        var covered = self
+        for photo in flipped {
+            covered.toggle(photo, in: stacked.list)
+        }
+        if let target = moved ? activeCell : self.active ?? activeCell, covered.contains(target) {
+            covered.activate(target)
+        }
+        return covered == self ? nil : covered
+    }
+}
