@@ -36,6 +36,8 @@ public struct CaptureInputs: Sendable {
 
     public var charts: [AppLookImport.Export]
     public var originals: AppLookImport.Originals
+    /// The one-image kit's file, so its photo tiles can be rendered through the engine.
+    public var compactKitFile: URL?
     public var photos: [PhotoPair]
     /// Exports that matched no kit photo.
     public var unmatched: [String]
@@ -44,12 +46,14 @@ public struct CaptureInputs: Sendable {
     public init(
         charts: [AppLookImport.Export],
         originals: AppLookImport.Originals,
+        compactKitFile: URL? = nil,
         photos: [PhotoPair] = [],
         unmatched: [String] = [],
         provenance: AppLookReport.Provenance? = nil,
     ) {
         self.charts = charts
         self.originals = originals
+        self.compactKitFile = compactKitFile
         self.photos = photos
         self.unmatched = unmatched
         self.provenance = provenance

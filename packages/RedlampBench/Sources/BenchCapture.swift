@@ -65,6 +65,7 @@ public enum BenchCapture {
             return PixelImage(image, maxLongEdge: long)
         }
         var originals = AppLookImport.Originals()
+        var compactFile: URL?
         var charts: [AppLookImport.Export] = []
         var photos: [CaptureInputs.PhotoPair] = []
         var unmatched: [String] = []
@@ -75,6 +76,7 @@ public enum BenchCapture {
             case 9:
                 originals.compact = image(asset.file)
                 originals.tileNames = asset.tiles ?? []
+                compactFile = folder.file(asset.file)
             default:
                 break
             }
@@ -100,7 +102,7 @@ public enum BenchCapture {
         }
         guard !charts.isEmpty else { throw CaptureError.noCharts(folder.id) }
         return CaptureInputs(
-            charts: charts, originals: originals, photos: photos, unmatched: unmatched,
+            charts: charts, originals: originals, compactKitFile: compactFile, photos: photos, unmatched: unmatched,
             provenance: .init(app: look.app, filter: look.filter, variant: look.variant, settings: look.settings),
         )
     }

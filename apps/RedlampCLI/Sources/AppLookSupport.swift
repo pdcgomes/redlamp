@@ -104,6 +104,7 @@ extension AppLookCommands {
         func inputs(_ matches: [PhotoMatch], provenance: AppLookReport.Provenance) -> CaptureInputs {
             CaptureInputs(
                 charts: charts, originals: originals(),
+                compactKitFile: manifest?.compact.map { kit.appendingPathComponent($0.file) },
                 photos: matches.map { match in
                     let kitPhoto = kitPhotos[match.kit], export = photos[match.export]
                     return CaptureInputs.PhotoPair(

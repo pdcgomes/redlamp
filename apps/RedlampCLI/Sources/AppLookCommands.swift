@@ -246,7 +246,8 @@ enum AppLookCommands {
         let provenance = try provenance(arguments, name: name)
         let session = try Session.load(path: url, kit: arguments.value("--kit").map { URL(fileURLWithPath: $0) })
         let matches = match(session.photos, session.kitPhotos)
-        let result = try session.inputs(matches, provenance: provenance).read()
+        let inputs = session.inputs(matches, provenance: provenance)
+        let result = try inputs.read()
 
         var recipe = try AppLookRecipe.make(result, name: name)
         let out = Repository.root.appendingPathComponent(outFolder).appendingPathComponent(slug(name))
@@ -259,6 +260,9 @@ enum AppLookCommands {
         try ImageFile.write(sheet, to: out.appendingPathComponent("contact-sheet.jpg"))
         print(result.report.summary)
         print("wrote \(recipeURL.path), report.json, report.txt and contact-sheet.jpg")
+        if arguments.has("--candidates") {
+            try await writeCandidates(inputs, result: result, name: name, into: out, context: context)
+        }
         if arguments.has("--install") {
             recipe = try context.library.install(contentsOf: recipeURL, reading: InProcessDecoder()).recipe
             print("installed \(recipe.id) (\(recipe.name))")
@@ -296,10 +300,58 @@ enum AppLookCommands {
         try ImageFile.write(sheet, to: out.appendingPathComponent("contact-sheet.jpg"))
         print("\(look?.title ?? reference.id): \(result.report.summary)")
         print("wrote \(recipeURL.path), report.json, report.txt and contact-sheet.jpg")
+        if context.arguments.has("--candidates") {
+            try await writeCandidates(inputs, result: result, name: name, into: out, context: context)
+        }
         if context.arguments.has("--install") {
             recipe = try context.library.install(contentsOf: recipeURL).recipe
             print("installed \(recipe.id) (\(recipe.name))")
         }
+    }
+
+    /// Every candidate look (TON-37), scored on the kit photos rendered through the engine, into
+    /// `candidates/` with `candidates.json`, best first.
+    static func writeCandidates(
+        _ inputs: CaptureInputs,
+        result: AppLookImport.Result,
+        name: String,
+        into out: URL,
+        context: RecipeCommands.Context,
+    ) async throws {
+        let candidates = try await LookCandidates.make(
+            inputs, result: result, name: name, renderer: context.renderer(), progress: { print("  \($0)…") },
+        )
+        let folder = out.appendingPathComponent("candidates")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        struct Entry: Encodable {
+            var kind: String
+            var title: String
+            var detail: String
+            var file: String
+            var score: LookScore
+        }
+        var entries: [Entry] = []
+        print("candidates, best first (score out of 100; ΔE on \(candidates.first?.score.basis ?? "nothing")):")
+        for candidate in candidates {
+            let file = "\(candidate.kind.rawValue).\(Recipe.fileExtension)"
+            try RecipeFile.write(candidate.recipe, to: folder.appendingPathComponent(file))
+            entries.append(Entry(
+                kind: candidate.kind.rawValue, title: candidate.kind.title, detail: candidate.detail,
+                file: "candidates/\(file)", score: candidate.score,
+            ))
+            let s = candidate.score
+            let parts = [
+                s.photoMean.map { String(format: "ΔE %.2f (p90 %.2f)", $0, s.photoP90 ?? 0) },
+                s.grain.map { String(format: "grain %+.4f", $0) },
+                s.sharpness.map { String(format: "sharpness %.2f", $0) },
+                s.glow.map { String(format: "glow %+.3f", $0) },
+                String(format: "from the charts %.2f", s.chartDeparture),
+                s.heldOut ? "held out" : nil,
+            ].compactMap(\.self)
+            print(String(format: "  %5.1f  %@: %@", s.total, candidate.kind.title, parts.joined(separator: ", ")))
+        }
+        try encoder.encode(entries).write(to: out.appendingPathComponent("candidates.json"), options: .atomic)
+        print("wrote \(candidates.count) candidates in \(folder.path)")
     }
 
     /// The app and filter, kept privately; the recipe's name must be Redlamp's own.
