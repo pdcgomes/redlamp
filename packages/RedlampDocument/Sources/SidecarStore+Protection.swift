@@ -103,7 +103,7 @@ extension SidecarStore {
         var data = Data(capacity: size)
         var buffer = [UInt8](repeating: 0, count: min(max(size + 1, 4096), 1 << 20))
         while true {
-            let count = buffer.withUnsafeMutableBytes { read(descriptor, $0.baseAddress, $0.count) }
+            let count = buffer.withUnsafeMutableBytes { Darwin.read(descriptor, $0.baseAddress, $0.count) }
             if count > 0 {
                 data.append(contentsOf: buffer[0 ..< count])
             } else if count == 0 {
