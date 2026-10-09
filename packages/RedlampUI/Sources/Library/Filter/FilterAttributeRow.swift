@@ -37,15 +37,7 @@ final class FilterAttributeRow: NSView {
                 tip: "\(stars) Star\(stars == 1 ? "" : "s") (again to clear)",
             )
         }
-        var labels: [FilterAttributes.LabelChoice: FilterToggle] = [:]
-        for label in ColorLabel.allCases {
-            labels[.color(label)] = FilterToggle(
-                symbol: "circle.fill", color: label.nsColor, identifier: "library.filter.label.\(label.rawValue)",
-                tip: label.rawValue.capitalized,
-            )
-        }
-        labels[.none] = FilterToggle(symbol: "circle.slash", identifier: "library.filter.label.none", tip: "No Label")
-        self.labels = labels
+        labels = Self.labelToggles()
         edited = FilterToggle(title: "Edited", identifier: "library.filter.edited", tip: "Edited")
         unedited = FilterToggle(title: "Unedited", identifier: "library.filter.unedited", tip: "Unedited")
         var kinds: [PhotoRecord.Kind: FilterToggle] = [:]
@@ -112,6 +104,19 @@ final class FilterAttributeRow: NSView {
     @available(*, unavailable)
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    /// A button for each colour label, and one for none.
+    private static func labelToggles() -> [FilterAttributes.LabelChoice: FilterToggle] {
+        var labels: [FilterAttributes.LabelChoice: FilterToggle] = [:]
+        for label in ColorLabel.allCases {
+            labels[.color(label)] = FilterToggle(
+                symbol: "circle.fill", color: label.nsColor, identifier: "library.filter.label.\(label.rawValue)",
+                tip: label.rawValue.capitalized,
+            )
+        }
+        labels[.none] = FilterToggle(symbol: "circle.slash", identifier: "library.filter.label.none", tip: "No Label")
+        return labels
     }
 
     override var isFlipped: Bool {
