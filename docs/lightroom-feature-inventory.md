@@ -106,6 +106,7 @@ Each feature has a roadmap tag:
 
 ## 13. Healing / Remove
 - Remove tool (content-aware, brush-based) [P3]
+- Detect Objects in Remove: a rough stroke over or around a thing, and Lightroom selects the thing itself, as the Objects mask's brush select does (Object Aware from May 2024, renamed in [October 2024](https://www.lightroomqueen.com/whats-new-in-lightroom-2024-10/)) [P3]
 - Heal and Clone modes: Size, Feather, Opacity, source repositioning, and choosing a new source [P3]
 - Generative Remove (Firefly cloud) [Replace with on-device inpainting; Later]
 - Distraction Removal for People, Reflections, and Dust (auto-detect) [Later; dust detection could come earlier]

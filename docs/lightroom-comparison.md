@@ -138,6 +138,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Heal and Clone | Yes | Done | | | RM-01 | Spots and brushed strokes, each finding its own source |
 | Content-aware Remove | Yes | Done | | | RM-07 | A classical fill on the Mac; large areas are for Generative Remove |
 | Remove people and objects with a click | Yes | Done | | | RM-08, RM-13 | Their cast shadows and their reflections on water go with them |
+| Pick an object to remove with a rough stroke (Detect Objects) | Yes | Planned | | P3 | RM-19 | Or with a box dragged around it; today a click picks it, and Objects masks already select by rectangle or brush |
 | Find and remove things named in words | No | Done | | | RM-08 | Trash, signs, cables and more, found anywhere in the photo; something as large as a car needs Generative Remove, since content-aware fill leaves a smeared patch |
 | Generative Remove | Yes (cloud, credits) | Done | Different | | RM-10, RM-15 | Runs on the Mac, without a cloud or credits, from an opt-in 2.4 GB download; tested on Macs with 16 GB or more, and offered on smaller ones with a note that it hasn't been tested there; fills are labelled as generated |
 | Dust removal and Visualize Spots | Yes | Done | | | RM-02 | Also across a shoot: specks in the same place on the sensor are healed in every photo |

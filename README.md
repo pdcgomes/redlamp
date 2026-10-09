@@ -911,6 +911,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Updating AI masks across a selection of photos <!-- tracker: EDT-17 -->
 - [x] Heal and Clone, as spots and brushed strokes, each finding its own source <!-- tracker: RM-01 -->
 - [x] Content-aware Remove, and removing people, objects and things named in words with a click <!-- tracker: RM-07, RM-08 -->
+- [ ] Removing an object picked by rectangle or brush, not only with a click <!-- tracker: RM-19 -->
 - [x] Remove Dust and Visualize Spots, for one photo or across a shoot <!-- tracker: RM-02 -->
 - [x] **Focus stacking:** stacks found in the filmstrip, alignment through focus breathing, depth-map fusion (Auto, Smooth and Detail), a retouch brush, and results that develop like a raw
 - [x] `redlamp-profiler`: look matching by black-box measurement against cameras' own JPEGs; four measured film looks ship
