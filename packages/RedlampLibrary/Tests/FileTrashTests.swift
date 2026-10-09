@@ -237,7 +237,10 @@ struct FileTrashTests {
         let ids = try await sandbox.rows()
         let id = try #require(ids["Shoot/IMG_0002.ARW"])
         let row = try await sandbox.index.write { writer in
-            let row = try Self.filled(#require(try writer.photo(id: id)))
+            var row = try Self.filled(#require(try writer.photo(id: id)))
+            // A camera and a lens the index has: one it doesn't was another index's, and has the photo read again.
+            row.camera = try writer.cameraID(for: "Sony ILCE-7RM5")
+            row.lens = try writer.lensID(for: "FE 35mm F1.4 GM")
             _ = try writer.upsertPhotos([row])
             return try writer.photo(id: id)
         }
