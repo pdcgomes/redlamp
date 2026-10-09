@@ -21,11 +21,14 @@ public final class MainThreadMonitor {
     private var iterationStart: CFAbsoluteTime = 0
     private var started: CFAbsoluteTime = 0
     public private(set) var durations: [Double] = []
+    /// When each of `durations`' iterations began.
+    public private(set) var starts: [CFAbsoluteTime] = []
 
     public init() {}
 
     public func start() {
         durations.removeAll()
+        starts.removeAll()
         started = CFAbsoluteTimeGetCurrent()
         let observer = CFRunLoopObserverCreateWithHandler(
             nil,
@@ -40,6 +43,7 @@ public final class MainThreadMonitor {
                     self.iterationStart = now
                 } else if self.iterationStart > 0 {
                     self.durations.append((now - self.iterationStart) * 1000)
+                    self.starts.append(self.iterationStart)
                     self.iterationStart = 0
                 }
             }

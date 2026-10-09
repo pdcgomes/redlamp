@@ -631,10 +631,13 @@
 
     extension RunningApp {
         /// Runs `body` with the main thread watched: its run loop's turns, and how long `body` took. The menu bar's
-        /// rebuilds meanwhile go in the run's `menu-bar.txt`.
+        /// rebuilds meanwhile go in the run's `menu-bar.txt`, and with `REDLAMP_TURN_PROFILE` set, what its slow turns
+        /// were busy in goes in `turn-profile-<name>.txt` (`SlowTurnProfile`).
         func watchingMainThread(
             _ name: String = "", _ body: () throws -> Void,
         ) throws -> (summary: MainThreadMonitor.Summary?, seconds: Double) {
+            let profile = SlowTurnProfile.isOn ? try MainThread
+                .run { SlowTurnProfile(thread: mach_thread_self()) } : nil
             let monitor = try MainThread.run { () -> MainThreadMonitorBox in
                 let monitor = MainThreadMonitor()
                 monitor.start()
@@ -646,10 +649,19 @@
             try body()
             let seconds = Date().timeIntervalSince(started)
             noteMenus(name, since: menus)
-            let summary = try MainThread.run { () -> MainThreadMonitor.Summary? in
+            let (summary, starts, durations) = try MainThread.run { () -> (
+                MainThreadMonitor.Summary?,
+                [Double],
+                [Double]
+            ) in
                 monitor.monitor.stop()
-                return monitor.monitor.summary(seconds: seconds)
+                return (monitor.monitor.summary(seconds: seconds), monitor.monitor.starts, monitor.monitor.durations)
             }
+            let phase = name.isEmpty ? "phase" : name.replacingOccurrences(of: "/", with: "-")
+            profile?.write(
+                to: runDirectory.appending(path: "turn-profile-\(phase).txt"), phase: name, starts: starts,
+                durations: durations,
+            )
             return (summary, seconds)
         }
 
