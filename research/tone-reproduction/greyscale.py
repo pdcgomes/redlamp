@@ -14,6 +14,8 @@ reference values:
    value, recovered through the tone curve's exact inverse, scaled from its reference to 18%.
 5. The model of the curve (Develop.metal's constants) for the same grey position, beside the
    measurement.
+6. Redlamp Reproduction (no tone curve), with Exposure set so the anchor patch reads its reference:
+   every other patch should then read its own L*, but for flare in the shot.
 
 Usage, from the repository root:
 
@@ -181,6 +183,20 @@ def measure(shot: Shot) -> dict:
         look: [modelled(y_of_lstar(ref) / MIDDLE_GREY * grey_scene, look) for ref in shot.references]
         for look in ("neutral", "color")
     }
+
+    # Redlamp Reproduction: without a curve the anchor's light scales with Exposure, so a step or two
+    # of the ratio to its reference anchors it.
+    reference = shot.references[shot.anchor]
+    exposure = 0.0
+    image = shot.render("reproduction-anchored", "reproduction", exposure, temperature, tint)
+    for _ in range(3):
+        value = lab(shot.patches(image)[shot.anchor])[0]
+        if abs(value - reference) < 0.02:
+            break
+        exposure += math.log2(y_of_lstar(reference) / y_of_lstar(value))
+        image = shot.render("reproduction-anchored", "reproduction", exposure, temperature, tint)
+    result["reproductionExposure"] = exposure
+    result["reproductionAnchored"] = [lab(p)[0] for p in shot.patches(image)]
     return result
 
 
@@ -193,6 +209,10 @@ def table(shot: Shot, result: dict) -> str:
         ("Color, Exposure 0", result["colorAsExposed"]),
         ("Color, model", result["model"]["color"]),
         (f"Neutral, Exposure {result['anchoredExposure']:+.2f} (anchored)", result["neutralAnchored"]),
+        (
+            f"Reproduction, Exposure {result['reproductionExposure']:+.2f} (anchored)",
+            result["reproductionAnchored"],
+        ),
     ]
     lines = [
         f"### {shot.entry['camera']} ({shot.entry['id']})",

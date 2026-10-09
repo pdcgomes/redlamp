@@ -11,6 +11,7 @@ A museum imaging department tried Redlamp on raw target shots from Canon, Leica,
 3. Exposure set so the middle-grey patch reads its reference L* under Neutral, so that what's left is the tone curve's shape.
 4. Where the shot put an 18% grey, in stops below the sensor's clip: the middle-grey patch's scene value, recovered through the tone curve's exact inverse and scaled from its reference to 18%.
 5. The model: `Develop.metal`'s tone curve with each look's contrast, as `DevelopParameters` applies it, at that grey position.
+6. Redlamp Reproduction, the Base Look without a curve that this note led to ([the design](../../plans/2026-10-09-reproduction-design.md)), with Exposure set so the middle-grey patch reads its reference L*.
 
 Its only shot so far is the CC0 Sigma fp DNG from the look-development set (raw.pixls.us): a ColorChecker Passport, not metered (ISO 3200, f/1.0, 1/50 s, under reddish light). The chart's own reference values aren't known; BabelColor's averages for charts made before November 2014 stand in for them. The department's files, when they arrive, are metered and come with their target's values.
 
@@ -26,9 +27,11 @@ Sigma fp, ColorChecker Passport's grey row, white balance 5610 K and tint +7 on 
 | Color, Exposure 0 | 7.0 | 19.9 | 37.9 | 56.2 | 70.8 | 81.8 |
 | Color, model | 5.5 | 20.0 | 37.9 | 56.6 | 71.1 | 82.7 |
 | Neutral, Exposure +0.53 (middle grey anchored) | 17.3 | 32.7 | 50.9 | 66.7 | 78.1 | 86.3 |
+| Redlamp Reproduction, Exposure +1.35 (middle grey anchored) | 22.5 | 35.5 | 50.9 | 66.4 | 81.0 | 95.3 |
 
 - **The model predicts the renders.** From Neutral 3.5 to White it is within 0.9 L* of what was measured; Black reads 2 L* lighter than modelled, as flare in a real shot's shadows does.
 - **With middle grey anchored, the curve still bends the scale.** White reads 86.3 against 96.5, Neutral 8 78.1 against 81.3 and Black 17.3 against 20.5, while Neutral 5 and 6.5 are within 0.1. That is the curve's shoulder and toe. No exposure makes it linear, so a reproduction mode has to replace the curve (TON-39), not adjust it.
+- **Without the curve, each patch reads its own L*.** Under Redlamp Reproduction (9 October, measured with the build) the anchored row is within 0.4 L* of the references from Neutral 3.5 to Neutral 8, and White reads 95.3 against 96.5. Black reads 2 L* lighter, the flare in the shot that Blacks can take out. The row is within 0.1 L* of the one the design worked out from the Neutral renders by undoing the curve (22.5, 35.5, 50.9, 66.4, 80.9, 95.2). The Exposure of +1.35 is on top of the typical anchor (+1.03), which takes the place of the Sigma fp's BaselineExposure (+1.0); this unmetered shot needs 2.38 stops in all, which is its own exposure, not the camera's calibration.
 - **Exposure depends on the camera.** Redlamp scales the sensor's clip to 1 and applies one curve to every camera. A DNG's BaselineExposure is added; other raws get none. Cameras put a metered 18% grey roughly 3.3 to 3.7 stops below clip, by their ISO calibration, and the model puts Neutral 5 at 51.4 L* for 3.3 stops and 44.6 for 3.7. The camera bench finds Redlamp's default up to 1.7 stops darker than the Canon 5D Mark IV's own JPEG and 2.2 stops darker than the R6 Mark III's. This shot's 3.85 stops is its own exposure, not the Sigma fp's calibration, since it wasn't metered.
 - **Redlamp's middle grey isn't the scene's.** The curve renders scene 0.18 at L* 64.3, and L* 50 at scene 0.112. Exposure anchored so a metered grey lands at 0.18 would brighten every non-DNG render by about a stop unless the curve is re-centred. CAM-28's design decides whether anchoring applies only in TON-39's mode or to every render, behind a new process version.
 
