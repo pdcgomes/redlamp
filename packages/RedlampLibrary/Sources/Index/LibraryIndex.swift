@@ -21,8 +21,11 @@ public final class LibraryIndex: Sendable {
     private let readerLoad: Mutex<[Int]>
     /// What this process's transactions changed, by the generation each made (LIB-44).
     let journal = IndexJournal()
-    /// The last IDs given, kept beside the index too (LIB-05).
+    /// Marks at or above the last IDs given, kept beside the index too (LIB-05).
     let marks: IndexIDMarks
+    /// How long after the last write that gave IDs the marks are brought down to them (`IndexIDMarks.settle`).
+    private let idSettling: Duration
+    private let settlingIDs = Mutex<Task<Void, Never>?>(nil)
 
     /// Opens the index at `url`, creating it and its folder if there's none, and brings its
     /// schema up to date and its last IDs into step with those kept beside it (`IndexIDMarks`).
@@ -37,13 +40,15 @@ public final class LibraryIndex: Sendable {
     /// Opens the index, blocking: only ever off the main thread.
     init(
         url: URL, readers: Int, migrations: [Migration], logLimits: IndexCheckpoints.Limits = .init(),
+        idBlocks: [IndexIDs: Int64]? = nil, idSettling: Duration = .seconds(2),
     ) throws {
         dispatchPrecondition(condition: .notOnQueue(.main))
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let database = try SQLiteDatabase(path: url.path)
         try Self.configure(database, writing: true)
         try Self.migrate(database, with: migrations)
-        let marks = IndexIDMarks(index: url)
+        let marks = IndexIDMarks(index: url, blocks: idBlocks)
+        self.idSettling = idSettling
         // The tables the last IDs are worked out from are this build's schema's.
         if migrations.count == Self.migrations.count {
             try database.transaction(.immediate) { try marks.reconcile(Writer(database: database)) }
@@ -91,26 +96,27 @@ public final class LibraryIndex: Sendable {
     /// Runs `body` on the write connection, in one transaction: committed when it returns, rolled
     /// back when it throws. Writes run one at a time, in the order they're called. Once called,
     /// a write runs even if the calling task is cancelled. A transaction that changes the index bumps
-    /// its generation (`IndexGeneration`), and one that gives IDs keeps them beside the index before it
-    /// commits (`IndexIDMarks`).
+    /// its generation (`IndexGeneration`), and one that gives IDs past the marks beside the index sets them
+    /// ahead before it commits (`IndexIDMarks`).
     @discardableResult
     public func write<T: Sendable>(_ body: @escaping @Sendable (Writer) throws -> T) async throws -> T {
-        let result = try await writer.run { [journal, marks, checkpoints] database -> (T, Bool) in
+        let result = try await writer.run { [journal, marks, checkpoints] database -> (T, Bool, Bool) in
             checkpoints.copyIfFull()
             var staged: IndexGeneration?
+            var gave = false
             do {
                 let result = try database.transaction(.immediate) {
                     let before = database.totalChanges
                     journal.begin()
                     marks.begin()
                     let result = try body(Writer(database: database, journal: journal, marks: marks))
-                    try marks.save()
+                    gave = try marks.save()
                     if database.totalChanges != before {
                         staged = try journal.stage(on: database)
                     }
                     return result
                 }
-                return (result, staged != nil)
+                return (result, staged != nil, gave && marks.ahead)
             } catch {
                 if let staged {
                     journal.unstage(staged)
@@ -121,7 +127,36 @@ public final class LibraryIndex: Sendable {
         if result.1 {
             journal.committed()
         }
+        if result.2 {
+            settleIDsLater()
+        }
         return result.0
+    }
+
+    /// Brings the marks beside the index down to the last IDs given once `idSettling` passes with no write giving
+    /// any, so the next open skips none of them.
+    private func settleIDsLater() {
+        let wait = idSettling
+        let task = Task.detached(priority: .utility) { [weak self] in
+            try? await Task.sleep(for: wait)
+            guard !Task.isCancelled, let self else { return }
+            try? await settleIDs()
+        }
+        settlingIDs.withLock { settling in
+            settling?.cancel()
+            settling = task
+        }
+    }
+
+    /// Brings the marks beside the index down to the last IDs given, when this process set them ahead
+    /// (`IndexIDMarks.settle`).
+    func settleIDs() async throws {
+        try await writer.run { [marks] database in try Self.settle(marks, on: database) }
+    }
+
+    private static func settle(_ marks: IndexIDMarks, on database: SQLiteDatabase) throws {
+        guard marks.ahead else { return }
+        try database.transaction(.immediate) { try marks.settle(Writer(database: database)) }
     }
 
     /// Runs `body` on one of the read connections, in a read transaction: everything it reads is
@@ -203,23 +238,28 @@ public final class LibraryIndex: Sendable {
     }
 
     /// Closes the connections once the work queued on them is done: the readers and the
-    /// checkpoints first, then the writer, which folds the write-ahead log into the database as it
-    /// closes. Reads and writes called afterwards throw `LibraryIndexError.closed`.
+    /// checkpoints first, then the writer, which brings the marks beside the index down to the last
+    /// IDs given and folds the write-ahead log into the database as it closes. Reads and writes called
+    /// afterwards throw `LibraryIndexError.closed`.
     public func close() async {
+        settlingIDs.withLock { $0?.cancel() }
         for reader in readers {
             await reader.close()
         }
         await checkpoints.close()
+        try? await settleIDs()
         await writer.close()
     }
 
     /// `close`, blocking: only ever off the main thread.
     func closeAndWait() {
         dispatchPrecondition(condition: .notOnQueue(.main))
+        settlingIDs.withLock { $0?.cancel() }
         for reader in readers {
             reader.closeAndWait()
         }
         checkpoints.closeAndWait()
+        try? writer.runAndWait { try Self.settle(marks, on: $0) }
         writer.closeAndWait()
     }
 

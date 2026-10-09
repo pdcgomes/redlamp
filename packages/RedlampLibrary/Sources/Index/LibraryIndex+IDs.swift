@@ -88,27 +88,46 @@ extension LibraryIndex.Writer {
     }
 }
 
-/// The last ID each of `IndexIDs`' tables gave, kept beside the index as well as in it (`Index.ids` beside
-/// `Index.sqlite`): an index restored from an older snapshot, or made again from nothing, would otherwise give again
-/// the IDs given since, and what holds them outside the index (the journals, Undo, the photos waiting for an XMP
-/// sync) would reach other photos with them. Whatever holds an ID finds the photo it meant, or none.
+/// A mark for each of `IndexIDs`' tables at or above every ID it gave, kept beside the index as well as in it
+/// (`Index.ids` beside `Index.sqlite`): an index restored from an older snapshot, or made again from nothing, would
+/// otherwise give again the IDs given since, and what holds them outside the index (the journals, Undo, the photos
+/// waiting for an XMP sync) would reach other photos with them. Whatever holds an ID finds the photo it meant, or none.
 ///
-/// The file is written and synced in each transaction that gives an ID, before it commits, so it's never behind the
-/// index, even when a power cut takes the index's last commits. As the index opens, its last IDs are raised to the
-/// file's, and the file's to the index's (`reconcile`). The file is JSON, its tables' last IDs by name, keys a newer
-/// build wrote kept: `{"folders":12,"photos":1040,"roots":2}`.
+/// A transaction that gives an ID past its table's mark writes and syncs the file before it commits, with the mark a
+/// block past that ID (`blocks`), so the file is never behind the index, even when a power cut takes the index's last
+/// commits, and the transactions giving IDs within the block write nothing. Once the writer has given none for a
+/// while, and as the index closes, the marks are brought down to the last IDs given, under the write lock (`settle`).
+/// As the index opens, its last IDs are raised to the file's marks, and the marks to the index's last IDs
+/// (`reconcile`): after a session that ended without settling, at most a block of each table's IDs goes unused. The
+/// file is JSON, its tables' marks by name, keys a newer build wrote kept: `{"folders":12,"photos":1040,"roots":2}`.
 final class IndexIDMarks: @unchecked Sendable {
     let url: URL
+    /// The IDs each table's mark is set past the ID that passed it, its table's own name its key.
+    let blocks: [String: Int64]
     /// The last IDs given in the transaction in progress, by table. Used only on the writer's queue.
     private var raised: [String: Int64] = [:]
+    /// Whether this process set marks past the last IDs given that aren't brought down yet. Used only on the
+    /// writer's queue.
+    private(set) var ahead = false
 
     /// The file is written at this length, or longer if it must be, over what it held: a write that small
     /// isn't torn.
     static let length = 512
 
-    /// The marks of the index at `index`.
-    init(index: URL) {
+    /// A block for photos is 65 transactions of an index build, a sync each; folders, keywords, cameras and the
+    /// rest come far fewer at a time. A session that ends without settling leaves a block of each unused, which
+    /// the arrays kept by photo, folder and keyword ID give room to (the column store's rows, the stacks' pairs, the
+    /// keywords' levels): 256 KB for photos at four bytes an ID.
+    static let blocks: [IndexIDs: Int64] = [.photos: 65536, .folders: 4096]
+    static let smallBlock: Int64 = 256
+
+    /// The marks of the index at `index`; `blocks` as `Self.blocks`, all of them 0 to write the file at the last
+    /// ID given in every transaction that gives one.
+    init(index: URL, blocks: [IndexIDs: Int64]? = nil) {
         url = index.deletingPathExtension().appendingPathExtension("ids")
+        self.blocks = Dictionary(uniqueKeysWithValues: IndexIDs.allCases.map { table in
+            (table.rawValue, blocks.map { $0[table] ?? 0 } ?? Self.blocks[table] ?? Self.smallBlock)
+        })
     }
 
     /// Starts noting a transaction's IDs.
@@ -121,19 +140,45 @@ final class IndexIDMarks: @unchecked Sendable {
         raised[table.rawValue] = max(raised[table.rawValue] ?? 0, id)
     }
 
-    /// Writes the IDs the transaction in progress gave, before it commits; nothing when the file has them.
-    func save() throws {
-        guard !raised.isEmpty else { return }
+    /// Before the transaction in progress commits, writes the file when an ID it gave passes its table's mark, which
+    /// is set a block past it; nothing when every ID it gave is within the marks. Whether it gave any.
+    @discardableResult
+    func save() throws -> Bool {
+        guard !raised.isEmpty else { return false }
         defer { raised.removeAll() }
         let kept = read()
-        let marks = kept.merging(raised, uniquingKeysWith: max)
+        var marks = kept
+        for (table, id) in raised where id > kept[table] ?? 0 {
+            marks[table] = id + (blocks[table] ?? 0)
+        }
+        if marks != kept {
+            try write(marks)
+            ahead = ahead || raised.contains { table, id in marks[table] ?? 0 > id }
+        }
+        return true
+    }
+
+    /// Brings each table's mark down to the last ID it gave, and up to it where the file is behind, from the index
+    /// `writer` writes, in a transaction holding the write lock, so no other process gives one meanwhile; the next
+    /// open then skips none.
+    func settle(_ writer: LibraryIndex.Writer) throws {
+        let kept = read()
+        var marks = kept
+        for table in IndexIDs.allCases {
+            let last = try writer.lastID(of: table)
+            if last > 0 || kept[table.rawValue] != nil {
+                marks[table.rawValue] = last
+            }
+        }
         if marks != kept {
             try write(marks)
         }
+        ahead = false
     }
 
     /// Brings the index `writer` writes and the file into step as the index opens: each table's last ID raised to
-    /// the file's, where an index restored or made again from nothing is behind it, and the file's to the index's.
+    /// the file's mark, where an index restored or made again from nothing is behind it, or the last session left a
+    /// block unsettled, and the mark to the index's last ID.
     func reconcile(_ writer: LibraryIndex.Writer) throws {
         let kept = read()
         var marks = kept

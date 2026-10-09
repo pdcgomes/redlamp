@@ -19,8 +19,8 @@ public struct LibraryPaths: Sendable, Hashable {
         return LibraryPaths(root: support.appending(path: "Redlamp/Library", directoryHint: .isDirectory))
     }
 
-    /// The index: rebuilt from the photos and their sidecars whenever it's lost. `Index.ids` beside it keeps the
-    /// last IDs it gave, which an index rebuilt or restored gives none of again (`IndexIDMarks`).
+    /// The index: rebuilt from the photos and their sidecars whenever it's lost. `Index.ids` beside it keeps marks
+    /// at or above the last IDs it gave, none of which an index rebuilt or restored gives again (`IndexIDMarks`).
     public var index: URL {
         root.appending(path: "Index.sqlite")
     }

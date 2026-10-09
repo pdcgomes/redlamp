@@ -9,7 +9,8 @@ public extension LibraryIndex {
         public let database: SQLiteDatabase
         /// Where the photos whose keywords change are noted, for the column store (LIB-44).
         let journal: IndexJournal?
-        /// Where the IDs given are noted, kept beside the index before the transaction commits (`IndexIDMarks`).
+        /// Where the IDs given are noted, for the marks beside the index set before the transaction commits
+        /// (`IndexIDMarks`).
         let marks: IndexIDMarks?
         /// IDs looked up in this transaction: gone with it, so a rollback leaves none stale.
         private var cameraIDs: [String: Int64] = [:]

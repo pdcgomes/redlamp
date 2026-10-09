@@ -84,25 +84,114 @@ struct IndexIDMarkTests {
         try await Self.expectNoneGivenAgain(Self.fill(index, "Third"), after: given)
     }
 
-    @Test func `the IDs a transaction gives are kept beside the index, and one that gives none leaves them`(
+    /// An index in a folder of its own whose marks come down `settling` after the last write giving IDs; with a
+    /// root at `IndexSandbox.rootPath`.
+    static func open(
+        settling: Duration = .seconds(3600), at existing: URL? = nil,
+    ) async throws -> (index: LibraryIndex, root: Int64) {
+        let url = existing ?? FileManager.default.temporaryDirectory
+            .appending(path: "redlamp-index-marks-\(UUID().uuidString)", directoryHint: .isDirectory)
+            .appending(path: "Index.sqlite")
+        let index = try await LibraryIndex.offCaller {
+            try LibraryIndex(url: url, readers: 1, migrations: LibraryIndex.migrations, idSettling: settling)
+        }
+        let root = try await index.write { writer in
+            let volume = try writer.upsertVolume(VolumeRecord(uuid: "TEST-VOLUME", name: "Test", kind: .ssd))
+            return try writer.upsertRoot(RootRecord(volume: volume, path: IndexSandbox.rootPath))
+        }
+        return (index, root)
+    }
+
+    /// Gives `count` photos in a folder of their own named after `name`; their IDs.
+    static func give(_ count: Int, _ name: String, in index: LibraryIndex, root: Int64) async throws -> [Int64] {
+        try await index.write { writer in
+            let folder = try writer.upsertFolder(FolderRecord(root: root, path: IndexSandbox.rootPath + "/" + name))
+            return try writer.upsertPhotos((0 ..< count).map { PhotoRecord(folder: folder, name: "\(name) \($0).JPG") })
+        }
+    }
+
+    static func modified(_ url: URL) throws -> Date? {
+        try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date
+    }
+
+    @Test func `a transaction giving an ID past its mark sets the mark a block ahead, and one within the marks writes nothing`(
     ) async throws {
-        let sandbox = try await IndexSandbox.make()
-        defer { sandbox.remove() }
-        let marks = sandbox.index.marks
+        let (index, root) = try await Self.open()
+        defer {
+            index.closeAndWait()
+            try? FileManager.default.removeItem(at: index.url.deletingLastPathComponent())
+        }
+        let marks = index.marks
         #expect(marks.url.lastPathComponent == "Index.ids")
-        let (ids, during) = try await sandbox.index.write { writer -> ([Int64], Int64?) in
-            let folder = try writer.upsertFolder(FolderRecord(root: sandbox.root, path: IndexSandbox.rootPath + "/A"))
+        let (ids, during) = try await index.write { writer -> ([Int64], Int64?) in
+            let folder = try writer.upsertFolder(FolderRecord(root: root, path: IndexSandbox.rootPath + "/A"))
             let ids = try writer.upsertPhotos([PhotoRecord(folder: folder, name: "A.JPG")])
             return (ids, marks.read()[IndexIDs.photos.rawValue])
         }
+        let (photos, roots) = (IndexIDs.photos.rawValue, IndexIDs.roots.rawValue)
+        let block = try #require(marks.blocks[photos])
+        #expect(block == 65536 && marks.blocks[roots] == 256)
         #expect(during == nil, "written as the transaction ends")
-        #expect(marks.read()[IndexIDs.photos.rawValue] == ids.last)
-        #expect(marks.read()[IndexIDs.roots.rawValue] == sandbox.root)
-        // A transaction that gives none leaves the file as it is.
-        let written = try FileManager.default.attributesOfItem(atPath: marks.url.path)[.modificationDate] as? Date
+        let last = try #require(ids.last)
+        #expect(marks.read()[photos] == last + block)
+        #expect(marks.read()[roots] == root + 256)
+
+        // A transaction that gives none, and one whose IDs are within the marks, leave the file as it is.
+        let written = try Self.modified(marks.url)
         try await Task.sleep(for: .milliseconds(20))
-        try await sandbox.index.write { try $0.setSetting("1", for: "test.unrelated") }
-        #expect(try FileManager.default.attributesOfItem(atPath: marks.url.path)[.modificationDate] as? Date == written)
+        try await index.write { try $0.setSetting("1", for: "test.unrelated") }
+        let more = try await Self.give(1000, "B", in: index, root: root)
+        #expect(try Self.modified(marks.url) == written)
+        #expect(marks.read()[photos] == last + block && more.max() ?? .max < last + block)
+    }
+
+    @Test func `the marks come down to the last IDs given once none are given for a while, and as the index closes`(
+    ) async throws {
+        var (index, root) = try await Self.open(settling: .milliseconds(50))
+        let url = index.url
+        defer {
+            index.closeAndWait()
+            try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+        }
+        let photos = IndexIDs.photos.rawValue
+        let first = try await Self.give(3, "A", in: index, root: root)
+        #expect(index.marks.read()[photos] ?? 0 > first.max() ?? 0)
+        for _ in 0 ..< 500 where index.marks.read()[photos] != first.last {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(index.marks.read()[photos] == first.last, "brought down once the writer was quiet")
+        #expect(index.marks.read()[IndexIDs.roots.rawValue] == root)
+
+        let second = try await Self.give(3, "B", in: index, root: root)
+        await index.close()
+        #expect(index.marks.read()[photos] == second.last, "and as it closed")
+        (index, root) = try await Self.open(at: url)
+        let third = try await Self.give(1, "C", in: index, root: root)
+        #expect(third == [(second.last ?? 0) + 1], "the next open skips none")
+    }
+
+    @Test func `an index whose session ended with its marks ahead gives none of its IDs, skipping at most a block`(
+    ) async throws {
+        let sandbox = try await IndexSandbox.make()
+        defer { sandbox.remove() }
+        _ = try await Self.fill(sandbox.index, "First")
+        let snapshot = try await sandbox.index.snapshot(to: sandbox.snapshots)
+        let given = try await Self.fill(sandbox.index, "Second")
+        // As a crash or a power cut leaves them: the marks a block ahead, the IDs given since not in the file.
+        let ahead = try Data(contentsOf: sandbox.index.marks.url)
+        await sandbox.index.close()
+        try ahead.write(to: sandbox.index.marks.url)
+        try Self.damage(sandbox.url)
+
+        let (index, outcome) = try await LibraryIndex.openOrRestore(at: sandbox.url, snapshots: sandbox.snapshots)
+        defer { index.closeAndWait() }
+        #expect(outcome == .restored(from: snapshot))
+        let again = try await Self.fill(index, "Third")
+        Self.expectNoneGivenAgain(again, after: given)
+        for table in IndexIDs.allCases {
+            let skipped = (again[table]?.min() ?? 0) - (given[table]?.max() ?? 0) - 1
+            #expect(skipped <= index.marks.blocks[table.rawValue] ?? 0, "\(table): \(skipped) skipped")
+        }
     }
 
     @Test func `an Undo from before the index was made again leaves the photos given its photos' IDs alone`(
