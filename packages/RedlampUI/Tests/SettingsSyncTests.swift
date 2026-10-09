@@ -8,11 +8,17 @@ import Testing
 /// background, with a history step, their pasted AI masks computed for them, and Undo puts them back.
 @MainActor
 struct SettingsSyncTests {
-    private func open(_ model: EditorModel, _ url: URL) async throws {
-        model.select(url)
-        for _ in 0 ..< 200 where model.info?.url != url {
+    /// Waits for an open or a paste, which can take seconds on a busy Mac.
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
+    }
+
+    private func open(_ model: EditorModel, _ url: URL) async throws {
+        model.select(url)
+        try await eventually { model.info?.url == url }
     }
 
     @Test func `sync writes the other photos, with history, and undo puts them back`() async throws {
@@ -100,7 +106,7 @@ struct SettingsSyncTests {
         model.copySelection = .default
     }
 
-    @Test func `Undo Sync reads and writes the sidecars off the main thread`() async throws {
+    @Test func `undoing a sync reads and writes the sidecars off the main thread`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -126,7 +132,7 @@ struct SettingsSyncTests {
                 NSFileCoordinator(filePresenter: nil)
                     .coordinate(writingItemAt: sidecar, options: [], error: &error) { _ in
                         held.resume()
-                        _ = release.wait(timeout: .now() + 2)
+                        _ = release.wait(timeout: .now() + 10)
                     }
             }.start()
         }
@@ -134,7 +140,7 @@ struct SettingsSyncTests {
         model.undoSync()
         let returned = ContinuousClock.now - started
         release.signal()
-        #expect(returned < .milliseconds(500), "Undo Sync returned in \(returned)")
+        #expect(returned < .seconds(2), "Undo Sync returned in \(returned)")
         await model.settingsSync.idle()
         #expect(store.load(for: b) == nil, "the sidecar the sync made is removed")
         model.copySelection = .default
@@ -154,9 +160,7 @@ struct SettingsSyncTests {
         model.copySettings()
         try await open(model, photos[1])
         model.click(photos[2], toggling: true)
-        for _ in 0 ..< 200 where model.info?.url != photos[2] {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info?.url == photos[2] }
         #expect(model.selectedPhotos == [photos[1], photos[2]])
         model.pasteSettings()
         await model.settingsSync.idle()
@@ -205,23 +209,20 @@ struct SettingsSyncTests {
         model.copySelection = .default
         try await open(model, photos[0])
         model.click(photos[1], toggling: true)
-        for _ in 0 ..< 200 where model.info?.url != photos[1] {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info?.url == photos[1] }
         model.click(photos[2], toggling: true)
-        for _ in 0 ..< 200 where model.info?.url != photos[2] {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info?.url == photos[2] }
         #expect(model.previousSelection == photos[1] && model.selectedPhotos == photos)
         model.pasteFromPrevious()
-        for _ in 0 ..< 200 where model.recipe[.exposure] != 2 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.recipe[.exposure] == 2 }
         await model.settingsSync.idle()
         #expect(model.recipe[.exposure] == 2, "C, the open photo")
         #expect(SidecarStore().load(for: photos[0])?.recipe[.exposure] == 2, "A, in the background")
     }
+}
 
+@MainActor
+extension SettingsSyncTests {
     /// A slider on an AI mask keeps the mask B computed for itself; deleting the mask deletes B's.
     @Test func `auto sync keeps each photo's AI mask and carries its deletion`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

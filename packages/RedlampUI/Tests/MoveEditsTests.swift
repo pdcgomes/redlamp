@@ -214,8 +214,11 @@ struct MoveEditsTests {
         #expect(folder.onThisMac(edited).isEmpty)
         #expect(Folder.leftovers(below: folder.root).isEmpty && Folder.leftovers(below: folder.paths.sidecars).isEmpty)
     }
+}
 
-    @Test func `Cancel stops the move between two parts and puts back what it moved, the placement as it was`(
+@MainActor
+extension MoveEditsTests {
+    @Test func `cancelling stops the move between two parts and puts back what it moved, the placement as it was`(
     ) async throws {
         let folder = Folder()
         defer { folder.cleanUp() }
@@ -244,7 +247,7 @@ struct MoveEditsTests {
         #expect(!FileManager.default.fileExists(atPath: folder.paths.root.appending(path: "Sidecar Move.json").path))
     }
 
-    @Test func `Cancel stops the sheet's move once, and nothing stops it putting back`() {
+    @Test func `cancelling stops the sheet's move once, and nothing stops it putting back`() {
         let journal = SidecarMoveJournal(plan: SidecarMovePlan(
             root: 1, rootPath: "/Volumes/Card", destination: .onThisMac, items: [], conflicts: [],
         ))
@@ -372,9 +375,7 @@ struct MoveEditsTests {
         let model = try #require(folder.model)
         let photo = folder.photo("A.JPG")
         model.select(photo)
-        for _ in 0 ..< 400 where model.info?.url != photo {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        await Self.eventually(seconds: 30) { model.info?.url == photo }
         try #require(model.info?.url == photo)
         model.setValue(.exposure, 0.8)
         #expect(model.hasUnsavedChange)

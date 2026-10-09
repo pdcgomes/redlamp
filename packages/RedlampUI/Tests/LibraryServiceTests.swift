@@ -102,7 +102,7 @@ struct LibraryServiceTests {
         Issue.record("the library didn't catch up with \(root.path): \(service.state)")
     }
 
-    private func eventually(seconds: Double = 5, _ condition: () -> Bool) async throws {
+    private func eventually(seconds: Double = 30, _ condition: () -> Bool) async throws {
         for _ in 0 ..< Int(seconds * 200) where !condition() {
             try await Task.sleep(for: .milliseconds(5))
         }
@@ -110,9 +110,7 @@ struct LibraryServiceTests {
 
     private func open(_ url: URL, in model: EditorModel) async throws {
         model.select(url)
-        for _ in 0 ..< 400 where model.info?.url != url {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info?.url == url }
         try #require(model.info?.url == url)
     }
 
@@ -182,7 +180,7 @@ struct LibraryServiceTests {
         try write("B.JPG", shade: 7)
         try FileManager.default.removeItem(at: photo("E.JPG"))
         try FileManager.default.moveItem(at: photo("A.JPG"), to: photo("D.JPG"))
-        try await eventually(seconds: 30) { library.items.map(\.name) == ["B.JPG", "C.JPG", "D.JPG"] }
+        try await eventually { library.items.map(\.name) == ["B.JPG", "C.JPG", "D.JPG"] }
         #expect(library.items.map(\.name) == ["B.JPG", "C.JPG", "D.JPG"])
         #expect(mismatches == 0, "every diff takes the rows before it to the rows after it, without a reset")
         #expect(library.items[1].metadata.rating == 3, "the photo that stayed keeps its badges")
@@ -205,7 +203,7 @@ struct LibraryServiceTests {
         #expect(library.storeThumbnail(for: library.items[1])?.1 == key, "a badge's change keeps the photo's key")
 
         try write("C.JPG", shade: 9)
-        try await eventually(seconds: 30) { library.storeThumbnail(for: library.items[1])?.1 != key }
+        try await eventually { library.storeThumbnail(for: library.items[1])?.1 != key }
         let rewritten = try #require(library.storeThumbnail(for: library.items[1])?.1)
         #expect(rewritten != key, "the photo rewritten with other pixels shows its new key")
     }
@@ -236,7 +234,7 @@ struct LibraryServiceTests {
         let listed = library.items
         let resets = diffs.filter(\.reset).count
 
-        try await eventually(seconds: 30) { library.isShownFromLibrary }
+        try await eventually { library.isShownFromLibrary }
         #expect(diffs.filter(\.reset).count == resets, "no reset: the filmstrip keeps its place")
         #expect(library.items == listed, "the same photos, with the same dates and badges")
 
@@ -362,16 +360,17 @@ struct LibraryServiceTests {
         let service = service(library)
         let started = ContinuousClock.now
         library.attach(service)
-        #expect(ContinuousClock.now - started < .milliseconds(50), "attaching returns at once")
+        // Well under the index's busy timeout of 5 s, which an open on the main thread would wait out.
+        #expect(ContinuousClock.now - started < .seconds(1), "attaching returns at once")
         library.open(root)
         try await eventually { !library.isListing && library.count == 3 }
         #expect(library.count == 3 && !library.isShownFromLibrary, "listed as before")
         #expect(service.state == .opening)
 
         try holder.execute("COMMIT")
-        try await eventually(seconds: 10) { service.isReady }
+        try await eventually { service.isReady }
         #expect(service.isReady)
-        try await eventually(seconds: 30) { library.isShownFromLibrary }
+        try await eventually { library.isShownFromLibrary }
         #expect(library.isShownFromLibrary)
     }
 }

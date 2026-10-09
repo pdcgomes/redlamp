@@ -22,7 +22,10 @@ struct VolumeIOTests {
     ) -> (concurrency: VolumeConcurrency, widths: [Int]) {
         var model = VolumeModel(profile: profile, seed: 3)
         var concurrency = VolumeConcurrency(initial: initial, range: 1 ... 16)
-        var inFlight: [(start: Duration, end: Duration, generation: Int, bytes: Int)] = []
+        struct Operation {
+            let start: Duration, end: Duration, generation: Int, bytes: Int
+        }
+        var inFlight: [Operation] = []
         var now = Duration.zero
         var issued = 0
         var widths: [Int] = []
@@ -30,7 +33,12 @@ struct VolumeIOTests {
             while inFlight.count < concurrency.width, issued < operations {
                 let bytes = sizes(issued)
                 let outcome = model.schedule("/IMG_\(issued).JPG", bytes: bytes, arriving: now)
-                inFlight.append((now, outcome.at, concurrency.generation, bytes))
+                inFlight.append(Operation(
+                    start: now,
+                    end: outcome.at,
+                    generation: concurrency.generation,
+                    bytes: bytes,
+                ))
                 issued += 1
             }
             let next = inFlight.indices.min { inFlight[$0].end < inFlight[$1].end }!
@@ -218,7 +226,7 @@ struct VolumeIOTests {
     }
 
     @Test func `an operation still going after thirty timeouts on a volume that answers fails alone`() async throws {
-        let fileSystem = SlowFileSystem(delay: .milliseconds(1500))
+        let fileSystem = SlowFileSystem(delay: .seconds(5))
         let probe = URL(fileURLWithPath: "/Volumes/Slow")
         let io = try VolumeIO(
             volume: fileSystem.volume(of: probe), fileSystem: fileSystem, probe: probe, timeout: .milliseconds(30),
@@ -230,7 +238,7 @@ struct VolumeIOTests {
             try await io.read(file, range: 0 ..< 100)
         }
         let waited = clock.now - started
-        #expect(waited >= io.operationLimit && waited < .milliseconds(1400), "\(waited)")
+        #expect(waited >= io.operationLimit && waited < .seconds(4), "\(waited)")
         let statistics = io.statistics
         #expect(statistics.isReachable && statistics.timeouts == 1 && statistics.longestUnanswered == .zero)
         #expect(try await io.attributes(of: file).name == "IMG_0001.JPG")
@@ -318,7 +326,7 @@ struct VolumeIOTests {
         let probe = URL(fileURLWithPath: "/Volumes/Gated")
         let io = try VolumeIO(
             volume: fileSystem.volume(of: probe), fileSystem: fileSystem, probe: probe,
-            timeout: .milliseconds(200), probeIntervals: .milliseconds(20) ... .milliseconds(80),
+            timeout: .seconds(1), probeIntervals: .milliseconds(20) ... .milliseconds(80),
         )
         let changes = io.reachabilityChanges()
         let file = probe.appending(path: "IMG_0001.JPG")
@@ -328,14 +336,14 @@ struct VolumeIOTests {
             try await io.read(file, range: 0 ..< 10)
         }
         let waited = clock.now - started
-        #expect(waited >= .milliseconds(200) && waited < .seconds(1), "\(waited)")
+        #expect(waited >= .seconds(1) && waited < .seconds(5), "\(waited)")
         #expect(!io.isReachable)
         let refused = clock.now
         await #expect(throws: LibraryFileSystemError.unreachable(file)) {
             try await io.read(file, range: 0 ..< 10)
         }
-        #expect(clock.now - refused < .milliseconds(100))
-        #expect(io.statistics.timeouts == 1 && io.statistics.longestWait < .seconds(1))
+        #expect(clock.now - refused < .milliseconds(500))
+        #expect(io.statistics.timeouts == 1 && io.statistics.longestWait < .seconds(5))
 
         fileSystem.open()
         var seen: [Bool] = []

@@ -395,8 +395,8 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
 
 @MainActor
 struct MaskEditingTests {
-    /// Waits for what needs the engine's list of AI masks, which the editor asks for off the main
-    /// actor after the open and can take seconds on a busy Mac.
+    /// Waits for the open, or for what needs the engine's list of AI masks, which the editor asks for off
+    /// the main actor after the open: either can take seconds on a busy Mac.
     private func eventually(_ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(30)
         while !condition(), ContinuousClock.now < deadline {
@@ -410,9 +410,7 @@ struct MaskEditingTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let model = EditorModel(engine: StubEngine())
         model.select(folder.appending(path: "IMG_0001.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         #expect(model.info != nil)
         return (model, { try? FileManager.default.removeItem(at: folder) })
     }
@@ -423,9 +421,7 @@ struct MaskEditingTests {
         let engine = try #require(model.engine as? StubEngine)
         model.activeTool = .masking
         model.activeTool = .heal
-        for _ in 0 ..< 200 where engine.maskModelReleases.withLock({ $0 }) == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { engine.maskModelReleases.withLock { $0 } > 0 }
         #expect(engine.maskModelReleases.withLock { $0 } == 1)
         model.activeTool = .edit
         try await Task.sleep(for: .milliseconds(50))
@@ -569,9 +565,7 @@ struct MaskEditingTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let model = EditorModel(engine: StubEngine())
         model.select(folder.appending(path: "IMG_0005.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         model.startDrawing(.radial)
         model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
         model.finishDrawing()
@@ -606,9 +600,7 @@ struct MaskEditingTests {
         )]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0010.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         await model.refreshAvailableMasks()
         let disc = MaskShape.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2))
         model.startDrawing(.radial)
@@ -618,9 +610,7 @@ struct MaskEditingTests {
         #expect(engine.lastRender?.maskOverlay == first)
 
         model.startDrawing(.objects)
-        for _ in 0 ..< 200 where model.drawingKind != .objects {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.drawingKind == .objects }
         #expect(model.maskOverlayShown == nil)
         #expect(engine.lastRender?.maskOverlay == nil, "the canvas drops the overlay as the tool is armed")
         await model.selectObject(at: ImagePoint(x: 0.5, y: 0.5))
@@ -672,9 +662,7 @@ struct MaskEditingTests {
         let engine = StubEngine()
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0007.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         func drawRadial() {
             model.startDrawing(.radial)
             model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
@@ -714,9 +702,7 @@ struct MaskEditingTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let model = EditorModel(engine: StubEngine())
         model.select(folder.appending(path: "IMG_0008.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         for _ in 0 ..< 3 {
             model.startDrawing(.radial)
             model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
@@ -739,9 +725,7 @@ struct MaskEditingTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let model = EditorModel(engine: StubEngine())
         model.select(folder.appending(path: "IMG_0009.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         model.startDrawing(.radial)
         model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
         model.finishDrawing()
@@ -766,9 +750,7 @@ struct MaskEditingTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let model = EditorModel(engine: StubEngine())
         model.select(folder.appending(path: "IMG_0006.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         for _ in 0 ..< 2 {
             model.startDrawing(.radial)
             model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
@@ -842,9 +824,7 @@ struct MaskEditingTests {
         )]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0004.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         await model.createAIMask(.subject)
         let mask = try #require(model.recipe.masks.first)
         let component = try #require(mask.components.first)
@@ -893,9 +873,7 @@ struct MaskEditingTests {
         )]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0003.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         await model.startAIMask(.people, part: .clothes)
         #expect(model.pendingModel?.model.id == "sam3")
         #expect(model.pendingModel?.part == .clothes)
@@ -922,9 +900,7 @@ struct MaskEditingTests {
         )]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0003.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         await model.createAIMask(.subject)
         let first = try #require(model.recipe.masks.first?.id)
         for _ in 1 ..< MaskLayer.maximumLayers {
@@ -952,9 +928,7 @@ struct MaskEditingTests {
         )]
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0003.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.info != nil }
         await model.startAIMask(.objects)
         #expect(model.pendingModel?.model.id == "sam2.1-tiny")
         #expect(model.drawingKind == nil)
@@ -1015,10 +989,8 @@ struct MaskEditingTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let model = EditorModel(engine: engine)
         model.select(folder.appending(path: "IMG_0004.ARW"))
-        for _ in 0 ..< 200 where model.info == nil {
-            try await Task.sleep(for: .milliseconds(5))
-        }
         let snow = try #require(MaskPreset.builtIn.first { $0.name == "Brighten Snow" })
+        try await eventually { model.canApply(snow) }
         await model.applyMaskPreset(snow)
         #expect(engine.lastRequest?.kind == .landscape && engine.lastRequest?.landscape == .snow)
         let mask = try #require(model.recipe.masks.first)
