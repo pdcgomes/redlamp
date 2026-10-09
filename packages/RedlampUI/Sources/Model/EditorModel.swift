@@ -431,6 +431,9 @@ public final class EditorModel {
         didSet { requestRender() }
     }
 
+    /// Whether the Healing tool draws its spots, their outlines and pins over the photo (`H`).
+    public var showSpots = true
+
     /// What a click in the Healing tool does.
     public var spotPick: SpotPick = .spot
     public internal(set) var isPickingRegion = false

@@ -11,7 +11,7 @@ The table below is read from `ShortcutAction`, the list the app itself uses for 
 
 {{table: shortcuts maskingTool brushMask linearMask radialMask colorRangeMask luminanceRangeMask depthRangeMask @Masking}}
 
-[[O]] and [[⇧O]] also work in the Crop tool, where [[O]] cycles the crop's overlay and [[⇧O]] turns it. [[H]] works only in the Masking tool, and [[⌫]] only with a mask, or a healing spot, selected.
+[[O]] and [[⇧O]] also work in the Crop tool, where [[O]] cycles the crop's overlay and [[⇧O]] turns it. [[H]] also works in the Healing tool, where it hides and shows the spots, and [[⌫]] works only with a mask, or a healing spot, selected.
 
 ## Keys while you draw
 

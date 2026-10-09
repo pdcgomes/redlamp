@@ -16,6 +16,13 @@ struct HealToolPanel: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.value)
                 Spacer()
+                Toggle("Show Spots", isOn: $model.showSpots)
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+                    .font(Theme.captionFont)
+                    .help(
+                        "Show the spots, their outlines and pins on the photo (H); hide them to see a fill with nothing over it",
+                    )
                 Button("Reset") { model.deleteAllSpots() }
                     .controlSize(.small)
                     .disabled(model.recipe.spots.isEmpty)

@@ -162,17 +162,20 @@ struct HealToolTests {
     private func drawOverlay(_ model: EditorModel, size: CGSize) throws
         -> (opacity: (CGPoint) -> Double, frame: ImageFrame) {
         model.canvas.updateView(size: size, backingScale: 1)
-        let renderer = ImageRenderer(
-            content: HealOverlayView().environment(model).frame(width: size.width, height: size.height),
-        )
+        // For content that draws nothing, ImageRenderer gives back an image it made before: a line
+        // drawn under the canvas, below the rows read, keeps it drawing.
+        let renderer = ImageRenderer(content: VStack(spacing: 0) {
+            HealOverlayView().environment(model).frame(width: size.width, height: size.height)
+            Color.black.frame(width: size.width, height: 1)
+        })
         renderer.scale = 1
         let image = try #require(renderer.cgImage)
-        let (width, height) = (image.width, image.height)
+        let (width, height) = (image.width, image.height - 1)
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
         ))
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        context.draw(image, in: CGRect(x: 0, y: -1, width: width, height: height + 1))
         let data = try #require(context.data)
         let pixels = Array(UnsafeBufferPointer(
             start: data.bindMemory(to: UInt8.self, capacity: width * height * 4), count: width * height * 4,
@@ -185,14 +188,19 @@ struct HealToolTests {
     }
 
     /// Picks the disc the engine finds about `centre` and draws the Healing tool's overlay with it
-    /// selected, its outline traced, then expects its edge outlined, eight ways round, and nothing
-    /// drawn over the photo inside it.
+    /// selected, its outline traced, then expects it outlined (`expectOutlined`).
     private func expectOutlinedPick(_ model: EditorModel, at centre: ImagePoint, radius: Double) async throws {
         model.activeTool = .heal
         model.spotPick = .object
         await model.pickRegion(at: centre)
         let region = try #require(model.selectedSpot?.region)
         await model.traceOutline(of: region)
+        try expectOutlined(model, at: centre, radius: radius)
+    }
+
+    /// Draws the Healing tool's overlay with the disc picked about `centre` selected, and expects its
+    /// edge outlined, eight ways round, and nothing drawn over the photo inside it.
+    private func expectOutlined(_ model: EditorModel, at centre: ImagePoint, radius: Double) throws {
         let (opacity, frame) = try drawOverlay(model, size: CGSize(width: 600, height: 400))
         func shown(_ distance: Double, _ angle: Double) -> CGPoint {
             frame.view(ImagePoint(x: centre.x + distance * cos(angle) / 1.5, y: centre.y + distance * sin(angle)))
@@ -223,6 +231,50 @@ struct HealToolTests {
         model.canvas.imageSize = GeometryMap(recipe: model.recipe, imageSize: info.pixelSize, lens: nil).outputSize
         #expect(model.canvas.imageSize == PixelSize(width: 300, height: 400))
         try await expectOutlinedPick(model, at: ImagePoint(x: 0.25, y: 0.5), radius: 0.2)
+    }
+
+    @Test func `H hides the spots while a pick's fills are compared, leaving the pick selected, and shows them again`(
+    ) async throws {
+        let centre = ImagePoint(x: 0.5, y: 0.5)
+        let engine = StubEngine()
+        engine.computed = try [ring(at: centre, outer: 0.25)]
+        engine.generativeAvailability = .ready
+        let (model, cleanup) = try await openEditor(engine)
+        let generative = model.fillsGeneratively
+        defer {
+            model.fillsGeneratively = generative
+            cleanup()
+        }
+        model.activeTool = .heal
+        await model.loadGenerativeFill()
+        model.fillsGeneratively = true
+        model.spotPick = .object
+        await model.pickRegion(at: centre)
+        for _ in 0 ..< 400 where model.generating != nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let spot = try #require(model.selectedSpot)
+        #expect(spot.fill != nil && model.fillVariations(of: spot)?.count == EditorModel.fillVariations)
+        try await model.traceOutline(of: #require(spot.region))
+        try expectOutlined(model, at: centre, radius: 0.25)
+
+        let size = CGSize(width: 600, height: 400)
+        func mostOpaque() throws -> Double {
+            let (opacity, _) = try drawOverlay(model, size: size)
+            return stride(from: 0.0, to: size.height, by: 1).map { y in
+                stride(from: 0.0, to: size.width, by: 1).map { opacity(CGPoint(x: $0, y: y)) }.max() ?? 0
+            }.max() ?? 0
+        }
+        #expect(model.canPerform(.maskPins))
+        #expect(model.perform(.maskPins))
+        #expect(try mostOpaque() == 0, "nothing drawn over the fill, or anywhere else")
+        model.showFillVariation(1)
+        let shown = try #require(model.selectedSpot)
+        #expect(shown.id == spot.id && model.fillVariations(of: shown)?.index == 1, "the next fill, the pick selected")
+        #expect(try mostOpaque() == 0)
+
+        #expect(model.perform(.maskPins))
+        try expectOutlined(model, at: centre, radius: 0.25)
     }
 
     @Test func `a mask's outline is a closed loop along each of its edges, in the photo's coordinates`() throws {

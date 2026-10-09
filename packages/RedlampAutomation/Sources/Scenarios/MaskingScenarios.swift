@@ -556,7 +556,8 @@
         }
 
         /// Generative Remove (RM-10), with the model this Mac has downloaded: a Remove spot gets three
-        /// fills, the arrows go through them, and Content-Aware takes it back.
+        /// fills, the arrows go through them with the spots hidden (`H`), and Content-Aware takes it
+        /// back.
         static let generative = Scenario(
             "healing.generative", "Generative Remove: a spot's three fills, the arrows, and back to Content-Aware",
             claims: [.feature("healing.remove"), .feature("healing.generative")],
@@ -577,8 +578,12 @@
                 .main { model in model.selectedSpot.map { model.generatedFills[$0.id]?.count ?? 0 } ?? 0 }
             try app.expect(fills == EditorModel.fillVariations, "\(fills) fills")
             let first = try app.main { $0.selectedSpot?.fill }
+            try app.press(.maskPins)
+            try app.wait("H to hide the spots") { !$0.showSpots && $0.selectedSpot?.fill != nil }
             try app.main { $0.showFillVariation(1) }
             try app.expect(try app.main { $0.selectedSpot?.fill } != first, "The arrow shows the next fill")
+            try app.press(.maskPins)
+            try app.wait("H to show the spots again") { $0.showSpots }
             try app.main { $0.useContentAwareFill() }
             try app.expect(try app.main { $0.selectedSpot?.fill } == nil, "Content-Aware takes the fill back")
             try app.main { model in

@@ -244,7 +244,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .depthRangeMask: "Depth Range Mask"
         case .maskOverlay: "Show / Hide Mask Overlay"
         case .maskOverlayColor: "Cycle Mask Overlay Color"
-        case .maskPins: "Show / Hide Pins"
+        case .maskPins: "Show / Hide Pins or Spots"
         case .deleteMask: "Delete Selected Mask or Spot"
         case .cancel: "Cancel / Leave Tool"
         case .rating0: "Clear Rating"

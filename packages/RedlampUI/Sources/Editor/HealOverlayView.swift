@@ -43,8 +43,10 @@ struct HealOverlayView: View {
                         .frame(width: diameter, height: diameter)
                 }
 
-                ForEach(model.recipe.spots) { spot in
-                    SpotHandles(spot: spot, frame: frame, isSelected: spot.id == model.selectedSpotID)
+                if model.showSpots {
+                    ForEach(model.recipe.spots) { spot in
+                        SpotHandles(spot: spot, frame: frame, isSelected: spot.id == model.selectedSpotID)
+                    }
                 }
 
                 ForEach(model.foundThings) { found in

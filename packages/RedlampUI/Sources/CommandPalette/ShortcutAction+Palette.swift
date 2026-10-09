@@ -57,7 +57,7 @@ extension ShortcutAction {
         .depthRangeMask: ["mask", "depth", "range", "local"],
         .maskOverlay: ["mask", "overlay", "red"],
         .maskOverlayColor: ["mask", "overlay", "color"],
-        .maskPins: ["mask", "pins", "handles"],
+        .maskPins: ["mask", "pins", "handles", "spots", "outlines"],
         .deleteMask: ["mask", "remove"],
         .rating0: ["stars", "rating", "unrate", "no stars"],
         .rating1: ["stars", "rating", "one"],

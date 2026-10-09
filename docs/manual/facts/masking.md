@@ -318,9 +318,10 @@ The ellipsis menu contains, in order:
 
 ### Pins on the canvas
 
-- **H** toggles them. Title **Show / Hide Pins**, key `H` —
-  `packages/RedlampUI/Sources/Shortcuts/ShortcutAction.swift:246`, `:350`; handled only in the Masking
-  tool — `packages/RedlampUI/Sources/Model/EditorModel+Shortcuts.swift:137-139`, `:247`.
+- **H** toggles them. Title **Show / Hide Pins or Spots**, key `H` —
+  `packages/RedlampUI/Sources/Shortcuts/ShortcutAction.swift:247`, `:352`; handled in the Masking
+  tool, and in the Healing tool, where it hides and shows the spots (`showSpots`) —
+  `packages/RedlampUI/Sources/Model/EditorModel+Shortcuts.swift:142-145`, `:255`.
 - Default: **shown** (`showMaskPins = true`) —
   `packages/RedlampUI/Sources/Model/EditorModel.swift:454`.
 - What `H` hides is both things: every **other** mask's pin, and the **selected** mask's component
@@ -1219,7 +1220,7 @@ monitor, the menus and the ⌘/ sheet all read (`:94-98`). `⌘/` opens the shee
 | --- | --- | --- |
 | `O` | Show / Hide Mask Overlay | `:244`, `:348` |
 | `⇧O` | Cycle Mask Overlay Color | `:245`, `:349` |
-| `H` | Show / Hide Pins | `:246`, `:350` |
+| `H` | Show / Hide Pins or Spots | `:247`, `:352` |
 | `⌫` | Delete Selected Mask or Spot | `:247`, `:351` |
 | `Esc` | Cancel / Leave Tool | `:248`, `:352` |
 

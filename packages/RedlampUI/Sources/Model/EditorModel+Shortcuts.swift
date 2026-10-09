@@ -138,6 +138,8 @@ public extension EditorModel {
             }
             guard activeTool == .masking else { return false }
             maskOverlayColor = maskOverlayColor.next
+        // In the Healing tool, H hides and shows its spots, as in Lightroom.
+        case .maskPins where activeTool == .heal: showSpots.toggle()
         case .maskPins:
             guard activeTool == .masking else { return false }
             showMaskPins.toggle()
@@ -250,7 +252,7 @@ public extension EditorModel {
         case .luminanceRangeMask: return photo && canCreateMask(.luminanceRange)
         case .depthRangeMask: return photo && canCreateMask(.depthRange)
         case .maskOverlay, .maskOverlayColor: return masking || activeTool == .crop
-        case .maskPins: return masking
+        case .maskPins: return masking || activeTool == .heal
         case .deleteMask: return (masking && selectedMaskID != nil) || (activeTool == .heal && selectedSpotID != nil)
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue:
