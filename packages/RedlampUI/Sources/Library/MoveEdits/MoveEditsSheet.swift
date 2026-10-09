@@ -217,8 +217,9 @@ final class MoveEditsSheetController: NSViewController {
     public var isOver: Bool
     /// The disk has been looked through: the count is the disk's.
     public var isChecked: Bool
-    /// From the command to the sheet on screen with its numbers.
+    /// From the command to the sheet on screen with its numbers, and to its numbers read from the index.
     public var shownAfter: Duration?
+    public var surveyedAfter: Duration?
 }
 
 @_spi(Harness) public extension EditorModel {
@@ -229,7 +230,7 @@ final class MoveEditsSheetController: NSViewController {
         return MoveEditsSheetState(
             heading: model.heading, count: model.count, kept: model.kept, goingTo: model.goingTo,
             status: model.status, canMove: model.canMove, isMoving: model.isMoving, isOver: model.isOver,
-            isChecked: model.plan != nil, shownAfter: controller.shownAfter,
+            isChecked: model.plan != nil, shownAfter: controller.shownAfter, surveyedAfter: model.surveyed,
         )
     }
 }

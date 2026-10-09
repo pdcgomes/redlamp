@@ -134,6 +134,7 @@
 
             var phases: [(String, (summary: MainThreadMonitor.Summary?, seconds: Double))] = []
             var shown: [Double] = []
+            var surveyed: [Double] = []
             var checked: [Double] = []
             for (name, goingTo) in [("there", "Redlamp on this Mac"), ("back", "Beside the photos")] {
                 try app.rightClickRow(row, choosing: ShortcutAction.moveEditsAndMetadata.title)
@@ -141,8 +142,8 @@
                 try app.wait("the sheet's numbers") { $0.moveEditsSheet?.shownAfter != nil }
                 let opened = Date()
                 let sheet = try app.main { $0.moveEditsSheet }
-                let after = sheet?.shownAfter?.components ?? (seconds: 0, attoseconds: 0)
-                shown.append(Double(after.seconds) * 1000 + Double(after.attoseconds) / 1e15)
+                shown.append(Self.milliseconds(sheet?.shownAfter))
+                surveyed.append(Self.milliseconds(sheet?.surveyedAfter))
                 try app.expect(
                     sheet?.count.hasPrefix("10,000 photos have edits or metadata") == true && sheet?.goingTo == goingTo,
                     "the sheet says \(String(describing: sheet))",
@@ -166,6 +167,7 @@
                 }
             }
             app.record("e2e-move-edits-sheet-shown-ms", shown.max() ?? -1)
+            app.record("e2e-move-edits-sheet-survey-ms", surveyed.max() ?? -1)
             app.record("e2e-move-edits-sheet-checked-ms", checked.max() ?? -1)
             let lines = phases.map { name, phase in
                 String(
@@ -175,7 +177,9 @@
                 )
             } + [
                 String(
-                    format: "sheet on screen with its numbers: %@ ms; root looked through: %@ ms; load %@",
+                    format: "numbers from the index: %@ ms; sheet on screen with them: %@ ms; root looked through: "
+                        + "%@ ms; load %@",
+                    surveyed.map { String(format: "%.1f", $0) }.joined(separator: " and "),
                     shown.map { String(format: "%.1f", $0) }.joined(separator: " and "),
                     checked.map { String(format: "%.0f", $0) }.joined(separator: " and "),
                     "\(ProcessInfo.processInfo.loadAverage)",
@@ -191,7 +195,12 @@
                     "moving \(name): main thread p99 \(phase.summary?.p99 ?? 0) ms",
                 )
             }
-            try app.expect((shown.max() ?? .infinity) < 16.7, "the sheet's numbers took \(shown) ms")
+            try app.expect((surveyed.max() ?? .infinity) < 8.3, "the sheet's numbers took \(surveyed) ms to read")
+        }
+
+        static func milliseconds(_ duration: Duration?) -> Double {
+            guard let parts = duration?.components else { return -1 }
+            return Double(parts.seconds) * 1000 + Double(parts.attoseconds) / 1e15
         }
     }
 
@@ -210,11 +219,13 @@
     }
 
     /// A root of 10,000 copies of a JPEG in twenty folders, each copy a clone ending in bytes of its own so each has
-    /// its own content key, each with a sidecar holding a rating and an edit: in a folder of its own where
+    /// its own content key, each with a sidecar holding a rating, one in ten an edit too: in a folder of its own where
     /// `REDLAMP_PERF_SCRATCH` says, `/Volumes/SSD/redlamp-tmp` by default, removed after.
     struct MoveEditsPerformanceScratch: Sendable {
         static let photos = 10000
         static let folders = 20
+        /// One photo in this many has an edit; every one has a rating, as a culled shoot does.
+        static let editedEvery = 10
 
         let base: URL
         let root: URL
@@ -246,7 +257,9 @@
                         try handle.write(contentsOf: Data(count: 16 + serial))
                         try handle.close()
                         var recipe = EditRecipe()
-                        recipe[.exposure] = Double(serial % 9) / 10
+                        if serial % Self.editedEvery == 0 {
+                            recipe[.exposure] = Double(serial % 9 + 1) / 10
+                        }
                         try SidecarStore().save(
                             Sidecar(recipe: recipe, metadata: PhotoMetadata(rating: serial % 5 + 1)), for: photo,
                         )

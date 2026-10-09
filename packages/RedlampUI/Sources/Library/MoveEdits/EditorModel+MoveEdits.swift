@@ -49,6 +49,7 @@ public extension EditorModel {
                 root: root, rootID: survey?.id, placement: survey?.placement ?? .besidePhotos,
                 indexed: survey?.photos ?? 0,
             )
+            model.surveyed = .now - requested
             MoveEditsSheetController.present(model, editor: self, requested: requested)
         }
         return true
