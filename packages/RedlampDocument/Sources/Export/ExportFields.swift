@@ -64,6 +64,14 @@ extension ExportMetadata.Fields {
         "RedlampExportFields" as CFString
     }
 
+    /// The TIFF tags ImageIO reads before IPTC's caption and copyright, by their IPTC keys.
+    static var tiffKeys: [CFString: CFString] {
+        [
+            kCGImagePropertyIPTCCaptionAbstract: kCGImagePropertyTIFFImageDescription,
+            kCGImagePropertyIPTCCopyrightNotice: kCGImagePropertyTIFFCopyright,
+        ]
+    }
+
     /// The IPTC fields the photo's fields stand for, which an export copies from its source only
     /// without them.
     static var iptcKeys: [CFString] {
@@ -92,15 +100,15 @@ extension ExportMetadata.Fields {
             iptc[key] = nil
         }
         let creators = creators.compactMap(Self.text)
-        let texts: [(CFString, CFString?, XMPProperty, String?)] = [
-            (kCGImagePropertyIPTCObjectName, nil, .title, title),
-            (kCGImagePropertyIPTCCaptionAbstract, kCGImagePropertyTIFFImageDescription, .description, caption),
-            (kCGImagePropertyIPTCCopyrightNotice, kCGImagePropertyTIFFCopyright, .rights, copyright),
+        let texts: [(CFString, XMPProperty, String?)] = [
+            (kCGImagePropertyIPTCObjectName, .title, title),
+            (kCGImagePropertyIPTCCaptionAbstract, .description, caption),
+            (kCGImagePropertyIPTCCopyrightNotice, .rights, copyright),
         ]
-        for (key, tiffKey, property, value) in texts {
+        for (key, property, value) in texts {
             let value = value.flatMap(Self.text)
             iptc[key] = value
-            if let tiffKey {
+            if let tiffKey = Self.tiffKeys[key] {
                 tiff[tiffKey] = value
             }
             if let value {

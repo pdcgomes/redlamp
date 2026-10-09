@@ -499,7 +499,9 @@
                 }
             }
         }
+    }
 
+    extension PanelScenarios {
         static let metadata = Scenario(
             "library.metadata",
             "The Metadata panel shows the photos selected's IPTC Core fields, mixed where they differ; a field typed "

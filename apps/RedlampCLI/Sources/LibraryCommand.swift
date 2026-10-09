@@ -184,7 +184,9 @@ enum LibraryCommand {
                source; --keywords adds keywords. A journal lets an import
                a forced quit cut short finish on the next run; --dry-run shows the plan.
     """
+}
 
+extension LibraryCommand {
     private static var scenarioNames: String {
         BenchScenarios.all.map(\.name).joined(separator: ", ")
     }
@@ -208,32 +210,60 @@ enum LibraryCommand {
             print(usage)
             return
         }
+        let rest = Array(arguments.dropFirst())
         switch command {
-        case "fixture": try fixture(Array(arguments.dropFirst()))
-        case "bench": try await bench(Array(arguments.dropFirst()))
-        case "index": try await index(Array(arguments.dropFirst()))
-        case "search": try await search(Array(arguments.dropFirst()))
-        case "stats": try await stats(Array(arguments.dropFirst()))
-        case "sidecars": try await sidecars(Array(arguments.dropFirst()))
-        case "names": try await names(Array(arguments.dropFirst()))
-        case "duplicates": try await duplicates(Array(arguments.dropFirst()))
-        case "health": try await health(Array(arguments.dropFirst()))
-        case "xmp": try await xmp(Array(arguments.dropFirst()))
-        case "rename": try await rename(Array(arguments.dropFirst()))
-        case "move": try await move(Array(arguments.dropFirst()))
-        case "trash": try await trash(Array(arguments.dropFirst()))
-        case "undo": try await undo(Array(arguments.dropFirst()))
-        case "journal": try await journal(Array(arguments.dropFirst()))
-        case "trashed": try await trashed(Array(arguments.dropFirst()))
-        case "put-back": try await putBack(Array(arguments.dropFirst()))
-        case "keywords": try await keywords(Array(arguments.dropFirst()))
-        case "stacks" where stackVerbs.contains(arguments.dropFirst().first ?? ""):
-            try await stackChange(Array(arguments.dropFirst()))
-        case "stacks": try await stacks(Array(arguments.dropFirst()))
-        case "groups": try await groups(Array(arguments.dropFirst()))
-        case "metadata": try await metadata(Array(arguments.dropFirst()))
-        case "collections": try await collections(Array(arguments.dropFirst()))
-        case "import": try await importing(Array(arguments.dropFirst()))
+        case "fixture", "bench", "index", "search", "stats", "sidecars", "names", "duplicates", "health", "xmp":
+            try await runReading(command, rest)
+        case "rename", "move", "trash", "undo", "journal", "trashed", "put-back":
+            try await runFiles(command, rest)
+        case "keywords", "stacks", "groups", "metadata", "collections", "import":
+            try await runOrganising(command, rest)
+        default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
+        }
+    }
+
+    /// Fixtures, benchmarks, indexing and what the index holds.
+    private static func runReading(_ command: String, _ arguments: [String]) async throws {
+        switch command {
+        case "fixture": try fixture(arguments)
+        case "bench": try await bench(arguments)
+        case "index": try await index(arguments)
+        case "search": try await search(arguments)
+        case "stats": try await stats(arguments)
+        case "sidecars": try await sidecars(arguments)
+        case "names": try await names(arguments)
+        case "duplicates": try await duplicates(arguments)
+        case "health": try await health(arguments)
+        case "xmp": try await xmp(arguments)
+        default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
+        }
+    }
+
+    /// Renaming, moving and trashing photos, and taking it back.
+    private static func runFiles(_ command: String, _ arguments: [String]) async throws {
+        switch command {
+        case "rename": try await rename(arguments)
+        case "move": try await move(arguments)
+        case "trash": try await trash(arguments)
+        case "undo": try await undo(arguments)
+        case "journal": try await journal(arguments)
+        case "trashed": try await trashed(arguments)
+        case "put-back": try await putBack(arguments)
+        default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
+        }
+    }
+
+    /// Keywords, stacks, groups, metadata, collections and importing.
+    private static func runOrganising(_ command: String, _ arguments: [String]) async throws {
+        switch command {
+        case "keywords": try await keywords(arguments)
+        case "stacks" where stackVerbs.contains(arguments.first ?? ""):
+            try await stackChange(arguments)
+        case "stacks": try await stacks(arguments)
+        case "groups": try await groups(arguments)
+        case "metadata": try await metadata(arguments)
+        case "collections": try await collections(arguments)
+        case "import": try await importing(arguments)
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
