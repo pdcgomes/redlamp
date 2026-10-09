@@ -284,16 +284,21 @@ extension LibraryService {
 /// The index's IDs of the photos the Library shows, by their IDs in its list (`FolderLibrary.photoIDs`), kept as
 /// they're found, with each folder read's names: a selection of thousands is looked up within a frame once its
 /// folders have been read. A photo's ID in the list is never given to another while it's shown.
+///
+/// `forget` runs on the main thread during a list's diff, so it never waits for the lock a lookup holds: it counts,
+/// and the next lookup, never on the main thread, sets the tables it finds out of date aside and frees them.
 final class PanelPhotoIDs: Sendable {
     private struct Found {
         var byList: [Int64: Int64] = [:]
         /// Each folder read, by its path: its photos' IDs by their names, composed.
         var folders: [String: [String: Int64]] = [:]
-        /// Counts `forget`s: what a read begun before the latest found isn't kept.
+        /// The `forget`s counted when these were found: what a read begun before the latest isn't kept.
         var generation = 0
     }
 
     private let found = Mutex(Found())
+    /// Counts `forget`s.
+    private let forgotten = Atomic(0)
 
     /// The index's IDs of `photos` (their IDs in the list and their URLs), by their IDs in the list, for those
     /// the index has; the folders of those not known yet are read, a folder at a time.
@@ -301,8 +306,13 @@ final class PanelPhotoIDs: Sendable {
         var known: [Int64: Int64] = [:]
         var missing: [(list: Int64, folder: String, name: String)] = []
         var generation = 0
+        var outdated: Found?
         found.withLock { found in
-            generation = found.generation
+            generation = forgotten.load(ordering: .acquiring)
+            if found.generation != generation {
+                outdated = found
+                found = Found(generation: generation)
+            }
             for photo in photos {
                 if let id = found.byList[photo.list] {
                     known[photo.list] = id
@@ -320,6 +330,7 @@ final class PanelPhotoIDs: Sendable {
                 }
             }
         }
+        _ = outdated
         guard !missing.isEmpty else { return known }
         let folders = Set(missing.map(\.folder))
         let read = await (try? index.read { reader -> [String: [String: Int64]] in
@@ -339,7 +350,7 @@ final class PanelPhotoIDs: Sendable {
             return read
         }) ?? [:]
         found.withLock { found in
-            let current = found.generation == generation
+            let current = found.generation == generation && forgotten.load(ordering: .acquiring) == generation
             if current {
                 found.folders.merge(read) { _, new in new }
             }
@@ -358,6 +369,6 @@ final class PanelPhotoIDs: Sendable {
     /// The list was made afresh, photos came or went, or the index moved photos the list already showed where they
     /// went: folders are read again.
     func forget() {
-        found.withLock { found in found = Found(generation: found.generation + 1) }
+        forgotten.add(1, ordering: .releasing)
     }
 }
