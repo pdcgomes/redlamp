@@ -224,12 +224,13 @@ final class LibrarySourceList: Sendable {
             }
             let read = try await Self.read(reading, folders: folders, index: index)
             folders.merge(read.folders) { _, new in new }
+            let count = read.parts.reduce(0) { $0 + $1.count }
             if fresh {
-                items.reserveCapacity(read.photos.count)
-                keys.reserveCapacity(read.photos.count)
-                indexIDs.reserveCapacity(read.photos.count)
+                items.reserveCapacity(count)
+                keys.reserveCapacity(count)
+                indexIDs.reserveCapacity(count)
             }
-            for photo in read.photos {
+            for photo in read.parts.joined() {
                 let url = photo.item.url
                 if fresh {
                     items[photo.id] = photo.item
@@ -265,7 +266,7 @@ final class LibrarySourceList: Sendable {
                 forget(item.url)
                 touched.insert(id)
             }
-            unread = read.photos.count == reading.count ? [] : reading.filter { items[$0] == nil }
+            unread = count == reading.count ? [] : reading.filter { items[$0] == nil }
             self.ids = ids
             hasList = true
             inStep = true
@@ -295,13 +296,13 @@ final class LibrarySourceList: Sendable {
         static let passFrom = 1024
         static let spread: Int64 = 16
 
-        /// Photos `ids` as the grid shows them, from their rows, with the paths of the folders read for them, those
-        /// `known` lacks at least. Many photos close together in ID are read in one pass over their range, in ID order,
-        /// a part on each of the index's readers, after every folder's path: a row read by its ID costs a lookup each,
-        /// 16 s in all for a million photos.
+        /// Photos `ids` as the grid shows them, from their rows, in parts, with the paths of the folders read for them,
+        /// those `known` lacks at least. Many photos close together in ID are read in one pass over their range, in ID
+        /// order, a part on each of the index's readers, after every folder's path: a row read by its ID costs a lookup
+        /// each, 16 s in all for a million photos.
         static func read(
             _ ids: [Int64], folders known: [Int64: String], index: LibraryIndex,
-        ) async throws -> (photos: [Read], folders: [Int64: String]) {
+        ) async throws -> (parts: [[Read]], folders: [Int64: String]) {
             guard ids.count >= passFrom, let low = ids.min(), let high = ids.max(),
                   high - low < Int64(ids.count) * spread
             else {
@@ -322,7 +323,7 @@ final class LibrarySourceList: Sendable {
                             }
                         }
                     }
-                    return (photos, folders)
+                    return ([photos], folders)
                 }
             }
             let folders = try await index.read { reader in
@@ -338,7 +339,7 @@ final class LibrarySourceList: Sendable {
             }
             let (chosen, parts) = (wanted, Int64(4))
             let size = (high - low) / parts + 1
-            let photos = try await withThrowingTaskGroup(of: [Read].self) { group in
+            let read = try await withThrowingTaskGroup(of: [Read].self) { group in
                 for part in 0 ..< parts {
                     let (start, end) = (low + part * size, min(high, low + (part + 1) * size - 1))
                     guard start <= end else { continue }
@@ -361,14 +362,13 @@ final class LibrarySourceList: Sendable {
                         }
                     }
                 }
-                var photos: [Read] = []
-                photos.reserveCapacity(ids.count)
+                var parts: [[Read]] = []
                 for try await part in group {
-                    photos += part
+                    parts.append(part)
                 }
-                return photos
+                return parts
             }
-            return (photos, folders)
+            return (read, folders)
         }
 
         /// The photo of `row`, read with `shown`'s columns, as the grid shows it in the folder at `folder`.
@@ -383,7 +383,7 @@ final class LibrarySourceList: Sendable {
             )
             let url = URL(fileURLWithPath: (folder == "/" ? "" : folder) + "/" + photo.name, isDirectory: false)
             return Read(
-                id: photo.id, item: LibraryFolderList.Mapping.item(photo, url: url),
+                id: photo.id, item: LibraryFolderList.Mapping.item(photo, url: url, folder: folder),
                 key: photo.contentKey.flatMap(ContentKey.init(data:)),
             )
         }

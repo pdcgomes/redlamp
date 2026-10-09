@@ -63,7 +63,7 @@ struct SourceListOpenBenchTests {
             started = clock.now
             let rows = try await LibrarySourceList.Mapping.read(ids, folders: [:], index: core.index)
             let alone = clock.now - started
-            #expect(rows.photos.count == 1_000_000)
+            #expect(rows.parts.reduce(0) { $0 + $1.count } == 1_000_000)
             started = clock.now
             var mapping = LibrarySourceList.Mapping()
             try await mapping.take(update, index: core.index)

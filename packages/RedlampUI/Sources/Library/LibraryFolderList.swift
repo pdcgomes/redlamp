@@ -382,13 +382,18 @@ final class LibraryFolderList: Sendable {
         /// `row` as an item at `url`: its badges are its sidecar's, or, before it has one, those Redlamp gave
         /// it ahead of writing one (a culling batch's), never other apps'.
         static func item(_ row: PhotoRecord, url: URL) -> LibraryItem {
+            item(row, url: url, folder: url.deletingLastPathComponent().path)
+        }
+
+        /// `row` as an item at `url`, in the folder at the path `folder`, as `item(_:url:)` has it.
+        static func item(_ row: PhotoRecord, url: URL, folder: String) -> LibraryItem {
             let hasSidecar = row.sidecarModified != nil
             var item = LibraryItem(
                 PhotoEntry(
                     url: url, size: row.size, modified: row.modified, hasSidecar: hasSidecar,
                     sidecarModified: row.sidecarModified,
                 ),
-                folderPath: url.deletingLastPathComponent().path,
+                folderPath: folder,
             )
             if hasSidecar {
                 item.hasEdits = row.edited

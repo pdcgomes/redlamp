@@ -86,16 +86,19 @@ struct LibrarySourceListTests {
         let folder = FileManager.default.temporaryDirectory.appending(path: "source-list-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
         let index = try await LibraryIndex.open(at: folder.appending(path: "Index.sqlite"), readers: 2)
-        // Two folders' photos, the grid's every field set on some, more than are read a row at a time.
+        // Three folders' photos, the grid's every field set on some, more than are read a row at a time.
         let ids = try await index.write { writer -> [Int64] in
             let volume = try writer.upsertVolume(VolumeRecord(uuid: "TEST", name: "Test", kind: .ssd))
             let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
-            let folders = try ["/Volumes/Test/Photos", "/Volumes/Test/Photos/Day 2"].map { path in
-                try writer.upsertFolder(FolderRecord(root: root, path: path))
-            }
+            let folders = try [
+                "/Volumes/Test/Photos",
+                "/Volumes/Test/Photos/Day 2",
+                "/Volumes/Test/Photos/Café – Alfama",
+            ]
+            .map { path in try writer.upsertFolder(FolderRecord(root: root, path: path)) }
             let flags: [PhotoFlag?] = [nil, .pick, .reject]
             let photos = (0 ..< LibrarySourceList.Mapping.passFrom + 500).map { number -> PhotoRecord in
-                var photo = PhotoRecord(folder: folders[number % 2], name: String(format: "IMG_%04d.JPG", number))
+                var photo = PhotoRecord(folder: folders[number % 3], name: String(format: "IMG_%04d.JPG", number))
                 photo.size = Int64(1000 + number)
                 photo.modified = Date(timeIntervalSince1970: 1_700_000_000 + Double(number))
                 photo.contentKey = number % 3 == 0 ? nil : Data(repeating: UInt8(number % 251), count: 16)
@@ -123,9 +126,9 @@ struct LibrarySourceListTests {
             return (items, keys)
         }
         let pass: [LibrarySourceList.Mapping.Read] = try await LibrarySourceList.Mapping
-            .read(ids, folders: [:], index: index).photos.sorted { $0.id < $1.id }
-        let few: [LibrarySourceList.Mapping.Read] = try await LibrarySourceList.Mapping
-            .read(Array(ids.prefix(10)), folders: [:], index: index).photos
+            .read(ids, folders: [:], index: index).parts.joined().sorted { $0.id < $1.id }
+        let few: [LibrarySourceList.Mapping.Read] = try await Array(LibrarySourceList.Mapping
+            .read(Array(ids.prefix(10)), folders: [:], index: index).parts.joined())
         await index.close()
         #expect(pass.map(\.item) == items)
         #expect(pass.map(\.key) == keys)
