@@ -120,10 +120,11 @@
         ) { app in
             var started = Date()
             let scratch = try MoveEditsPerformanceScratch(app)
-            defer { scratch.remove(app) }
+            let included = try app.main { $0.library.includesSubfolders }
+            defer { scratch.remove(app, includingSubfolders: included) }
             app.record("e2e-move-edits-copies-seconds", Date().timeIntervalSince(started))
             started = Date()
-            try scratch.show(app)
+            _ = try scratch.show(app)
             app.record("e2e-move-edits-indexed-seconds", Date().timeIntervalSince(started))
             let row = "folders." + scratch.root.standardizedFileURL.path
             try app.main { model in model.expandedSidebarSections.insert(.folders) }
@@ -259,19 +260,28 @@
             }
         }
 
-        /// Adds the root to Folders and shows its photos in Library's grid, from the library.
-        func show(_ app: RunningApp) throws {
+        /// Adds the root to Folders and shows its photos, its folders' included, in Library's grid, from the library.
+        /// Returns whether Show Photos in Subfolders was on before, which `remove` puts back.
+        func show(_ app: RunningApp) throws -> Bool {
             let root = root
             if try app.main({ $0.module != .develop }) {
                 try app.press(.developModule)
             }
-            try app.main { $0.open([root]) }
+            let included = try app.main { model in
+                let included = model.library.includesSubfolders
+                model.open([root])
+                if !included {
+                    model.setIncludesSubfolders(true)
+                }
+                return included
+            }
             try app.wait("10,000 photos indexed and shown from the library", timeout: 1800) { model in
                 model.folder?.standardizedFileURL == root.standardizedFileURL && model.library.isShownFromLibrary
                     && model.items.count == Self.photos
             }
             try app.settle(timeout: 120)
             try app.press(.gridView)
+            return included
         }
 
         /// How many of the photos have their sidecar beside them.
@@ -279,12 +289,16 @@
             (FileManager.default.subpaths(atPath: root.path) ?? []).count { $0.hasSuffix(".JPG.redlamp") }
         }
 
-        /// Takes the root out of Folders and away, and opens the run's working photo again.
-        func remove(_ app: RunningApp) {
+        /// Takes the root out of Folders and away, puts Show Photos in Subfolders back as `included`, and opens the
+        /// run's working photo again.
+        func remove(_ app: RunningApp, includingSubfolders included: Bool) {
             let root = root
             try? app.main { model in
                 if let added = model.library.root(containing: root) {
                     model.library.remove(added)
+                }
+                if model.library.includesSubfolders != included {
+                    model.setIncludesSubfolders(included)
                 }
             }
             try? FileManager.default.removeItem(at: base)
