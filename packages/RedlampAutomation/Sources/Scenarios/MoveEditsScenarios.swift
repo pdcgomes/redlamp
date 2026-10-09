@@ -135,6 +135,7 @@
             var phases: [(String, (summary: MainThreadMonitor.Summary?, seconds: Double))] = []
             var shown: [Double] = []
             var surveyed: [Double] = []
+            var read: [Double] = []
             var checked: [Double] = []
             for (name, goingTo) in [("there", "Redlamp on this Mac"), ("back", "Beside the photos")] {
                 try app.rightClickRow(row, choosing: ShortcutAction.moveEditsAndMetadata.title)
@@ -144,6 +145,7 @@
                 let sheet = try app.main { $0.moveEditsSheet }
                 shown.append(Self.milliseconds(sheet?.shownAfter))
                 surveyed.append(Self.milliseconds(sheet?.surveyedAfter))
+                read.append(Self.milliseconds(sheet?.readAfter))
                 try app.expect(
                     sheet?.count.hasPrefix("10,000 photos have edits or metadata") == true && sheet?.goingTo == goingTo,
                     "the sheet says \(String(describing: sheet))",
@@ -168,6 +170,7 @@
             }
             app.record("e2e-move-edits-sheet-shown-ms", shown.max() ?? -1)
             app.record("e2e-move-edits-sheet-survey-ms", surveyed.max() ?? -1)
+            app.record("e2e-move-edits-sheet-read-ms", read.max() ?? -1)
             app.record("e2e-move-edits-sheet-checked-ms", checked.max() ?? -1)
             let lines = phases.map { name, phase in
                 String(
@@ -177,9 +180,10 @@
                 )
             } + [
                 String(
-                    format: "numbers from the index: %@ ms; sheet on screen with them: %@ ms; root looked through: "
-                        + "%@ ms; load %@",
+                    format: "numbers from the index: %@ ms, the read over in %@ ms; sheet on screen with them: %@ ms; "
+                        + "root looked through: %@ ms; load %@",
                     surveyed.map { String(format: "%.1f", $0) }.joined(separator: " and "),
+                    read.map { String(format: "%.1f", $0) }.joined(separator: " and "),
                     shown.map { String(format: "%.1f", $0) }.joined(separator: " and "),
                     checked.map { String(format: "%.0f", $0) }.joined(separator: " and "),
                     "\(ProcessInfo.processInfo.loadAverage)",

@@ -25,7 +25,9 @@ final class MoveEditsModel {
     let placement: RootRecord.Sidecars
     /// Its photos with edits or metadata, as the index has them.
     let indexed: Int
-    /// How long the index took to say so, for the regression suite.
+    /// How long the index took to say so, from the command to the read's end, and to the main thread having it, for the
+    /// regression suite.
+    var read: Duration?
     var surveyed: Duration?
     /// The move a quit interrupted, as the library's journal holds it, which the sheet finishes, rather than one to
     /// ask for.

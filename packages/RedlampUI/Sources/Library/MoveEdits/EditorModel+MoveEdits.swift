@@ -46,14 +46,18 @@ public extension EditorModel {
         isModalDialogOpen = true
         // The read starts now rather than once the menu that chose the command has let the main thread go.
         let (folder, index) = (root.url, core.index)
-        let reading = Task.detached(priority: .userInitiated) { await MoveEditsModel.survey(folder, in: index) }
+        let reading = Task.detached(priority: .userInitiated) {
+            let survey = await MoveEditsModel.survey(folder, in: index)
+            return (survey, ContinuousClock.now - requested)
+        }
         Task {
-            let survey = await reading.value
+            let (survey, read) = await reading.value
             isModalDialogOpen = false
             let model = MoveEditsModel(
                 root: root, rootID: survey?.id, placement: survey?.placement ?? .besidePhotos,
                 indexed: survey?.photos ?? 0,
             )
+            model.read = read
             model.surveyed = .now - requested
             MoveEditsSheetController.present(model, editor: self, requested: requested)
         }
