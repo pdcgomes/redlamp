@@ -20,6 +20,8 @@
         @ObservationIgnored public private(set) var keys: [Double] = []
         @ObservationIgnored private var started: CFAbsoluteTime?
         @ObservationIgnored private var observer: CFRunLoopObserver?
+        /// The app's, for a failure's account of what the menus show.
+        @ObservationIgnored public internal(set) weak var state: MenuBarState?
 
         /// The menus' body starts: returns when, for `built(since:)`.
         public func rebuilding() -> CFAbsoluteTime {

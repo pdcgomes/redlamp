@@ -430,7 +430,18 @@
                     pause(0.1)
                 }
             }
-            guard ready else { throw ScenarioFailure("\(title) is disabled in the menu") }
+            guard ready else {
+                let account = try main { model -> String in
+                    guard let action = ShortcutAction.allCases.first(where: { Menus.title(of: $0) == title }),
+                          let (menu, index) = Menus.find(title)
+                    else { return "" }
+                    let shown = MenuBarProbe.shared.state.map { $0.isEnabled(action) ? "enabled" : "disabled" } ?? "?"
+                    return " (the editor can\(model.canPerform(action) ? "" : "'t") run it, the menus' state has it "
+                        + "\(shown), and SwiftUI left the item \(menu.items[index].target == nil ? "without" : "with") "
+                        + "a target)"
+                }
+                throw ScenarioFailure("\(title) is disabled in the menu\(account)")
+            }
             post { _ in
                 guard let (menu, index) = Menus.find(title) else { return }
                 menu.performActionForItem(at: index)

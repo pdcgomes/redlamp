@@ -39,6 +39,9 @@ import RedlampLibrary
     public init(model: EditorModel) {
         self.model = model
         refresh()
+        #if DEBUG || REDLAMP_PROFILING
+            MenuBarProbe.shared.state = self
+        #endif
     }
 
     /// Whether `action`'s item is enabled.
