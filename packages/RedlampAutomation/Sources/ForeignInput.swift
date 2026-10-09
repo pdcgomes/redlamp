@@ -42,6 +42,16 @@
             recorder = nil
         }
 
+        /// Runs `body`, which sends events made to look foreign: they're dropped as foreign ones are, and the run's
+        /// events name them apart (`foreign-input-made`), so the report counts only what came from the Mac.
+        static func madeHere(_ body: () throws -> Void) rethrows {
+            making = true
+            defer { making = false }
+            try body()
+        }
+
+        private static var making = false
+
         /// Whether `event` is foreign input to drop, which the run's events then name.
         private static func drops(_ event: NSEvent) -> Bool {
             guard let recorder, let type = kept[event.type], isForeign(event) else { return false }
@@ -52,7 +62,7 @@
             if [.keyDown, .keyUp].contains(event.type) {
                 fields["characters"] = event.charactersIgnoringModifiers ?? ""
             }
-            recorder.write("foreign-input", fields)
+            recorder.write(making ? "foreign-input-made" : "foreign-input", fields)
             return true
         }
 

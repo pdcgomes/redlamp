@@ -95,13 +95,13 @@ struct DriverTests {
         return event
     }
 
-    /// What the run's events say was dropped.
-    private func dropped(in directory: URL) throws -> [[String: Any]] {
+    /// What the run's events say was dropped, under `name`.
+    private func dropped(in directory: URL, as name: String = "foreign-input") throws -> [[String: Any]] {
         let url = directory.appending(path: "events-main.jsonl")
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         return try String(contentsOf: url, encoding: .utf8).split(separator: "\n").compactMap {
             try JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any]
-        }.filter { $0["event"] as? String == "foreign-input" }
+        }.filter { $0["event"] as? String == name }
     }
 
     /// A menu item's action, as AppKit sends it for a key equivalent.
@@ -167,6 +167,14 @@ struct DriverTests {
         let records = try dropped(in: directory)
         #expect(records.map { $0["type"] as? String } == ["keyDown", "keyDown", "flagsChanged"])
         #expect(records.prefix(2).allSatisfy { $0["characters"] as? String == "p" && $0["keyCode"] as? Int == 35 })
+
+        // One a scenario makes to stand for the Mac's is dropped as well, and named apart from what the Mac sent.
+        ForeignInput.madeHere {
+            NSApp.sendEvent(fromTheMac[0])
+        }
+        #expect(handled == ["u", "u", "p", "p"])
+        #expect(try dropped(in: directory).count == 3)
+        #expect(try dropped(in: directory, as: "foreign-input-made").count == 1)
     }
 
     /// Its monitors come before the filter and after it, as the canvas's do.

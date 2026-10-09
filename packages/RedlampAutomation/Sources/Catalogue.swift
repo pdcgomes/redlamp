@@ -25,6 +25,7 @@
             + MoveEditsScenarios.all
             + DragScenarios.all
             + MenuBarScenarios.all
+            + ForeignInputScenarios.all
             + SoakScenarios.all + PerformanceScenarios.all + PanelPerformanceScenarios.all
             + LibrarySourcesPerformanceScenarios.all
             + DragPerformanceScenarios.all
