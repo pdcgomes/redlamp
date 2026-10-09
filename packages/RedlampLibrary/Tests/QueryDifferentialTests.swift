@@ -65,7 +65,7 @@ struct QueryDifferentialTests {
             case .megapixels: number([0.1, 1, 12.2, 24, 40, 44.8, 48, 61], ranges: ranges)
             case .aspect: number([1, 4.0 / 3, 1.5, 16.0 / 9, 2, 3], ranges: ranges)
             case .orientation: .orientation(random.pick([nil] + PhotoOrientation.allCases))
-            case .trait: .trait(random.pick(LibraryQuery.Trait.allCases))
+            case .trait: .trait(random.pick(LibraryQuery.Trait.allCases.filter { $0.query != nil }))
             }
         }
 

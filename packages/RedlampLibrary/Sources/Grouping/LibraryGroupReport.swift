@@ -22,7 +22,7 @@ public struct LibraryGroupReport: Sendable {
     public let stacked: Duration
 
     /// Groups the photos `query` finds in `index`, or those of `collection` it finds, in `sort`'s order,
-    /// by `key`, moments as `setting` finds them.
+    /// by `key`, moments as `setting` finds them, the query's `is:unpicked-moment` too.
     public static func run(
         _ query: LibraryQuery, in collection: CollectionPath? = nil, by key: GroupKey = .moment,
         setting: MomentSetting = MomentSetting(), sort: QuerySort = QuerySort(), index: LibraryIndex,
@@ -32,11 +32,8 @@ public struct LibraryGroupReport: Sendable {
         var started = clock.now
         try await engine.load()
         let loaded = clock.now - started
-        let list = if let collection {
-            try await engine.list(.collection(collection), matching: query, sort: sort)
-        } else {
-            try await engine.list(.query(query), sort: sort)
-        }
+        let source = collection.map(PhotoSource.collection) ?? .allPhotographs
+        let list = try await engine.list(source, matching: query, sort: sort, moments: setting)
         started = clock.now
         let stacks = try await StackFinder.find(in: index, store: engine.store ?? ColumnStore())
         let stacked = clock.now - started

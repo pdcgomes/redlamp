@@ -47,21 +47,29 @@ indirect enum QueryPlan: Sendable, Hashable {
         case creator, copyright, customLabel, place
     }
 
-    /// Photos looked up in the index.
+    /// Photos looked up in the index, or found in the store from other photos.
     enum RowSet: Sendable, Hashable {
         /// An FTS5 query of the text index.
         case match(String)
         case keywords([Int64])
         case collections([Int64])
+        /// The photos in moments without a pick (LIB-41).
+        case unpickedMoments(MomentScope)
     }
 
-    /// `query` against `store`: nil is every photo.
-    init(_ query: LibraryQuery?, store: ColumnStore, vocabulary: QueryVocabulary, today: Int) {
-        self = query.map { Self.compile($0, store: store, vocabulary: vocabulary, today: today) } ?? .all
+    /// `query` against `store`: nil is every photo. `moments` are the photos `is:unpicked-moment`
+    /// finds moments among, and how.
+    init(
+        _ query: LibraryQuery?, store: ColumnStore, vocabulary: QueryVocabulary, today: Int,
+        moments: MomentScope = .library,
+    ) {
+        self = query.map {
+            Self.compile($0, store: store, vocabulary: vocabulary, today: today, moments: moments)
+        } ?? .all
     }
 
     /// The photos of the collection at `path`, or of every collection inside it, smart collections'
-    /// queries included.
+    /// queries included, each finding the library's moments at the default setting.
     init(collection path: CollectionPath, store: ColumnStore, vocabulary: QueryVocabulary, today: Int) {
         let ids = vocabulary.names.collections.compactMap { id, text in
             CollectionPath(text)?.isWithin(path) == true ? id : nil
@@ -89,8 +97,11 @@ indirect enum QueryPlan: Sendable, Hashable {
     // MARK: - Compiling
 
     private static func compile(
-        _ query: LibraryQuery, store: ColumnStore, vocabulary: QueryVocabulary, today: Int,
+        _ query: LibraryQuery, store: ColumnStore, vocabulary: QueryVocabulary, today: Int, moments: MomentScope,
     ) -> QueryPlan {
+        func compiled(_ query: LibraryQuery) -> QueryPlan {
+            compile(query, store: store, vocabulary: vocabulary, today: today, moments: moments)
+        }
         switch query {
         case .all:
             return .all
@@ -107,21 +118,24 @@ indirect enum QueryPlan: Sendable, Hashable {
             ])
         case let .filter(filter):
             let alternatives = filter.values.map { value in
-                compile(filter.field, filter.comparison, value, store: store, vocabulary: vocabulary, today: today)
+                compile(
+                    filter.field, filter.comparison, value, store: store, vocabulary: vocabulary, today: today,
+                    moments: moments,
+                )
             }
             return filter.comparison == .notEqual ? negated(any(alternatives)) : any(alternatives)
         case let .not(query):
-            return negated(compile(query, store: store, vocabulary: vocabulary, today: today))
+            return negated(compiled(query))
         case let .and(queries):
-            return every(queries.map { compile($0, store: store, vocabulary: vocabulary, today: today) })
+            return every(queries.map(compiled))
         case let .or(queries):
-            return any(queries.map { compile($0, store: store, vocabulary: vocabulary, today: today) })
+            return any(queries.map(compiled))
         }
     }
 
     private static func compile(
         _ field: LibraryQuery.Field, _ comparison: LibraryQuery.Comparison, _ value: LibraryQuery.Value,
-        store: ColumnStore, vocabulary: QueryVocabulary, today: Int,
+        store: ColumnStore, vocabulary: QueryVocabulary, today: Int, moments: MomentScope,
     ) -> QueryPlan {
         if let range = QueryRanges.range(field, comparison, value, today: today) {
             guard !range.isEmpty else { return .nothing }
@@ -140,7 +154,8 @@ indirect enum QueryPlan: Sendable, Hashable {
         }
         switch (field, value) {
         case let (.trait, .trait(trait)):
-            return compile(trait.query, store: store, vocabulary: vocabulary, today: today)
+            guard let query = trait.query else { return .leaf(.rows(.unpickedMoments(moments))) }
+            return compile(query, store: store, vocabulary: vocabulary, today: today, moments: moments)
         case let (.flag, .flag(flag)):
             return .leaf(.packed(
                 shift: Packed.flagShift,

@@ -44,9 +44,12 @@ public extension QueryEngine {
     /// (`NameRanking`) that its field matches (free text: keywords, folders, cameras, lenses and
     /// places), with that word in its place, when that brings photos back. The fewest typos win, then
     /// the most photos. Nil when the query finds photos, no such word brings any back, or its terms
-    /// needn't all match (`OR`). Runs on the caller's task, which cancels it, as the filter bar's is
-    /// when the query changes; each word tried costs a count of the column store.
-    func suggestion(for query: LibraryQuery, in source: PhotoSource) async throws -> QuerySuggestion? {
+    /// needn't all match (`OR`). `moments` is the source's Tighter–Looser setting, as
+    /// `list(_:matching:sort:moments:)` takes it. Runs on the caller's task, which cancels it, as the
+    /// filter bar's is when the query changes; each word tried costs a count of the column store.
+    func suggestion(
+        for query: LibraryQuery, in source: PhotoSource, moments: MomentSetting = MomentSetting(),
+    ) async throws -> QuerySuggestion? {
         if await loadedSnapshot() == nil {
             try await load()
         }
@@ -54,10 +57,13 @@ public extension QueryEngine {
         let rules = QueryRules(query)
         guard rules.match == .all else { return nil }
         let photos = try await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
+        let scope = MomentScope(source: source, setting: moments)
         func count(_ query: LibraryQuery) async throws -> Int {
             try Task.checkCancellation()
             guard let searchable = query.searchable else { return photos.count }
-            var found = try await matches(for: searchable, in: store, vocabulary: vocabulary, generation: generation)
+            var found = try await matches(
+                for: searchable, in: store, vocabulary: vocabulary, generation: generation, moments: scope,
+            )
             found.formIntersection(photos)
             return found.count
         }

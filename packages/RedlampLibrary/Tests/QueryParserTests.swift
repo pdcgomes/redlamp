@@ -162,7 +162,7 @@ struct QueryParserTests {
             (
                 "is:sharp",
                 3 ..< 8,
-                "is takes a trait: long-exposure, panorama, high-resolution, low-light or no-location",
+                "is takes a trait: long-exposure, panorama, high-resolution, low-light, no-location or unpicked-moment",
             ),
             ("aspect:3:0", 7 ..< 10, "aspect is the long side over the short"),
             ("orientation:sideways", 12 ..< 20, "orientation is landscape, portrait, square or none"),

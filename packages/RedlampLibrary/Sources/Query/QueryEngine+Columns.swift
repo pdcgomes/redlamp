@@ -88,9 +88,12 @@ public struct FacetColumnCounts: Sendable, Hashable {
 
 public extension QueryEngine {
     /// The photos of `source` that `query` finds, in `sort`'s order, from the column store as it is now
-    /// (loading it first if it hasn't been). Like `list`, it cancels nothing.
-    func list(_ source: PhotoSource, matching query: LibraryQuery, sort: QuerySort = QuerySort()) async throws
-        -> PhotoList {
+    /// (loading it first if it hasn't been); `is:unpicked-moment` finds the source's moments as `moments`,
+    /// its Tighter–Looser setting, finds them. Like `list`, it cancels nothing.
+    func list(
+        _ source: PhotoSource, matching query: LibraryQuery, sort: QuerySort = QuerySort(),
+        moments: MomentSetting = MomentSetting(),
+    ) async throws -> PhotoList {
         if await loadedSnapshot() == nil {
             try await load()
         }
@@ -104,7 +107,10 @@ public extension QueryEngine {
             of: source, in: store, vocabulary: vocabulary, generation: generation, unreadable: query.findsUnreadable,
         )
         if let searchable = query.searchable {
-            let found = try await matches(for: searchable, in: store, vocabulary: vocabulary, generation: generation)
+            let found = try await matches(
+                for: searchable, in: store, vocabulary: vocabulary, generation: generation,
+                moments: MomentScope(source: source, setting: moments),
+            )
             rows.formIntersection(found)
         }
         try Task.checkCancellation()
@@ -112,13 +118,14 @@ public extension QueryEngine {
     }
 
     /// How the photos of `source` that each request's query finds count by its column, handed over as
-    /// each column is counted, in the order asked for. Columns counted for the same store, source and
+    /// each column is counted, in the order asked for; `moments` is the source's Tighter–Looser setting,
+    /// as `list(_:matching:sort:moments:)` takes it. Columns counted for the same store, source and
     /// query are kept. A later request for facets or columns, or a search, cancels it.
-    func columns(_ requests: [FacetColumnRequest], in source: PhotoSource) -> AsyncThrowingStream<
-        FacetColumnCounts,
-        any Error,
-    > {
+    func columns(
+        _ requests: [FacetColumnRequest], in source: PhotoSource, moments: MomentSetting = MomentSetting(),
+    ) -> AsyncThrowingStream<FacetColumnCounts, any Error> {
         let (stream, continuation) = AsyncThrowingStream.makeStream(of: FacetColumnCounts.self)
+        let scope = MomentScope(source: source, setting: moments)
         let task = Task.detached(priority: .utility) { [self] in
             do {
                 guard let (store, vocabulary, generation) = await loadedSnapshot() else {
@@ -132,7 +139,7 @@ public extension QueryEngine {
                     let searchable = request.query.searchable
                     let key = ColumnKey(
                         generation: generation, source: source, column: request.column, query: searchable,
-                        today: today,
+                        today: today, moments: searchable?.findsMoments == true ? moments : nil,
                     )
                     if let kept = countedColumn(key) {
                         continuation.yield(FacetColumnCounts(
@@ -152,6 +159,7 @@ public extension QueryEngine {
                     if let searchable {
                         let found = try await matches(
                             for: searchable, in: store, vocabulary: vocabulary, generation: generation,
+                            moments: scope,
                         )
                         rows.formIntersection(found)
                     }
@@ -370,7 +378,7 @@ public struct QueryCompletion: Sendable, Hashable {
     /// The query the term for a trait or an orientation stands for; nil for another field's.
     var counted: LibraryQuery? {
         if field == .trait, let trait = LibraryQuery.Trait(rawValue: value) {
-            return trait.query
+            return .filter(LibraryQuery.Filter(.trait, .equal, [.trait(trait)]))
         }
         guard field == .orientation, let orientation = PhotoOrientation(rawValue: value) else { return nil }
         return .filter(LibraryQuery.Filter(.orientation, .equal, [.orientation(orientation)]))
@@ -386,18 +394,23 @@ public struct QueryCompletion: Sendable, Hashable {
 public extension QueryEngine {
     /// The values of `field`, or of every field completion has values for when it's nil
     /// (`QueryCompletion.fields`), best first, as `NameRanking` ranks them: as the filter bar's text
-    /// completes a term. A trait or an orientation comes with the photos of `source` it finds.
-    /// Nothing runs on the caller's thread.
+    /// completes a term. A trait or an orientation comes with the photos of `source` it finds, the
+    /// moments without a pick as `moments`, the source's Tighter–Looser setting, finds them. Nothing runs
+    /// on the caller's thread.
     func completions(
         _ typed: String, field: LibraryQuery.Field?, limit: Int = 8, in source: PhotoSource = .allPhotographs,
+        moments: MomentSetting = MomentSetting(),
     ) async -> [QueryCompletion] {
-        await completions(typed, fields: field.map { [$0] } ?? QueryCompletion.fields, limit: limit, in: source)
+        await completions(
+            typed, fields: field.map { [$0] } ?? QueryCompletion.fields, limit: limit, in: source, moments: moments,
+        )
     }
 
     /// The values of `fields` best first, ties going to the field listed first: as the palette lists
     /// the library's names (LIB-19).
     func completions(
         _ typed: String, fields: [LibraryQuery.Field], limit: Int = 8, in source: PhotoSource = .allPhotographs,
+        moments: MomentSetting = MomentSetting(),
     ) async -> [QueryCompletion] {
         let typed = typed.trimmingCharacters(in: .whitespaces)
         guard !typed.isEmpty, limit > 0, let (store, vocabulary, generation) = await loadedSnapshot() else {
@@ -413,6 +426,7 @@ public extension QueryEngine {
             guard let query = completion.counted,
                   var found = try? await matches(
                       for: query.searchable, in: store, vocabulary: vocabulary, generation: generation,
+                      moments: MomentScope(source: source, setting: moments),
                   )
             else { continue }
             found.formIntersection(photos)

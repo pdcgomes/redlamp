@@ -58,7 +58,7 @@ extension QueryEngine {
             return try await matches(for: query.searchable, in: store, vocabulary: vocabulary, generation: generation)
         case let .collection(path):
             let plan = QueryPlan(collection: path, store: store, vocabulary: vocabulary, today: today)
-            return try await rows(for: plan, in: store, generation: generation)
+            return try await rows(for: plan, in: store, vocabulary: vocabulary, generation: generation)
         case let .health(check):
             return try await store.rows(withIDs: healthFindings(check, in: store, generation: generation).photos)
         case .keptAnyway:

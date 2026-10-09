@@ -18,10 +18,11 @@ public struct LibrarySearch: Sendable {
     public let loaded: Duration
 
     /// Runs `query` over `index`, or over the photos of `collection`, in `sort`'s order, keeping the
-    /// paths of the first `limit` photos, or of every photo when it's nil.
+    /// paths of the first `limit` photos, or of every photo when it's nil; `is:unpicked-moment` finds
+    /// their moments as `moments` finds them.
     public static func run(
         _ query: LibraryQuery, in collection: CollectionPath? = nil, sort: QuerySort = QuerySort(),
-        limit: Int? = nil, index: LibraryIndex,
+        limit: Int? = nil, moments: MomentSetting = MomentSetting(), index: LibraryIndex,
     ) async throws -> LibrarySearch {
         let engine = QueryEngine(index: index)
         let clock = ContinuousClock()
@@ -32,10 +33,10 @@ public struct LibrarySearch: Sendable {
         var firstPage: Duration?
         var result = QueryResult(ids: [], count: 0, isComplete: true)
         if let collection {
-            let list = try await engine.list(.collection(collection), matching: query, sort: sort)
+            let list = try await engine.list(.collection(collection), matching: query, sort: sort, moments: moments)
             result = QueryResult(ids: list.ids, count: list.count, isComplete: true)
         } else {
-            for try await found in engine.search(query, sort: sort) {
+            for try await found in engine.search(query, sort: sort, moments: moments) {
                 firstPage = firstPage ?? clock.now - started
                 result = found
             }

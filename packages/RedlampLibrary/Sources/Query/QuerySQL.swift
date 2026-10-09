@@ -155,7 +155,8 @@ struct QuerySQL: Sendable, Hashable {
                 return "p.id IN (SELECT cp.photo FROM collection_photos cp JOIN collections c ON c.id = cp.collection"
                     + " WHERE c.path IS NOT NULL AND redlamp_keyword(c.path, \(bind(text))))"
             case let (.trait, .trait(trait)):
-                return predicate(trait.query)
+                // `is:unpicked-moment` needs the column store: the engine waits for it rather than ask SQL.
+                return trait.query.map { predicate($0) } ?? "0"
             case let (.has, .detail(detail)):
                 return switch detail {
                 case .gps: ColumnEncoding.locationSQL

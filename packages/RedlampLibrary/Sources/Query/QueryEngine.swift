@@ -112,19 +112,23 @@ public final class QueryEngine: Sendable {
         var kind = Kind.changed
     }
 
-    /// A column counted over a source's photos in a store.
+    /// A column counted over a source's photos in a store; `moments` is the setting a query with
+    /// `is:unpicked-moment` was counted with.
     struct ColumnKey: Hashable {
         let generation: Int
         let source: PhotoSource
         let column: FacetColumn
         let query: LibraryQuery?
         let today: Int
+        let moments: MomentSetting?
     }
 
-    /// A query as it's compiled: the day decides what `today` is.
+    /// A query as it's compiled: the day decides what `today` is, and for `is:unpicked-moment` the
+    /// photos and setting its moments are found with.
     private struct PlanKey: Hashable {
         let query: LibraryQuery?
         let today: Int
+        let moments: MomentScope?
     }
 
     /// Plans, row sets and results kept, at most, before they're dropped.
@@ -487,15 +491,20 @@ public final class QueryEngine: Sendable {
     // MARK: - Searching
 
     /// The photos `query` finds, in `sort`'s order: the first `pageSize` as soon as they're found,
-    /// then all of them. Cancels the search before it and its facets. The stream finishes early,
-    /// throwing `CancellationError`, when a newer search cancels it.
+    /// then all of them; `is:unpicked-moment` finds the library's moments as `moments` finds them.
+    /// Cancels the search before it and its facets. The stream finishes early, throwing
+    /// `CancellationError`, when a newer search cancels it.
     public func search(
         _ query: LibraryQuery, sort: QuerySort = QuerySort(), pageSize: Int = 100,
+        moments: MomentSetting = MomentSetting(),
     ) -> AsyncThrowingStream<QueryResult, any Error> {
         let (stream, continuation) = AsyncThrowingStream.makeStream(of: QueryResult.self)
+        let scope = MomentScope(source: .allPhotographs, setting: moments)
         let task = Task.detached(priority: .userInitiated) { [self] in
             do {
-                try await find(query.searchable, sort: sort, pageSize: max(pageSize, 1)) { continuation.yield($0) }
+                try await find(query.searchable, sort: sort, pageSize: max(pageSize, 1), moments: scope) {
+                    continuation.yield($0)
+                }
                 continuation.finish()
             } catch {
                 continuation.finish(throwing: error)
@@ -511,16 +520,24 @@ public final class QueryEngine: Sendable {
         return stream
     }
 
+    /// `moments` are the photos and setting `is:unpicked-moment` finds moments with, which SQL can't: a
+    /// query with it waits for the store.
     private func find(
-        _ query: LibraryQuery?, sort: QuerySort, pageSize: Int, yield: @escaping @Sendable (QueryResult) -> Void,
+        _ query: LibraryQuery?, sort: QuerySort, pageSize: Int, moments: MomentScope,
+        yield: @escaping @Sendable (QueryResult) -> Void,
     ) async throws {
+        if query?.findsMoments == true, await loadedSnapshot() == nil {
+            try await load()
+        }
         if snapshot().map({ !$0.0.keepsOrder(sort.key) }) == true {
             try await prepareOrder(sort.key)
         }
         guard let (store, vocabulary, generation) = snapshot() else {
             return try await searchSQL(query, sort: sort, pageSize: pageSize, yield: yield)
         }
-        var matches = try await matches(for: query, in: store, vocabulary: vocabulary, generation: generation)
+        var matches = try await matches(
+            for: query, in: store, vocabulary: vocabulary, generation: generation, moments: moments,
+        )
         if query?.findsUnreadable != true {
             matches = store.readable(matches)
         }
@@ -587,11 +604,13 @@ public final class QueryEngine: Sendable {
         return table
     }
 
-    /// The rows `query` finds in `store`, compiling it unless its plan is kept.
+    /// The rows `query` finds in `store`, compiling it unless its plan is kept; `moments` are the photos
+    /// and setting `is:unpicked-moment` finds moments with.
     func matches(
         for query: LibraryQuery?, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
+        moments: MomentScope = .library,
     ) async throws -> RowBits {
-        let key = PlanKey(query: query, today: today)
+        let key = PlanKey(query: query, today: today, moments: query?.findsMoments == true ? moments : nil)
         let (kept, keptMatches) = state.withLock { state -> (QueryPlan?, RowBits?) in
             guard state.generation == generation, let plan = state.plans[key] else { return (nil, nil) }
             return (plan, state.matches[plan])
@@ -599,7 +618,7 @@ public final class QueryEngine: Sendable {
         if let keptMatches {
             return keptMatches
         }
-        let plan = kept ?? QueryPlan(query, store: store, vocabulary: vocabulary, today: key.today)
+        let plan = kept ?? QueryPlan(query, store: store, vocabulary: vocabulary, today: key.today, moments: moments)
         if kept == nil {
             state.withLock { state in
                 guard state.generation == generation else { return }
@@ -609,11 +628,14 @@ public final class QueryEngine: Sendable {
                 state.plans[key] = plan
             }
         }
-        return try await rows(for: plan, in: store, generation: generation)
+        return try await rows(for: plan, in: store, vocabulary: vocabulary, generation: generation)
     }
 
-    /// The rows `plan` finds in `store`, looking up its row sets in the index unless they're kept.
-    func rows(for plan: QueryPlan, in store: ColumnStore, generation: Int) async throws -> RowBits {
+    /// The rows `plan` finds in `store`, looking up its row sets in the index, or finding them in the
+    /// store, unless they're kept.
+    func rows(
+        for plan: QueryPlan, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
+    ) async throws -> RowBits {
         if let kept = state.withLock({ $0.generation == generation ? $0.matches[plan] : nil }) {
             return kept
         }
@@ -624,7 +646,7 @@ public final class QueryEngine: Sendable {
                 continue
             }
             try Task.checkCancellation()
-            let rows = try await store.rows(withIDs: photoIDs(set))
+            let rows = try await lookUp(set, in: store, vocabulary: vocabulary, generation: generation)
             sets[set] = rows
             state.withLock { state in
                 guard state.generation == generation else { return }
@@ -646,11 +668,18 @@ public final class QueryEngine: Sendable {
         return matches
     }
 
-    private func photoIDs(_ set: QueryPlan.RowSet) async throws -> [Int64] {
+    private func lookUp(
+        _ set: QueryPlan.RowSet, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
+    ) async throws -> RowBits {
         switch set {
-        case let .match(match): try await source.photoIDs(matching: match)
-        case let .keywords(keywords): try await source.photoIDs(withKeywords: keywords)
-        case let .collections(collections): try await source.photoIDs(inCollections: collections)
+        case let .match(match): return try await store.rows(withIDs: source.photoIDs(matching: match))
+        case let .keywords(keywords): return try await store.rows(withIDs: source.photoIDs(withKeywords: keywords))
+        case let .collections(collections):
+            return try await store.rows(withIDs: source.photoIDs(inCollections: collections))
+        case let .unpickedMoments(scope):
+            let photos = try await rows(of: scope.source, in: store, vocabulary: vocabulary, generation: generation)
+            try Task.checkCancellation()
+            return store.unpickedMoments(of: photos, setting: scope.setting)
         }
     }
 

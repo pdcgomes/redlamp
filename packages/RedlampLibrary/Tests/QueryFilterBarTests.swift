@@ -205,8 +205,9 @@ struct QueryFilterBarTests {
         #expect(inStudio.map(\.term) == ["is:high-resolution"] && inStudio.first?.count == 1)
         #expect(await engine.completions("loca", field: nil).map(\.term) == ["is:no-location"])
         for trait in LibraryQuery.Trait.allCases {
-            let expanded = try await engine.ids(trait.query.description)
-            #expect(try await engine.ids("is:\(trait.rawValue)") == expanded, "\(trait) is \(trait.query)")
+            guard let query = trait.query else { continue }
+            let expanded = try await engine.ids(query.description)
+            #expect(try await engine.ids("is:\(trait.rawValue)") == expanded, "\(trait) is \(query)")
         }
     }
 

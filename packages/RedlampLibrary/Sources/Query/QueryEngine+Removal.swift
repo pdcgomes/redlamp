@@ -29,9 +29,12 @@ public extension QueryEngine {
     /// back the most of them, from one count of the column store for each term; of terms that bring
     /// back as many, the one written last. Nil when the query finds photos, when no term's removal
     /// alone brings any back, or when its terms needn't all match (`OR`), since then taking one out
-    /// finds fewer. Runs on the caller's task, which cancels it, as the filter bar's is when the
-    /// query changes.
-    func removal(from query: LibraryQuery, in source: PhotoSource) async throws -> QueryRemoval? {
+    /// finds fewer. `moments` is the source's Tighter–Looser setting, as `list(_:matching:sort:moments:)`
+    /// takes it. Runs on the caller's task, which cancels it, as the filter bar's is when the query
+    /// changes.
+    func removal(
+        from query: LibraryQuery, in source: PhotoSource, moments: MomentSetting = MomentSetting(),
+    ) async throws -> QueryRemoval? {
         if await loadedSnapshot() == nil {
             try await load()
         }
@@ -39,10 +42,13 @@ public extension QueryEngine {
         let rules = QueryRules(query)
         guard rules.match != .any else { return nil }
         let photos = try await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
+        let scope = MomentScope(source: source, setting: moments)
         func count(_ query: LibraryQuery) async throws -> Int {
             try Task.checkCancellation()
             guard let searchable = query.searchable else { return photos.count }
-            var found = try await matches(for: searchable, in: store, vocabulary: vocabulary, generation: generation)
+            var found = try await matches(
+                for: searchable, in: store, vocabulary: vocabulary, generation: generation, moments: scope,
+            )
             found.formIntersection(photos)
             return found.count
         }

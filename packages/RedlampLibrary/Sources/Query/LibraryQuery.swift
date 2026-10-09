@@ -166,7 +166,8 @@ public indirect enum LibraryQuery: Sendable, Hashable {
     }
 
     /// A trait (LIB-06): a name for a query over the index's fields, written `is:` and its name, and
-    /// offered as the filter bar completes what's typed.
+    /// offered as the filter bar completes what's typed; or, for `unpicked-moment`, for photos found
+    /// from their moments (LIB-41).
     public enum Trait: String, Sendable, Hashable, CaseIterable {
         /// A second or more: `shutter>=1`.
         case longExposure = "long-exposure"
@@ -178,6 +179,11 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case lowLight = "low-light"
         /// No GPS position: `-has:gps`.
         case noLocation = "no-location"
+        /// In a moment without a pick (`MomentCoverage`), among the photos the query filters as the
+        /// Tighter–Looser setting it's run with finds their moments: a source's photos for its filter,
+        /// the library's for a search, and the library's at the default setting for a smart
+        /// collection's query or another source's own.
+        case unpickedMoment = "unpicked-moment"
 
         /// Its name as the filter bar shows it.
         public var title: String {
@@ -187,17 +193,20 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .highResolution: "High Resolution"
             case .lowLight: "Low Light"
             case .noLocation: "No Location"
+            case .unpickedMoment: "Moments without a Pick"
             }
         }
 
-        /// The query it stands for.
-        public var query: LibraryQuery {
+        /// The query it stands for; nil for `unpicked-moment`, which depends on the other photos of
+        /// its moment.
+        public var query: LibraryQuery? {
             switch self {
             case .longExposure: .filter(Filter(.shutter, .greaterOrEqual, [.number(1)]))
             case .panorama: .filter(Filter(.aspect, .greaterOrEqual, [.number(2)]))
             case .highResolution: .filter(Filter(.megapixels, .greaterOrEqual, [.number(40)]))
             case .lowLight: .filter(Filter(.iso, .greaterOrEqual, [.number(3200)]))
             case .noLocation: .not(.filter(Filter(.has, .equal, [.detail(.gps)])))
+            case .unpickedMoment: nil
             }
         }
     }
@@ -232,6 +241,17 @@ public extension LibraryQuery {
     /// Whether its photos include those that can't be read, which lists otherwise leave out (LIB-40).
     var findsUnreadable: Bool {
         mentions(.unreadable)
+    }
+
+    /// Whether it has `is:unpicked-moment`, whose photos depend on the photos it filters and the
+    /// Tighter–Looser setting it's run with (LIB-41).
+    var findsMoments: Bool {
+        switch self {
+        case .all, .text: false
+        case let .filter(filter): filter.field == .trait && filter.values.contains(.trait(.unpickedMoment))
+        case let .not(query): query.findsMoments
+        case let .and(queries), let .or(queries): queries.contains { $0.findsMoments }
+        }
     }
 }
 
