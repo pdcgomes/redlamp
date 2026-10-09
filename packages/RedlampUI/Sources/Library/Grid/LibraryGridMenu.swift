@@ -24,6 +24,7 @@ enum LibraryGridMenu {
                 model.showInFinder(photo)
             },
         ], to: menu)
+        add(health(for: photo, model: model), to: menu)
         add(culling(for: photo, model: model), to: menu)
         add([stacking(for: photo, model: model)] + focusStacking(for: photo, model: model), to: menu)
         if let photoMenu = FilmstripMenu.menu(for: photo, model: model) {
@@ -148,6 +149,47 @@ enum LibraryGridMenu {
         let dismiss = item("Not a Focus Stack", key: nil, enabled: true) { model.dismissStack(suggestion) }
         dismiss.setAccessibilityIdentifier("library.menu.dismissFocusStack")
         return [merge, dismiss]
+    }
+
+    // MARK: - Library Health
+
+    /// On a photo of a Library Health check's list (LIB-40): what the check found in it and proposes, the check's batch
+    /// with its count, and Keep Anyway for the photo or the selection it's in; in Kept Anyway's list, List Again.
+    static func health(for photo: URL, model: EditorModel) -> [NSMenuItem] {
+        guard model.module == .library, !model.isModalDialogOpen else { return [] }
+        if model.librarySources.shown == .keptAnyway {
+            let again = item(ShortcutAction.listAgain.title, key: nil, enabled: model.canListAgain) {
+                model.listAgain(photo)
+            }
+            again.setAccessibilityIdentifier("library.menu.\(ShortcutAction.listAgain.rawValue)")
+            return [again]
+        }
+        guard model.shownHealthCheck != nil, let offer = model.healthProposals.offer else { return [] }
+        var items: [NSMenuItem] = []
+        if let mark = model.healthProposals.mark(for: photo) {
+            let found = NSMenuItem(title: Self.found(mark), action: nil, keyEquivalent: "")
+            found.isEnabled = false
+            found.setAccessibilityIdentifier("library.menu.healthFinding")
+            items.append(found)
+        }
+        let check = HealthProposals.check(offer.check, pairs: model.librarySources.pairRule)
+        let title = offer.proposed > 0
+            ? HealthWords.menuTitle(check, count: offer.proposed, kinds: model.healthProposals.proposedKinds)
+            : ShortcutAction.acceptHealthProposals.title
+        let accept = item(title, key: nil, enabled: model.canAcceptHealthProposals) { model.acceptHealthProposals() }
+        accept.setAccessibilityIdentifier("library.menu.\(ShortcutAction.acceptHealthProposals.rawValue)")
+        let keep = item(ShortcutAction.keepAnyway.title, key: nil, enabled: model.canKeepAnyway) {
+            model.keepAnyway(photo)
+        }
+        keep.setAccessibilityIdentifier("library.menu.\(ShortcutAction.keepAnyway.rawValue)")
+        return items + [accept, keep]
+    }
+
+    /// A finding's sentence as the menu's first line, a long path shortened in its middle.
+    private static func found(_ mark: HealthMark) -> String {
+        let sentence = mark.sentence.prefix(1).uppercased() + mark.sentence.dropFirst()
+        guard sentence.count > 90 else { return sentence }
+        return sentence.prefix(44) + "…" + sentence.suffix(45)
     }
 
     // MARK: - Culling

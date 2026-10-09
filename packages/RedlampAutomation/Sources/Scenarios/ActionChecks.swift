@@ -141,6 +141,11 @@
                     action: action,
                     unavailable: "moves a folder's sidecars: checked on a scratch folder by library.move-edits",
                 )
+            case .acceptHealthProposals, .keepAnyway, .listAgain:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs a Library Health check with findings: checked on copies by library.health",
+                )
             case .toggleStack, .stackPhotos, .unstackPhotos, .moveToStackTop, .openAllStacks, .closeAllStacks:
                 ActionCheck(
                     action: action,

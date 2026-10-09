@@ -83,6 +83,12 @@ extension ShortcutAction {
             "sidecar", "sidecars", "redlamp file", "edits", "metadata", "on this mac", "beside the photos", "read-only",
             "where edits are kept", "folder", "library",
         ],
+        .acceptHealthProposals: [
+            "library health", "duplicates", "copies", "raw and jpeg", "pairs", "damaged", "wrong extension", "trash",
+            "delete", "clean up", "proposals", "accept", "library",
+        ],
+        .keepAnyway: ["library health", "keep", "dismiss", "ignore", "not a duplicate", "proposal", "library"],
+        .listAgain: ["library health", "kept anyway", "take back", "list again", "undismiss", "library"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -241,6 +247,9 @@ extension ShortcutAction {
         case .moveToFolder: "folder.badge.plus"
         case .keywordPainter: "paintbrush.pointed"
         case .moveEditsAndMetadata: "arrow.left.arrow.right"
+        case .acceptHealthProposals: "checkmark.rectangle.stack"
+        case .keepAnyway: "checkmark.seal"
+        case .listAgain: "arrow.uturn.backward.circle"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

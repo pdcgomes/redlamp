@@ -39,6 +39,10 @@ public extension EditorModel {
         guard action.isAvailable else { return false }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
+        // Library Health's first: its newest change goes back before older changes of any other kind.
+        if let performed = performHealthShortcut(action) {
+            return performed
+        }
         if let performed = performStackShortcut(action) ?? performPainterShortcut(action)
             ?? performSourceShortcut(action) ?? performModuleShortcut(action) ?? performGridShortcut(action)
             ?? performPanelShortcut(action) ?? performFileShortcut(action)
@@ -207,6 +211,9 @@ public extension EditorModel {
         }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
+        if let available = canPerformHealthShortcut(action) {
+            return available
+        }
         if let available = canPerformStackShortcut(action) ?? canPerformPainterShortcut(action)
             ?? canPerformSourceShortcut(action) ?? canPerformModuleShortcut(action) ?? canPerformGridShortcut(action)
             ?? canPerformPanelShortcut(action) ?? canPerformFileShortcut(action) ?? canPerformCullingShortcut(action) {

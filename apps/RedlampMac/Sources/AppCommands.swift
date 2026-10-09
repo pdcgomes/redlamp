@@ -55,6 +55,9 @@ struct AppCommands: Commands {
             Divider()
             // For the folder added to Folders that holds the folder open (LIB-11).
             item(.moveEditsAndMetadata)
+            Divider()
+            // For the Library Health check shown (LIB-40).
+            item(.acceptHealthProposals)
         }
 
         CommandMenu("Photo") {
@@ -62,6 +65,8 @@ struct AppCommands: Commands {
             item(.showInFinder)
             item(.putBack)
             item(.putBackBatch)
+            item(.keepAnyway)
+            item(.listAgain)
             mouseItem(.renamePhotos)
             item(.moveToFolder)
             Divider()
