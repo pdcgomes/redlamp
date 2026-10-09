@@ -1,6 +1,7 @@
 import AppKit
 import RedlampDesign
 import RedlampDocument
+import Synchronization
 
 /// The grid's badges as images, each drawn once for the screen's scale and shared by every cell that
 /// shows it, so a cell scrolling in sets layers' contents and draws nothing.
@@ -56,9 +57,22 @@ enum GridBadges {
         NSFont.systemFont(ofSize: compact ? 8.5 : 10, weight: .semibold)
     }
 
+    /// A proposal's word measured once: cells placed while the grid scrolls ask for it several times each.
     nonisolated static func wordWidth(_ word: String, compact: Bool) -> CGFloat {
-        (word as NSString).size(withAttributes: [.font: wordFont(compact: compact)]).width.rounded(.up)
+        if let width = wordWidths.withLock({ $0[WordKey(word: word, compact: compact)] }) {
+            return width
+        }
+        let width = (word as NSString).size(withAttributes: [.font: wordFont(compact: compact)]).width.rounded(.up)
+        wordWidths.withLock { $0[WordKey(word: word, compact: compact)] = width }
+        return width
     }
+
+    private struct WordKey: Hashable {
+        let word: String
+        let compact: Bool
+    }
+
+    private nonisolated static let wordWidths = Mutex<[WordKey: CGFloat]>([:])
 
     /// The symbol of a proposal: to the Trash, kept, renamed, left out, or nothing proposed.
     private static func symbol(of proposal: HealthMark.Proposal) -> String {
