@@ -51,9 +51,17 @@ struct LibraryDragTests {
         #expect(sandbox.files(in: "Picked").isEmpty)
         #expect(Set(model.selectedPhotos.map(\.lastPathComponent)) == ["A.JPG", "C.JPG"], "they come back selected")
 
+        let stepIDs = model.fileSteps.redo.last?.photos.map(\.id) ?? []
         #expect(model.canPerform(.redo) && model.perform(.redo))
         await model.filesMade()
-        #expect(sandbox.files(in: "Picked") == ["A.JPG", "A.JPG.redlamp", "C.JPG"])
+        if sandbox.files(in: "Picked") != ["A.JPG", "A.JPG.redlamp", "C.JPG"], let core = sandbox.service?.core {
+            let urls = ["A.JPG", "C.JPG"].map { sandbox.photo($0) }
+            let found = await LibraryService.indexIDs(of: urls, in: core.index)
+            Issue.record("""
+            Redo left Picked with \(sandbox.files(in: "Picked")); the step's photos \(stepIDs), the index's now \
+            \(urls.map { found[$0] }); errors \(model.activity.events.filter { $0.kind == .error }.map(\.text))
+            """)
+        }
         #expect(model.perform(.undo))
         await model.filesMade()
         #expect(sandbox.files(in: "Picked").isEmpty)
