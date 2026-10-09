@@ -63,7 +63,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | DNG camera profiles | Yes | Done | | | CAM-04, TON-09 | Dual-illuminant colour and the embedded HueSatMap; a profile's look is offered as a Base Look |
 | Custom `.dcp` camera profiles | Yes | Later | | | | Deferred on 2 October 2026 |
 | ICC input profiles | No | Planned | | P2 | TON-10 | |
-| A scene-referred rendering for reproduction work, with exposure tied to the camera's metering | No | Planned | | P3 | TON-39, CAM-28 | No tone curve or look, so a target's grey scale exports at its own L*; Lightroom needs a custom linear profile for this |
+| A scene-referred rendering for reproduction work, with exposure tied to the camera's metering | No | Done | | | TON-39, CAM-28 | The Base Look Redlamp Reproduction: no tone curve or look, and each camera's exposure calibrated from a target, so a metered grey scale exports at its own L*; Lightroom needs a custom linear profile for this |
 | Calibration panel | Yes | Done | | | | Shadows Tint and the red, green and blue primaries |
 | Process versions | Yes | Done | | | P1-01 | An edit keeps rendering the way it was made; moving it to a newer process is your choice |
 | HDR editing and export | Yes | Planned | | P4 | | |
