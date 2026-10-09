@@ -27,7 +27,8 @@ extension LibraryIndexer {
             case folder(FolderListing)
             case photo(PendingPhoto)
             case move(PendingMove)
-            case delete([Int64])
+            /// Rows whose photos vanished, with the folder each vanished from.
+            case delete([(photo: Int64, folder: Int64)])
             case deleteFolder(String)
             case complete(FolderCompletion)
             case offline(volume: Int64, key: String)
@@ -297,7 +298,7 @@ extension LibraryIndexer.Batcher {
 private struct BatchItems {
     var photos: [LibraryIndexer.PendingPhoto] = []
     var moves: [LibraryIndexer.PendingMove] = []
-    var deleted: [Int64] = []
+    var deleted: [(photo: Int64, folder: Int64)] = []
     var deletedFolders: [String] = []
     var completed: [LibraryIndexer.FolderCompletion] = []
     var offline: [(volume: Int64, key: String)] = []
@@ -331,7 +332,7 @@ private struct BatchWrite {
         case let .folder(listing): try record(listing)
         case let .photo(photo): items.photos.append(photo)
         case let .move(move): items.moves.append(move)
-        case let .delete(ids): items.deleted += ids
+        case let .delete(rows): items.deleted += rows
         case let .deleteFolder(path): items.deletedFolders.append(path)
         case let .complete(completion): items.completed.append(completion)
         case let .offline(volume, key): items.offline.append((volume, key))
@@ -368,12 +369,16 @@ private struct BatchWrite {
         outcome.moved = moving.count
     }
 
-    /// Writes `photos` with their keywords, collections and health.
+    /// Writes `photos` with their keywords, collections and health. A row read where it no longer is, moved since by a
+    /// file batch, is left where the batch put it.
     mutating func write(_ photos: [LibraryIndexer.PendingPhoto]) throws {
         var records: [PhotoRecord] = []
         var written: [LibraryIndexer.PendingPhoto] = []
         for var photo in photos {
             guard let folder = try folderID(photo.folder) else { continue }
+            if !photo.isNew, try writer.photo(folder: folder, name: photo.record.name)?.id != photo.record.id {
+                continue
+            }
             photo.record.folder = folder
             if let camera = photo.camera {
                 photo.record.camera = try writer.cameraID(for: camera.name, make: camera.make, model: camera.model)
@@ -417,10 +422,16 @@ private struct BatchWrite {
         }
     }
 
-    mutating func remove(_ deleted: [Int64], folders deletedFolders: [String], keeping restorable: Set<Int64>?) throws {
-        if !deleted.isEmpty {
-            try writer.deletePhotos(deleted)
-            outcome.removed += deleted
+    /// Removes the rows of photos that vanished, but those no longer in the folder they vanished from, which a file
+    /// batch
+    /// has moved since; then the folders that vanished, with the photos in them.
+    mutating func remove(
+        _ deleted: [(photo: Int64, folder: Int64)], folders deletedFolders: [String], keeping restorable: Set<Int64>?,
+    ) throws {
+        let gone = try deleted.filter { try writer.photo(id: $0.photo)?.folder == $0.folder }.map(\.photo)
+        if !gone.isEmpty {
+            try writer.deletePhotos(gone)
+            outcome.removed += gone
         }
         for path in deletedFolders {
             guard let id = try folderID(path) else { continue }

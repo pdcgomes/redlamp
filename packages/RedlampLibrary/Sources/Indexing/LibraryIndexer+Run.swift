@@ -428,7 +428,10 @@ extension LibraryIndexer.Run {
         volume.photos.finish()
     }
 
+    /// Lists the folder and compares it with its rows, once no file batch holds it (`FolderHolds`).
     private func list(_ item: LibraryIndexer.WalkQueue.Item, on volume: LibraryIndexer.VolumeWork) async {
+        guard let listing = try? await indexer.index.folderHolds.list(item.path) else { return }
+        defer { listing.done() }
         let url = URL(fileURLWithPath: item.path, isDirectory: true)
         // Only the way to the folders on screen goes ahead of photos: the walk always has another
         // listing waiting, and photos waiting behind every one wouldn't be read until it ended.
@@ -702,7 +705,7 @@ extension LibraryIndexer.Run {
             let topmost = folders.filter { path in !folders.contains { path.hasPrefix($0 + "/") } }.sorted()
             var items: [LibraryIndexer.Batcher.Item] = []
             if !deleted.isEmpty {
-                items.append(.delete(deleted.map(\.record.id)))
+                items.append(.delete(deleted.map { ($0.record.id, $0.record.folder) }))
             }
             items += topmost.map(LibraryIndexer.Batcher.Item.deleteFolder)
             for path in state.deferred {

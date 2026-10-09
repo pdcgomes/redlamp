@@ -17,7 +17,8 @@ import Synchronization
 /// - **Undo** is a batch of its own, planned from where the photos are then.
 /// - **The index follows** as the steps go, in batches: rows keep their IDs and get their new paths,
 ///   folders are made and moved, and no photo is read; `live` hears of every change. The store
-///   needs nothing, since it's keyed by the photos' content.
+///   needs nothing, since it's keyed by the photos' content. The indexer lists none of the folders the
+///   batch changes until it's done (`FolderHolds`), so change tracking never reads one half moved.
 /// - **Recently Trashed** lists what its batches moved to the Trash that's still there, from the
 ///   journal, and Put Back puts it back (`trashed()`, `planPutBack(_:)`).
 ///
@@ -142,6 +143,8 @@ public final class FileOperations: Sendable {
             batch: batch, log: journal.log(batch.id), fileSystem: fileSystem, store: SidecarStore(locator: locator),
             outcome: FileOutcome(batch: batch, state: .running), interruption: interruption.withLock { $0 },
         )
+        let held = await index.folderHolds.hold(Self.heldFolders(batch.steps))
+        defer { held.release() }
         return try await forward(runner, from: 0, locator: locator, progress: progress)
     }
 
@@ -285,6 +288,8 @@ public final class FileOperations: Sendable {
             batch: batch, log: journal.log(id), fileSystem: fileSystem, store: SidecarStore(locator: locator),
             trashed: logged.trashed, outcome: FileOutcome(batch: batch, state: logged.state), interruption: nil,
         )
+        let held = await index.folderHolds.hold(Self.heldFolders(batch.steps))
+        defer { held.release() }
         let outcome = try await settle(runner, logged: logged, choice, locator: locator, progress: progress)
         try await LibraryIndex.offCaller { runner.removeInterruptedSaves(locator: locator) }
         return outcome

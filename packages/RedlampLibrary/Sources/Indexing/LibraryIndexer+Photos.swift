@@ -606,6 +606,8 @@ extension LibraryIndexer.Run {
             return known
         }
         let names: Set<String>?
+        let listing = try await indexer.index.folderHolds.list(folder)
+        defer { listing.done() }
         do {
             let entries = try await volume.io.contentsOfDirectory(
                 at: URL(fileURLWithPath: folder, isDirectory: true), priority: priority,

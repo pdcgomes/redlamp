@@ -22,6 +22,8 @@ public final class LibraryIndex: Sendable {
     private let readerLoad: Mutex<[Int]>
     /// What this process's transactions changed, by the generation each made (LIB-44).
     let journal = IndexJournal()
+    /// The folders file batches are changing, which the indexer lists once their index is written (LIB-26).
+    let folderHolds = FolderHolds()
     /// Marks at or above the last IDs given, kept beside the index too (LIB-05).
     let marks: IndexIDMarks
     /// How long after the last write that gave IDs the marks are brought down to them (`IndexIDMarks.settle`).

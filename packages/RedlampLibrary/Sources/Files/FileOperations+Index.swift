@@ -93,6 +93,39 @@ struct IndexChanges: Sendable {
 }
 
 extension FileOperations {
+    /// The folders `steps` change, which the indexer leaves while their batch runs (`FolderHolds`): those holding the
+    /// files they move, and the folders they move, make or remove, with everything below them.
+    static func heldFolders(_ steps: [FileStep]) -> Set<FolderHolds.Folder> {
+        var held = Set<FolderHolds.Folder>()
+        func hold(folder path: String) {
+            held.insert(FolderHolds.Folder(path, subtree: true))
+            held.insert(FolderHolds.Folder(FilePlanner.split(path).folder))
+        }
+        for step in steps {
+            for item in step.items {
+                for path in [item.source, item.destination].compactMap(\.self) {
+                    if item.isDirectory {
+                        hold(folder: path)
+                    } else {
+                        held.insert(FolderHolds.Folder(FilePlanner.split(path).folder))
+                    }
+                }
+            }
+            step.folder.map(hold(folder:))
+            for move in step.folders {
+                hold(folder: move.from)
+                hold(folder: move.to)
+            }
+            for folder in step.removedFolders {
+                hold(folder: folder.path)
+            }
+            for removed in step.removed {
+                held.insert(FolderHolds.Folder(removed.folder))
+            }
+        }
+        return held
+    }
+
     /// Writes what `steps` did to the index in one transaction, without reading any photo: file
     /// identifiers and sidecars' dates are taken from the files' attributes. Rows of files gone that held a
     /// place a step took go with their XMP merge records, unless a batch can bring them back. Then `live`
