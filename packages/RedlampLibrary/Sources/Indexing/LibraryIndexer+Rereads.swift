@@ -60,7 +60,10 @@ extension LibraryIndexer.Run {
     /// Lists `folder` again and reads its photos named `names` whole, whatever their rows say.
     private func reread(_ names: Set<String>, in folder: String) async {
         let volume = state.withLock { state in
-            state.volumes.first { volume in volume.roots.contains { folder == $0 || folder.hasPrefix($0 + "/") } }
+            state.volumes.first { volume in
+                !state.failedVolumes.contains(volume.id)
+                    && volume.roots.contains { folder == $0 || folder.hasPrefix($0 + "/") }
+            }
         }
         guard let volume, let jobs = try? await listedAgain(folder, names, on: volume) else { return }
         for job in jobs {
