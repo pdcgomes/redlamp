@@ -34,9 +34,11 @@ struct ImportBrowseTests {
             guard case let .listed(_, photos) = event else { return nil }
             return photos
         }.first)
-        #expect(listed.map { ($0 as NSString).lastPathComponent } == (1 ... 7).reversed().map { number in
+        let names: [String] = listed.map { ($0 as NSString).lastPathComponent }
+        let newestFirst: [String] = (1 ... 7).reversed().map { number in
             String(format: number == 7 ? "IMG_%04d.CR3" : "IMG_%04d.JPG", number)
-        })
+        }
+        #expect(names == newestFirst)
         #expect(events.last == .browsed)
         let photos = session.photos
         #expect(photos.count == 7 && photos.allSatisfy { $0.state == .previewed })

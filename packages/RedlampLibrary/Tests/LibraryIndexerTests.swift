@@ -446,8 +446,8 @@ extension LibraryIndexerTests {
     ) async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 200, seed: 31, shapes: []))
         defer { sandbox.remove() }
-        let photo = try #require((0 ..< 200).map(sandbox.fixture.photo(at:))
-            .first { $0.sidecar == nil && $0.xmp == nil })
+        let photos: [FixturePhoto] = (0 ..< 200).map(sandbox.fixture.photo(at:))
+        let photo = try #require(photos.first { $0.sidecar == nil && $0.xmp == nil })
         let hanging = SlowReadFileSystem(slow: sandbox.url(photo), delay: .seconds(6))
         let volumes = VolumeIORegistry(fileSystem: hanging, configuration: .init(timeout: .milliseconds(100)))
         let indexer = LibraryIndexer(index: sandbox.index, volumes: volumes, configuration: .testing())
