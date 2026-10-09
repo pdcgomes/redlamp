@@ -212,8 +212,11 @@ struct GroupedListTests {
         library.choices.stack([evening[1], morning[2]], top: evening[1], in: library.grouping().stacks)
         let grouping = library.grouping()
         var grouped = grouping.grouped(library.list, by: .moment)
-        #expect(Array(grouped) == [.header(0)] + [morning[0], morning[1], morning[3]].map(Item.photo)
-            + [.header(1)] + evening.map(Item.photo))
+        var expected: [Item] = [.header(0)]
+        expected += [morning[0], morning[1], morning[3]].map(Item.photo)
+        expected.append(.header(1))
+        expected += evening.map(Item.photo)
+        #expect(Array(grouped) == expected)
         #expect(grouped.stacked.photos(of: evening[1]) == [evening[1], morning[2]])
         #expect(grouped.groups.allSatisfy { $0.filter == nil })
         let before = Array(grouped)
