@@ -59,8 +59,9 @@ import RedlampLibrary
     /// Counts the list's changes, for a grouping made meanwhile to open its stacks as the list has them.
     @ObservationIgnored private(set) var openings = 0
     @ObservationIgnored let finder = LibraryStackFinder()
-    /// Each photo's ID in the index, by its ID here, as the stackings found them.
-    @ObservationIgnored private(set) var indexIDs: [Int64: Int64] = [:]
+    /// Each photo's ID in the index, by its ID here, as the stackings found them, while the photos' IDs aren't the
+    /// index's (`indexID(of:)`).
+    @ObservationIgnored private var indexIDs: [Int64: Int64] = [:]
     @ObservationIgnored private var observers: [UUID: @MainActor (Change) -> Void] = [:]
     @ObservationIgnored private var observation: LibraryObservation?
     @ObservationIgnored private var indexing: LibraryObservation?
@@ -132,8 +133,9 @@ import RedlampLibrary
         stacking = true
         pending = false
         let request = Request(
-            items: library.items, ids: library.photoIDs, list: library.photoList, previous: list,
-            opensNew: opensNew, finder: finder, photoIDs: model.libraryPanels.photoIDs, forgetting: self.forgetting,
+            items: library.showsIndexIDs ? nil : library.items, ids: library.photoIDs, list: library.photoList,
+            previous: list, opensNew: opensNew, finder: finder, photoIDs: model.libraryPanels.photoIDs,
+            forgetting: self.forgetting,
         )
         self.forgetting = (false, false)
         // Detached, so the stacking starts at once rather than once the main thread has drawn what asked for it.
@@ -145,7 +147,8 @@ import RedlampLibrary
     }
 
     private struct Request: Sendable {
-        var items: [LibraryItem]
+        /// The photos, whose URLs find their IDs in the index; nil when their IDs are the index's.
+        var items: [LibraryItem]?
         var ids: ContiguousArray<Int64>
         var list: PhotoList
         var previous: StackedList?
@@ -168,20 +171,28 @@ import RedlampLibrary
     /// before open in it.
     private nonisolated static func stack(_ request: Request, index: LibraryIndex, engine: QueryEngine) async
         -> Result? {
-        let (items, ids) = (request.items, request.ids)
-        guard items.count == ids.count else { return nil }
+        let (items, ids, list) = (request.items, request.ids, request.list)
+        guard items.map({ $0.count == ids.count }) ?? true else { return nil }
         if request.forgetting.stacks {
             await request.finder.forget(names: request.forgetting.names)
         }
-        let photos = ids.indices.map { (list: ids[$0], url: items[$0].url) }
-        let byOwn = await request.photoIDs.ids(of: photos, in: index)
-        guard let found = await request.finder.stacks(in: index, engine: engine) else { return nil }
-        var byIndex: [Int64: Int64] = [:]
-        byIndex.reserveCapacity(byOwn.count)
-        for (own, indexed) in byOwn {
-            byIndex[indexed] = own
+        var byOwn: [Int64: Int64] = [:]
+        if let items {
+            let photos = ids.indices.map { (list: ids[$0], url: items[$0].url) }
+            byOwn = await request.photoIDs.ids(of: photos, in: index)
         }
-        let stacks = found.relabelled(above: ids.max() ?? -1) { byIndex[$0] }
+        guard let found = await request.finder.stacks(in: index, engine: engine) else { return nil }
+        let stacks: Stacks
+        if items == nil {
+            stacks = found.relabelled(above: list.highestID ?? -1) { list.contains($0) ? $0 : nil }
+        } else {
+            var byIndex: [Int64: Int64] = [:]
+            byIndex.reserveCapacity(byOwn.count)
+            for (own, indexed) in byOwn {
+                byIndex[indexed] = own
+            }
+            stacks = found.relabelled(above: ids.max() ?? -1) { byIndex[$0] }
+        }
         var stacked: StackedList
         var changed: Bool
         if let previous = request.previous {
@@ -400,6 +411,14 @@ import RedlampLibrary
     /// Whether `photo` has a cell of its own, or stands for a closed stack's photos.
     func isOnShow(_ photo: Int64) -> Bool {
         list?.isShown(photo) ?? true
+    }
+
+    /// The index's ID of photo `own`, one of the photos shown: its own while the photos' IDs are the index's, else as
+    /// the stackings found it. A closed stack's photos outside the source have none.
+    func indexID(of own: Int64) -> Int64? {
+        guard let library = model?.library else { return nil }
+        guard library.showsIndexIDs else { return indexIDs[own] }
+        return library.photoList.contains(own) ? own : nil
     }
 }
 

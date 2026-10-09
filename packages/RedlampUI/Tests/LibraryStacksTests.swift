@@ -486,4 +486,40 @@ struct LibraryStacksTests {
         #expect(top() == nil && grid.shownCount == 6)
         await model.libraryPanels.written()
     }
+
+    @Test func `a source shown by the index's IDs finds its stacks by them, and stacks, tops and unstacks by them`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, grid, _, window) = try await open()
+        defer { window.contentView = nil }
+        _ = model.librarySources.show(.allPhotographs)
+        try await eventually(seconds: 20) {
+            model.library.showsIndexIDs && !model.librarySources.isListing && model.items.count == Self.photos.count
+                && model.gridStacks.list.map { $0.list.source == .allPhotographs && $0.stacksShown == (0, 2) } == true
+        }
+        try #require(model.library.showsIndexIDs && model.items.count == Self.photos.count, "All Photographs shown")
+        #expect(model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true, "the burst and the pair found")
+        #expect(grid.shownCount == 6)
+        let (first, second) = try (id(model, "S01.JPG"), id(model, "S02.JPG"))
+        #expect(model.gridStacks.indexID(of: first) == first, "a photo's ID is the index's")
+        func top() -> Int64? {
+            model.gridStacks.list?.stacks.stack(containing: first)?.top
+        }
+        try model.clickInGrid(url(model, "S01.JPG"))
+        try model.clickInGrid(url(model, "S02.JPG"), toggling: true)
+        #expect(model.perform(.stackPhotos))
+        try await eventually(seconds: 20) { top() == second }
+        #expect(top() == second, "the active photo is on top")
+        #expect(model.gridStacks.list.map { $0.stacksShown == (0, 3) } == true && grid.shownCount == 5)
+
+        model.gridStacks.toggle(second)
+        try model.clickInGrid(url(model, "S01.JPG"))
+        #expect(model.perform(.moveToStackTop))
+        try await eventually(seconds: 20) { top() == first }
+        #expect(top() == first)
+        #expect(model.perform(.unstackPhotos))
+        try await eventually(seconds: 20) { top() == nil }
+        #expect(top() == nil && model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true)
+        await model.libraryPanels.written()
+    }
 }

@@ -26,7 +26,7 @@ public extension EditorModel {
     func stackSelectedPhotos() -> Bool {
         guard canStackSelection else { return false }
         let photos = selectedForStacks
-        let top = selection.flatMap(library.photoID(of:)).flatMap { gridStacks.indexIDs[$0] }
+        let top = selection.flatMap(library.photoID(of:)).flatMap(gridStacks.indexID(of:))
         return makeStackChange(
             .stack(photos.ids, top: top), title: "Stack \(LibraryPanels.count(photos.ids.count))", photos: photos,
         )
@@ -47,7 +47,7 @@ public extension EditorModel {
     @discardableResult
     func moveToTopOfStack() -> Bool {
         guard canMoveToTopOfStack, let url = selection, let own = library.photoID(of: url),
-              let id = gridStacks.indexIDs[own], let stacks = libraryViews.stacks?.list?.stacks,
+              let id = gridStacks.indexID(of: own), let stacks = libraryViews.stacks?.list?.stacks,
               let stack = stacks.stack(containing: own)
         else { return false }
         let photos = stackPhotos(stacks.allPhotos(of: stack))
@@ -381,12 +381,12 @@ public extension EditorModel {
     /// `photos`, by their IDs here, with the others of their pairs, as their URLs and their IDs in the index.
     private func stackPhotos(_ photos: [Int64]) -> (urls: [URL], ids: [Int64]) {
         let stacks = libraryViews.stacks?.list?.stacks ?? Stacks()
-        let known = gridStacks.indexIDs
+        let stacking = gridStacks
         var seen = Set<Int64>()
         var found: (urls: [URL], ids: [Int64]) = ([], [])
         for photo in photos {
             for member in stacks.pair(containing: photo)?.photos ?? [photo] where seen.insert(member).inserted {
-                guard let id = known[member], let url = library.url(ofPhoto: member) else { continue }
+                guard let id = stacking.indexID(of: member), let url = library.url(ofPhoto: member) else { continue }
                 found.urls.append(url)
                 found.ids.append(id)
             }
