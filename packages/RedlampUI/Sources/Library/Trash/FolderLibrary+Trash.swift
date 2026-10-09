@@ -69,7 +69,11 @@ extension FolderLibrary {
         guard trash.following == nil, let updates = service?.trashedUpdates() else { return }
         trash.following = Task { [weak self] in
             for await photos in updates {
-                self?.trashed(photos)
+                // Ten thousand photos moved to the Trash at once take milliseconds to look up by place.
+                let byPlace = await Task.detached(priority: .userInitiated) {
+                    Dictionary(photos.map { (Self.url(ofPlace: $0.place), $0) }) { first, _ in first }
+                }.value
+                self?.trashed(photos, byPlace: byPlace)
             }
         }
         trash.activation = NotificationCenter.default.addObserver(
@@ -79,10 +83,12 @@ extension FolderLibrary {
         }
     }
 
-    /// The library's list changed: kept for the count, and shown when Recently Trashed is.
-    private func trashed(_ photos: [TrashedPhoto]) {
+    /// The library's list changed, with its photos by place: kept for the count, and shown when Recently Trashed is.
+    private func trashed(_ photos: [TrashedPhoto], byPlace: [URL: TrashedPhoto]) {
+        let replaced = (trash.photos, trash.byPlace)
         trash.photos = photos
-        trash.byPlace = Dictionary(photos.map { (URL(fileURLWithPath: $0.place), $0) }) { first, _ in first }
+        trash.byPlace = byPlace
+        scheduler.submit(.background) { withExtendedLifetime(replaced) {} }
         trashedCount = photos.count
         guard showsRecentlyTrashed else { return }
         showTrashed()
@@ -104,7 +110,7 @@ extension FolderLibrary {
         var keys: [URL: ContentKey] = [:]
         for photo in trash.photos {
             if let key = photo.photo.photo.contentKey.flatMap(ContentKey.init(data:)) {
-                keys[URL(fileURLWithPath: photo.place)] = key
+                keys[Self.url(ofPlace: photo.place)] = key
             }
         }
         trash.keys = keys
@@ -140,6 +146,12 @@ extension FolderLibrary {
 
     /// `photo` as Recently Trashed shows it: at its place in the Trash, with its row's badges.
     nonisolated static func item(_ photo: TrashedPhoto) -> LibraryItem {
-        LibraryFolderList.Mapping.item(photo.photo.photo.record(inFolder: 0), url: URL(fileURLWithPath: photo.place))
+        LibraryFolderList.Mapping.item(photo.photo.photo.record(inFolder: 0), url: url(ofPlace: photo.place))
+    }
+
+    /// The URL of a photo's place in the Trash. A place is a file, so it's made without asking the disk whether
+    /// it's a folder.
+    nonisolated static func url(ofPlace place: String) -> URL {
+        URL(fileURLWithPath: place, isDirectory: false)
     }
 }
