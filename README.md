@@ -887,6 +887,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Lens corrections the raw file carries (DNG opcodes, Sony's and Fujifilm's), and manual Distortion and Vignetting, in the same geometry map
 - [x] Adobe LCP lens profiles you put in Redlamp's Lens Profiles folder, named in the Lens Corrections panel <!-- tracker: LNS-04, LNS-11 -->
 - [x] **Crop and straighten** (aspect presets and lock, composition overlays, Angle and the Straighten tool, Constrain to Image), rotate and flip, and the manual Transform sliders, all one geometry map that masks follow <!-- tracker: LNS-06 -->
+- [ ] Crop: custom aspect ratios kept in the Aspect menu, a button that swaps portrait and landscape, and turning the photo by dragging outside the crop <!-- tracker: LNS-12, LNS-13 -->
 - [x] Upright: Auto, Level, Vertical and Full from the photo's own straight edges, found by Redlamp's line detector, and Guided from drawn guides. A correction is applied only when the edges agree on it, so a landscape or a still life is levelled at most, and Auto leaves strong perspective partly in place <!-- tracker: LNS-07 -->
 - [x] Brush, color range, and luminance range masks, and Vision AI masks (subject, sky, background, people) <!-- tracker: MSK-05, MSK-08, MSK-16 -->
 - [x] Lightroom XMP preset import, setting by setting, with a report of what came across
