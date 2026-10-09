@@ -424,6 +424,18 @@ def known_stalls() -> dict[str, str]:
     return {item["frame"]: item["reason"] for item in json.loads(path.read_text()).get("knownStalls", [])}
 
 
+def foreign_keys(run_dir: Path) -> dict[str, int]:
+    """Keys typed on this Mac that reached the test app, which it kept out of the run, by the scenario running then:
+    a menu the app opens takes the keyboard while it tracks, even in the background."""
+    counts: dict[str, int] = {}
+    for path in sorted(run_dir.glob("events-*.jsonl")):
+        for event in read_events(path):
+            if event.get("event") == "foreign-input" and event.get("type") == "keyDown":
+                scenario = event.get("scenario") or "between scenarios"
+                counts[scenario] = counts.get(scenario, 0) + 1
+    return counts
+
+
 def read_events(path: Path, start: int = 0) -> list[dict]:
     """The events in `path` from byte `start`: where a launch began adding its own to its group's."""
     if not path.exists():
@@ -703,6 +715,10 @@ def write_report(run_dir: Path, report: dict) -> None:
         lines += ["", "| Metric | Value |", "| --- | --- |"] + [f"| `{k}` | {v:.1f} |" for k, v in sorted(perf["metrics"].items())]
     state = report["ownerState"]
     lines += ["", "## Isolation", "", state["summary"]]
+    typed = report.get("foreignKeys") or {}
+    if typed:
+        where = ", ".join(f"{count} in `{scenario}`" for scenario, count in sorted(typed.items()))
+        lines += ["", f"Keys typed on this Mac reached the app and were kept out of the run: {where}."]
     storage = report.get("storage")
     if storage:
         change = storage["temporaryFreeChange"] / 2**30
@@ -1041,7 +1057,7 @@ def main() -> int:
         "summary": summary, "scenarios": scenarios, "crashes": crashes, "hangs": hangs,
         "retriedHangs": launches.retried_hangs, "coverage": cover, "coverageRequired": coverage_required,
         "ownerState": {"changed": changed, "ownerAppRunning": owner_running, "summary": state_summary},
-        "relay": relay.count, "performance": performance, "storage": storage,
+        "relay": relay.count, "performance": performance, "storage": storage, "foreignKeys": foreign_keys(run_dir),
     }
     write_report(run_dir, report)
     defaults("delete", BUNDLE_ID)

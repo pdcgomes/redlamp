@@ -83,9 +83,13 @@
                     "showBefore": model.showBefore,
                 ],
             ]
-            // What the app did last, which a scenario's clean-up after the failure doesn't take away.
+            // What the app did last, which a scenario's clean-up after the failure doesn't take away, each at the time
+            // of day the run's events are on.
+            let time = DateFormatter()
+            time.dateFormat = "HH:mm:ss.SSS"
             state["activity"] = model.activity.events.suffix(24).map { event in
-                "\(event.kind.rawValue): \(event.text)\(event.count > 1 ? " ×\(event.count)" : "")"
+                "\(time.string(from: event.time)) \(event.kind.rawValue): \(event.text)"
+                    + (event.count > 1 ? " ×\(event.count)" : "")
             }
             if let editor {
                 var window = window(editor)

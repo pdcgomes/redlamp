@@ -51,6 +51,7 @@
                 NSApp.terminate(nil)
                 return
             }
+            ForeignInput.keepOut(recording: recorder)
             // A run in the background keeps rendering at full speed.
             nonisolated(unsafe) let activity = ProcessInfo.processInfo.beginActivity(
                 options: [.userInitiated, .latencyCritical, .idleDisplaySleepDisabled], reason: "Regression suite",

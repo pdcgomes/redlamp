@@ -80,6 +80,35 @@ struct DriverTests {
         #expect((coverage?["claims"] as? [String: [String]])?["action.export"] == ["menu"])
     }
 
+    @Test func `a key typed on the Mac doesn't reach the app's handlers, and the run's events name it`() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "foreign-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var handled: [String] = []
+        let shortcuts = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            handled.append(event.charactersIgnoringModifiers ?? "")
+            return event
+        }
+        defer { shortcuts.map(NSEvent.removeMonitor) }
+        ForeignInput.keepOut(recording: Recorder(directory: directory, launch: "main"))
+        defer { ForeignInput.letIn() }
+
+        let sent = try Keyboard.event(.char("u"))
+        let typed = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 35, keyDown: true))
+        typed.keyboardSetUnicodeString(stringLength: 1, unicodeString: Array("p".utf16))
+        typed.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
+        let foreign = try #require(NSEvent(cgEvent: typed))
+        #expect(!ForeignInput.isForeign(sent) && ForeignInput.isForeign(foreign))
+        NSApp.sendEvent(sent)
+        NSApp.sendEvent(foreign)
+        #expect(handled == ["u"])
+        let lines = try String(contentsOf: directory.appending(path: "events-main.jsonl"), encoding: .utf8)
+            .split(separator: "\n")
+        let dropped = try lines.map { try JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
+        #expect(dropped.count == 1 && dropped.first??["event"] as? String == "foreign-input")
+        #expect(dropped.first??["characters"] as? String == "p" && dropped.first??["keyCode"] as? Int == 35)
+    }
+
     @Test func `a failure's record is named for its scenario and step`() {
         #expect(FailureRecord
             .fileName("smoke.actions-by-key.openFolder by key") == "smoke.actions-by-key.openFolder-by-key")
