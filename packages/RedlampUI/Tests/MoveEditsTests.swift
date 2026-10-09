@@ -196,7 +196,7 @@ struct MoveEditsTests {
         #expect(try await folder.record().sidecars == .onThisMac)
         #expect(folder.beside(edited).isEmpty, "nothing left beside the photos")
         #expect(folder.onThisMac(edited) == before)
-        #expect(SidecarMoveRecord.saved(in: folder.defaults) == nil)
+        #expect(try await folder.core.sidecars.unfinishedMove() == nil)
         #expect(!FileManager.default.fileExists(atPath: folder.paths.root.appending(path: "Sidecar Move.json").path))
         let store = folder.library.sidecars.store(for: folder.photo("C.JPG"))
         #expect(store.load(for: folder.photo("C.JPG"))?.metadata?.rating == 3, "read where it went")
@@ -236,40 +236,30 @@ struct MoveEditsTests {
             },
         )
         #expect(result.total == 300 && result.error == nil)
-        #expect(result.outcome.moved == SidecarMoveJob.part, "the first part, then nothing")
-        #expect(result.putBack?.moved == SidecarMoveJob.part && result.putBack?.failed.isEmpty == true)
+        #expect(result.outcome.moved == LibrarySidecars.movePart, "the first part, then nothing")
+        #expect(result.putBack?.moved == LibrarySidecars.movePart && result.putBack?.failed.isEmpty == true)
         #expect(try await folder.record().sidecars == .besidePhotos)
         #expect(folder.beside(names) == before)
         #expect(await placements.count == 2, "the locator read again as it set out and as it came back")
         #expect(!FileManager.default.fileExists(atPath: folder.paths.root.appending(path: "Sidecar Move.json").path))
     }
 
-    @Test func `Cancel turns the move round in the defaults before it puts back`() throws {
-        let suite = "move-edits-cancel-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { UserDefaults().removePersistentDomain(forName: suite) }
-        let record = SidecarMoveRecord(root: "/Volumes/Card", destination: .onThisMac)
-        record.save(in: defaults)
+    @Test func `Cancel stops the sheet's move once, and nothing stops it putting back`() {
+        let journal = SidecarMoveJournal(plan: SidecarMovePlan(
+            root: 1, rootPath: "/Volumes/Card", destination: .onThisMac, items: [], conflicts: [],
+        ))
         let sheet = MoveEditsModel(
             root: WorkingFolder(path: "/Volumes/Card"), rootID: 1, placement: .besidePhotos, indexed: 3,
-            unfinished: record,
+            unfinished: journal,
         )
-        sheet.onCancel = {
-            var turned = record
-            turned.destination = .besidePhotos
-            turned.puttingBack = true
-            turned.save(in: defaults)
-        }
-        #expect(sheet.isMoving && !sheet.isPuttingBack)
+        #expect(sheet.isMoving && !sheet.isPuttingBack && sheet.destination == .onThisMac)
         sheet.cancel()
         #expect(sheet.control.isCancelled)
-        #expect(SidecarMoveRecord.saved(in: defaults) == SidecarMoveRecord(
-            root: "/Volumes/Card", destination: .besidePhotos, puttingBack: true,
-        ))
+        sheet.setPhase(.moving(FileProgress(done: 1, total: 3, isRollingBack: true)))
+        #expect(sheet.isPuttingBack && sheet.status == "Putting back: 1 of 3 photos")
     }
 
-    @Test func `a launch finishes a move a quit interrupted: the part in the journal, then the rest from the disk`(
-    ) async throws {
+    @Test func `a launch finishes a move a quit interrupted, from the library's journal`() async throws {
         _ = NSApplication.shared
         let folder = Folder()
         defer { folder.cleanUp() }
@@ -280,29 +270,23 @@ struct MoveEditsTests {
         let core = try folder.core
         let id = try await folder.record().id
 
-        // As a quit leaves it: the first part moved, the placement this Mac's, the next part in the journal and
-        // the move in the defaults; the journal doesn't have the rest.
+        // As a quit leaves it: the first part moved, the placement this Mac's, the whole move in the journal.
         let plan = try await core.sidecars.planMove(ofRoot: id, to: .onThisMac)
         var first = plan
-        first.items = Array(plan.items.prefix(SidecarMoveJob.part))
+        first.items = Array(plan.items.prefix(LibrarySidecars.movePart))
         _ = try await core.sidecars.move(first)
-        var next = plan
-        next.items = Array(plan.items[SidecarMoveJob.part ..< SidecarMoveJob.part + 20])
-        try JSONEncoder().encode(next).write(to: core.sidecars.moveJournal)
-        SidecarMoveRecord(root: LibraryService.path(folder.root), destination: .onThisMac).save(in: folder.defaults)
+        try JSONEncoder().encode(SidecarMoveJournal(plan: plan)).write(to: core.sidecars.moveJournal)
         folder.close()
 
         try await folder.open()
-        await Self.eventually(seconds: 30) { SidecarMoveRecord.saved(in: folder.defaults) == nil }
-        #expect(SidecarMoveRecord.saved(in: folder.defaults) == nil, "the move finished")
+        let finished = "Finished moving the edits and metadata of 300 photos in Photos to Redlamp on this Mac, "
+            + "which a quit interrupted"
+        await Self.eventually(seconds: 30) { folder.model.activity.events.contains { $0.text == finished } }
+        #expect(folder.model.activity.events.contains { $0.text == finished })
+        #expect(try await folder.core.sidecars.unfinishedMove() == nil, "the move finished")
         #expect(try await folder.record().sidecars == .onThisMac)
         #expect(folder.beside(names).isEmpty)
         #expect(folder.onThisMac(names) == before)
-        #expect(try !FileManager.default.fileExists(atPath: folder.core.sidecars.moveJournal.path))
-        #expect(folder.model.activity.events.contains {
-            $0.text == "Finished moving the edits and metadata of 24 photos in Photos to Redlamp on this Mac, "
-                + "which a quit interrupted"
-        })
     }
 
     // MARK: - Refusing

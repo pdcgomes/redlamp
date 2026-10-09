@@ -27,8 +27,9 @@ final class MoveEditsModel {
     let indexed: Int
     /// How long the index took to say so, for the regression suite.
     var surveyed: Duration?
-    /// The move a quit interrupted, which the sheet finishes, rather than one to ask for.
-    let unfinished: SidecarMoveRecord?
+    /// The move a quit interrupted, as the library's journal holds it, which the sheet finishes, rather than one to
+    /// ask for.
+    let unfinished: SidecarMoveJournal?
     /// The sidecars in the place they'd leave, once found.
     private(set) var plan: SidecarMovePlan?
     /// Why they can't go where they'd go, in words.
@@ -36,12 +37,10 @@ final class MoveEditsModel {
     private(set) var phase: Phase
     let control = SidecarMoveControl()
     var onChange: (() -> Void)?
-    /// Hears Cancel turn the move round, before it puts back: the defaults keep the move going the other way.
-    var onCancel: (() -> Void)?
 
     init(
         root: WorkingFolder, rootID: Int64?, placement: RootRecord.Sidecars, indexed: Int,
-        unfinished: SidecarMoveRecord? = nil,
+        unfinished: SidecarMoveJournal? = nil,
     ) {
         self.root = root
         self.rootID = rootID
@@ -59,7 +58,7 @@ final class MoveEditsModel {
 
     /// Where the move takes them: the other place, or where the unfinished move was taking them.
     var destination: RootRecord.Sidecars {
-        unfinished?.destination ?? (placement == .besidePhotos ? .onThisMac : .besidePhotos)
+        unfinished?.plan.destination ?? (placement == .besidePhotos ? .onThisMac : .besidePhotos)
     }
 
     var source: RootRecord.Sidecars {
@@ -154,7 +153,6 @@ final class MoveEditsModel {
     func cancel() {
         guard isMoving, !control.isCancelled else { return }
         control.cancel()
-        onCancel?()
         onChange?()
     }
 

@@ -46,14 +46,20 @@ public struct LibrarySidecars: Sendable {
         guard let record = try await index.read({ try $0.root(id: root) }) else {
             throw LibrarySidecarsError.noSuchRoot(root)
         }
+        try await setPlacement(placement, of: record)
+    }
+
+    /// `setPlacement` for a root the caller has found, without reading the index: it runs to the end even once the
+    /// calling task is cancelled.
+    func setPlacement(_ placement: RootRecord.Sidecars, of record: RootRecord) async throws {
         let inVolume = try await LibraryIndex.offCaller {
             Self.pathInVolume(of: URL(fileURLWithPath: record.path, isDirectory: true))
         }
         try await index.write { writer in
-            try writer.setSidecars(placement, forRoot: root)
-            try writer.setSetting("1", for: Self.probedKey(root))
+            try writer.setSidecars(placement, forRoot: record.id)
+            try writer.setSetting("1", for: Self.probedKey(record.id))
             if let inVolume {
-                try writer.setSetting(inVolume, for: Self.pathKey(root))
+                try writer.setSetting(inVolume, for: Self.pathKey(record.id))
             }
         }
     }
@@ -189,30 +195,14 @@ public struct LibrarySidecars: Sendable {
         return parts.joined(separator: "/")
     }
 
-    /// Whether Redlamp can write in `folder`; nil when the folder isn't there. A local volume says
-    /// so without anything being written; on a network volume, whose share may refuse writes its
-    /// permissions allow, a hidden file is made there and removed. That file is named as an
-    /// interrupted save's leftover, so a share that lets it be made but not removed has it removed
-    /// with them.
+    /// Whether Redlamp can write in `folder`, a network volume's share probed (`writeAccess(in:probing:)`); nil when
+    /// the folder isn't there.
     static func canWrite(in folder: URL) -> Bool? {
-        let keys: Set<URLResourceKey> = [.isDirectoryKey, .volumeIsReadOnlyKey, .volumeIsLocalKey]
-        guard let values = try? URL(fileURLWithPath: folder.path).resourceValues(forKeys: keys),
-              values.isDirectory == true
-        else { return nil }
-        if values.volumeIsReadOnly == true || access(folder.path, W_OK) != 0 {
-            return false
+        switch writeAccess(in: folder, probing: true) {
+        case .writable: true
+        case .missing: nil
+        case .readOnly, .notPermitted, .refused: false
         }
-        if values.volumeIsLocal == true {
-            return true
-        }
-        let probe = folder.appending(path: ".redlamp-probe.redlamp.\(UUID().uuidString)").path
-        let descriptor = open(probe, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
-        guard descriptor >= 0 else { return errno == ENOENT ? nil : false }
-        var byte: UInt8 = 0
-        let wrote = write(descriptor, &byte, 1) == 1
-        let closed = close(descriptor) == 0
-        let removed = unlink(probe) == 0
-        return wrote && closed && removed
     }
 
     /// `body`'s answer on a thread of its own, or nil once `timeout` has passed without one.

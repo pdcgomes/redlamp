@@ -12,7 +12,9 @@ import RedlampLibrary
 /// - **The open photo's sidecar moves first,** and its later saves go where the root keeps them from then on.
 /// - **Said in words:** a refusal, a move stopped or put back, and the photos it couldn't move, which the activity
 ///   log names.
-/// - **After a quit,** the next launch finishes the move with its sheet up, once the library is open.
+/// - **After a quit,** the next launch finishes the move the library's journal holds with its sheet up, once the
+/// library
+///   is open.
 public extension EditorModel {
     /// Move Edits and Metadata… for the root holding the folder open in Folders.
     @discardableResult
@@ -89,39 +91,30 @@ extension EditorModel {
                 }
             }
         }
-        let defaults = library.defaults
-        let record = sheet.unfinished ?? SidecarMoveRecord(
-            root: LibraryService.path(root.url), destination: sheet.destination,
-        )
-        record.save(in: defaults)
-        sheet.onCancel = {
-            var turned = record
-            turned.destination = record.destination == .onThisMac ? .besidePhotos : .onThisMac
-            turned.puttingBack = !record.puttingBack
-            turned.save(in: defaults)
-        }
-        sheet.setPhase(.moving(FileProgress(done: 0, total: 0, isRollingBack: record.puttingBack)))
+        sheet.setPhase(.moving(FileProgress(done: 0, total: 0, isRollingBack: sheet.unfinished?.puttingBack == true)))
         let relay = FileProgressRelay { [weak sheet] progress in
             guard let sheet, sheet.isMoving else { return }
-            var shown = progress
-            shown.isRollingBack = progress.isRollingBack || record.puttingBack
-            sheet.setPhase(.moving(shown))
+            sheet.setPhase(.moving(progress))
         }
         let placed: @Sendable () async -> Void = { [weak service] in await service?.placementsChanged() }
-        let result: SidecarMoveJob.Result? = if let unfinished = sheet.unfinished {
-            await SidecarMoveJob.finish(
-                unfinished, core: core, control: sheet.control, placed: placed,
-                progress: { relay.send($0) },
+        let result: SidecarMoveJob.Result?
+        if sheet.unfinished != nil {
+            result = await SidecarMoveJob.finish(
+                core: core, control: sheet.control, placed: placed, progress: { relay.send($0) },
             )
+            guard result != nil else {
+                // The journal was gone: something else finished the move.
+                await service.placementsChanged()
+                return true
+            }
         } else if let rootID = sheet.rootID {
-            await SidecarMoveJob.run(
+            result = await SidecarMoveJob.run(
                 root: rootID, to: sheet.destination, first: selection.flatMap { Self.path(of: $0, below: root.url) },
                 core: core, control: sheet.control, placed: placed, progress: { relay.send($0) },
             )
         } else {
-            nil
+            result = nil
         }
-        SidecarMoveRecord.remove(from: defaults)
         await service.placementsChanged()
         return report(result, of: sheet)
     }
@@ -129,9 +122,11 @@ extension EditorModel {
     /// Finishes the move of a root's edits and metadata a quit interrupted, once the library is open: with its sheet
     /// up, after any sheet that's up first, or without one where there's no window for it. A root that isn't there now
     /// is left for the next launch.
-    func finishSidecarMove(_ record: SidecarMoveRecord) {
-        guard let root = library.roots.first(where: { LibraryService.path($0.url) == record.root }) else {
-            SidecarMoveRecord.remove(from: library.defaults)
+    func finishSidecarMove(_ journal: SidecarMoveJournal) {
+        guard let root = library.roots.first(where: { LibraryService.path($0.url) == journal.plan.rootPath }) else {
+            if let url = library.service?.core?.sidecars.moveJournal {
+                Task.detached { try? FileManager.default.removeItem(at: url) }
+            }
             activity.record(
                 .error,
                 "A move of edits and metadata a quit interrupted wasn't finished: its folder isn't in Folders any more",
@@ -148,8 +143,8 @@ extension EditorModel {
             let survey = await MoveEditsModel.survey(root.url, in: core.index)
             let model = MoveEditsModel(
                 root: root, rootID: survey?.id,
-                placement: record.destination == .onThisMac ? .besidePhotos : .onThisMac,
-                indexed: survey?.photos ?? 0, unfinished: record,
+                placement: journal.plan.destination == .onThisMac ? .besidePhotos : .onThisMac,
+                indexed: survey?.photos ?? 0, unfinished: journal,
             )
             if !isModalDialogOpen, let sheet = MoveEditsSheetController.present(model, editor: self) {
                 sheet.finishUnfinished()

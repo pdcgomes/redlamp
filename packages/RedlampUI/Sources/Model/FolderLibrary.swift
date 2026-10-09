@@ -155,7 +155,7 @@ public final class FolderLibrary {
     @ObservationIgnored var onRemoved: (@MainActor () -> Void)?
     /// Finishes a move of a root's edits and metadata a quit interrupted, once the library is open
     /// (`followUnfinishedSidecarMove`).
-    @ObservationIgnored var unfinishedSidecarMove: (@MainActor (SidecarMoveRecord) -> Void)?
+    @ObservationIgnored var unfinishedSidecarMove: (@MainActor (SidecarMoveJournal) -> Void)?
     @ObservationIgnored var lookedForSidecarMove = false
     /// What stacks are found from: the engine's reader, which in the Mac app reads in the decode
     /// service. Until it is set, no stacks are found.

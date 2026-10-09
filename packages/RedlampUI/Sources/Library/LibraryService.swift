@@ -212,7 +212,6 @@ public final class LibraryService {
             core.syncXMP((defaults?.array(forKey: Self.xmpWaitingKey) as? [NSNumber])?.map(\.int64Value) ?? [])
             defaults?.removeObject(forKey: Self.xmpWaitingKey)
             Task.detached(priority: .utility) { [weak self] in
-                _ = try? await core.sidecars.resumeMove()
                 let locator = try? await core.sidecars.locator()
                 await self?.placed(locator)
                 try? await Task.sleep(for: .seconds(60))

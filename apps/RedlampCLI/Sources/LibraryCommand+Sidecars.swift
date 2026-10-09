@@ -63,7 +63,8 @@ extension LibraryCommand {
                 lines.append("Would move \(count(planned.items.count)) sidecars \(destinationDescription(destination))")
             } else {
                 let reported = Mutex(ContinuousClock.now)
-                let moved = try await library.move(planned) { done, total in
+                let moved = try await library.move(planned, progress: { progress in
+                    let (done, total) = (progress.done, progress.total)
                     let report = reported.withLock { last in
                         guard ContinuousClock.now - last >= .seconds(1) || done == total else { return false }
                         last = .now
@@ -72,7 +73,7 @@ extension LibraryCommand {
                     if report {
                         FileHandle.standardError.write(Data("  \(count(done)) of \(count(total))\n".utf8))
                     }
-                }
+                })
                 outcome = moved
                 failed = failed || !moved.failed.isEmpty || !moved.conflicts.isEmpty
                 lines.append("Moved \(count(moved.moved)) sidecars \(destinationDescription(destination))")
