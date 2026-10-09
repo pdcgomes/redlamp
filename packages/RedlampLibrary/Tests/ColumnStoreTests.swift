@@ -25,6 +25,11 @@ struct ColumnStoreTests {
             "Wedding in the hills 2.JPG",
             "Wedding in the hills 10.JPG",
             "wedding in the hills 10.jpg",
+            "DSC05507.ARW",
+            "DSC-5513.ARW",
+            "Café_1.jpg",
+            "Cafe\u{301}01.jpg",
+            "Ｆｕｌｌ.jpg",
         ]
         return (0 ..< count).map { offset in
             let edited = random.chance(0.3)
@@ -282,17 +287,22 @@ struct ColumnStoreTests {
         }
     }
 
-    @Test func `the Finder order takes digits by value and ignores case, accents and width`() {
+    @Test func `the name order is Folders': digits by value, case, accents and width folded, an ASCII name first`() {
         let ascending = [
             ("a.jpg", "a1.jpg"), ("a1.jpg", "ab.jpg"), ("IMG_2.JPG", "IMG_10.JPG"), ("DSC_0009.ARW", "DSC_0010.ARW"),
             ("Été", "Ezz"), ("Zebra", "東京"), ("DSC_0001.ARW", "DSCF0001.RAF"), ("a 2.jpg", "a-2.jpg"),
+            ("DSC05507.ARW", "DSC_5513.ARW"), ("a-2.jpg", "a2.jpg"), ("a2.jpg", "a_2.jpg"), ("cafe", "Café"),
+            ("full", "Ｆｕｌｌ"), ("Café", "Cafe 2"),
         ]
         for (first, second) in ascending {
             #expect(FinderOrder.compare(first, second) < 0, "\(first) before \(second)")
             #expect(FinderOrder.compare(second, first) > 0, "\(second) after \(first)")
+            #expect(FinderOrder.key(first).lexicographicallyPrecedes(FinderOrder.key(second)), "\(first)'s key first")
+            #expect(FileOrder.precedes(first, second), "and in Folders")
         }
-        for (first, second) in [("img_0001.jpg", "IMG_1.JPG"), ("Café", "cafe"), ("Ｆｕｌｌ", "full")] {
+        for (first, second) in [("img_0001.jpg", "IMG_1.JPG"), ("Café", "café"), ("Caf\u{E9}", "Cafe\u{301}")] {
             #expect(FinderOrder.compare(first, second) == 0, "\(first) and \(second)")
+            #expect(FinderOrder.key(first) == FinderOrder.key(second))
         }
     }
 

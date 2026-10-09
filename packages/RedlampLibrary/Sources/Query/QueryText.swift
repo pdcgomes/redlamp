@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 
 /// How the query language matches text: ignoring case, accents and width, as completion does
 /// (DEC-52). The column engine and the SQL it compiles to call the same functions (`QuerySQL`
@@ -146,83 +147,27 @@ struct FoldedText: Sendable, Hashable {
     }
 }
 
-/// The order the Finder lists names in, near enough to sort a million names quickly: letters
-/// ignoring case, accents and width, runs of digits by their value, and spaces and punctuation
-/// before digits, which come before letters. Names with the same key keep the order of their
-/// photos' IDs.
+/// The library's name order, Folders' own (`FileOrder`): its keys sort a million names without
+/// comparing strings, and the index's SQL sorts with `compare`. Names with the same key keep the
+/// order of their photos' IDs.
 enum FinderOrder {
     /// Bytes that sort as the names do.
     static func key(_ name: String) -> [UInt8] {
-        var key = ContiguousArray<UInt8>()
-        appendKey(of: name, to: &key)
-        return Array(key)
+        FileOrder.key(name)
     }
 
-    /// Appends `name`'s key to `key`: a run of digits as a marker, the count of its digits after
-    /// leading zeros and then those digits, or a single zero for a run of zeros.
     static func appendKey(of name: String, to key: inout ContiguousArray<UInt8>) {
-        let folded = name.utf8.allSatisfy { $0 < 0x80 } ? name : QueryText.folded(name)
-        // Where the run of digits being read keeps its count, -1 outside a run.
-        var countAt = -1
-        var digits = 0
-        func endDigits() {
-            guard countAt >= 0 else { return }
-            if digits == 0 {
-                key.append(UInt8(ascii: "0"))
-                digits = 1
-            }
-            key[countAt] = UInt8(min(digits, 255))
-            countAt = -1
-        }
-        for byte in folded.utf8 {
-            switch byte {
-            case UInt8(ascii: "0") ... UInt8(ascii: "9"):
-                if countAt < 0 {
-                    key.append(digitMarker)
-                    countAt = key.count
-                    key.append(0)
-                    digits = 0
-                }
-                if digits > 0 || byte != UInt8(ascii: "0") {
-                    key.append(byte)
-                    digits += 1
-                }
-            case UInt8(ascii: "A") ... UInt8(ascii: "Z"):
-                endDigits()
-                key.append(byte + 0x20)
-            case UInt8(ascii: "a") ... UInt8(ascii: "z"), 0x80...:
-                endDigits()
-                key.append(byte)
-            default:
-                endDigits()
-                key.append(punctuation[Int(byte)])
-            }
-        }
-        endDigits()
+        FileOrder.appendKey(of: name, to: &key)
     }
 
     /// Orders two names as `key` does.
     static func compare(_ lhs: String, _ rhs: String) -> Int {
-        let (left, right) = (key(lhs), key(rhs))
-        return left.lexicographicallyPrecedes(right) ? -1 : right.lexicographicallyPrecedes(left) ? 1 : 0
-    }
-
-    /// Below every letter and above all punctuation, which maps to 1 up to 33 in byte order.
-    private static let digitMarker: UInt8 = 0x30
-
-    private static let punctuation: [UInt8] = {
-        var table = [UInt8](repeating: 0, count: 128)
-        var next: UInt8 = 1
-        for byte in 0 ..< 128 {
-            let isAlphanumeric = (0x30 ... 0x39).contains(byte) || (0x41 ... 0x5A).contains(byte)
-                || (0x61 ... 0x7A).contains(byte)
-            if byte >= 0x20, !isAlphanumeric {
-                table[byte] = next
-                next += 1
-            }
+        switch FileOrder.compare(lhs, rhs) {
+        case .orderedAscending: -1
+        case .orderedSame: 0
+        case .orderedDescending: 1
         }
-        return table
-    }()
+    }
 }
 
 extension LibraryQuery {

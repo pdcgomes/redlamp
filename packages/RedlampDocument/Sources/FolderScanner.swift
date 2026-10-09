@@ -150,9 +150,13 @@ public enum FolderScanner {
     }
 }
 
-/// Finder's order for file names: case-insensitive, with runs of digits compared as numbers, so
-/// `IMG_9.ARW` comes before `IMG_10.ARW`. ASCII names are compared directly; anything else falls
-/// back to `localizedStandardCompare`.
+/// The order Folders lists file names in, and the library's lists with it (`key`): case-insensitive,
+/// with runs of digits compared as numbers, so `IMG_9.ARW` comes before `IMG_10.ARW`, and every other
+/// character by its code, so `DSC-1` before `DSC1` before `DSC_1` (the Finder puts punctuation
+/// before digits). A name beyond ASCII is compared with its case, accents and width folded, then,
+/// against a name that folds the same, after it if that one is all ASCII, else by its folded case.
+/// ASCII names are compared directly; any other pair by their keys, so the order is the keys' for
+/// every pair of names.
 public enum FileOrder {
     public static func precedes(_ lhs: String, _ rhs: String) -> Bool {
         compare(lhs, rhs) == .orderedAscending
@@ -161,11 +165,76 @@ public enum FileOrder {
     public static func compare(_ lhs: String, _ rhs: String) -> ComparisonResult {
         var lhs = lhs
         var rhs = rhs
-        let result = lhs.withUTF8 { a in rhs.withUTF8 { b in compareASCII(a, b) } }
-        return result ?? lhs.localizedStandardCompare(rhs)
+        if let result = lhs.withUTF8({ a in rhs.withUTF8 { b in compareASCII(a, b) } }) {
+            return result
+        }
+        let (left, right) = (key(lhs), key(rhs))
+        return left == right ? .orderedSame : left.lexicographicallyPrecedes(right) ? .orderedAscending
+            : .orderedDescending
     }
 
-    /// Nil when either name isn't ASCII.
+    /// Bytes that sort as the names do, so a million names sort without comparing strings.
+    public static func key(_ name: String) -> [UInt8] {
+        var key = ContiguousArray<UInt8>()
+        appendKey(of: name, to: &key)
+        return Array(key)
+    }
+
+    /// Appends `name`'s key to `key`: A to Z lowercased, a run of digits as a marker, the count of
+    /// its digits after leading zeros and then those digits (a single zero for a run of zeros), and
+    /// every other byte as it is. A name beyond ASCII is keyed folded, then a zero and its bytes with
+    /// only its case folded, so names that fold the same follow the one all ASCII.
+    public static func appendKey(of name: String, to key: inout ContiguousArray<UInt8>) {
+        let isASCII = name.utf8.allSatisfy { $0 < 0x80 }
+        let folded = isASCII ? name
+            : name.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+        // Where the run of digits being read keeps its count, -1 outside a run.
+        var countAt = -1
+        var digits = 0
+        func endDigits() {
+            guard countAt >= 0 else { return }
+            if digits == 0 {
+                key.append(UInt8(ascii: "0"))
+                digits = 1
+            }
+            key[countAt] = UInt8(min(digits, 255))
+            countAt = -1
+        }
+        for byte in folded.utf8 {
+            switch byte {
+            case UInt8(ascii: "0") ... UInt8(ascii: "9"):
+                if countAt < 0 {
+                    key.append(digitMarker)
+                    countAt = key.count
+                    key.append(0)
+                    digits = 0
+                }
+                if digits > 0 || byte != UInt8(ascii: "0") {
+                    key.append(byte)
+                    digits += 1
+                }
+            case UInt8(ascii: "A") ... UInt8(ascii: "Z"):
+                endDigits()
+                key.append(byte + 0x20)
+            default:
+                endDigits()
+                key.append(byte)
+            }
+        }
+        endDigits()
+        guard !isASCII else { return }
+        key.append(0)
+        key
+            .append(contentsOf: name.folding(options: .caseInsensitive, locale: nil)
+                .precomposedStringWithCanonicalMapping
+                .utf8)
+    }
+
+    /// A digit's own code, so a run of digits sorts against any other character as `compareASCII`
+    /// has a digit do: after space, `-`, `.` and the others below it, before `:`, `_` and letters.
+    private static let digitMarker = UInt8(ascii: "0")
+
+    /// Nil when a byte beyond ASCII comes before the names differ: their keys tell then.
     private static func compareASCII(_ a: UnsafeBufferPointer<UInt8>, _ b: UnsafeBufferPointer<UInt8>)
         -> ComparisonResult? {
         var i = 0
@@ -178,6 +247,10 @@ public enum FileOrder {
             }
             if isDigit(x), isDigit(y) {
                 let (endA, endB, order) = compareNumbers(a, from: i, b, from: j)
+                // A fullwidth digit or a mark after a run folds into it, so its keys tell.
+                if endA < a.count && a[endA] >= 0x80 || endB < b.count && b[endB] >= 0x80 {
+                    return nil
+                }
                 if order != .orderedSame {
                     return order
                 }

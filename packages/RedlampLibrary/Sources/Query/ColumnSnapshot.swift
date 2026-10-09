@@ -58,8 +58,9 @@ enum ColumnSnapshot {
     }
 
     static let magic: UInt64 = 0x534E_4D55_4C4F_4352 // "RCOLUMNS", little-endian
-    /// The file's layout: bumped whenever a section is added, removed or changes its values.
-    static let format: UInt32 = 1
+    /// The file's layout: bumped whenever a section is added, removed or changes its values, the name
+    /// order's included (`FinderOrder`).
+    static let format: UInt32 = 2
     static let headerBytes = 72
     static let entryBytes = 40
 
