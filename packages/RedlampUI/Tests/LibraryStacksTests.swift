@@ -46,7 +46,7 @@ struct LibraryStacksTests {
 
     private func write(_ photo: Photo) throws {
         let url = root.appending(path: photo.path)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
         let context = try #require(CGContext(
             data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0, space: space,
@@ -78,12 +78,15 @@ struct LibraryStacksTests {
     }
 
     /// The folder indexed, open in an editor from the library, with its grid and filmstrip shown in a window, which
-    /// the test keeps until it ends, once its stacks are found.
-    private func open() async throws -> (EditorModel, LibraryGridView, FilmstripStripView, NSWindow) {
-        for photo in Self.photos {
+    /// the test keeps until it ends, once its stacks are found. `others` go in its subfolder Other, which it's shown
+    /// without.
+    private func open(others: [Photo] = []) async throws
+        -> (EditorModel, LibraryGridView, FilmstripStripView, NSWindow) {
+        for photo in Self.photos + others.map({ Photo(path: "Other/" + $0.path, time: $0.time, type: $0.type) }) {
             try write(photo)
         }
-        let library = FolderLibrary()
+        let library = FolderLibrary(defaults: UserDefaults(suiteName: suite))
+        library.setIncludesSubfolders(false)
         library.add([root])
         let service = LibraryService(
             paths: LibraryPaths(root: base.appending(path: "Library", directoryHint: .isDirectory)),
@@ -312,6 +315,54 @@ struct LibraryStacksTests {
         let top = try #require(model.gridStacks.list?.cell(for: id(model, "B01.JPG")))
         #expect(model.gridStacks.list?.badges(of: top).stack?.count == 2, "the burst's two frames left")
         #expect(restacks == before + 2 && strip(filmstrip) == 6)
+    }
+
+    @Test func `each source keeps which of its stacks are open, as it keeps its Group By`() async throws {
+        defer { cleanUp() }
+        let (model, grid, filmstrip, window) = try await open(others: [
+            Photo(path: "O01.JPG", time: 3000), Photo(path: "O01.HEIC", time: 3000, type: .heic),
+            Photo(path: "O02.JPG", time: 3600),
+        ])
+        defer { window.contentView = nil }
+        let other = root.appending(path: "Other", directoryHint: .isDirectory)
+        /// Shows `folder`, and waits until its stacks are found as many as it has, `open` of them open.
+        func show(_ folder: URL, count: Int, open: Int, closed: Int) async throws {
+            model.showFolder(folder)
+            try await eventually(seconds: 20) {
+                model.folder == folder && model.items.count == count && model.gridStacks.list.map {
+                    $0.list.source == model.library.photoList.source && $0.stacksShown == (open, closed)
+                } == true
+            }
+            try #require(model.folder == folder && model.items.count == count, "\(folder.lastPathComponent) shown")
+            #expect(
+                model.gridStacks.list.map { $0.stacksShown == (open, closed) } == true,
+                "\(folder.lastPathComponent)'s stacks",
+            )
+        }
+        try model.gridStacks.toggle(id(model, "B01.JPG"))
+        #expect(model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true && strip(filmstrip) == 8)
+
+        try await show(other, count: 3, open: 0, closed: 1)
+        try model.gridStacks.toggle(id(model, "O01.JPG"))
+        #expect(model.gridStacks.list.map { $0.stacksShown == (1, 0) } == true)
+        try await show(root, count: Self.photos.count, open: 1, closed: 1)
+        #expect(cells(grid, model).prefix(4) == ["B01.JPG", "B02.JPG", "B03.JPG", "P01.JPG"], "the burst open again")
+        #expect(strip(filmstrip) == 8, "and the filmstrip's cells with it")
+
+        model.gridStacks.openAll()
+        try await show(other, count: 3, open: 1, closed: 0)
+        model.gridStacks.closeAll()
+        try await show(root, count: Self.photos.count, open: 2, closed: 0)
+        try await show(other, count: 3, open: 0, closed: 1)
+        try await show(root, count: Self.photos.count, open: 2, closed: 0)
+        try model.gridStacks.toggle(id(model, "B01.JPG"))
+        #expect(model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true)
+        try await show(other, count: 3, open: 0, closed: 1)
+        try await show(root, count: Self.photos.count, open: 1, closed: 1)
+        #expect(
+            cells(grid, model).contains("P01.HEIC") && !cells(grid, model).contains("B02.JPG"),
+            "after Open All, the burst closed alone stays closed",
+        )
     }
 
     @Test func `stacking, unstacking and a stack's top are changes Undo takes back, the grid following`() async throws {

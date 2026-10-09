@@ -69,7 +69,7 @@
                     model.setCellStyle(.compact)
                     model.gridStacks.openAll()
                 }
-                scratch.sources.remove(self)
+                removeScratch(scratch.sources)
                 try? openWorking()
             }
             try scratch.sources.index(self)
@@ -128,7 +128,36 @@
     }
 
     enum LibraryStackScenarios {
-        static let all: [Scenario] = [shown, changes]
+        static let all: [Scenario] = [shown, changes, perSource]
+
+        static let perSource = Scenario(
+            "library.stacks-per-source",
+            "Each source keeps which of its stacks are open, as it keeps its Group By: a burst opened with S, and a "
+                + "pair left closed, are so again when the folder is shown again after another",
+            claims: [.action(.toggleStack), .feature("library.stacks")],
+        ) { app in
+            try app.withStacks { scratch in
+                let (raw, jpeg, burst) = (StackScratch.raw, StackScratch.jpeg, StackScratch.burst)
+                try app.clickStill("grid.\(burst[0])")
+                try app.wait("the burst's three photos selected") { model in
+                    Set(model.selectedPhotos.map(\.lastPathComponent)) == Set(burst)
+                }
+                try app.press(.toggleStack)
+                try app.waitForStacks("S to open the burst", open: 1, closed: 1)
+                let (photos, folder) = (app.photos, scratch.sources.folder)
+                try app.main { $0.showFolder(photos) }
+                try app.wait("the run's folder", timeout: 30) { $0.folder == photos && !$0.library.isListing }
+                try app.main { $0.showFolder(folder) }
+                try app.wait("the scratch folder again", timeout: 30) { $0.folder == folder && !$0.library.isListing }
+                try app.waitForStacks("the burst open and the pair closed again", open: 1, closed: 1, timeout: 30)
+                try app.wait("the burst's frames with cells of their own, the JPEG without") { _ in
+                    let cells = GroupScenarios.onScreen()
+                    return burst.allSatisfy { cells.contains("grid.\($0)") } && cells.contains("grid.\(raw)")
+                        && !cells.contains("grid.\(jpeg)")
+                }
+                app.covered([.action(.toggleStack), .feature("library.stacks")], via: .key)
+            }
+        }
 
         /// The names of the photos shown whose metadata `holds` what's looked for.
         @MainActor static func names(in model: EditorModel, where holds: (PhotoMetadata) -> Bool) -> Set<String> {

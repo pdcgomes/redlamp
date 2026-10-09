@@ -536,6 +536,32 @@ public struct StackedList: Sendable, RandomAccessCollection {
         reopen(RowBits(rows: stacks.count), selection: &selection)
     }
 
+    /// The stacks the list shows as one, each by its top photo, whether it's a raw and its JPEG rather than a burst
+    /// or a manual stack, and whether it's open: what a source's view keeps of them. A raw and its JPEG inside a
+    /// closed burst or manual stack count, opening as they were when it opens.
+    public var openness: [(top: Int64, pair: Bool, isOpen: Bool)] {
+        var found: [(top: Int64, pair: Bool, isOpen: Bool)] = []
+        for stack in stacks.pairs.lowerBound ..< stacks.groups.upperBound where places[stack] >= 0 {
+            guard let top = stacks.members(of: stack).first else { continue }
+            found.append((top, stacks.pairs.contains(stack), opened.contains(stack)))
+        }
+        return found
+    }
+
+    /// Opens the stacks `opens` picks by their top photo and whether they're a raw and its JPEG, and closes the
+    /// others, the diff inserting and removing their cells; `selection` follows the photos it held.
+    @discardableResult
+    public mutating func reopen(
+        selection: inout StackSelection, where opens: (_ top: Int64, _ pair: Bool) -> Bool,
+    ) -> PhotoListDiff {
+        var chosen = RowBits(rows: stacks.count)
+        for stack in stacks.pairs.lowerBound ..< stacks.groups.upperBound {
+            guard let top = stacks.members(of: stack).first, opens(top, stacks.pairs.contains(stack)) else { continue }
+            chosen.insert(stack)
+        }
+        return reopen(chosen, selection: &selection)
+    }
+
     /// Opens the stacks `opened` holds and closes the others.
     private mutating func reopen(_ opened: RowBits, selection: inout StackSelection) -> PhotoListDiff {
         let old = self
