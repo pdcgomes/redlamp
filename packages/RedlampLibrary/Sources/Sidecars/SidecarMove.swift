@@ -103,9 +103,11 @@ public extension LibrarySidecars {
         return try await finish(plan, progress: progress)
     }
 
+    /// The root is found by its path: an index made again since the move began gives it another ID.
     private func finish(_ plan: SidecarMovePlan, progress: (@Sendable (Int, Int) -> Void)?) async throws
         -> SidecarMoveOutcome {
-        try await setPlacement(plan.destination, forRoot: plan.root)
+        let root = try await index.read { try $0.root(path: plan.rootPath)?.id } ?? plan.root
+        try await setPlacement(plan.destination, forRoot: root)
         let journal = moveJournal
         return try await LibraryIndex.offCaller {
             let outcome = Mutex(SidecarMoveOutcome())

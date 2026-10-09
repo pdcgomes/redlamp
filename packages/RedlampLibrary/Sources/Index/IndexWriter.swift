@@ -9,14 +9,17 @@ public extension LibraryIndex {
         public let database: SQLiteDatabase
         /// Where the photos whose keywords change are noted, for the column store (LIB-44).
         let journal: IndexJournal?
+        /// Where the IDs given are noted, kept beside the index before the transaction commits (`IndexIDMarks`).
+        let marks: IndexIDMarks?
         /// IDs looked up in this transaction: gone with it, so a rollback leaves none stale.
         private var cameraIDs: [String: Int64] = [:]
         private var lensIDs: [String: Int64] = [:]
         private var keywordIDs: [String: Int64] = [:]
 
-        init(database: SQLiteDatabase, journal: IndexJournal? = nil) {
+        init(database: SQLiteDatabase, journal: IndexJournal? = nil, marks: IndexIDMarks? = nil) {
             self.database = database
             self.journal = journal
+            self.marks = marks
         }
     }
 
@@ -294,7 +297,7 @@ public extension LibraryIndex.Writer {
 
     // MARK: - Cameras, lenses and keywords
 
-    /// The ID of the camera named `name`, added the first time it's seen.
+    /// The ID of the camera named `name`, added the first time it's seen with an ID no camera had (`IndexIDs`).
     func cameraID(for name: String, make: String? = nil, model: String? = nil) throws -> Int64 {
         if let id = cameraIDs[name] {
             return id
@@ -303,17 +306,20 @@ public extension LibraryIndex.Writer {
         if let existing = try existingID(of: name, in: "cameras") {
             id = existing
         } else {
-            let insert = try database.cached("INSERT INTO cameras (name, make, model) VALUES (?, ?, ?) RETURNING id")
+            let insert = try database.cached("""
+            INSERT INTO cameras (name, make, model, id) VALUES (?, ?, ?, ?) RETURNING id
+            """)
             try insert.bind(name, at: 1)
             try insert.bind(make, at: 2)
             try insert.bind(model, at: 3)
+            try insert.bind(newID(of: .cameras), at: 4)
             id = try returnedID(insert)
         }
         cameraIDs[name] = id
         return id
     }
 
-    /// The ID of the lens named `name`, added the first time it's seen.
+    /// The ID of the lens named `name`, added the first time it's seen with an ID no lens had (`IndexIDs`).
     func lensID(for name: String) throws -> Int64 {
         if let id = lensIDs[name] {
             return id
@@ -322,8 +328,9 @@ public extension LibraryIndex.Writer {
         if let existing = try existingID(of: name, in: "lenses") {
             id = existing
         } else {
-            let insert = try database.cached("INSERT INTO lenses (name) VALUES (?) RETURNING id")
+            let insert = try database.cached("INSERT INTO lenses (name, id) VALUES (?, ?) RETURNING id")
             try insert.bind(name, at: 1)
+            try insert.bind(newID(of: .lenses), at: 2)
             id = try returnedID(insert)
         }
         lensIDs[name] = id

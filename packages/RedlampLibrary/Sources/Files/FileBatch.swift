@@ -278,10 +278,14 @@ public struct RemovedPhoto: Sendable, Hashable, Codable {
 public struct CollectionPlace: Sendable, Hashable, Codable {
     public var collection: Int64
     public var position: Int?
+    /// The collection's path, which a photo is put back by: an index made again since gives collections other IDs.
+    /// Nil in batches journaled before it.
+    public var path: String?
 
-    public init(collection: Int64, position: Int?) {
+    public init(collection: Int64, position: Int?, path: String? = nil) {
         self.collection = collection
         self.position = position
+        self.path = path
     }
 }
 

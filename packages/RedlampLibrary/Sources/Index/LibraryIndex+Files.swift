@@ -87,11 +87,20 @@ public extension LibraryIndex.Writer {
     }
 
     /// Puts back a photo's row as it was, in `folder` and named `name`, with its keywords and its
-    /// places in the collections still there: under its own ID, unless another photo has taken it
-    /// since. Returns the ID it has.
+    /// places in the collections still there, found by path: under its own ID, unless another photo has
+    /// taken it since. A camera or lens the index doesn't have was another index's, which this one
+    /// replaced: the photo is read again. Returns the ID it has.
     func restorePhoto(_ removed: RemovedPhoto, inFolder folder: Int64, name: String) throws -> Int64 {
         var record = removed.photo.record(inFolder: folder)
         record.name = name
+        if let camera = record.camera, try !has(camera, in: "cameras") {
+            record.camera = nil
+            record.indexed = 0
+        }
+        if let lens = record.lens, try !has(lens, in: "lenses") {
+            record.lens = nil
+            record.indexed = 0
+        }
         let id = try upsertPhotos([record])[0]
         var restored = id
         if id != removed.photo.id, try photo(id: removed.photo.id) == nil {
@@ -115,15 +124,22 @@ public extension LibraryIndex.Writer {
         try setKeywords(removed.keywords, forPhoto: restored)
         let place = try database.cached("""
         INSERT OR IGNORE INTO collection_photos (collection, photo, position)
-        SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM collections WHERE id = ?1)
+        SELECT id, ?3, ?4 FROM collections WHERE path = ?2 OR (?2 IS NULL AND id = ?1)
         """)
         for collection in removed.collections {
             try place.bind(collection.collection, at: 1)
-            try place.bind(restored, at: 2)
-            try place.bind(collection.position, at: 3)
+            try place.bind(collection.path, at: 2)
+            try place.bind(restored, at: 3)
+            try place.bind(collection.position, at: 4)
             try place.run()
         }
         return restored
+    }
+
+    private func has(_ id: Int64, in table: String) throws -> Bool {
+        let statement = try database.cached("SELECT 1 FROM \(table) WHERE id = ?")
+        try statement.bind(id, at: 1)
+        return try statement.first { _ in true } ?? false
     }
 
     /// Puts back a folder's row as it was, under its own ID unless another folder has taken it, in the root that
@@ -177,9 +193,14 @@ public extension IndexQueries {
 
     /// The collections `photo` is in, with its place in each.
     func collectionPlaces(ofPhoto photo: Int64) throws -> [CollectionPlace] {
-        let statement = try database.cached("SELECT collection, position FROM collection_photos WHERE photo = ?")
+        let statement = try database.cached("""
+        SELECT cp.collection, cp.position, c.path FROM collection_photos cp
+          LEFT JOIN collections c ON c.id = cp.collection WHERE cp.photo = ?
+        """)
         try statement.bind(photo, at: 1)
-        return try statement.map { CollectionPlace(collection: $0.int64(at: 0), position: $0.optionalInt(at: 1)) }
+        return try statement.map { row in
+            CollectionPlace(collection: row.int64(at: 0), position: row.optionalInt(at: 1), path: row.string(at: 2))
+        }
     }
 
     /// `folder` and every folder under it, parents first.

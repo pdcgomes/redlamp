@@ -18,9 +18,11 @@ public final class LibraryIndex: Sendable {
     private let readerLoad: Mutex<[Int]>
     /// What this process's transactions changed, by the generation each made (LIB-44).
     let journal = IndexJournal()
+    /// The last IDs given, kept beside the index too (LIB-05).
+    let marks: IndexIDMarks
 
     /// Opens the index at `url`, creating it and its folder if there's none, and brings its
-    /// schema up to date.
+    /// schema up to date and its last IDs into step with those kept beside it (`IndexIDMarks`).
     public static func open(at url: URL, readers: Int = 4) async throws -> LibraryIndex {
         try await open(at: url, readers: readers, migrations: migrations)
     }
@@ -36,6 +38,9 @@ public final class LibraryIndex: Sendable {
         let database = try SQLiteDatabase(path: url.path)
         try Self.configure(database, writing: true)
         try Self.migrate(database, with: migrations)
+        let marks = IndexIDMarks(index: url)
+        try database.transaction(.immediate) { try marks.reconcile(Writer(database: database)) }
+        self.marks = marks
         sqlite3_update_hook(database.handle, { context, _, _, table, row in
             guard let context, let table else { return }
             Unmanaged<IndexJournal>.fromOpaque(context).takeUnretainedValue().record(table: table, row: row)
@@ -75,16 +80,19 @@ public final class LibraryIndex: Sendable {
     /// Runs `body` on the write connection, in one transaction: committed when it returns, rolled
     /// back when it throws. Writes run one at a time, in the order they're called. Once called,
     /// a write runs even if the calling task is cancelled. A transaction that changes the index bumps
-    /// its generation (`IndexGeneration`).
+    /// its generation (`IndexGeneration`), and one that gives IDs keeps them beside the index before it
+    /// commits (`IndexIDMarks`).
     @discardableResult
     public func write<T: Sendable>(_ body: @escaping @Sendable (Writer) throws -> T) async throws -> T {
-        let result = try await writer.run { [journal] database -> (T, Bool) in
+        let result = try await writer.run { [journal, marks] database -> (T, Bool) in
             var staged: IndexGeneration?
             do {
                 let result = try database.transaction(.immediate) {
                     let before = database.totalChanges
                     journal.begin()
-                    let result = try body(Writer(database: database, journal: journal))
+                    marks.begin()
+                    let result = try body(Writer(database: database, journal: journal, marks: marks))
+                    try marks.save()
                     if database.totalChanges != before {
                         staged = try journal.stage(on: database)
                     }
