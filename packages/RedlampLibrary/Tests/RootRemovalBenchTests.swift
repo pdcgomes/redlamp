@@ -99,24 +99,32 @@ struct RootRemovalBenchTests {
         let unlinked = clock.now - started
         #expect(list.list.count == total - removal.photos.count && found == 0)
 
-        // The sweep, with another write asked for every 20 ms meanwhile: none waits longer than a batch.
+        // The sweep, with another write asked for every 20 ms meanwhile: none waits longer than a batch. Its wait is
+        // until its transaction starts on the writer's queue, then until its caller has its result.
         let waits = Mutex<[Duration]>([])
+        let returns = Mutex<[Duration]>([])
         let sweeping = Mutex(true)
         let writing = Task.detached {
             while sweeping.withLock({ $0 }) {
                 let asked = ContinuousClock.now
-                try? await index.write { try $0.setSetting("1", for: "bench.write") }
-                let waited = ContinuousClock.now - asked
-                waits.withLock { $0.append(waited) }
+                let began = try? await index.write { writer in
+                    try writer.setSetting("1", for: "bench.write")
+                    return ContinuousClock.now
+                }
+                let returned = ContinuousClock.now - asked
+                waits.withLock { $0.append((began ?? .now) - asked) }
+                returns.withLock { $0.append(returned) }
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }
         let indexer = LibraryIndexer(index: index)
         var batches: [Duration] = []
         var last = clock.now
+        var logPages = 0
         for await event in indexer.sweepRemovedRoots() {
             if case let .photosRemoved(ids) = event {
                 batches.append(clock.now - last)
+                logPages = max(logPages, index.logPages)
                 try await engine.update(photos: ids)
                 last = clock.now
             }
@@ -125,18 +133,31 @@ struct RootRemovalBenchTests {
         Self.report("slowest batches: " + slowest.map { "#\($0.offset) \(Self.milliseconds($0.element))" }
             .joined(separator: ", ") + "; median \(Self.milliseconds(batches.sorted()[batches.count / 2]))")
         let swept = clock.now - started
+        let merged = clock.now - last
         sweeping.withLock { $0 = false }
         await writing.value
-        let longest = waits.withLock { $0.max() } ?? .zero
+        let waited = waits.withLock { $0.sorted() }
+        let returned = returns.withLock { $0.sorted() }
+        let longest = waited.last ?? .zero
         let left = try await index.read { reader in try (reader.photoCount(), reader.removedRoots().count) }
         #expect(left.0 == total - removal.photos.count && left.1 == 0)
 
+        let (frame, frames) = (waited.count { $0 > .milliseconds(16.7) }, waited.count { $0 > .milliseconds(33.3) })
+        let (median, p99) = (waited[waited.count / 2], waited[waited.count * 99 / 100])
+        let longestFive = waited.suffix(5).reversed().map(Self.milliseconds).joined(separator: ", ")
+        let (back, backMost) = (returned[returned.count * 99 / 100], returned.last ?? .zero)
+        Self.report("""
+        another write's waits for the writer: median \(Self.milliseconds(median)), p99 \(Self.milliseconds(p99)), \
+        \(frame) over 16.7 ms and \(frames) over 33.3 ms of \(waited.count), the longest five \(longestFive); back \
+        with its caller in p99 \(Self.milliseconds(back)), at most \(Self.milliseconds(backMost)); the log at most \
+        \(logPages) pages after a batch; the text index merged after the batches in \(Self.milliseconds(merged))
+        """)
         Self.report("""
         \(removal.photos.count) photos in \(removal.folders.count) folders, from the removal: marked by \
         \(Self.milliseconds(marked)), out of the store by \(Self.milliseconds(stored)), of the list of every photo \
         by \(Self.milliseconds(listed)), a search for them done by \(Self.milliseconds(searched)), their links gone \
         by \(Self.milliseconds(unlinked)), swept in \(batches.count) batches by \(Self.milliseconds(swept)); another \
-        write waited at most \(Self.milliseconds(longest)) of \(waits.withLock { $0.count }), load \
+        write waited at most \(Self.milliseconds(longest)) of \(waited.count), load \
         \(Self.load)
         """)
     }
