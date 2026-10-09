@@ -147,12 +147,17 @@ final class DraggedPhotos {
         listed = Listed(urls: [photo], folders: [LibraryService.path(photo.deletingLastPathComponent())])
     }
 
-    init(selection: PhotoSelection, items: [LibraryItem], ids: ContiguousArray<Int64>, fromLibrary: Bool) {
+    /// The photos of `selection` among `items`, whose IDs are `ids`; a large source's rows not yet read are read from
+    /// its list, `source`.
+    init(
+        selection: PhotoSelection, items: LibraryItems, ids: ContiguousArray<Int64>, source: LibrarySourceList?,
+        fromLibrary: Bool,
+    ) {
         count = selection.count
         self.fromLibrary = fromLibrary
         listing = Task {
             let listed = await Task.detached(priority: .userInitiated) {
-                Self.list(selection, items: items, ids: ids)
+                await Self.list(selection, items: items, ids: ids, source: source)
             }.value
             self.listed = listed
             return listed
@@ -168,12 +173,20 @@ final class DraggedPhotos {
     }
 
     private nonisolated static func list(
-        _ selection: PhotoSelection, items: [LibraryItem], ids: ContiguousArray<Int64>,
-    ) -> Listed {
+        _ selection: PhotoSelection, items: LibraryItems, ids: ContiguousArray<Int64>, source: LibrarySourceList?,
+    ) async -> Listed {
+        var read: [Int64: LibraryItem] = [:]
+        if items.readsOnRequest {
+            let unread = ids.filter { selection.contains($0) && items.readRow($0) == nil }
+            if !unread.isEmpty {
+                read = await (try? source?.rows(of: unread))?.items ?? [:]
+            }
+        }
         var urls: [URL] = []
         urls.reserveCapacity(selection.count)
         var folders = Set<String>()
-        for (index, item) in zip(ids.indices, items) where selection.contains(ids[index]) {
+        for (index, id) in ids.enumerated() where selection.contains(id) && index < items.count {
+            guard let item = items.row(index) ?? read[id] else { continue }
             urls.append(item.url)
             folders.insert(item.folderPath)
         }

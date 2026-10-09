@@ -133,7 +133,7 @@ import RedlampLibrary
         stacking = true
         pending = false
         let request = Request(
-            items: library.showsIndexIDs ? nil : library.items, ids: library.photoIDs, list: library.photoList,
+            items: library.showsIndexIDs ? nil : library.items.allRows, ids: library.photoIDs, list: library.photoList,
             previous: list, opensNew: opensNew, finder: finder, photoIDs: model.libraryPanels.photoIDs,
             forgetting: self.forgetting,
         )
@@ -314,7 +314,7 @@ import RedlampLibrary
     /// Photos that came or went are stacked again at once, with their names read again; badges' changes, once
     /// they've been quiet a moment, for a stack another Mac or app changed in a sidecar.
     private func libraryChanged(_ diff: LibraryDiff) {
-        guard !diff.isEmpty else { return }
+        guard !diff.isEmpty, !diff.onlyReads else { return }
         guard !diff.reset, diff.removed.isEmpty, diff.inserted.isEmpty else {
             return restack(forgetting: true, names: true)
         }

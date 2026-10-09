@@ -204,6 +204,9 @@ public extension FolderLibrary {
 
     /// Remembers `photo` as the one shown in the open folder.
     func remember(_ photo: URL) {
+        if items.readsOnRequest {
+            activePhoto = sourcePhotoID(of: photo)
+        }
         guard let folder = openFolder?.standardizedFileURL.path else { return }
         let path = photo.standardizedFileURL.path
         guard lastPhotos[folder] != path else { return }

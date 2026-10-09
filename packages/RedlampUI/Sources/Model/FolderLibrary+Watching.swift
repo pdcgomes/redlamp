@@ -218,7 +218,7 @@ extension FolderLibrary {
     /// (already in `items`). `probing` reads the badges of those with a sidecar.
     func apply(removed: IndexSet, inserting: [LibraryItem], updated: [URL], probing: Bool = true) {
         if !removed.isEmpty {
-            items = items.enumerated().filter { !removed.contains($0.offset) }.map(\.element)
+            items = LibraryItems(items.enumerated().filter { !removed.contains($0.offset) }.map(\.element))
             photoIDs = ContiguousArray(photoIDs.enumerated().filter { !removed.contains($0.offset) }.map(\.element))
         }
         for item in inserting {
@@ -279,7 +279,7 @@ extension FolderLibrary {
     /// while a directory's listing is unchanged.
     func refreshStacks() {
         let generation = generation
-        let snapshot = items
+        let snapshot = items.allRows
         let cached = stackCache.mapValues(\.signature)
         scheduler.submit(.background, key: keyPrefix + "stacks:\(generation)") {
             var groups: [String: [LibraryItem]] = [:]

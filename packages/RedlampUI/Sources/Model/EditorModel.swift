@@ -31,7 +31,7 @@ public final class EditorModel {
     }
 
     /// Not observed: views observe `library.count` or `library.revision`.
-    public var items: [LibraryItem] {
+    public var items: LibraryItems {
         library.items
     }
 

@@ -7,22 +7,38 @@ import RedlampLibrary
 
 /// How the photos changed, for views that update row by row (the filmstrip): rows removed
 /// (indices before the change), rows inserted and rows whose badges changed (indices after it).
-/// `reset` replaces everything, as when another folder opens.
+/// `reset` replaces everything, as when another folder opens. `read` are a large source's rows just
+/// read (`LibraryItems`), which views show as they show rows changed, but which aren't a change.
 public struct LibraryDiff: Sendable, Equatable {
     public var reset = false
     public var removed = IndexSet()
     public var inserted = IndexSet()
     public var updated = IndexSet()
+    public var read = IndexSet()
 
-    public init(reset: Bool = false, removed: IndexSet = [], inserted: IndexSet = [], updated: IndexSet = []) {
+    public init(
+        reset: Bool = false, removed: IndexSet = [], inserted: IndexSet = [], updated: IndexSet = [],
+        read: IndexSet = [],
+    ) {
         self.reset = reset
         self.removed = removed
         self.inserted = inserted
         self.updated = updated
+        self.read = read
     }
 
     public var isEmpty: Bool {
-        !reset && removed.isEmpty && inserted.isEmpty && updated.isEmpty
+        !reset && removed.isEmpty && inserted.isEmpty && updated.isEmpty && read.isEmpty
+    }
+
+    /// Whether it only brings rows just read.
+    public var onlyReads: Bool {
+        !reset && removed.isEmpty && inserted.isEmpty && updated.isEmpty && !read.isEmpty
+    }
+
+    /// The rows whose cells show something new: those changed, and those just read.
+    public var redrawn: IndexSet {
+        read.isEmpty ? updated : updated.union(read)
     }
 }
 
@@ -111,7 +127,7 @@ public final class FolderLibrary {
     /// Bumped by every change to `items`.
     public private(set) var revision = 0
 
-    @ObservationIgnored public internal(set) var items: [LibraryItem] = []
+    @ObservationIgnored public internal(set) var items = LibraryItems()
     /// Each photo's ID, beside `items`, so a selection over them (`photoList`) outlives any change: the index's ID
     /// for the photos of a Library entry or a collection (`FolderLibrary+Collections`), which the index never
     /// gives twice; for others, one given here as it's listed and kept while it's shown, never reused, and above
@@ -123,6 +139,10 @@ public final class FolderLibrary {
     @ObservationIgnored var isReadingHighestIndexID = false
     @ObservationIgnored private var madeList: PhotoList?
     @ObservationIgnored var positions: [URL: Int] = [:]
+    /// Sources shown with more photos than this have their rows read as they're asked for (`LibraryItems`), those of
+    /// their first `firstRead` photos with their first change.
+    @ObservationIgnored var largestRead = LibrarySourceList.largestRead
+    @ObservationIgnored var firstRead = LibrarySourceList.firstRead
     @ObservationIgnored let scheduler: WorkScheduler
     /// Starts every key this library gives `scheduler`, which other libraries share (the harness's
     /// scenes', each test's): a job with another's key would replace it, or be cancelled with it.
@@ -220,8 +240,9 @@ public final class FolderLibrary {
         index(of: url).map { photoIDs[$0] }
     }
 
+    /// The URL of photo `id`; nil for a large source's photo whose row isn't read.
     public func url(ofPhoto id: Int64) -> URL? {
-        photoList.index(of: id).map { items[$0].url }
+        photoList.index(of: id).flatMap { items.row($0)?.url }
     }
 
     /// How far above the index's IDs those given here start: a session would have to index more photos than this
@@ -309,14 +330,14 @@ public final class FolderLibrary {
                     append(LibraryItem.items(listing))
                     if !announced, !items.isEmpty {
                         announced = true
-                        opened(items)
+                        opened(items.allRows)
                     }
                 }
                 guard self.generation == generation else { return }
                 isListing = false
                 isOpenFolderUnavailable = !listed
                 if !announced {
-                    opened(items)
+                    opened(items.allRows)
                 }
                 refreshStacks()
                 awaitLibrary(generation)
@@ -338,7 +359,7 @@ public final class FolderLibrary {
                 }
                 replace(with: found ?? [])
                 probeSidecars(in: 0 ..< items.count, generation: generation)
-                opened(items)
+                opened(items.allRows)
                 refreshStacks()
                 awaitLibrary(generation)
                 _ = try? await scheduler.run(.background) { SidecarStore.removeLeftovers(in: folder) }
@@ -365,7 +386,7 @@ public final class FolderLibrary {
 
     /// `positions` being each item's index, as made off the main thread.
     func replace(with items: [LibraryItem], positions: [URL: Int]) {
-        self.items = items
+        self.items = LibraryItems(items)
         self.positions = positions
         photoIDs = ContiguousArray(newPhotoIDs(items.count))
         photosMoved()

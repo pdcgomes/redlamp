@@ -382,7 +382,9 @@ public final class LibrarySources {
         model.stackSuggestions = []
         followShown()
         close()
-        let (generation, list) = model.library.openSource(source, photos: listed) { [weak self] in
+        let (generation, list) = model.library.openSource(
+            source, photos: listed, wanted: model.libraryViews.keptPhotos(of: source.key),
+        ) { [weak self] in
             self?.received($0, generation: $1)
         }
         self.generation = generation
@@ -443,7 +445,9 @@ public final class LibrarySources {
             // Only after the photos are in: a filmstrip out of sight doesn't take them, and one placing itself
             // as it goes out of sight would look for a photo it doesn't have.
             model.showModule(.library)
-            model.didList(shown, Array(model.library.items.prefix(Self.warmedAsShown)))
+            // A large source's first change brings these rows (`LibrarySourceList.firstRead`).
+            let items = model.library.items
+            model.didList(shown, items.indices.prefix(Self.warmedAsShown).compactMap(items.row))
         }
     }
 

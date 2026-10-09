@@ -9,19 +9,70 @@ import RedlampLibrary
 public extension EditorModel {
     /// The photos selected, in the filmstrip's order: a pass over the photos' IDs, so views follow
     /// `photoSelection` itself. The selection is read once: each read is an observed access, which a view's body
-    /// would make a photo at a time; and only the photos selected are read, each a copy of many references.
+    /// would make a photo at a time; and only the photos selected are read, each a copy of many references. Of a
+    /// large source's photos, only those whose rows are read: what acts on them all asks for them through
+    /// `withSelectedPhotos`.
     var selectedPhotos: [URL] {
         let selected = photoSelection
         guard !selected.isEmpty else { return selection.map { [$0] } ?? [] }
+        return library.items.urls(at: selectedPlaces(selected))
+    }
+
+    /// The IDs of the photos selected, in the filmstrip's order; the active photo's alone when nothing else is.
+    var selectedIDs: [Int64] {
+        let selected = photoSelection
+        guard !selected.isEmpty else { return selection.flatMap(library.photoID(of:)).map { [$0] } ?? [] }
         let ids = library.photoIDs
-        var urls: [URL] = []
-        urls.reserveCapacity(selected.count)
-        items.withUnsafeBufferPointer { items in
-            for index in ids.indices where items.indices.contains(index) && selected.contains(ids[index]) {
-                urls.append(items[index].url)
-            }
+        return selectedPlaces(selected).map { ids[$0] }
+    }
+
+    /// Calls `body` with the photos selected once their rows are read: at once, unless they're a large source's and
+    /// some aren't read yet, which are read first. `body` isn't called when another source is shown meanwhile.
+    func withSelectedPhotos(_ body: @escaping @MainActor ([URL]) -> Void) {
+        guard library.items.readsOnRequest else { return body(selectedPhotos) }
+        library.whenRead(selectedIDs) { [weak self] in
+            guard let self else { return }
+            body(selectedPhotos)
         }
-        return urls
+    }
+
+    /// Whether every photo selected has its row read: always, unless they're a large source's.
+    var hasReadSelection: Bool {
+        !library.items.readsOnRequest || library.hasRead(selectedIDs)
+    }
+
+    /// Returns once every photo selected has its row read, a large source's read first (`withSelectedPhotos`).
+    func readSelection() async {
+        guard library.items.readsOnRequest else { return }
+        await library.read(selectedIDs)
+    }
+
+    /// How many photos are selected: the active photo alone when nothing else is.
+    var selectedCount: Int {
+        photoSelection.isEmpty ? (selection == nil ? 0 : 1) : photoSelection.count
+    }
+
+    /// The index's IDs of the photos selected, in order: their own while the photos' IDs are the index's, else found
+    /// from their URLs; photos the index doesn't have are left out.
+    func selectedIndexIDs() async -> [Int64] {
+        if library.showsIndexIDs {
+            return selectedIDs
+        }
+        let urls = selectedPhotos
+        guard let index = library.service?.core?.index else { return [] }
+        let found = await LibraryService.indexIDs(of: urls, in: index)
+        return urls.compactMap { found[$0] }
+    }
+
+    /// The places of the photos of `selected` among those shown, in order.
+    private func selectedPlaces(_ selected: PhotoSelection) -> [Int] {
+        let ids = library.photoIDs
+        var places: [Int] = []
+        places.reserveCapacity(selected.count)
+        for index in ids.indices where selected.contains(ids[index]) {
+            places.append(index)
+        }
+        return places
     }
 
     var isMultiSelecting: Bool {

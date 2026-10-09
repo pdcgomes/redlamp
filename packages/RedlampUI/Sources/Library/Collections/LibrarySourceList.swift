@@ -14,22 +14,32 @@ import Synchronization
 /// the filter or the source's photos change, worked out off the main thread from the photos it already has,
 /// the latest filter winning, as the folders' lists do (`LibraryFolderList`).
 ///
+/// A source of more than `largestRead` photos is large: its rows aren't read as it changes, but as the grid and the
+/// filmstrip ask for them (`rows(of:)`), since reading a million takes most of a second. Each change hands over its
+/// list, with the rows read for it: the first screens' and those of `wanted` photos with the first change, and
+/// with every change those of the photos the main thread holds rows of (`hold`) that it changed.
+///
 /// A photo's badges are its `.redlamp` sidecar's, as the folders' lists show them.
 final class LibrarySourceList: Sendable {
     /// The photos in the list's order, and how they differ from those handed over before.
     struct Change: Sendable {
         /// The photos' IDs in the index, in the list's order.
         var list: PhotoList
-        /// The photos, in the list's order.
+        /// The photos, in the list's order; none for a large source, whose rows are `read`.
         var items: [LibraryItem]
+        /// For a large source, the rows read for this change, by ID: of the photos the main thread holds that
+        /// changed, or with the first change, those of its first screens and of the photos it wanted. Nil for a
+        /// source whose rows are all in `items`.
+        var read: [Int64: LibraryItem]?
         /// How many photos were handed over before; -1 for the first change.
         var previousCount: Int
         /// The rows removed, inserted and changed, or a reset when the photos that stayed moved.
         var diff: LibraryDiff
         /// The content keys of the source's photos that have one, filtered or not, by their IDs, for their
-        /// thumbnails from the store.
+        /// thumbnails from the store; for a large source, those of the rows `read`.
         var keys: [Int64: ContentKey]
-        /// The source's photos by their folders and names, filtered or not.
+        /// The source's photos by their folders and names, filtered or not; for a large source, those of the rows
+        /// `read`.
         var paths: PhotoPaths
         /// The source's photos, filtered or not.
         var total = 0
@@ -41,6 +51,11 @@ final class LibrarySourceList: Sendable {
     }
 
     let source: PhotoSource
+    /// Sources with more photos than this are large.
+    let largestRead: Int
+    /// The rows of a large source's first photos its first change brings.
+    private let firstRead: Int
+    private let index: LibraryIndex
     private let state = Mutex(State())
 
     private struct State {
@@ -49,6 +64,10 @@ final class LibrarySourceList: Sendable {
         var closed = false
         var filter = LibraryListFilter()
         var events: AsyncStream<Event>.Continuation?
+        /// The photos the main thread holds rows of, or has asked for, while the source is large.
+        var held = Set<Int64>()
+        /// The folders' paths the rows asked for were read with.
+        var folders: [Int64: String] = [:]
     }
 
     private enum Event: Sendable {
@@ -60,12 +79,24 @@ final class LibrarySourceList: Sendable {
     /// the filmstrip and the grid take faster than as many rows.
     static let largestDiff = 32
 
-    /// The list opens once LibraryLive has applied the changes it has gathered.
+    /// Sources with more photos than this are large, by default: none yet.
+    static let largestRead = Int.max
+
+    /// The rows read with a large source's first change, of its first photos: the screens the grid and the
+    /// filmstrip open on, and the thumbnails warmed (`LibrarySources.warmedAsShown`).
+    static let firstRead = 1000
+
+    /// The list opens once LibraryLive has applied the changes it has gathered; with a large source, its first
+    /// change brings the rows of the photos at `wanted` too (the kept view's active, selected and top photos).
     init(
         core: LibraryCore, source: PhotoSource, filter: LibraryListFilter = LibraryListFilter(),
-        deliver: @escaping @MainActor @Sendable (Change) -> Void,
+        largestRead: Int = LibrarySourceList.largestRead, firstRead: Int = LibrarySourceList.firstRead,
+        wanted: [URL] = [], deliver: @escaping @MainActor @Sendable (Change) -> Void,
     ) {
         self.source = source
+        self.largestRead = largestRead
+        self.firstRead = firstRead
+        index = core.index
         let (live, index, engine) = (core.live, core.index, core.engine)
         let (events, continuation) = AsyncStream.makeStream(of: Event.self)
         state.withLock { state in
@@ -94,8 +125,9 @@ final class LibrarySourceList: Sendable {
                 forwarding.cancel()
                 handing.finish()
             }
-            var mapping = Mapping()
+            var mapping = Mapping(largestRead: largestRead)
             var handedFilter: LibraryListFilter?
+            var first = true
             for await event in events {
                 let filter = state.withLock { $0.filter }
                 var changed = false
@@ -103,13 +135,17 @@ final class LibrarySourceList: Sendable {
                     changed = await (try? mapping.take(update, index: index)) != nil
                 }
                 if mapping.hasList, changed || filter != handedFilter,
-                   let change = try? await Self.change(
+                   var change = try? await Self.change(
                        handing: filter,
                        after: handedFilter,
                        from: &mapping,
                        engine: engine,
                        source: source,
                    ) {
+                    if change.read != nil {
+                        try? await readRows(for: &change, changed: mapping.rereading, first: first, wanted: wanted)
+                    }
+                    first = false
                     handedFilter = filter
                     await deliver(change)
                 }
@@ -147,6 +183,83 @@ final class LibrarySourceList: Sendable {
         task?.cancel()
     }
 
+    // MARK: - A large source's rows
+
+    /// The main thread holds the rows of the photos `ids`, or has asked for them: each change brings them again
+    /// when it changes them.
+    func hold(_ ids: some Sequence<Int64>) {
+        state.withLock { $0.held.formUnion(ids) }
+    }
+
+    /// The main thread no longer holds the rows of the photos `ids`; `all` lets go of every one.
+    func release(_ ids: some Sequence<Int64>, all: Bool = false) {
+        state.withLock { state in
+            if all {
+                state.held = []
+            } else {
+                state.held.subtract(ids)
+            }
+        }
+    }
+
+    /// The rows of a large source's photos `ids`, as the grid shows them, with their content keys and paths;
+    /// photos the index no longer has are left out.
+    func rows(of ids: [Int64]) async throws -> Rows {
+        let known = state.withLock { $0.folders }
+        let read = try await Mapping.read(ids, folders: known, index: index)
+        if !read.folders.isEmpty {
+            state.withLock { $0.folders.merge(read.folders) { _, new in new } }
+        }
+        var rows = Rows()
+        rows.take(read.parts)
+        return rows
+    }
+
+    /// Rows read for a large source, by ID, as the main thread takes them.
+    struct Rows: Sendable {
+        var items: [Int64: LibraryItem] = [:]
+        var keys: [Int64: ContentKey] = [:]
+        var paths = PhotoPaths()
+
+        mutating func take(_ parts: [[Read]]) {
+            for part in parts {
+                for photo in part {
+                    items[photo.id] = photo.item
+                    if let key = photo.key {
+                        keys[photo.id] = key
+                    }
+                }
+                paths.insert(part)
+            }
+        }
+    }
+
+    /// Reads into a large source's `change` the rows it brings: those of its first screens and of the photos at the
+    /// URLs `wanted` with the `first` change, and those of the photos the main thread holds that `changed` names (all
+    /// of them when it's nil, as after the list was made afresh), the rows kept from before the source was large
+    /// among them.
+    private func readRows(for change: inout Change, changed: Set<Int64>?, first: Bool, wanted: [URL]) async throws {
+        var held = state.withLock { $0.held }
+        if let kept = change.read {
+            held.formUnion(kept.keys)
+        }
+        var reading = changed.map { held.intersection($0) } ?? held
+        if first {
+            reading.formUnion(change.list.ids.prefix(firstRead))
+            if !wanted.isEmpty {
+                await reading.formUnion(LibraryService.indexIDs(of: wanted, in: index).values)
+            }
+        }
+        reading = reading.filter(change.list.contains)
+        guard !reading.isEmpty else { return }
+        let rows = try await rows(of: Array(reading))
+        change.read?.merge(rows.items) { _, new in new }
+        for id in reading where rows.items[id] != nil {
+            change.keys[id] = rows.keys[id]
+        }
+        change.paths.merge(rows.paths)
+    }
+
     /// The change handing over the photos `filter` finds of `mapping`'s, in its sort's order; `before` is the
     /// filter of the change handed over before, nil for the first.
     private static func change(
@@ -168,15 +281,28 @@ final class LibrarySourceList: Sendable {
         if filter.reversed {
             ids.reverse()
         }
-        var change = mapping.change(handing: ids, of: source)
+        let whole = filter.query == nil && filter.sort == nil && !filter.reversed
+        var change = mapping.change(handing: ids, of: source, whole: whole)
         change.filter = filter.isEmpty && before?.isEmpty != false ? nil : filter
         change.took = (queried, clock.now - started - queried)
         return change
     }
 
     /// What maps a list's updates to changes: every photo of the source by ID, filtered or not, their folders'
-    /// paths, and the photos handed over last.
+    /// paths, and the photos handed over last; for a large source, its list alone.
     struct Mapping: Sendable {
+        /// Sources with more photos than this are large.
+        let largestRead: Int
+        /// The source's photos while it's large; nil while their rows are kept here.
+        private var large: PhotoList?
+        /// While the source is large, the photos whose rows changed since the last change was handed over; nil when
+        /// any may have, as after the list was made afresh.
+        private var changedSinceHanded: Set<Int64>? = []
+        /// What the last change handed over of a large source changed (`changedSinceHanded`), for its rows to be
+        /// read again.
+        private(set) var rereading: Set<Int64>? = []
+        /// The rows kept when the source became large, handed over with the next change.
+        private var leftover: Rows?
         private var items: [Int64: LibraryItem] = [:]
         private var folders: [Int64: String] = [:]
         /// The source's photos in its own order, capture time's.
@@ -196,22 +322,36 @@ final class LibrarySourceList: Sendable {
         /// Photos of the list whose rows weren't read when they came: read again with the next update.
         private var unread: [Int64] = []
 
+        init(largestRead: Int = LibrarySourceList.largestRead) {
+            self.largestRead = largestRead
+        }
+
         /// Whether photo `id` is one of the source's.
         func holds(_ id: Int64) -> Bool {
-            items[id] != nil
+            large?.contains(id) ?? (items[id] != nil)
         }
 
         /// The source's photos as `update` leaves them, reading the rows of those new or changed. Once an update
         /// has been taken whole, the next is taken from the photos its diff names alone: those that came, went or
-        /// changed, and any whose row wasn't read before. A reset is taken by looking at every photo.
+        /// changed, and any whose row wasn't read before. A reset is taken by looking at every photo. A large
+        /// source's rows aren't read: the photos the update changed are noted, for the main thread's rows of them
+        /// to be read again.
         mutating func take(_ update: PhotoListUpdate, index: LibraryIndex) async throws {
             let list = update.list
             let ids = Array(list.ids)
             let diff = update.diff
-            let stepped = inStep && !diff.reset && (diff.removed.last ?? -1) < self.ids.count
-            inStep = false
             let named = diff.reset ? []
                 : diff.inserted.map { list[$0] } + diff.updated.map { list[$0] } + diff.moved.map { list[$0.to] }
+            guard list.count <= largestRead else {
+                return takeLarge(list, ids: ids, changed: diff.reset ? nil : named)
+            }
+            if large != nil {
+                large = nil
+                handed = nil
+                changedSinceHanded = []
+            }
+            let stepped = inStep && !diff.reset && (diff.removed.last ?? -1) < self.ids.count
+            inStep = false
             // With none of the source's photos kept yet, every photo is read, and is new, and none leaves.
             let fresh = items.isEmpty
             let reading: [Int64]
@@ -255,6 +395,34 @@ final class LibrarySourceList: Sendable {
             inStep = true
         }
 
+        /// A large source's photos as `list` has them, `changed` naming those whose rows it changed (nil when any
+        /// may have). The rows kept from before the source was large go to the main thread with the next change.
+        private mutating func takeLarge(_ list: PhotoList, ids: [Int64], changed: [Int64]?) {
+            if large == nil, !items.isEmpty {
+                var kept = Rows()
+                for (id, item) in items where list.contains(id) {
+                    kept.items[id] = item
+                    kept.keys[id] = keys[id]
+                }
+                kept.paths = paths
+                leftover = kept
+            }
+            if let changed {
+                changedSinceHanded?.formUnion(changed)
+            } else {
+                changedSinceHanded = nil
+            }
+            large = list
+            self.ids = ids
+            hasList = true
+            inStep = false
+            items = [:]
+            keys = [:]
+            paths = PhotoPaths()
+            touched = []
+            unread = []
+        }
+
         /// Keeps `photo` as it was read; when none of the source's photos were kept before (`fresh`), without looking
         /// for what it was.
         private mutating func keep(_ photo: Read, fresh: Bool) {
@@ -290,8 +458,11 @@ final class LibrarySourceList: Sendable {
         }
 
         /// The change handing over the photos `ids` names, in its order, as `source`'s list, against those handed
-        /// over before.
-        mutating func change(handing ids: [Int64], of source: PhotoSource) -> Change {
+        /// over before; `whole` when they're the source's photos in its own order.
+        mutating func change(handing ids: [Int64], of source: PhotoSource, whole: Bool = false) -> Change {
+            if let large {
+                return change(handing: ids, of: source, from: large, whole: whole)
+            }
             let before = handed
             var shown: [LibraryItem] = []
             shown.reserveCapacity(ids.count)
@@ -332,6 +503,56 @@ final class LibrarySourceList: Sendable {
             handed = list
             touched = []
             return change
+        }
+
+        /// A large source's change: its list, `large` itself when it hands over the source's photos `whole`, with
+        /// no rows but those kept from before it was large; row by row when it keeps the photos' order and changes
+        /// few, the photos whose rows changed updated.
+        private mutating func change(
+            handing ids: [Int64], of source: PhotoSource, from large: PhotoList, whole: Bool,
+        ) -> Change {
+            let before = handed
+            let list = whole ? large : PhotoList(source: source, ids: ContiguousArray(ids))
+            var change = Change(
+                list: list, items: [], read: leftover?.items ?? [:], previousCount: before?.count ?? -1,
+                diff: LibraryDiff(reset: true), keys: leftover?.keys ?? [:], paths: leftover?.paths ?? PhotoPaths(),
+                total: self.ids.count,
+            )
+            if let before, let changed = changedSinceHanded,
+               abs(list.count - before.count) <= LibrarySourceList.largestDiff,
+               let diff = Self.diff(from: before, to: list, changed: changed) {
+                change.diff = diff
+            }
+            rereading = changedSinceHanded
+            changedSinceHanded = []
+            leftover = nil
+            handed = list
+            return change
+        }
+
+        /// The rows `list` removes, inserts and updates from `before`, `changed` naming the photos whose rows
+        /// changed; nil when the photos that stay move, or it removes and inserts too many to hand over row by row.
+        static func diff(from before: PhotoList, to list: PhotoList, changed: Set<Int64>) -> LibraryDiff? {
+            var carried = IndexSet()
+            var inserted = IndexSet()
+            var updated = IndexSet()
+            var lastCarried = -1
+            for (index, id) in list.ids.enumerated() {
+                guard let place = before.index(of: id) else {
+                    inserted.insert(index)
+                    guard inserted.count <= LibrarySourceList.largestDiff else { return nil }
+                    continue
+                }
+                guard place > lastCarried else { return nil }
+                carried.insert(place)
+                lastCarried = place
+                if changed.contains(id) {
+                    updated.insert(index)
+                }
+            }
+            let removed = IndexSet(integersIn: 0 ..< before.count).subtracting(carried)
+            guard removed.count + inserted.count <= LibrarySourceList.largestDiff else { return nil }
+            return LibraryDiff(removed: removed, inserted: inserted, updated: updated)
         }
     }
 }
@@ -386,6 +607,18 @@ struct PhotoPaths: Sendable {
         let (folder, name) = Self.split(url.path)
         guard folders[folder]?.removeValue(forKey: name) != nil, folders[folder]?.isEmpty == true else { return }
         folders[folder] = nil
+    }
+
+    /// Adds `other`'s photos, which take the place of any at their paths.
+    mutating func merge(_ other: PhotoPaths) {
+        for (folder, names) in other.folders {
+            folders[folder, default: [:]].merge(names) { _, new in new }
+        }
+    }
+
+    /// Whether it holds no photo.
+    var isEmpty: Bool {
+        folders.isEmpty
     }
 
     /// A photo's path as its folder's and its name; `/` for a photo at the top of its disk.

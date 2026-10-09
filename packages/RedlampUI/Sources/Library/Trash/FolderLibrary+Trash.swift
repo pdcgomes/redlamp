@@ -54,7 +54,7 @@ public extension FolderLibrary {
         if items.isEmpty {
             trash.opened = opened
         }
-        opened(items)
+        opened(items.allRows)
     }
 
     /// The photo Recently Trashed lists at `url`, its place in the Trash.
@@ -98,7 +98,7 @@ extension FolderLibrary {
             if !items.isEmpty {
                 trash.opened = nil
             }
-            opened(items)
+            opened(items.allRows)
         }
     }
 
@@ -137,7 +137,7 @@ extension FolderLibrary {
             }
         }
         guard !removed.isEmpty || !inserted.isEmpty || !updated.isEmpty else { return }
-        items = shown
+        items = LibraryItems(shown)
         photoIDs = ids
         positions = Dictionary(shown.enumerated().map { ($1.url, $0) }) { first, _ in first }
         photosMoved()

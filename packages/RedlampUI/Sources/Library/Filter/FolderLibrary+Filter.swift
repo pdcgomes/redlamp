@@ -35,7 +35,7 @@ extension FolderLibrary {
         let unchanged = carried && ordered.diff.isEmpty
         // Freeing tens of thousands of photos takes milliseconds: the list replaced goes off the main thread.
         let replaced = (items, positions, fromLibrary.keys)
-        items = ordered.items
+        items = LibraryItems(ordered.items)
         positions = ordered.positions
         photoIDs = ids
         fromLibrary.keys = ordered.keys
@@ -50,7 +50,7 @@ extension FolderLibrary {
             publish(carried ? ordered.diff : LibraryDiff(reset: true))
         }
         if let opened {
-            opened(items)
+            opened(items.allRows)
             refreshStacks()
         }
         filters?.listed(LibraryListing(

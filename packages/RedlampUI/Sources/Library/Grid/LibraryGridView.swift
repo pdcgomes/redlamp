@@ -504,7 +504,8 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         guard let first = visibleRows.first, first < shownCount else { return nil }
         let offset = gridLayout.frame(forItem: first).minY - visible.minY
         switch content(ofItem: first) {
-        case let .photo(row): return ScreenAnchor(target: .photo(model.items[row].url), offset: offset)
+        case let .photo(row):
+            return model.library.items.row(row).map { ScreenAnchor(target: .photo($0.url), offset: offset) }
         case let .header(group): return ScreenAnchor(target: .header(group), offset: offset)
         case .none: return nil
         }
@@ -614,17 +615,18 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         visibleRows = shown
         let items = model.items
         let rows = shown.compactMap(row(ofItem:))
-        thumbnails.protected = Set(rows.map { items[$0].url })
+        thumbnails.protected = Set(rows.compactMap { items.row($0)?.url })
         for run in Self.runs(of: rows) {
             model.library.prioritize(run)
         }
         if let first = rows.min(), let last = rows.max() {
             model.editRenders.show(first ..< last + 1, in: .grid)
+            model.library.showRows(first ..< last + 1, in: "grid")
         }
         if let first = shown.first(where: { item in
             row(ofItem: item) != nil && gridLayout.frame(forItem: item).minY >= visible.minY - 1
-        }), let row = row(ofItem: first) {
-            model.libraryViews.topPhoto = items[row].url
+        }), let row = row(ofItem: first), let item = items.row(row) {
+            model.libraryViews.topPhoto = item.url
         }
         prefetch(around: shown)
         if gridLayout.style == .expanded {
@@ -739,11 +741,14 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// Sets `cell` to item `index` where the layout puts it: its photo, thumbnail, badges and selection, and,
     /// with `refresh`, its text.
     private func place(_ index: Int, _ cell: LibraryGridCell, refresh: Bool) {
-        guard let row = row(ofItem: index) else {
+        // A large source's row not read yet shows once it is; a closed stack's photos are read with its cell.
+        if let id = photoID(ofItem: index), let stacked = cellStacks?.photos(of: id), !stacked.isEmpty {
+            model.library.askForRows(ofPhotos: stacked)
+        }
+        guard let row = row(ofItem: index), let item = model.library.row(at: row) else {
             cell.root.isHidden = true
             return
         }
-        let item = model.items[row]
         let edge = edge
         let edit = thumbnails.edit(for: item)
         cell.place(gridLayout.frame(forItem: index), geometry: gridLayout.geometry, scale: scale)
@@ -834,12 +839,12 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private func prefetch(around shown: Range<Int>) {
         let screen = shown.count
         let near = max(shown.lowerBound - screen, 0) ..< min(shown.upperBound + screen, shownCount)
+        model.library.askForRows(at: near.lazy.compactMap(row(ofItem:)))
         let items = model.items
         let edge = edge
         var wanted = Set<URL>()
         for index in near where !shown.contains(index) {
-            guard let row = row(ofItem: index) else { continue }
-            let item = items[row]
+            guard let row = row(ofItem: index), let item = items.row(row) else { continue }
             wanted.insert(item.url)
             guard prefetching[item.url] == nil, thumbnails.cached(item, edge: edge) == nil else { continue }
             prefetching[item.url] = thumbnails.request(item, edge: edge, lane: .lookAhead) { [weak self] _ in
@@ -887,7 +892,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
 
     private func requestDetails(for shown: Range<Int>) {
         let items = model.items
-        details.request(shown.compactMap(row(ofItem:)).map { items[$0] }) { [weak self] urls in
+        details.request(shown.compactMap { row(ofItem: $0).flatMap(items.row) }) { [weak self] urls in
             guard let self, gridLayout.style == .expanded else { return }
             let arrived = Set(urls)
             for cell in cells.values {
@@ -918,14 +923,14 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             if moves {
                 isStale = true
             } else {
-                staleRows.formUnion(diff.updated)
+                staleRows.formUnion(diff.redrawn)
             }
             return
         }
         // Grouped or stacked, the groups or the stacks follow the photos that came, went or moved (`LibraryGroups`,
         // `LibraryStacks`), and the cells by their photos' IDs meanwhile.
         if shownGroups != nil || shownStacks != nil, !diff.reset {
-            return update(diff.updated)
+            return update(diff.redrawn)
         }
         if diff.reset, shownGroups != nil || model.gridGroups.list != nil || shownStacks != nil {
             refill()
@@ -949,7 +954,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             recycleAll()
             relayout(force: true)
         }
-        update(diff.updated)
+        update(diff.redrawn)
     }
 
     /// Redraws the badges of these rows' cells, and their thumbnails if their files changed: for thousands of
@@ -959,8 +964,10 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         let shown = rows.count > cells.count ? cells.keys.filter { row(ofItem: $0).map(rows.contains) == true }
             .sorted() : rows.compactMap(item(ofRow:))
         for index in shown {
-            guard let cell = cells[index], let row = row(ofItem: index), items.indices.contains(row) else { continue }
-            let rewritten = cell.item?.modified != items[row].modified
+            guard let cell = cells[index], let row = row(ofItem: index), items.indices.contains(row),
+                  let item = items.row(row)
+            else { continue }
+            let rewritten = cell.item?.modified != item.modified
             if rewritten {
                 cell.setImage(nil, edge: 0)
             }
@@ -1044,7 +1051,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         case .none: return
         case let .photo(found): row = found
         }
-        let url = model.items[row].url
+        guard let url = model.library.items.row(row)?.url else { return }
         let frame = gridLayout.frame(forItem: index)
         let plain = event.modifierFlags.isDisjoint(with: [.command, .shift])
         let inCell = CGPoint(x: point.x - frame.minX, y: point.y - frame.minY)
@@ -1073,7 +1080,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// photo is in it. A star the photo's rating already ends at clears it, as does the flag of a pick; the
     /// label chip offers the labels.
     private func cull(_ target: GridCellGeometry.Target, item index: Int, row: Int, event: NSEvent) {
-        let item = model.items[row]
+        guard let item = model.library.items.row(row) else { return }
         let metadata = item.metadata
         switch target {
         case let .star(stars): model.cull(.rating(metadata.rating == stars ? 0 : stars), fromCell: item.url)
@@ -1158,7 +1165,8 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         if let index = gridLayout.item(at: point), index < shownCount {
             switch content(ofItem: index) {
             case let .photo(row):
-                let menu = LibraryGridMenu.menu(for: model.items[row].url, model: model)
+                guard let url = model.library.items.row(row)?.url else { break }
+                let menu = LibraryGridMenu.menu(for: url, model: model)
                 menuItem = index
                 cells[index]?.isMenuTarget = true
                 return menu
@@ -1181,8 +1189,9 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         guard let index = gridLayout.item(at: point), index < shownCount else { return "" }
         switch content(ofItem: index) {
         case let .photo(row):
-            return model.items[row].name + (stackDescription(ofItem: index).map { ", \($0)" } ?? "")
-                + (proposals.mark(for: model.items[row].url).map { ": \($0.sentence)" } ?? "")
+            guard let item = model.library.items.row(row) else { return "" }
+            return item.name + (stackDescription(ofItem: index).map { ", \($0)" } ?? "")
+                + (proposals.mark(for: item.url).map { ": \($0.sentence)" } ?? "")
         case .header: return headers[index].map { "\($0.title) (click to open or close, ⌥-click for every group)" } ?? ""
         case .none: return ""
         }
@@ -1192,7 +1201,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// `a stack of 9, closed`.
     private func stackDescription(ofItem index: Int) -> String? {
         var parts: [String] = []
-        if let row = row(ofItem: index), suggestedFrames.contains(model.items[row].url) {
+        if let row = row(ofItem: index), let url = model.library.items.row(row)?.url, suggestedFrames.contains(url) {
             parts.append("suggested for a focus stack")
         }
         guard let stacks = cellStacks, let id = photoID(ofItem: index) else {
@@ -1262,7 +1271,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     fileprivate func press(item index: Int) {
         guard index < shownCount else { return }
         switch content(ofItem: index) {
-        case let .photo(row): model.clickInGrid(model.items[row].url)
+        case let .photo(row): clickRow(row, extending: false)
         case let .header(group): model.toggleGroup(group)
         case .none: break
         }
@@ -1314,7 +1323,7 @@ extension LibraryGridView {
             let current = model.selection.flatMap(item(of:))
             if let target = target(of: key, from: current, in: sections), target != current,
                let row = row(ofItem: target) {
-                model.clickInGrid(model.items[row].url, extending: extending)
+                clickRow(row, extending: extending)
             }
             return true
         }
@@ -1322,9 +1331,23 @@ extension LibraryGridView {
         let current = model.selection.flatMap(item(of:))
         let target = current.map { self.target(of: key, from: $0, last: last) } ?? 0
         if (0 ... last).contains(target), target != current, let row = row(ofItem: target) {
-            model.clickInGrid(model.items[row].url, extending: extending)
+            clickRow(row, extending: extending)
         }
         return true
+    }
+
+    /// Clicks row `row`'s photo, as a key that moves to it does: once it's read, for a large source's row.
+    private func clickRow(_ row: Int, extending: Bool) {
+        let library = model.library
+        guard library.photoIDs.indices.contains(row) else { return }
+        if let item = library.items.row(row) {
+            return model.clickInGrid(item.url, extending: extending)
+        }
+        let id = library.photoIDs[row]
+        library.whenRead([id]) { [weak self] in
+            guard let self, let url = library.url(ofPhoto: id) else { return }
+            model.clickInGrid(url, extending: extending)
+        }
     }
 
     /// The photo `key` moves to from item `current`, grouped: ↑ and ↓ to the cell above or below, into the

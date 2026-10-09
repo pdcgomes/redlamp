@@ -50,7 +50,10 @@ extension LibraryGridView {
         let selection = model.photoSelection
         let fromLibrary = library.service?.isReady == true && !library.showsRecentlyTrashed
         let photos = selection.count > 1 && library.photoID(of: press.url).map(selection.contains) == true
-            ? DraggedPhotos(selection: selection, items: library.items, ids: library.photoIDs, fromLibrary: fromLibrary)
+            ? DraggedPhotos(
+                selection: selection, items: library.items, ids: library.photoIDs, source: library.rowSource,
+                fromLibrary: fromLibrary,
+            )
             : DraggedPhotos(photo: press.url, fromLibrary: fromLibrary)
         let pasteboard = NSPasteboardItem()
         pasteboard.setString(photos.token, forType: LibraryDrags.photos)
@@ -88,11 +91,15 @@ extension LibraryGridView {
         guard let keyword = LibraryDrags.keyword(in: sender), let target = keywordTarget(at: sender.draggingLocation)
         else { return false }
         let panels = model.libraryPanels
-        let photos = switch target {
-        case .selection: model.selectedPhotos
-        case let .photo(_, url): model.photos(standingFor: url)
+        switch target {
+        case .selection:
+            model.withSelectedPhotos { photos in
+                Task { await panels.change([keyword], on: photos) }
+            }
+        case let .photo(_, url):
+            let photos = model.photos(standingFor: url)
+            Task { await panels.change([keyword], on: photos) }
         }
-        Task { await panels.change([keyword], on: photos) }
         return true
     }
 
@@ -111,7 +118,7 @@ extension LibraryGridView {
         if model.isMultiSelecting, model.photoSelection.contains(id) {
             return .selection
         }
-        return .photo(list: id, url: model.items[row].url)
+        return library.row(at: row).map { .photo(list: id, url: $0.url) }
     }
 
     /// Outlines the cells on screen that `target` would tag.

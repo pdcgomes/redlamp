@@ -13,9 +13,10 @@ extension FolderLibrary {
     /// Closes the open folder for `source`'s photos, `photos` as the library lists them, filtered and sorted as
     /// the filter bar has `source`: each change of their list goes to `deliver` with the opening's generation, for
     /// `showSource`. The folder that was open is the one the next launch opens. Returns the generation, which a
-    /// later opening ends, and the list, which its owner closes; no list without the library.
+    /// later opening ends, and the list, which its owner closes; no list without the library. A large source's
+    /// first change brings the rows of the photos at `wanted` (`LibrarySourceList`).
     func openSource(
-        _ source: LibrarySource, photos: PhotoSource,
+        _ source: LibrarySource, photos: PhotoSource, wanted: [URL] = [],
         deliver: @escaping @MainActor @Sendable (LibrarySourceList.Change, Int) -> Void,
     ) -> (generation: Int, list: LibrarySourceList?) {
         let before = openFolder ?? trash.folderBefore
@@ -34,6 +35,7 @@ extension FolderLibrary {
         filters?.follow(source, photos: photos)
         let list = LibrarySourceList(
             core: core, source: photos, filter: filters?.request(for: source.key) ?? LibraryListFilter(),
+            largestRead: largestRead, firstRead: firstRead, wanted: wanted,
         ) { change in deliver(change, generation) }
         fromLibrary.sourceList = list
         filters?.sourceList = list
@@ -70,9 +72,15 @@ extension FolderLibrary {
         let unchanged = carried && change.diff.isEmpty
         // Freeing tens of thousands of photos takes milliseconds: the photos replaced go off the main thread.
         let replaced = (items, positions, photoIDs, fromLibrary.tables)
-        fromLibrary.sourceKeys = change.keys
-        fromLibrary.sourcePaths = change.paths
-        items = change.items
+        if let read = change.read {
+            takeLarge(change, read: read)
+        } else {
+            fromLibrary.sourceList?.release([], all: true)
+            fromLibrary.rows.asked = []
+            fromLibrary.sourceKeys = change.keys
+            fromLibrary.sourcePaths = change.paths
+            items = LibraryItems(change.items)
+        }
         positions = [:]
         photoIDs = change.list.ids
         scheduler.submit(.background) { withExtendedLifetime(replaced) {} }
@@ -87,10 +95,40 @@ extension FolderLibrary {
         }
         if let filter = change.filter {
             filters?.listed(LibraryListing(
-                shown: change.items.count, total: change.total, filter: filter, took: change.took,
+                shown: change.list.count, total: change.total, filter: filter, took: change.took,
             ))
         }
         return true
+    }
+
+    /// A large source's `change`: its photos' IDs, with the rows read before that it still has, and those `read`
+    /// for it taking their place; the rows of photos it no longer has are let go of.
+    private func takeLarge(_ change: LibrarySourceList.Change, read: [Int64: LibraryItem]) {
+        let list = change.list
+        var kept = items.rowsRead
+        var paths = fromLibrary.sourcePaths ?? PhotoPaths()
+        var keys = fromLibrary.sourceKeys
+        var leaving: [Int64] = []
+        for (id, item) in kept where !list.contains(id) || read[id].map({ $0.url != item.url }) == true {
+            paths.remove(at: item.url)
+            if read[id] == nil {
+                leaving.append(id)
+                keys[id] = nil
+            }
+        }
+        for id in leaving {
+            kept[id] = nil
+        }
+        kept.merge(read) { _, new in new }
+        for id in read.keys {
+            keys[id] = change.keys[id]
+        }
+        paths.merge(change.paths)
+        fromLibrary.sourceList?.release(leaving)
+        fromLibrary.sourceList?.hold(read.keys)
+        fromLibrary.sourceKeys = keys
+        fromLibrary.sourcePaths = paths
+        items = LibraryItems(ids: list.ids, read: kept)
     }
 }
 

@@ -370,7 +370,8 @@ public final class LibraryPanels {
 struct SelectionSnapshot: Sendable {
     let selection: PhotoSelection
     let list: PhotoList
-    let items: [LibraryItem]
+    /// The photos, whose URLs are read only when the list's IDs aren't the index's.
+    let items: LibraryItems
     /// The active photo's place in the list.
     let active: Int?
     /// The list's IDs are the index's (`FolderLibrary.photoIDs`).

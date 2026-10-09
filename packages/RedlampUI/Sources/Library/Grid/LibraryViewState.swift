@@ -185,6 +185,13 @@ public final class LibraryViewState {
         save()
     }
 
+    /// The photos `source`'s view was left with: its active, top and selected photos, and its open stacks' tops.
+    func keptPhotos(of source: String) -> [URL] {
+        guard let view = views.last(where: { $0.source == source }) else { return [] }
+        let paths = [view.active, view.top].compactMap(\.self) + view.selected + (view.stacks?.others.map(\.path) ?? [])
+        return paths.map { URL(fileURLWithPath: $0, isDirectory: false) }
+    }
+
     /// `source`'s view as it was left, its size, cell style, grouping and open stacks shown again, and the grid
     /// going back to its top photo; nil for a source not seen lately.
     func restore(_ source: String) -> SourceView? {

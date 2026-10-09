@@ -178,21 +178,24 @@ public extension EditorModel {
     }
 
     /// The rows `step`'s photos are listed at now, with their IDs and the values `value` gives each from what
-    /// it shows; those it gives none, and those no longer listed, are left out. A photo is looked for by its
-    /// URL only when it has moved: a selection of thousands is found again within a frame.
+    /// it shows; those it gives none, and those no longer listed, are left out. A photo that moved is looked for
+    /// by its ID, then by its URL: a selection of thousands is found again within a frame. A large source's rows not
+    /// read aren't shown, and show the library's values once they're read.
     private func find(
         _ step: CullingStep, _ value: (CullingValues, Int) -> CullingValues?,
     ) -> (rows: [Int], photoIDs: [Int64], values: [CullingValues]) {
         let items = library.items
         let ids = library.photoIDs
+        let list = library.photoList
         var found: (rows: [Int], photoIDs: [Int64], values: [CullingValues]) = ([], [], [])
         for place in step.photos.indices {
             var row = step.rows[place]
             if !ids.indices.contains(row) || ids[row] != step.photoIDs[place] {
-                guard let moved = library.index(of: step.photos[place]) else { continue }
+                guard let moved = list.index(of: step.photoIDs[place]) ?? library.index(of: step.photos[place])
+                else { continue }
                 row = moved
             }
-            guard let value = value(CullingValues(items[row].metadata), place) else { continue }
+            guard let item = items.row(row), let value = value(CullingValues(item.metadata), place) else { continue }
             found.rows.append(row)
             found.photoIDs.append(ids[row])
             found.values.append(value)
@@ -205,6 +208,17 @@ public extension EditorModel {
     /// Gives the photos of `rows` (places in `items`) what `change` asks for, as one change with Undo: shown
     /// at once, then made in the background. A read-only photo open in Develop is left as it is.
     internal func cull(_ change: CullingChange, rows: [Int]) {
+        // A large source's photos whose rows aren't read are read first, and found again by their IDs.
+        let ids = library.photoIDs
+        let unread = rows.filter { ids.indices.contains($0) && library.items.row($0) == nil }.map { ids[$0] }
+        guard unread.isEmpty else {
+            let photos = rows.filter(ids.indices.contains).map { ids[$0] }
+            return library.whenRead(unread) { [weak self] in
+                guard let self else { return }
+                let list = library.photoList
+                cull(change, rows: photos.compactMap(list.index(of:)))
+            }
+        }
         guard let step = cullingStep(change, rows: rows) else { return }
         let sequence = cullingQueue.request(step.photos)
         show(step.after, field: change.field, rows: step.rows, photoIDs: step.photoIDs, sequence: sequence)
@@ -531,11 +545,15 @@ public extension EditorModel {
         cullingOverlay.expire()
         let latest = cullingOverlay.latest()
         guard !latest.isEmpty else { return }
-        let rows = diff.reset ? IndexSet(items.indices) : diff.updated.union(diff.inserted)
+        let rows = diff.reset ? IndexSet(items.indices) : diff.updated.union(diff.inserted).union(diff.read)
         let ids = library.photoIDs
-        for row in rows where library.items.indices.contains(row) && ids.indices.contains(row) {
-            guard let shown = latest[ids[row]] else { continue }
-            let current = CullingValues(library.items[row].metadata)
+        // The photos shown with a change, when they're fewer than the rows: a million rows reset otherwise.
+        let list = library.photoList
+        let reached = latest.count < rows.count
+            ? latest.keys.compactMap(list.index(of:)).filter(rows.contains).sorted() : Array(rows)
+        for row in reached where library.items.indices.contains(row) && ids.indices.contains(row) {
+            guard let shown = latest[ids[row]], let item = library.items.row(row) else { continue }
+            let current = CullingValues(item.metadata)
             for field in shown.fields where !current.matches(shown.values, in: field) {
                 shown.values.apply(field, to: &library.items[row].metadata)
             }
@@ -971,28 +989,16 @@ extension CullingValues {
 
 extension FolderLibrary {
     /// Changes the badges of the photos in `rows`, in order, as one change, each of which `change` changes:
-    /// a pass over them in one mutation of `items`, for a selection of thousands.
+    /// a pass over them in one mutation of `items`, for a selection of thousands. A large source's rows not read
+    /// yet show the change once they are (`EditorModel.keepCullingShown`).
     func setMetadata(_ rows: [Int], _ change: (Int, inout PhotoMetadata) -> Void) {
-        items.withUnsafeMutableBufferPointer { items in
-            for (place, row) in rows.enumerated() where items.indices.contains(row) {
-                change(place, &items[row].metadata)
-            }
-        }
+        _ = items.changeMetadata(rows, comparing: false, change)
         publish(LibraryDiff(updated: IndexSet(rows: rows)))
     }
 
     /// Changes the badges of the photos in `rows` as one change; `change` hears each photo's place in `rows`.
     func updateMetadata(_ rows: [Int], _ change: (Int, inout PhotoMetadata) -> Void) {
-        var updated: [Int] = []
-        items.withUnsafeMutableBufferPointer { items in
-            for (place, row) in rows.enumerated() where items.indices.contains(row) {
-                let before = items[row].metadata
-                change(place, &items[row].metadata)
-                if items[row].metadata != before {
-                    updated.append(row)
-                }
-            }
-        }
+        let updated = items.changeMetadata(rows, comparing: true, change)
         if !updated.isEmpty {
             publish(LibraryDiff(updated: IndexSet(rows: updated)))
         }

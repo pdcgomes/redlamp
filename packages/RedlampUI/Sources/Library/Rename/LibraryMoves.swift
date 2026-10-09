@@ -64,7 +64,13 @@ extension FolderLibrary {
         }
         while true {
             let restoredIDs = moves.restoring.isEmpty ? [] : Array(newPhotoIDs(moves.restoring.count))
-            let shown = (items: items, ids: photoIDs, positions: positions, revision: revision, filtered: isFiltered)
+            let shown = (
+                items: items.allRows,
+                ids: photoIDs,
+                positions: positions,
+                revision: revision,
+                filtered: isFiltered,
+            )
             let moved = await Task.detached(priority: .userInitiated) {
                 Self.moving(
                     moves, items: shown.items, photoIDs: shown.ids, positions: shown.positions,
@@ -85,7 +91,7 @@ extension FolderLibrary {
 
     private func apply(_ moved: Moved, _ moves: LibraryMoves) {
         let replaced = (items, positions)
-        items = moved.items
+        items = LibraryItems(moved.items)
         photoIDs = moved.photoIDs
         positions = moved.positions
         var keys: [(URL, ContentKey)] = []

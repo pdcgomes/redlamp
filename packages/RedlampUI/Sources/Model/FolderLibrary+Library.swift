@@ -34,6 +34,8 @@ struct FromLibrary {
     /// the index, which are their IDs here; nil until its photos are shown.
     var sourceKeys: [Int64: ContentKey] = [:]
     var sourcePaths: PhotoPaths?
+    /// A large source's rows asked for and on screen (`FolderLibrary+Items`).
+    var rows = SourceRows()
 
     /// What freeing takes milliseconds of for thousands of photos, for doing off the main thread.
     var tables: some Sendable {
@@ -192,7 +194,7 @@ extension FolderLibrary {
             listedDirectories = Set(all.items.map(\.folderPath)).union(openFolder.map { [$0.path] } ?? [])
             isListing = false
             isOpenFolderUnavailable = false
-            opened(items)
+            opened(items.allRows)
             refreshStacks()
             let directories = listedDirectories
             scheduler.submit(.background) {
@@ -209,7 +211,7 @@ extension FolderLibrary {
     /// side has are removed or inserted, and those whose badges differ updated, keeping each file's
     /// dates as listed so cells and the thumbnail cache see the same photo.
     private func adopt(_ library: [LibraryItem], generation: Int) {
-        let (current, revision) = (items, revision)
+        let (current, revision) = (items.allRows, revision)
         fromLibrary.adopting = true
         Task { [weak self] in
             let difference = await Task.detached(priority: .userInitiated) {

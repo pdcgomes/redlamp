@@ -145,7 +145,8 @@ import RedlampLibrary
         let stacks = model.gridStacks
         stackOpenings = stacks.openings
         let request = Request(
-            items: library.items, ids: library.photoIDs, known: indexIDs, indexed: indexedPhotos,
+            items: library.items.allRows, ids: library.photoIDs, indexIDs: library.showsIndexIDs, known: indexIDs,
+            indexed: indexedPhotos,
             sort: library.filters?.sort.query ?? QuerySort(), grouping: wanted, finder: stacks.finder,
             stacks: stacks.list, opensStacks: stacks.opensNew, badgeChanges: badgeChanges,
         )
@@ -182,8 +183,11 @@ import RedlampLibrary
     }
 
     private struct Request: Sendable {
+        /// The photos' rows, for their picks; none for a large source's, whose rows aren't all read.
         var items: [LibraryItem]
         var ids: ContiguousArray<Int64>
+        /// The photos' IDs are the index's.
+        var indexIDs: Bool
         var known: [Int64: Int64]
         /// The photos as the last grouping found them in the index, for the same list.
         var indexed: IndexedPhotos?
@@ -218,9 +222,27 @@ import RedlampLibrary
         let sort: QuerySort
         let indexed: PhotoList
         let own: PhotoList
+        /// Each index ID's photo here; none when the IDs here are the index's (`identical`).
         let byIndex: [Int64: Int64]
+        let identical: Bool
         /// Above every ID here, where the stacks' photos the list doesn't have are numbered.
         let above: Int64
+
+        /// `ids`'s photos, whose IDs are the index's.
+        init(indexed ids: ContiguousArray<Int64>, source: PhotoSource, sort: QuerySort) {
+            self.ids = ids
+            self.sort = sort
+            indexed = PhotoList(source: source, sort: sort, ids: ids)
+            own = indexed
+            byIndex = [:]
+            identical = true
+            above = indexed.highestID ?? -1
+        }
+
+        /// The photo here of index ID `id`, when the list has it.
+        func own(of id: Int64) -> Int64? {
+            identical ? (own.contains(id) ? id : nil) : byIndex[id]
+        }
 
         /// `ids`'s photos the index has, by `indexIDs`, the first photo of an index ID taking it.
         init(_ ids: ContiguousArray<Int64>, source: PhotoSource, sort: QuerySort, indexIDs: (Int64) -> Int64?) {
@@ -241,6 +263,7 @@ import RedlampLibrary
             self.indexed = PhotoList(source: source, sort: sort, ids: indexed)
             self.own = PhotoList(source: source, sort: sort, ids: own)
             self.byIndex = byIndex
+            identical = false
             above = ids.max() ?? -1
         }
 
@@ -254,7 +277,8 @@ import RedlampLibrary
     private nonisolated static func group(_ request: Request, index: LibraryIndex, engine: QueryEngine) async
         -> Result? {
         let (items, ids, known) = (request.items, request.ids, request.known)
-        guard items.count == ids.count else { return nil }
+        let rows = items.count == ids.count ? items : nil
+        guard rows != nil || request.indexIDs else { return nil }
         let clock = ContinuousClock()
         var mark = clock.now
         var parts: [Duration] = []
@@ -268,6 +292,8 @@ import RedlampLibrary
         let photos: IndexedPhotos
         if let indexed = request.indexed, indexed.holds(ids, source: source, sort: sort) {
             photos = indexed
+        } else if request.indexIDs {
+            photos = IndexedPhotos(indexed: ids, source: source, sort: sort)
         } else {
             let missing = ids.indices.filter { known[ids[$0]] == nil }
             if !missing.isEmpty {
@@ -289,8 +315,7 @@ import RedlampLibrary
         )
         lap()
         let relabelled = groups.relabelled(as: photos.own)
-        let byIndex = photos.byIndex
-        var grouped = GroupedList(relabelled, stacks: stacks.relabelled(above: photos.above) { byIndex[$0] })
+        var grouped = GroupedList(relabelled, stacks: stacks.relabelled(above: photos.above, by: photos.own(of:)))
         if let shown = request.stacks {
             grouped.openStacks(as: shown)
         } else if request.opensStacks {
@@ -298,7 +323,9 @@ import RedlampLibrary
         }
         lap()
         return Result(
-            grouped: grouped, picks: picks(of: relabelled, items: items, ids: ids),
+            grouped: grouped,
+            picks: rows.map { picks(of: relabelled, items: $0, ids: ids) } ?? relabelled.indices
+                .map(relabelled.picks(ofGroup:)),
             badgeChanges: request.badgeChanges, found: found, indexed: photos, grouping: request.grouping,
             parts: parts,
         )
@@ -441,7 +468,7 @@ import RedlampLibrary
     /// counted here, and the grouping follows once they've been quiet a moment, for a photo whose capture time,
     /// camera or size changed with its file.
     private func libraryChanged(_ diff: LibraryDiff) {
-        guard model?.libraryViews.groupKey != .ungrouped else { return }
+        guard model?.libraryViews.groupKey != .ungrouped, !diff.onlyReads else { return }
         guard !diff.reset, diff.removed.isEmpty, diff.inserted.isEmpty, list != nil else { return regroup() }
         badgeChanges += 1
         badgesChanged(diff.updated)
@@ -468,8 +495,11 @@ import RedlampLibrary
         updateCoverage()
     }
 
+    /// The groups' picks, from the photos' badges; a large source's, whose rows aren't all read, as the index counts
+    /// them.
     private static func picks(of groups: PhotoGroups, in library: FolderLibrary) -> [Int] {
-        picks(of: groups, items: library.items, ids: library.photoIDs)
+        guard !library.items.readsOnRequest else { return groups.indices.map(groups.picks(ofGroup:)) }
+        return picks(of: groups, items: library.items.allRows, ids: library.photoIDs)
     }
 
     /// Each group's picks, in one pass over the photos shown: loops, as a closure formed in the main actor's

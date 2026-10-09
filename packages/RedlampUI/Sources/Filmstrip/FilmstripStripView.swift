@@ -41,6 +41,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var selected: URL?
     private var marked = PhotoSelection()
     private var prefetching: [URL: UInt64] = [:]
+    /// The items waiting for a large source's rows, by row (`showRead`).
+    private var unread: [Int: FilmstripItem] = [:]
     /// Shown again: it goes back to the filmstrip's place once laid out.
     private var needsPlace = false
     /// The photos changed while the strip was out of sight (hidden, or in the module not shown): it reloads
@@ -167,6 +169,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     /// would count its change twice, deleting rows the count no longer has.
     private func reload() {
         reloads += 1
+        unread = [:]
         followItems()
         collectionView.reloadData()
         collectionView.layoutSubtreeIfNeeded()
@@ -298,11 +301,24 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     ) -> NSCollectionViewItem {
         let view = collectionView.makeItem(withIdentifier: FilmstripItem.identifier, for: indexPath)
         guard let item = view as? FilmstripItem, let row = row(ofItem: indexPath.item) else { return view }
-        let photo = model.items[row]
+        unread.removeValue(forKey: row)
+        // A large source's row not read yet: the cell shows once it is (`showRead`).
+        guard let photo = model.library.row(at: row) else {
+            item.cell.isHidden = true
+            unread[row] = item
+            return item
+        }
+        show(photo, row: row, in: item, at: indexPath.item)
+        return item
+    }
+
+    /// Sets `item`, item `index` of the strip, to row `row`'s photo.
+    private func show(_ photo: LibraryItem, row: Int, in item: FilmstripItem, at index: Int) {
+        item.cell.isHidden = false
         let shown = model.thumbnailLoader.cachedThumbnail(photo)
         item.cell.rendersEdit = model.editRenders.renders(photo)
         item.cell.configure(photo, image: shown?.image, edit: shown?.edit)
-        item.cell.stackBadges = stackBadges(ofItem: indexPath.item)
+        item.cell.stackBadges = stackBadges(ofItem: index)
         item.cell.isSelected = photo.url == selected
         item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[row])
         item.cell.onClick = { [weak self] modifiers in
@@ -313,7 +329,19 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         item.cell.onMenu = { [weak self] in
             self.flatMap { FilmstripMenu.menu(for: photo.url, model: $0.model, culling: true) }
         }
-        return item
+    }
+
+    /// A large source's rows just read: the cells that waited for them show their photos.
+    private func showRead(_ rows: IndexSet) {
+        for (row, item) in unread where rows.contains(row) {
+            unread[row] = nil
+            guard let index = self.item(ofRow: row),
+                  collectionView.item(at: IndexPath(item: index, section: 0)) === item,
+                  let photo = model.library.items.row(row)
+            else { continue }
+            show(photo, row: row, in: item, at: index)
+            requestThumbnail(for: item, photo)
+        }
     }
 
     // MARK: - Thumbnails
@@ -321,8 +349,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     func collectionView(
         _: NSCollectionView, willDisplay item: NSCollectionViewItem, forRepresentedObjectAt indexPath: IndexPath,
     ) {
-        guard let item = item as? FilmstripItem, let row = row(ofItem: indexPath.item) else { return }
-        let photo = model.items[row]
+        guard let item = item as? FilmstripItem, let row = row(ofItem: indexPath.item),
+              let photo = model.library.items.row(row)
+        else { return }
         item.cell.isSelected = photo.url == selected
         item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[row])
         if let id = prefetching.removeValue(forKey: photo.url) {
@@ -332,8 +361,11 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     }
 
     func collectionView(
-        _: NSCollectionView, didEndDisplaying item: NSCollectionViewItem, forRepresentedObjectAt _: IndexPath,
+        _: NSCollectionView, didEndDisplaying item: NSCollectionViewItem, forRepresentedObjectAt indexPath: IndexPath,
     ) {
+        if let row = row(ofItem: indexPath.item), unread[row] === item {
+            unread[row] = nil
+        }
         guard let item = item as? FilmstripItem, let id = item.request else { return }
         item.request = nil
         model.thumbnailLoader.cancel(id)
@@ -363,9 +395,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     }
 
     func collectionView(_: NSCollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+        model.library.askForRows(at: indexPaths.compactMap { row(ofItem: $0.item) })
         for indexPath in indexPaths {
-            guard let row = row(ofItem: indexPath.item) else { continue }
-            let photo = model.items[row]
+            guard let row = row(ofItem: indexPath.item), let photo = model.library.items.row(row) else { continue }
             guard prefetching[photo.url] == nil, !model.thumbnailLoader.hasThumbnail(photo) else { continue }
             prefetching[photo.url] = model.thumbnailLoader.request(photo, lane: .lookAhead) { [weak self] _ in
                 self?.prefetching.removeValue(forKey: photo.url)
@@ -375,7 +407,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
 
     func collectionView(_: NSCollectionView, cancelPrefetchingForItemsAt indexPaths: [IndexPath]) {
         for indexPath in indexPaths {
-            if let row = row(ofItem: indexPath.item), let id = prefetching.removeValue(forKey: model.items[row].url) {
+            if let row = row(ofItem: indexPath.item), let photo = model.library.items.row(row),
+               let id = prefetching.removeValue(forKey: photo.url) {
                 model.thumbnailLoader.cancel(id)
             }
         }
@@ -385,15 +418,17 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     @objc private func scrolled() {
         let rows = collectionView.indexPathsForVisibleItems().compactMap { row(ofItem: $0.item) }
         guard let first = rows.min(), let last = rows.max() else { return }
-        model.thumbnailLoader.protected = Set(rows.map { model.items[$0].url })
+        model.library.showRows(first ..< last + 1, in: "filmstrip")
+        model.thumbnailLoader.protected = Set(rows.compactMap { model.library.items.row($0)?.url })
         for run in LibraryGridView.runs(of: rows) {
             model.library.prioritize(run)
         }
         model.editRenders.show(first ..< last + 1, in: .filmstrip)
         let middle = CGPoint(x: scrollView.contentView.bounds.midX, y: collectionView.bounds.midY)
         // Until it has gone back to its place, the strip is where its layout left it, not where it was scrolled.
-        if !needsPlace, let item = collectionView.indexPathForItem(at: middle)?.item, let row = row(ofItem: item) {
-            model.filmstripPlace = model.items[row].url
+        if !needsPlace, let item = collectionView.indexPathForItem(at: middle)?.item, let row = row(ofItem: item),
+           let photo = model.library.items.row(row) {
+            model.filmstripPlace = photo.url
         }
     }
 
@@ -417,7 +452,11 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
                 collectionView.deleteItems(at: Set(diff.removed.map { IndexPath(item: $0, section: 0) }))
                 collectionView.insertItems(at: Set(diff.inserted.map { IndexPath(item: $0, section: 0) }))
             }
+            unread = Dictionary(unread.values.compactMap { item in
+                collectionView.indexPath(for: item).flatMap { row(ofItem: $0.item) }.map { ($0, item) }
+            }) { first, _ in first }
         }
+        showRead(diff.read)
         // Asking the strip for each of thousands of rows takes longer than a frame: a change to that many
         // reaches the cells it holds.
         let rows = diff.updated.count > 64 ? IndexSet(collectionView.subviews.compactMap { view in
@@ -425,9 +464,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         }).intersection(diff.updated) : diff.updated
         for row in rows where model.items.indices.contains(row) {
             guard let index = item(ofRow: row),
-                  let item = collectionView.item(at: IndexPath(item: index, section: 0)) as? FilmstripItem
+                  let item = collectionView.item(at: IndexPath(item: index, section: 0)) as? FilmstripItem,
+                  let photo = model.library.items.row(row)
             else { continue }
-            let photo = model.items[row]
             let rewritten = item.cell.item?.modified != photo.modified
             item.cell.rendersEdit = model.editRenders.renders(photo)
             item.cell.configure(photo, image: nil)
@@ -449,9 +488,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         }
         for url in urls {
             guard let row = model.library.index(of: url), let index = item(ofRow: row),
-                  let item = collectionView.item(at: IndexPath(item: index, section: 0)) as? FilmstripItem
+                  let item = collectionView.item(at: IndexPath(item: index, section: 0)) as? FilmstripItem,
+                  let photo = model.library.items.row(row)
             else { continue }
-            let photo = model.items[row]
             item.cell.rendersEdit = model.editRenders.renders(photo)
             requestThumbnail(for: item, photo)
         }
