@@ -494,41 +494,10 @@ extension XMPFields {
             }
         }
         if fields.contains(.label), !current.same(.label, as: self) {
-            if let label {
-                changes.append((XMPNamespace.label, .text(conventions.labels.name(for: label))))
-                changes.append((XMPNamespace.labelColor, .text(label.rawValue)))
-                if conventions.urgency {
-                    changes.append((XMPNamespace.urgency, .text(String(XMPUrgency.value(for: label)))))
-                }
-            } else if let custom = Self.text(customLabel) {
-                changes.append((XMPNamespace.label, .text(custom)))
-                var removed = [XMPNamespace.labelColor]
-                if conventions.urgency {
-                    removed.append(XMPNamespace.urgency)
-                }
-                changes += removed.filter(has).map { ($0, nil) }
-            } else {
-                var removed = [XMPNamespace.label, XMPNamespace.labelColor]
-                if conventions.urgency {
-                    removed.append(XMPNamespace.urgency)
-                }
-                changes += removed.filter(has).map { ($0, nil) }
-            }
+            changes += labelChanges(conventions: conventions, has: has)
         }
         if fields.contains(.keywords), !current.same(.keywords, as: self) {
-            if let keywords, !keywords.isEmpty {
-                let keywords = KeywordPath.paths(keywords)
-                let paths = keywords.map { $0.names.joined(separator: "|") }
-                var names: [String] = []
-                var seen = Set<String>()
-                for name in keywords.flatMap(\.names) where seen.insert(name).inserted {
-                    names.append(name)
-                }
-                changes.append((XMPNamespace.hierarchicalSubject, .bag(paths)))
-                changes.append((XMPNamespace.subject, .bag(names)))
-            } else {
-                changes += [XMPNamespace.hierarchicalSubject, XMPNamespace.subject].filter(has).map { ($0, nil) }
-            }
+            changes += keywordChanges(has: has)
         }
         for (field, property, value) in [
             (XMPField.title, XMPNamespace.title, title),
@@ -551,17 +520,7 @@ extension XMPFields {
             }
         }
         if fields.contains(.location), !current.same(.location, as: self) {
-            let place = Self.place(location)
-            let values = [place?.sublocation, place?.city, place?.state, place?.country, place?.countryCode]
-            for (property, value) in zip(XMPSource.places, values) {
-                if let value {
-                    if packet?.text(property).flatMap(XMPSource.trimmed) != value {
-                        changes.append((property, .text(value)))
-                    }
-                } else if has(property) {
-                    changes.append((property, nil))
-                }
-            }
+            changes += locationChanges(to: packet, has: has)
         }
         if fields.contains(.captureTime), let camera, !current.same(.captureTime, as: self) {
             let time = XMPCaptureTime(camera: camera, shift: captureShift, offset: captureOffset).text
@@ -574,6 +533,68 @@ extension XMPFields {
         }
         if !changes.isEmpty {
             changes.append((XMPNamespace.metadataDate, .text(Self.date(now))))
+        }
+        return changes
+    }
+
+    /// The label in the chosen set's name, with its colour and Urgency, or a custom label's name, or none.
+    private func labelChanges(
+        conventions: XMPConventions, has: (XMPProperty) -> Bool,
+    ) -> [(XMPProperty, XMPValue?)] {
+        var changes: [(XMPProperty, XMPValue?)] = []
+        if let label {
+            changes.append((XMPNamespace.label, .text(conventions.labels.name(for: label))))
+            changes.append((XMPNamespace.labelColor, .text(label.rawValue)))
+            if conventions.urgency {
+                changes.append((XMPNamespace.urgency, .text(String(XMPUrgency.value(for: label)))))
+            }
+        } else if let custom = Self.text(customLabel) {
+            changes.append((XMPNamespace.label, .text(custom)))
+            var removed = [XMPNamespace.labelColor]
+            if conventions.urgency {
+                removed.append(XMPNamespace.urgency)
+            }
+            changes += removed.filter(has).map { ($0, nil) }
+        } else {
+            var removed = [XMPNamespace.label, XMPNamespace.labelColor]
+            if conventions.urgency {
+                removed.append(XMPNamespace.urgency)
+            }
+            changes += removed.filter(has).map { ($0, nil) }
+        }
+        return changes
+    }
+
+    /// The keywords as Lightroom's paths and the flat list, or none.
+    private func keywordChanges(has: (XMPProperty) -> Bool) -> [(XMPProperty, XMPValue?)] {
+        guard let keywords, !keywords.isEmpty else {
+            return [XMPNamespace.hierarchicalSubject, XMPNamespace.subject].filter(has).map { ($0, nil) }
+        }
+        let paths = KeywordPath.paths(keywords)
+        var names: [String] = []
+        var seen = Set<String>()
+        for name in paths.flatMap(\.names) where seen.insert(name).inserted {
+            names.append(name)
+        }
+        return [
+            (XMPNamespace.hierarchicalSubject, .bag(paths.map { $0.names.joined(separator: "|") })),
+            (XMPNamespace.subject, .bag(names)),
+        ]
+    }
+
+    /// The location in IPTC Core's five properties, those `packet` holds already left as they are.
+    private func locationChanges(to packet: XMPPacket?, has: (XMPProperty) -> Bool) -> [(XMPProperty, XMPValue?)] {
+        var changes: [(XMPProperty, XMPValue?)] = []
+        let place = Self.place(location)
+        let values = [place?.sublocation, place?.city, place?.state, place?.country, place?.countryCode]
+        for (property, value) in zip(XMPSource.places, values) {
+            if let value {
+                if packet?.text(property).flatMap(XMPSource.trimmed) != value {
+                    changes.append((property, .text(value)))
+                }
+            } else if has(property) {
+                changes.append((property, nil))
+            }
         }
         return changes
     }

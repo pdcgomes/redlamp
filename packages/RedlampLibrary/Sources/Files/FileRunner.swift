@@ -192,7 +192,9 @@ final class FileRunner: @unchecked Sendable {
             break
         }
     }
+}
 
+extension FileRunner {
     private func putBack(_ item: FileItem, from place: String) throws {
         let original = URL(fileURLWithPath: item.source)
         try? fileSystem.createDirectory(

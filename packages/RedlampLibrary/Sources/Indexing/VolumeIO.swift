@@ -211,7 +211,9 @@ public final class VolumeIO: Sendable {
         notify()
         scheduleProbe()
     }
+}
 
+extension VolumeIO {
     // MARK: - Running
 
     private struct Job: Sendable {

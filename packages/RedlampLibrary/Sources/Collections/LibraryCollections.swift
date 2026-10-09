@@ -194,20 +194,7 @@ public struct LibraryCollections: Sendable {
                 new.target = target.replacingPrefix(from, with: to)
             }
         case let .delete(paths):
-            for path in paths where list[path] == nil {
-                throw MetadataError.collection(.noSuchCollection(path))
-            }
-            let what = paths.count == 1 ? "“\(paths[0].displayName)”" : "\(paths.count) collections"
-            batch = MetadataBatch(kind: .collections, title: "Delete \(what)")
-            batch.edit = ["collections": .drop(paths.map(\.text))]
-            let ids = try await index.read { try $0.photoIDs(inCollectionsWithin: paths) }
-            batch.photos = try await metadata.photos(ids, edit: batch.edit)
-            for path in old.collections.keys where paths.contains(where: { path.isWithin($0) }) {
-                new.collections[path] = nil
-            }
-            if let target = old.target, paths.contains(where: { target.isWithin($0) }) {
-                new.target = nil
-            }
+            batch = try await deleting(paths, list: list, from: old, into: &new)
         case let .add(ids, path):
             if let existing = list[path], existing.kind != .collection {
                 throw MetadataError.collection(.notACollection(path))
@@ -263,5 +250,27 @@ public struct LibraryCollections: Sendable {
         if saved {
             metadata.live?.namesChanged()
         }
+    }
+
+    /// The batch that deletes `paths` and the collections inside them, which leave `definitions`.
+    private func deleting(
+        _ paths: [CollectionPath], list: CollectionList, from old: CollectionDefinitions,
+        into definitions: inout CollectionDefinitions,
+    ) async throws -> MetadataBatch {
+        for path in paths where list[path] == nil {
+            throw MetadataError.collection(.noSuchCollection(path))
+        }
+        let what = paths.count == 1 ? "“\(paths[0].displayName)”" : "\(paths.count) collections"
+        var batch = MetadataBatch(kind: .collections, title: "Delete \(what)")
+        batch.edit = ["collections": .drop(paths.map(\.text))]
+        let ids = try await index.read { try $0.photoIDs(inCollectionsWithin: paths) }
+        batch.photos = try await metadata.photos(ids, edit: batch.edit)
+        for path in old.collections.keys where paths.contains(where: { path.isWithin($0) }) {
+            definitions.collections[path] = nil
+        }
+        if let target = old.target, paths.contains(where: { target.isWithin($0) }) {
+            definitions.target = nil
+        }
+        return batch
     }
 }

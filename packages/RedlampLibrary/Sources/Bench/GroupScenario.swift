@@ -448,7 +448,7 @@ struct SyntheticSessionLibrary: Sendable {
                     let pick = picks && (random.int(below: 20) == 0 || !picked && frame == 0 && shot.frames == 1
                         && random.int(below: 4) == 0)
                     let id = add(
-                        base + ".ARW", folder: session, at: at, camera: shot.camera, lens: lens, shutter: shutter,
+                        base + ".ARW", folder: session, at: at, gear: (shot.camera, lens), shutter: shutter,
                         pick: pick, size: size, iso: Double(100 << random.int(below: 6)),
                     )
                     first = first ?? id
@@ -458,7 +458,7 @@ struct SyntheticSessionLibrary: Sendable {
                     last = max(last, at)
                     if paired, rows.count < photos {
                         add(
-                            base + ".JPG", folder: session, at: at, camera: shot.camera, lens: lens, shutter: shutter,
+                            base + ".JPG", folder: session, at: at, gear: (shot.camera, lens), shutter: shutter,
                             pick: false, size: size, iso: 100,
                         )
                         expected.pairs += 1
@@ -479,7 +479,7 @@ struct SyntheticSessionLibrary: Sendable {
             }
             if rows.count < photos, session % 10 == 0 {
                 add(
-                    "SCAN_\(rows.count).TIF", folder: scans, at: nil, camera: nil, lens: nil, shutter: nil, pick: false,
+                    "SCAN_\(rows.count).TIF", folder: scans, at: nil, gear: (nil, nil), shutter: nil, pick: false,
                     size: (3000, 2000), iso: nil,
                 )
             }
@@ -505,13 +505,14 @@ struct SyntheticSessionLibrary: Sendable {
 
     @discardableResult
     private mutating func add(
-        _ name: String, folder: Int64, at milliseconds: Int64?, camera: Int64?, lens: Int64?, shutter: Double?,
+        _ name: String, folder: Int64, at milliseconds: Int64?, gear: (camera: Int64?, lens: Int64?), shutter: Double?,
         pick: Bool, size: (Int, Int), iso: Double?,
     ) -> Int64 {
         let id = Int64(rows.count + 1)
         rows.append(ColumnStore.Row(
             HotColumns(
-                id: id, folder: folder, captured: milliseconds.map { Double($0) / 1000 }, camera: camera, lens: lens,
+                id: id, folder: folder, captured: milliseconds.map { Double($0) / 1000 }, camera: gear.camera,
+                lens: gear.lens,
                 rating: 0, flag: pick ? PhotoRecord.code(for: .pick) : 0, label: 0, marked: false, edited: false,
                 iso: iso, aperture: 4, focal: 50,
                 kind: PhotoRecord.Kind(pathExtension: (name as NSString).pathExtension).rawValue, name: name,

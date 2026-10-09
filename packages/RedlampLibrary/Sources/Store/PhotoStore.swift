@@ -160,9 +160,11 @@ public final class PhotoStore: Sendable {
         }
         return nil
     }
+}
 
+public extension PhotoStore {
     /// The key's `tier` for `edit`, if it was made from the photo file as it is now.
-    public func data(
+    func data(
         for key: ContentKey, tier: Tier, edit: EditDigest = .unedited, size: Int64, modified: Date,
     ) -> Data? {
         if case let .found(data) = read(StoreKey(key), tier, edit, file: (size, modified), payload: true) {
@@ -192,7 +194,7 @@ public final class PhotoStore: Sendable {
     /// `size` bytes modified at `modified`, in place of what was there; whether it was stored. A
     /// tier over its budget then loses its least recently used records.
     @discardableResult
-    public func store(
+    func store(
         _ payload: Data, for key: ContentKey, tier: Tier, edit: EditDigest = .unedited, size: Int64, modified: Date,
     ) -> Bool {
         let key = StoreKey(key)
@@ -219,19 +221,19 @@ public final class PhotoStore: Sendable {
     }
 
     /// Removes every tier and edit of the key.
-    public func remove(_ key: ContentKey) {
+    func remove(_ key: ContentKey) {
         let key = StoreKey(key)
         withShard(key.shard) { shard, now in shard.remove(key, tier: nil, edit: .unedited, now: now) }
     }
 
     /// Removes the key's `tier` for `edit`.
-    public func remove(_ key: ContentKey, tier: Tier, edit: EditDigest = .unedited) {
+    func remove(_ key: ContentKey, tier: Tier, edit: EditDigest = .unedited) {
         let key = StoreKey(key)
         withShard(key.shard) { shard, now in shard.remove(key, tier: tier, edit: edit, now: now) }
     }
 
     /// The edits the store holds the key's renders of, in either tier.
-    public func edits(of key: ContentKey) -> Set<EditDigest> {
+    func edits(of key: ContentKey) -> Set<EditDigest> {
         let key = StoreKey(key)
         return withShard(key.shard) { shard, now in Set(shard.edits(of: key, now: now).map(\.edit)) } ?? []
     }
@@ -240,7 +242,7 @@ public final class PhotoStore: Sendable {
     /// records went: a photo's earlier edits, once it's rendered with its new one (LIB-17). The
     /// unedited photo's tiers stay.
     @discardableResult
-    public func removeEdits(of key: ContentKey, keeping: Set<EditDigest> = []) -> Int {
+    func removeEdits(of key: ContentKey, keeping: Set<EditDigest> = []) -> Int {
         let key = StoreKey(key)
         return withShard(key.shard) { shard, now -> Int in
             let gone = shard.edits(of: key, now: now).filter { !keeping.contains($0.edit) }.map(\.entry)
@@ -253,7 +255,7 @@ public final class PhotoStore: Sendable {
     // MARK: - Budgets
 
     /// The bytes the tier's records take.
-    public func size(of tier: Tier) -> Int64 {
+    func size(of tier: Tier) -> Int64 {
         if !state.withLock({ $0.measured }) {
             open()
         }
@@ -262,7 +264,7 @@ public final class PhotoStore: Sendable {
 
     /// Sets the tier's budget, nil for none; a tier over its new budget loses its least recently
     /// used records now.
-    public func setBudget(_ bytes: Int64?, for tier: Tier) {
+    func setBudget(_ bytes: Int64?, for tier: Tier) {
         state.withLock { $0.budgets[tier] = bytes }
         if let bytes {
             keep(tier, within: bytes)
@@ -272,7 +274,7 @@ public final class PhotoStore: Sendable {
     /// Removes every record of the keys `isIndexed` says the library no longer holds, and returns
     /// how many keys went.
     @discardableResult
-    public func evict(keepingIndexed isIndexed: (ContentKey) -> Bool) -> Int {
+    func evict(keepingIndexed isIndexed: (ContentKey) -> Bool) -> Int {
         open()
         var removed = 0
         for number in 0 ..< Self.shardCount {
@@ -287,7 +289,7 @@ public final class PhotoStore: Sendable {
 
     /// Rewrites every shard with stale records, and returns the bytes that freed.
     @discardableResult
-    public func compact() -> Int64 {
+    func compact() -> Int64 {
         var freed: Int64 = 0
         for number in 0 ..< Self.shardCount {
             freed += withShard(number) { shard, now -> Int64 in
@@ -353,7 +355,7 @@ public final class PhotoStore: Sendable {
     // MARK: - Shards
 
     /// Opens every shard now, rather than as each is first used, and measures the store.
-    public func open() {
+    func open() {
         let root = state.withLock { state -> URL? in
             guard !state.leftoversRemoved else { return nil }
             state.leftoversRemoved = true
@@ -370,7 +372,7 @@ public final class PhotoStore: Sendable {
 
     /// Writes each open shard's index file and closes it (tests, and when the app quits); the store
     /// opens them again as they're used.
-    public func close() {
+    func close() {
         let now = Self.seconds(clock())
         DispatchQueue.concurrentPerform(iterations: Self.shardCount) { number in
             slots[number].state.withLock { slot in
@@ -387,7 +389,7 @@ public final class PhotoStore: Sendable {
         state.withLock { $0.measured = false }
     }
 
-    public func statistics() -> Statistics {
+    func statistics() -> Statistics {
         open()
         var statistics = Statistics(gridBytes: total(.grid), previewBytes: total(.preview))
         for number in 0 ..< Self.shardCount {
@@ -465,7 +467,7 @@ public final class PhotoStore: Sendable {
         tier == .grid ? gridBytes.load(ordering: .relaxed) : previewBytes.load(ordering: .relaxed)
     }
 
-    static func seconds(_ date: Date) -> UInt32 {
+    internal static func seconds(_ date: Date) -> UInt32 {
         UInt32(clamping: Int(date.timeIntervalSinceReferenceDate.rounded(.down)))
     }
 
@@ -475,7 +477,7 @@ public final class PhotoStore: Sendable {
     /// copy checked byte for byte before the shard reads and writes it, then the old files are
     /// removed. A shard waits while it's copied; the others read and write as usual. Throws, with
     /// the store left where it was, when a copy fails or `destination` holds a store already.
-    public func move(to destination: URL) throws {
+    func move(to destination: URL) throws {
         try moves.withLock { _ in
             let source = root
             guard destination.standardizedFileURL.path != source.standardizedFileURL.path else { return }

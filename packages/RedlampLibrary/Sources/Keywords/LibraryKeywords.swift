@@ -208,7 +208,9 @@ public final class LibraryKeywords: Sendable {
         batch.definitions = definitions.isEmpty ? nil : definitions
         return KeywordPlan(batch: batch)
     }
+}
 
+extension LibraryKeywords {
     /// Writes `plan`'s batch to the journal and runs it: the definitions, then the index, then the
     /// sidecars, `progress` hearing how many of those are done. A batch that fails partway is rolled
     /// back before the error is thrown. Throws `KeywordError.unfinished` while a batch a forced quit

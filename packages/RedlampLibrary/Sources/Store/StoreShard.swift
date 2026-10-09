@@ -153,7 +153,9 @@ struct StoreShard {
         }
         return shard
     }
+}
 
+extension StoreShard {
     /// A pack's generation, if it's one this version reads.
     private static func generation(of mapping: StoreMapping) -> UInt64? {
         let bytes = mapping.bytes
