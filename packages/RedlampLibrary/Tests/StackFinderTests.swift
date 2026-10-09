@@ -281,6 +281,34 @@ struct StackFinderTests {
         #expect(decoded == .init(id: id))
     }
 
+    @Test func `an index set back to version 8 opens at this version, its stacks' places kept`() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "redlamp-stack-places-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appending(path: "Index.sqlite")
+        let id = UUID()
+        let index = try await LibraryIndex.open(at: url)
+        let photo = try await index.write { writer in
+            let volume = try writer.upsertVolume(VolumeRecord(uuid: "PLACES", kind: .ssd))
+            let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
+            let folder = try writer.upsertFolder(FolderRecord(root: root, path: "/Volumes/Test/Photos/Shoot"))
+            let stacked = PhotoRecord(folder: folder, name: "A.JPG", stack: PhotoStack(id: id, position: 3))
+            return try writer.upsertPhotos([stacked])[0]
+        }
+        await index.close()
+        do {
+            let holder = try SQLiteDatabase(path: url.path)
+            try holder.setUserVersion(8)
+        }
+        let reopened = try await LibraryIndex.open(at: url)
+        defer { reopened.closeAndWait() }
+        let (version, row) = try await reopened.read { reader in
+            try (reader.database.userVersion, reader.photo(id: photo))
+        }
+        #expect(version == LibraryIndex.schemaVersion)
+        #expect(row?.stack == PhotoStack(id: id, position: 3))
+    }
+
     @Test func `an index whose settings kept the choices moves them to its columns`() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "redlamp-stacks-\(UUID().uuidString)", directoryHint: .isDirectory)

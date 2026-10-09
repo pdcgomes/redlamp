@@ -48,7 +48,10 @@ extension LibraryIndex {
         try database.execute(schemaVersion8)
     }
 
+    /// Adds nothing to an index that has the column already, one set back to version 8.
     static func migrateToVersion9(_ database: SQLiteDatabase) throws {
+        let column = try database.prepare("SELECT 1 FROM pragma_table_info('photos') WHERE name = 'stack_position'")
+        guard try column.first({ _ in true }) == nil else { return }
         try database.execute(schemaVersion9)
     }
 
