@@ -169,6 +169,53 @@ struct MomentTests {
         #expect(sparse.grouping().moments(of: sparse.list, setting: tightest).photoSets == photos.map { [$0] })
     }
 
+    @Test func `moments start where the rule says, the median of each pause's own window worked out afresh`() {
+        var random = SeededRandom(seed: 29)
+        var times: [Int64] = [0]
+        for _ in 0 ..< 6000 {
+            let gap = switch random.int(below: 10) {
+            case 0 ..< 5: Int64(random.int(in: 1 ... 30000))
+            case 5, 6: Int64(random.int(in: 0 ... 1000))
+            case 7: Int64(random.int(in: 30000 ... 600_000))
+            case 8: Int64(random.int(in: 600_000 ... 8_000_000))
+            default: Int64(random.int(in: 8_000_000 ... 400_000_000))
+            }
+            times.append(times[times.count - 1] + gap)
+        }
+        for looseness in MomentSetting.tightest ... MomentSetting.loosest {
+            let setting = MomentSetting(looseness: looseness)
+            let found = times.withUnsafeBufferPointer { MomentFinder.starts($0, setting: setting) }
+            #expect(Array(found) == Self.starts(times, setting: setting), "looseness \(looseness)")
+        }
+    }
+
+    /// `MomentFinder.starts` as its documentation states the rule, each pause's window sorted afresh.
+    private static func starts(_ times: [Int64], setting: MomentSetting) -> [Int32] {
+        var pauses: [Int64] = []
+        var after: [Int32] = []
+        for place in times.indices.dropFirst() {
+            let gap = times[place] - times[place - 1]
+            if gap > Int64(StackFinder.burstGap * 1000) {
+                pauses.append(gap)
+                after.append(Int32(place))
+            }
+        }
+        let (around, floor) = (MomentFinder.gapsAround, Int64((setting.floor * 1000).rounded()))
+        var starts: [Int32] = []
+        for pause in pauses.indices where pauses[pause] > floor {
+            let lower = max(0, min(pause - around / 2, pauses.count - around - 1))
+            var window = Array(pauses[lower ..< min(pauses.count, lower + around + 1)])
+            window.remove(at: window.firstIndex(of: pauses[pause]) ?? 0)
+            window.sort()
+            let median = window.isEmpty ? .infinity : window.count % 2 == 1 ? Double(window[window.count / 2])
+                : Double(window[window.count / 2 - 1] + window[window.count / 2]) / 2
+            if Double(pauses[pause]) > setting.multiple * min(median, MomentSetting.slowestPace * 1000) {
+                starts.append(after[pause])
+            }
+        }
+        return starts
+    }
+
     @Test func `one setting moves the floor and the multiple together`() throws {
         let standard = MomentSetting()
         #expect(standard.looseness == 0 && standard.floor == 60 && standard.multiple == 4 && standard.ceiling == 3600)
