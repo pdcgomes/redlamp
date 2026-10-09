@@ -22,6 +22,31 @@ private final class ReadLog: Sendable {
 /// click or the next photo selects one.
 @MainActor
 struct PhotoSelectionTests {
+    @Test func `the photos selected are read with one read of the selection, as a panel's view reads them`() {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let model = EditorModel(engine: StubEngine())
+        model.showModule(.library)
+        let photos = (0 ..< 20000).map { folder.appending(path: String(format: "IMG_%05d.ARW", $0)) }
+        model.library.replace(with: photos.map { LibraryItem(url: $0) })
+        model.select(photos[0])
+        model.selectAllPhotos()
+        #expect(model.selectedPhotos == photos)
+        /// Each read of the selection inside a view's body is an observed access, which `selectedRows` makes once.
+        func median(_ read: () -> Void) -> Duration {
+            let clock = ContinuousClock()
+            var times: [Duration] = []
+            for _ in 0 ..< 9 {
+                let start = clock.now
+                withObservationTracking(read) {}
+                times.append(clock.now - start)
+            }
+            return times.sorted()[times.count / 2]
+        }
+        let photosRead = median { _ = model.selectedPhotos }
+        let rowsRead = median { _ = model.selectedRows }
+        #expect(photosRead < rowsRead * 3 + .milliseconds(1), "selectedPhotos \(photosRead), selectedRows \(rowsRead)")
+    }
+
     @Test func `clicks select several photos, the clicked one active`() {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let model = EditorModel(engine: StubEngine())

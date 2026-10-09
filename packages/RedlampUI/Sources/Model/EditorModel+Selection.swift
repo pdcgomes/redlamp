@@ -7,15 +7,19 @@ import RedlampLibrary
 /// over the photos' IDs (`library.photoList`), so selecting all of a large folder costs a pass over its
 /// bits, never one over its photos.
 public extension EditorModel {
-    /// The photos selected, in the filmstrip's order: a pass over the photos shown, so views follow
-    /// `photoSelection` itself.
+    /// The photos selected, in the filmstrip's order: a pass over the photos' IDs, so views follow
+    /// `photoSelection` itself. The selection is read once: each read is an observed access, which a view's body
+    /// would make a photo at a time; and only the photos selected are read, each a copy of many references.
     var selectedPhotos: [URL] {
-        guard !photoSelection.isEmpty else { return selection.map { [$0] } ?? [] }
+        let selected = photoSelection
+        guard !selected.isEmpty else { return selection.map { [$0] } ?? [] }
         let ids = library.photoIDs
         var urls: [URL] = []
-        urls.reserveCapacity(photoSelection.count)
-        for (index, item) in items.enumerated() where photoSelection.contains(ids[index]) {
-            urls.append(item.url)
+        urls.reserveCapacity(selected.count)
+        items.withUnsafeBufferPointer { items in
+            for index in ids.indices where items.indices.contains(index) && selected.contains(ids[index]) {
+                urls.append(items[index].url)
+            }
         }
         return urls
     }
