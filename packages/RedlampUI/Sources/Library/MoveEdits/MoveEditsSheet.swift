@@ -21,8 +21,10 @@ final class MoveEditsSheetController: NSViewController {
     private let progress = NSProgressIndicator()
     private let cancel = NSButton(title: "Cancel", target: nil, action: nil)
     private let move = NSButton(title: "Move", target: nil, action: nil)
-    /// When the sheet went up, after the command that asked for it, for the regression suite.
+    /// When the sheet went up, after the command that asked for it, and whether the index's numbers were in it then,
+    /// for the regression suite.
     private(set) var shown: ContinuousClock.Instant?
+    private(set) var appearedWithNumbers = false
     private let requested: ContinuousClock.Instant
 
     static let width: CGFloat = 520
@@ -109,15 +111,24 @@ final class MoveEditsSheetController: NSViewController {
         update()
     }
 
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        model.takeAnswer(since: requested)
+    }
+
     override func viewDidAppear() {
         super.viewDidAppear()
-        shown = shown ?? .now
-        if case .checking = model.phase, let sidecars = editor?.library.service?.core?.sidecars {
+        MoveEditsTrace.note("sheet appeared")
+        if shown == nil {
+            shown = .now
+            appearedWithNumbers = model.indexed != nil
+        }
+        if case .checking = model.phase, model.rootID != nil, let sidecars = editor?.library.service?.core?.sidecars {
             Task { await model.check(sidecars) }
         }
     }
 
-    /// The time from the command to the sheet on screen, its numbers in it.
+    /// The time from the command to the sheet on screen.
     var shownAfter: Duration? {
         shown.map { $0 - requested }
     }
@@ -217,11 +228,13 @@ final class MoveEditsSheetController: NSViewController {
     public var isOver: Bool
     /// The disk has been looked through: the count is the disk's.
     public var isChecked: Bool
-    /// From the command to the sheet on screen with its numbers, to its numbers read from the index, and to the read's
-    /// end, off the main thread.
+    /// From the command to the sheet on screen, to its numbers from the index in it, and to the read's end, off the
+    /// main thread.
     public var shownAfter: Duration?
     public var surveyedAfter: Duration?
     public var readAfter: Duration?
+    /// The index's numbers were in the sheet as it appeared.
+    public var appearedWithNumbers: Bool
 }
 
 @_spi(Harness) public extension EditorModel {
@@ -233,7 +246,7 @@ final class MoveEditsSheetController: NSViewController {
             heading: model.heading, count: model.count, kept: model.kept, goingTo: model.goingTo,
             status: model.status, canMove: model.canMove, isMoving: model.isMoving, isOver: model.isOver,
             isChecked: model.plan != nil, shownAfter: controller.shownAfter, surveyedAfter: model.surveyed,
-            readAfter: model.read,
+            readAfter: model.read, appearedWithNumbers: controller.appearedWithNumbers,
         )
     }
 }

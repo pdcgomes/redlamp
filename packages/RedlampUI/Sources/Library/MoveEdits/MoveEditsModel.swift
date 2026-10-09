@@ -1,14 +1,17 @@
 import Foundation
 import RedlampDocument
 import RedlampLibrary
+import Synchronization
 
 /// What Move Edits and Metadata… (LIB-11, DEC-43) says of a root and the move it runs: where the root keeps its
-/// edits and metadata and where they'd go, how many photos have them (from the index, so it's on screen at once,
-/// then from the disk), whether they can go there, and the move's progress and outcome.
+/// edits and metadata and where they'd go, how many photos have them (from the index, then from the disk), whether
+/// they can go there, and the move's progress and outcome. The sheet opens before the index has answered, with where
+/// the library's locator says the root keeps them, and doesn't wait for it: the index's numbers follow.
 @MainActor
 final class MoveEditsModel {
     enum Phase: Equatable {
-        /// The sidecars are being found on the disk: Move waits for them.
+        /// The index is asked how many photos have edits or metadata, then the sidecars are found on the disk: Move
+        /// waits for them.
         case checking
         case ready
         /// The open photo's edit, and the saves asked for before Move, are being written.
@@ -19,13 +22,17 @@ final class MoveEditsModel {
         case failed(String)
     }
 
+    /// The root's row in the index, where it keeps its sidecars and how many of its photos have one.
+    typealias Survey = (id: Int64, placement: RootRecord.Sidecars, photos: Int)
+
     let root: WorkingFolder
-    let rootID: Int64?
-    /// Where the root keeps its sidecars now.
-    let placement: RootRecord.Sidecars
-    /// Its photos with edits or metadata, as the index has them.
-    let indexed: Int
-    /// How long the index took to say so, from the command to the read's end, and to the main thread having it, for the
+    /// The root's row in the index, once it has answered.
+    private(set) var rootID: Int64?
+    /// Where the root keeps its sidecars now: as the locator has it until the index answers.
+    private(set) var placement: RootRecord.Sidecars
+    /// Its photos with edits or metadata, as the index has them; nil until it has answered.
+    private(set) var indexed: Int?
+    /// From the command to the read's end, off the main thread, and to the sheet having the numbers, for the
     /// regression suite.
     var read: Duration?
     var surveyed: Duration?
@@ -39,6 +46,14 @@ final class MoveEditsModel {
     private(set) var phase: Phase
     let control = SidecarMoveControl()
     var onChange: (() -> Void)?
+    /// The index's answer as the read leaves it, off the main thread, for the sheet to take before it first appears.
+    private let answer = Answer()
+    private var sidecars: LibrarySidecars?
+    private var isLookingThrough = false
+
+    private final class Answer: Sendable {
+        let survey = Mutex<(Survey?, read: Duration)?>(nil)
+    }
 
     init(
         root: WorkingFolder, rootID: Int64?, placement: RootRecord.Sidecars, indexed: Int,
@@ -52,10 +67,25 @@ final class MoveEditsModel {
         if unfinished != nil {
             phase = .moving(FileProgress(done: 0, total: 0, isRollingBack: unfinished?.puttingBack == true))
         } else if rootID == nil {
-            phase = .failed("The library hasn't read “\(root.name)” yet, so its edits and metadata can't be moved yet")
+            phase = .failed(Self.unread(root))
         } else {
             phase = .checking
         }
+    }
+
+    /// A sheet for `root` before the index has answered, where `locator` says it keeps its sidecars;
+    /// `survey(_:since:)` asks the index, then the disk.
+    init(root: WorkingFolder, locator: SidecarLocator, sidecars: LibrarySidecars) {
+        self.root = root
+        let path = LibraryService.path(root.url)
+        placement = locator.roots.first { $0.path == path }?.onThisMac == true ? .onThisMac : .besidePhotos
+        self.sidecars = sidecars
+        unfinished = nil
+        phase = .checking
+    }
+
+    private static func unread(_ root: WorkingFolder) -> String {
+        "The library hasn't read “\(root.name)” yet, so its edits and metadata can't be moved yet"
     }
 
     /// Where the move takes them: the other place, or where the unfinished move was taking them.
@@ -93,19 +123,56 @@ final class MoveEditsModel {
 
     /// The root of the index at `root`'s path, where it keeps its sidecars and how many of its photos have one: a read
     /// of the index, for the sheet's numbers. Nil when the index doesn't have it.
-    nonisolated static func survey(
-        _ root: URL, in index: LibraryIndex,
-    ) async -> (id: Int64, placement: RootRecord.Sidecars, photos: Int)? {
+    nonisolated static func survey(_ root: URL, in index: LibraryIndex) async -> Survey? {
         let path = LibraryService.path(root)
-        return try? await index.read { reader -> (id: Int64, placement: RootRecord.Sidecars, photos: Int)? in
+        return try? await index.read { reader -> Survey? in
+            MoveEditsTrace.note("read began on a reader")
+            defer { MoveEditsTrace.note("read over") }
             guard let record = try reader.root(path: path) else { return nil }
             return try (record.id, record.sidecars, reader.photoCount(withSidecarsInRoot: record.id))
         } ?? nil
     }
 
+    /// Asks the index how many of the root's photos have edits or metadata, off the main thread, then looks through
+    /// the disk. The answer reaches the sheet as it first appears (`takeAnswer(since:)`) when it's in by then, or as
+    /// soon as the main thread is free after.
+    func survey(_ index: LibraryIndex, since requested: ContinuousClock.Instant) {
+        let (folder, answer) = (root.url, answer)
+        // Started here, not from a task on the main actor, which waits for the main thread to lay out the sheet.
+        let reading = Task.detached(priority: .userInitiated) {
+            let survey = await Self.survey(folder, in: index)
+            answer.survey.withLock { $0 = (survey, ContinuousClock.now - requested) }
+        }
+        Task {
+            await reading.value
+            takeAnswer(since: requested)
+        }
+    }
+
+    /// Shows the index's answer once it's in, and then looks through the disk.
+    func takeAnswer(since requested: ContinuousClock.Instant) {
+        guard indexed == nil, phase == .checking, let found = answer.survey.withLock({ $0 }) else { return }
+        MoveEditsTrace.note("the sheet has the numbers")
+        read = found.read
+        surveyed = .now - requested
+        guard let survey = found.0 else {
+            phase = .failed(Self.unread(root))
+            onChange?()
+            return
+        }
+        rootID = survey.id
+        placement = survey.placement
+        indexed = survey.photos
+        onChange?()
+        if let sidecars {
+            Task { await check(sidecars) }
+        }
+    }
+
     /// Finds the sidecars on the disk, and, for a move into the folder, whether Redlamp can write there.
     func check(_ sidecars: LibrarySidecars) async {
-        guard let rootID, phase == .checking else { return }
+        guard let rootID, phase == .checking, !isLookingThrough else { return }
+        isLookingThrough = true
         let (destination, folder) = (destination, root.url)
         let found = await Task.detached(priority: .userInitiated) { () -> (
             Result<SidecarMovePlan, any Error>,
@@ -176,8 +243,10 @@ final class MoveEditsModel {
 
     /// How many photos have edits or metadata in the place they'd leave: the index's count until the disk's is in.
     var count: String {
-        let photos = plan.map { $0.items.count + $0.conflicts.count } ?? indexed
         let place = Self.place(source)
+        guard let photos = plan.map({ $0.items.count + $0.conflicts.count }) ?? indexed else {
+            return "Counting the photos with edits or metadata \(place)…"
+        }
         guard photos > 0 else { return "No photo has edits or metadata \(place)." }
         return "\(Self.photos(photos)) \(photos == 1 ? "has" : "have") edits or metadata \(place)."
     }

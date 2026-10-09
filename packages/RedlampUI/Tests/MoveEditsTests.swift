@@ -173,6 +173,11 @@ struct MoveEditsTests {
         }
     }
 
+    /// Holds the thread it's called on, as work on the main thread does.
+    private static func stall(_ seconds: Double) {
+        Thread.sleep(forTimeInterval: seconds)
+    }
+
     // MARK: - Moving
 
     @Test func `a root's edits and metadata move to this Mac and back with every byte kept, its placement following`(
@@ -365,6 +370,75 @@ extension MoveEditsTests {
             indexed: 0,
         )
         #expect(unknown.isOver && unknown.status.hasPrefix("The library hasn't read “Elsewhere” yet"))
+    }
+
+    @Test func `the sheet starts where the locator says, counting, and doesn't wait for readers the index has busy`(
+    ) async throws {
+        let folder = Folder()
+        defer { folder.cleanUp() }
+        try folder.write(["A.JPG", "B.JPG", "C.JPG"], edited: ["A.JPG", "C.JPG"])
+        try await folder.open()
+        let core = try folder.core
+        let sheet = try MoveEditsModel(
+            root: folder.workingFolder, locator: folder.library.sidecars.locator, sidecars: core.sidecars,
+        )
+        #expect(sheet.phase == .checking && sheet.placement == .besidePhotos && sheet.rootID == nil)
+        #expect(sheet.count == "Counting the photos with edits or metadata beside the photos…")
+        #expect(sheet.goingTo == "Redlamp on this Mac" && !sheet.canMove)
+
+        // Every reader taken by a long read, as a large library's counts can take them.
+        let index = core.index
+        let busy = (0 ..< 8).map { _ in
+            Task.detached { try await index.read { _ in Thread.sleep(forTimeInterval: 0.5) } }
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        sheet.survey(index, since: .now)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(sheet.indexed == nil && sheet.phase == .checking, "still counting behind the long reads")
+        for read in busy {
+            try await read.value
+        }
+        await Self.eventually { sheet.canMove }
+        #expect(sheet.indexed == 2 && sheet.rootID != nil && sheet.canMove)
+        #expect(sheet.count == "2 photos have edits or metadata beside the photos.")
+        #expect(try #require(sheet.read) > .milliseconds(200))
+    }
+
+    @Test func `the index's answer is in the sheet as it first appears when the read is over by then`() async throws {
+        let folder = Folder()
+        defer { folder.cleanUp() }
+        try folder.write(["A.JPG", "B.JPG"], edited: ["B.JPG"])
+        try await folder.open()
+        let core = try folder.core
+        let sheet = try MoveEditsModel(
+            root: folder.workingFolder, locator: folder.library.sidecars.locator, sidecars: core.sidecars,
+        )
+        let requested = ContinuousClock.now
+        sheet.survey(core.index, since: requested)
+        // The main thread busy laying out the sheet, so the answer can't come back to it on its own.
+        Self.stall(0.3)
+        #expect(sheet.indexed == nil)
+        sheet.takeAnswer(since: requested)
+        #expect(sheet.indexed == 1 && sheet.count == "1 photo has edits or metadata beside the photos.")
+        #expect(try #require(sheet.read) < .milliseconds(300))
+        #expect(try #require(sheet.surveyed) >= .milliseconds(300))
+        await Self.eventually { sheet.canMove }
+        #expect(sheet.canMove, "and then the disk looked through")
+    }
+
+    @Test func `a root the locator keeps on this Mac starts the sheet there`() async throws {
+        let folder = Folder()
+        defer { folder.cleanUp() }
+        try folder.write(["A.JPG"], edited: ["A.JPG"])
+        try await folder.open()
+        let path = LibraryService.path(folder.root)
+        let locator = SidecarLocator(folder: folder.paths.sidecars, roots: [
+            SidecarLocator.Root(path: path, volume: "CARD", pathInVolume: "Photos", onThisMac: true),
+            SidecarLocator.Root(path: path + "/Day 2", volume: "CARD", pathInVolume: "Photos/Day 2", onThisMac: false),
+        ])
+        let sheet = try MoveEditsModel(root: folder.workingFolder, locator: locator, sidecars: folder.core.sidecars)
+        #expect(sheet.placement == .onThisMac && sheet.goingTo == "Beside the photos")
+        #expect(sheet.count == "Counting the photos with edits or metadata in Redlamp on this Mac…")
     }
 
     @Test func `the open photo's edit is saved before the move, and its next save goes where it went`() async throws {

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import RedlampDocument
 import RedlampLibrary
+import Synchronization
 
 /// Move Edits and Metadata… (LIB-11, DEC-43): from a root's menu in Folders for that root, and from the Library menu
 /// and the palette for the root holding the folder open in Folders. Its sheet says where the root keeps its edits and
@@ -35,33 +36,19 @@ public extension EditorModel {
             && library.roots.contains { $0.id == root.id }
     }
 
-    /// Move Edits and Metadata… for `root`: its sheet, with where the root keeps its edits and metadata and how many of
-    /// its photos have them, from the index.
+    /// Move Edits and Metadata… for `root`: its sheet at once, where the root keeps its edits and metadata as the
+    /// library's locator has it, and how many of its photos have them as soon as the index says, which the sheet
+    /// doesn't wait for: a read can queue behind others on the index's readers.
     @discardableResult
     func moveEditsAndMetadata(of root: WorkingFolder) -> Bool {
         guard canMoveEdits(of: root), let core = library.service?.core,
               let window = EditorWindowController.frontWindow, window.attachedSheet == nil
         else { return false }
         let requested = ContinuousClock.now
-        isModalDialogOpen = true
-        // The read starts now rather than once the menu that chose the command has let the main thread go.
-        let (folder, index) = (root.url, core.index)
-        let reading = Task.detached(priority: .userInitiated) {
-            let survey = await MoveEditsModel.survey(folder, in: index)
-            return (survey, ContinuousClock.now - requested)
-        }
-        Task {
-            let (survey, read) = await reading.value
-            isModalDialogOpen = false
-            let model = MoveEditsModel(
-                root: root, rootID: survey?.id, placement: survey?.placement ?? .besidePhotos,
-                indexed: survey?.photos ?? 0,
-            )
-            model.read = read
-            model.surveyed = .now - requested
-            MoveEditsSheetController.present(model, editor: self, requested: requested)
-        }
-        return true
+        MoveEditsTrace.note("command", at: requested)
+        let sheet = MoveEditsModel(root: root, locator: library.sidecars.locator, sidecars: core.sidecars)
+        sheet.survey(core.index, since: requested)
+        return MoveEditsSheetController.present(sheet, editor: self, requested: requested) != nil
     }
 }
 
@@ -285,5 +272,37 @@ extension EditorModel {
         let reasons = Set(failed.values.map(SidecarMoveJob.reason)).sorted()
         let shown = reasons.prefix(3).joined(separator: "; ")
         return reasons.count > 3 ? shown + "; and \(reasons.count - 3) more reasons" : shown
+    }
+}
+
+/// The steps Move Edits and Metadata… takes to its sheet, each when it happened, for the regression suite's
+/// measurements; nothing outside development and profiling builds.
+@_spi(Harness) public enum MoveEditsTrace {
+    #if DEBUG || REDLAMP_PROFILING
+        private static let marks = Mutex<[(time: ContinuousClock.Instant, text: String)]>([])
+    #endif
+
+    static func note(_ text: @autoclosure () -> String, at time: ContinuousClock.Instant = .now) {
+        #if DEBUG || REDLAMP_PROFILING
+            let text = text()
+            marks.withLock { marks in
+                marks.append((time, text))
+                if marks.count > 100 {
+                    marks.removeFirst(marks.count - 100)
+                }
+            }
+        #endif
+    }
+
+    /// The steps noted since the last call.
+    public static func take() -> [(time: ContinuousClock.Instant, text: String)] {
+        #if DEBUG || REDLAMP_PROFILING
+            marks.withLock { marks in
+                defer { marks = [] }
+                return marks
+            }
+        #else
+            []
+        #endif
     }
 }
