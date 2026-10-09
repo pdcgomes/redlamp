@@ -39,7 +39,10 @@ public final class LibraryIndex: Sendable {
         try Self.configure(database, writing: true)
         try Self.migrate(database, with: migrations)
         let marks = IndexIDMarks(index: url)
-        try database.transaction(.immediate) { try marks.reconcile(Writer(database: database)) }
+        // The tables the last IDs are worked out from are this build's schema's.
+        if migrations.count == Self.migrations.count {
+            try database.transaction(.immediate) { try marks.reconcile(Writer(database: database)) }
+        }
         self.marks = marks
         sqlite3_update_hook(database.handle, { context, _, _, table, row in
             guard let context, let table else { return }
