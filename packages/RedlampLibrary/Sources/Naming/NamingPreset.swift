@@ -63,6 +63,6 @@ public struct NamingPreset: Sendable, Hashable, Codable, Identifiable {
     public static let builtIn = lightroom + redlamp
 
     private static func builtIn(_ id: String, _ name: String, _ template: String) -> NamingPreset {
-        NamingPreset(id: id, name: name, template: try! NamingTemplate(parsing: template))
+        NamingPreset(id: id, name: name, template: (try? NamingTemplate(parsing: template)) ?? NamingTemplate([]))
     }
 }

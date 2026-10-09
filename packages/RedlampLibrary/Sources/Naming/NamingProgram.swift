@@ -41,7 +41,8 @@ struct NamingProgram: Sendable {
         case upper, lower, title
         case range(NamingRange)
         case replace(String, String)
-        case regex(NSRegularExpression, String)
+        /// Nil for a pattern made in code that doesn't compile, which matches nothing: parsing refuses those.
+        case regex(NSRegularExpression?, String)
         case defaultText(String)
         case before(String)
         case after(String)
@@ -151,32 +152,15 @@ struct NamingProgram: Sendable {
         case .now:
             let (format, zone) = date()
             return .now(format, zone)
-        case .camera: return .camera
-        case .make: return .make
-        case .model: return .model
-        case .lens: return .lens
-        case .iso: return .iso
-        case .aperture: return .aperture
-        case .shutter: return .shutter
-        case .focal: return .focal
-        case .width: return .width
-        case .height: return .height
-        case .title: return .title
-        case .caption: return .caption
-        case .creator: return .creator
-        case .copyright: return .copyright
-        case .city: return .city
-        case .state: return .state
-        case .country: return .country
-        case .sublocation: return .sublocation
+        case .camera, .make, .model, .lens, .iso, .aperture, .shutter, .focal, .width, .height, .ext:
+            return photoSource(token.field)
+        case .title, .caption, .creator, .copyright, .city, .state, .country, .sublocation, .rating, .label,
+             .flag:
+            return metadataSource(token.field)
         case .keywords: return .keywords(arguments.isEmpty ? " " : argument(0))
-        case .rating: return .rating
-        case .label: return .label
-        case .flag: return .flag
         case .name: return .name(NamingRange(parsing: argument(0)))
         case .original: return .original(NamingRange(parsing: argument(0)))
         case .number: return .number(digits(0))
-        case .ext: return .ext
         case .folder: return .folder(max(Int(argument(0)) ?? 1, 1))
         case .sequence: return .sequence(digits(0), NamingSequenceScope(parsing: argument(1)) ?? .job)
         case .total: return .total(digits(0))
@@ -190,9 +174,44 @@ struct NamingProgram: Sendable {
         }
     }
 
-    /// For a pattern made in code that doesn't compile: parsing refuses those.
-    private static let matchingNothing = try! NSRegularExpression(pattern: "(?!)")
+    /// The source of a camera setting, the photo's size or its extension.
+    private static func photoSource(_ field: NamingField) -> Source {
+        switch field {
+        case .camera: .camera
+        case .make: .make
+        case .model: .model
+        case .lens: .lens
+        case .iso: .iso
+        case .aperture: .aperture
+        case .shutter: .shutter
+        case .focal: .focal
+        case .width: .width
+        case .height: .height
+        case .ext: .ext
+        default: .ext
+        }
+    }
 
+    /// The source of a field of the photo's metadata.
+    private static func metadataSource(_ field: NamingField) -> Source {
+        switch field {
+        case .title: .title
+        case .caption: .caption
+        case .creator: .creator
+        case .copyright: .copyright
+        case .city: .city
+        case .state: .state
+        case .country: .country
+        case .sublocation: .sublocation
+        case .rating: .rating
+        case .label: .label
+        case .flag: .flag
+        default: .title
+        }
+    }
+}
+
+extension NamingProgram {
     private static func modifier(_ modifier: NamingModifier) -> Modifier {
         switch modifier {
         case .upper: return .upper
@@ -201,9 +220,7 @@ struct NamingProgram: Sendable {
         case let .range(range): return .range(range)
         case let .replace(find, with): return .replace(find, with)
         case let .regex(pattern, with, ignoringCase):
-            let expression = (try? NSRegularExpression(
-                pattern: pattern, options: ignoringCase ? [.caseInsensitive] : [],
-            )) ?? Self.matchingNothing
+            let expression = try? NSRegularExpression(pattern: pattern, options: ignoringCase ? [.caseInsensitive] : [])
             return .regex(expression, with)
         case let .defaultText(text): return .defaultText(text)
         case let .before(text): return .before(text)
@@ -293,49 +310,13 @@ struct NamingProgram: Sendable {
         _ source: Source, of fields: borrowing NamingFields, _ subject: Subject, folders: borrowing [[String]],
     ) -> String {
         switch source {
-        case let .captured(format, zone):
-            guard let captured = fields.captured else { return "" }
-            return date(NamingMoment(wallClock: captured, offset: fields.capturedOffset), format, zone)
-        case let .modified(format, zone):
-            guard let modified = fields.modified else { return "" }
-            return date(instant: modified, format, zone)
-        case let .now(format, zone):
-            return date(instant: context.date, format, zone)
-        case .camera: return fields.camera ?? ""
-        case .make: return fields.make ?? ""
-        case .model: return fields.model ?? ""
-        case .lens: return fields.lens ?? ""
-        case .iso: return number(fields.iso.map { Int($0.rounded()) })
-        case .aperture: return decimal(fields.aperture)
-        case .shutter:
-            guard let shutter = fields.shutter, shutter > 0, shutter.isFinite else { return "" }
-            if shutter >= 0.3 {
-                return decimal(shutter)
-            }
-            var text = "1-"
-            NamingNumbers.append(Int((1 / shutter).rounded()), digits: 1, to: &text)
-            return text
-        case .focal: return decimal(fields.focalLength)
-        case .width: return number(fields.width)
-        case .height: return number(fields.height)
-        case .title: return fields.title ?? ""
-        case .caption: return fields.caption ?? ""
-        case .creator: return fields.creator ?? ""
-        case .copyright: return fields.copyright ?? ""
-        case .city: return fields.location?.city ?? ""
-        case .state: return fields.location?.state ?? ""
-        case .country: return fields.location?.country ?? ""
-        case .sublocation: return fields.location?.sublocation ?? ""
-        case let .keywords(separator):
-            return fields.keywords.map { KeywordPath($0)?.name ?? $0 }.joined(separator: separator)
-        case .rating: return number(fields.rating)
-        case .label: return fields.label ?? ""
-        case .flag:
-            switch fields.flag {
-            case .pick: return "Pick"
-            case .reject: return "Reject"
-            case nil: return ""
-            }
+        case .captured, .modified, .now:
+            return dateValue(source, of: fields)
+        case .camera, .make, .model, .lens, .iso, .aperture, .shutter, .focal, .width, .height:
+            return photoValue(source, of: fields)
+        case .title, .caption, .creator, .copyright, .city, .state, .country, .sublocation, .keywords, .rating, .label,
+             .flag:
+            return metadataValue(source, of: fields)
         case let .name(range): return range.map { $0.apply(to: subject.base) } ?? subject.base
         case let .original(range): return range.map { $0.apply(to: subject.originalBase) } ?? subject.originalBase
         case let .number(digits):
@@ -356,6 +337,70 @@ struct NamingProgram: Sendable {
         case let .total(digits): return number(total, digits: digits)
         case let .counter(slot, digits): return number(counterStarts[slot] + subject.sequence.job + 1, digits: digits)
         case let .text(name): return context.texts[name] ?? ""
+        }
+    }
+
+    private func dateValue(_ source: Source, of fields: borrowing NamingFields) -> String {
+        switch source {
+        case let .captured(format, zone):
+            guard let captured = fields.captured else { return "" }
+            return date(NamingMoment(wallClock: captured, offset: fields.capturedOffset), format, zone)
+        case let .modified(format, zone):
+            guard let modified = fields.modified else { return "" }
+            return date(instant: modified, format, zone)
+        case let .now(format, zone):
+            return date(instant: context.date, format, zone)
+        default:
+            return ""
+        }
+    }
+
+    private func photoValue(_ source: Source, of fields: borrowing NamingFields) -> String {
+        switch source {
+        case .camera: return fields.camera ?? ""
+        case .make: return fields.make ?? ""
+        case .model: return fields.model ?? ""
+        case .lens: return fields.lens ?? ""
+        case .iso: return number(fields.iso.map { Int($0.rounded()) })
+        case .aperture: return decimal(fields.aperture)
+        case .shutter:
+            guard let shutter = fields.shutter, shutter > 0, shutter.isFinite else { return "" }
+            if shutter >= 0.3 {
+                return decimal(shutter)
+            }
+            var text = "1-"
+            NamingNumbers.append(Int((1 / shutter).rounded()), digits: 1, to: &text)
+            return text
+        case .focal: return decimal(fields.focalLength)
+        case .width: return number(fields.width)
+        case .height: return number(fields.height)
+        default:
+            return ""
+        }
+    }
+
+    private func metadataValue(_ source: Source, of fields: borrowing NamingFields) -> String {
+        switch source {
+        case .title: fields.title ?? ""
+        case .caption: fields.caption ?? ""
+        case .creator: fields.creator ?? ""
+        case .copyright: fields.copyright ?? ""
+        case .city: fields.location?.city ?? ""
+        case .state: fields.location?.state ?? ""
+        case .country: fields.location?.country ?? ""
+        case .sublocation: fields.location?.sublocation ?? ""
+        case let .keywords(separator):
+            fields.keywords.map { KeywordPath($0)?.name ?? $0 }.joined(separator: separator)
+        case .rating: number(fields.rating)
+        case .label: fields.label ?? ""
+        case .flag:
+            switch fields.flag {
+            case .pick: "Pick"
+            case .reject: "Reject"
+            case nil: ""
+            }
+        default:
+            ""
         }
     }
 
@@ -445,9 +490,9 @@ struct NamingProgram: Sendable {
         case let .range(range): value = range.apply(to: value)
         case let .replace(find, with): value = Self.replacing(find, with: with, in: value)
         case let .regex(expression, with):
-            value = expression.stringByReplacingMatches(
+            value = expression?.stringByReplacingMatches(
                 in: value, range: NSRange(value.startIndex..., in: value), withTemplate: with,
-            )
+            ) ?? value
         case let .defaultText(text):
             if value.isEmpty {
                 value = text

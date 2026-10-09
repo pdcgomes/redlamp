@@ -296,6 +296,18 @@ final class NamingTemplateField: NSObject, NSTextFieldDelegate {
 
     static func title(of field: NamingField) -> String {
         switch field {
+        case .date, .modified, .now, .camera, .make, .model, .lens, .iso, .aperture, .shutter, .focal, .width, .height:
+            photoTitle(of: field)
+        case .title, .caption, .creator, .copyright, .city, .state, .country, .sublocation, .keywords, .rating, .label,
+             .flag:
+            metadataTitle(of: field)
+        case .name, .original, .number, .ext, .folder, .sequence, .total, .counter, .text:
+            fileTitle(of: field)
+        }
+    }
+
+    private static func photoTitle(of field: NamingField) -> String {
+        switch field {
         case .date: "Date Taken"
         case .modified: "Date Modified"
         case .now: "Today"
@@ -309,6 +321,12 @@ final class NamingTemplateField: NSObject, NSTextFieldDelegate {
         case .focal: "Focal Length"
         case .width: "Width"
         case .height: "Height"
+        default: ""
+        }
+    }
+
+    private static func metadataTitle(of field: NamingField) -> String {
+        switch field {
         case .title: "Title"
         case .caption: "Caption"
         case .creator: "Creator"
@@ -321,6 +339,12 @@ final class NamingTemplateField: NSObject, NSTextFieldDelegate {
         case .rating: "Rating"
         case .label: "Label"
         case .flag: "Flag"
+        default: ""
+        }
+    }
+
+    private static func fileTitle(of field: NamingField) -> String {
+        switch field {
         case .name: "File Name"
         case .original: "Original File Name"
         case .number: "Original Number Suffix"
@@ -330,6 +354,7 @@ final class NamingTemplateField: NSObject, NSTextFieldDelegate {
         case .total: "Total"
         case .counter: "Counter"
         case .text: "Custom Text"
+        default: ""
         }
     }
 }

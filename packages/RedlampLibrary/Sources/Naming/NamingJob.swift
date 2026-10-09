@@ -202,17 +202,37 @@ public struct NamingJob: Sendable {
         }
 
         let listings = existing.map { (folder: Int(folder($0.key)), names: $0.value) }
-        var fromFolder = [Int](repeating: 0, count: paths.count + 1)
-        for photo in prepared {
-            fromFolder[Int(groups[Int(photo.group)].source) + 1] += 1
+        let taken = Self.taken(
+            listings, folders: paths.count, photos: photos, prepared: prepared, groups: groups, parallel: parallel,
+        )
+
+        self.prepared = prepared
+        self.groups = groups
+        self.byFolder = byFolder
+        folderSpans = spans
+        self.existing = taken
+        folderNames = paths.map { path in
+            path.split(separator: "/").reversed().map(String.init)
         }
-        for id in paths.indices {
+    }
+
+    /// For each folder of `listings` (of `folders` in all), the names its files take (folded) that no photo moving
+    /// out of it frees, and one such file for each.
+    private static func taken(
+        _ listings: [(folder: Int, names: Set<String>)], folders: Int, photos: [NamingPhoto], prepared: [Prepared],
+        groups finished: [Group], parallel: Bool,
+    ) -> [Int32: [String: String]] {
+        var fromFolder = [Int](repeating: 0, count: folders + 1)
+        for photo in prepared {
+            fromFolder[Int(finished[Int(photo.group)].source) + 1] += 1
+        }
+        for id in 0 ..< folders {
             fromFolder[id + 1] += fromFolder[id]
         }
         var placed = fromFolder
         var bySource = [Int32](repeating: 0, count: photos.count)
         for (index, photo) in prepared.enumerated() {
-            let source = Int(groups[Int(photo.group)].source)
+            let source = Int(finished[Int(photo.group)].source)
             bySource[placed[source]] = Int32(index)
             placed[source] += 1
         }
@@ -255,17 +275,11 @@ public struct NamingJob: Sendable {
         for (listing, names) in zip(listings, found) {
             taken[Int32(listing.folder)] = names
         }
-
-        self.prepared = prepared
-        self.groups = groups
-        self.byFolder = byFolder
-        folderSpans = spans
-        self.existing = taken
-        folderNames = paths.map { path in
-            path.split(separator: "/").reversed().map(String.init)
-        }
+        return taken
     }
+}
 
+extension NamingJob {
     // MARK: - Naming
 
     /// Every photo's name from `template`, in the job's order, with collisions resolved.

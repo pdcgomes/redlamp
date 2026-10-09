@@ -147,7 +147,9 @@ struct NamingTemplateParser {
         }
         return NamingToken(field, arguments, modifiers: modifiers)
     }
+}
 
+extension NamingTemplateParser {
     /// A name and its values, from `position` up to the `|` or `}` after them, with `check` run on the
     /// name once something follows it. Nil when the text ends first, as you type.
     private mutating func call(

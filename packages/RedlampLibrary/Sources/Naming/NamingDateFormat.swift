@@ -91,22 +91,7 @@ struct NamingDateFormat: Sendable, Hashable {
                 end += 1
             }
             let count = end - index
-            let piece: Piece? = switch character {
-            case "y": .year(count)
-            case "M", "L": .month(count)
-            case "d": .day(count)
-            case "D": .dayOfYear(count)
-            case "E": .weekday(count)
-            case "H": .hour(count)
-            case "h": .hour12(count)
-            case "m": .minute(count)
-            case "s": .second(count)
-            case "S": count <= 9 ? .fraction(count) : nil
-            case "a": .period
-            case "Z": .offset
-            default: nil
-            }
-            guard let piece else {
+            guard let piece = Self.piece(character, count: count) else {
                 let message = character == "S"
                     ? "a second's fraction has at most 9 digits"
                     : "\(character) isn't part of a date: use yyyy, MM, dd, HH, mm, ss or SSS, and put text in 'quotes'"
@@ -118,6 +103,25 @@ struct NamingDateFormat: Sendable, Hashable {
         }
         flush()
         self.init(pieces: pieces)
+    }
+
+    /// What `count` of the pattern letter `character` in a row stand for; nil for a letter that isn't one.
+    private static func piece(_ character: Character, count: Int) -> Piece? {
+        switch character {
+        case "y": .year(count)
+        case "M", "L": .month(count)
+        case "d": .day(count)
+        case "D": .dayOfYear(count)
+        case "E": .weekday(count)
+        case "H": .hour(count)
+        case "h": .hour12(count)
+        case "m": .minute(count)
+        case "s": .second(count)
+        case "S": count <= 9 ? .fraction(count) : nil
+        case "a": .period
+        case "Z": .offset
+        default: nil
+        }
     }
 
     /// Appends `moment` as the format has it; false, appending nothing, when the format shows an offset
