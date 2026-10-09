@@ -222,6 +222,7 @@ extension EditorModel {
         await waitForSaves(of: saving)
         let run = await batch()
         await follow(moves, of: step, paths: run.paths)
+        libraryPanels.photosMoved()
         if isNew {
             if let made = run.batch {
                 step.batch = made

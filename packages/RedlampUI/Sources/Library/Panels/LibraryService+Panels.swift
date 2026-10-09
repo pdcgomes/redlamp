@@ -289,6 +289,8 @@ final class PanelPhotoIDs: Sendable {
         var byList: [Int64: Int64] = [:]
         /// Each folder read, by its path: its photos' IDs by their names, composed.
         var folders: [String: [String: Int64]] = [:]
+        /// Counts `forget`s: what a read begun before the latest found isn't kept.
+        var generation = 0
     }
 
     private let found = Mutex(Found())
@@ -298,7 +300,9 @@ final class PanelPhotoIDs: Sendable {
     func ids(of photos: [(list: Int64, url: URL)], in index: LibraryIndex) async -> [Int64: Int64] {
         var known: [Int64: Int64] = [:]
         var missing: [(list: Int64, folder: String, name: String)] = []
+        var generation = 0
         found.withLock { found in
+            generation = found.generation
             for photo in photos {
                 if let id = found.byList[photo.list] {
                     known[photo.list] = id
@@ -335,19 +339,25 @@ final class PanelPhotoIDs: Sendable {
             return read
         }) ?? [:]
         found.withLock { found in
-            found.folders.merge(read) { _, new in new }
+            let current = found.generation == generation
+            if current {
+                found.folders.merge(read) { _, new in new }
+            }
             for photo in missing {
                 if let id = read[photo.folder]?[photo.name] {
                     known[photo.list] = id
-                    found.byList[photo.list] = id
+                    if current {
+                        found.byList[photo.list] = id
+                    }
                 }
             }
         }
         return known
     }
 
-    /// The list was made afresh, or photos came or went: folders are read again.
+    /// The list was made afresh, photos came or went, or the index moved photos the list already showed where they
+    /// went: folders are read again.
     func forget() {
-        found.withLock { $0 = Found() }
+        found.withLock { found in found = Found(generation: found.generation + 1) }
     }
 }

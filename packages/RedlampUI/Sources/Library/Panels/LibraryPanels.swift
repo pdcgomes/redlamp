@@ -167,6 +167,15 @@ public final class LibraryPanels {
         }
     }
 
+    /// A rename or a move ran, or was taken back: the index has the photos where the list showed them before it ran,
+    /// so the folders read meanwhile are read again, and the selection with them.
+    func photosMoved() {
+        photoIDs.forget()
+        if tracker != nil {
+            refresh()
+        }
+    }
+
     private func selectionChanged() {
         guard let model, model.module == .library else { return }
         if changedAt == nil {
