@@ -269,6 +269,7 @@ public final class LibrarySources {
         counts = read
         isCounted = true
         followNewestImport()
+        model?.healthProposals.confirmDuplicates(unconfirmed: read.unconfirmedDuplicates)
         if !read.hasSameRows(as: before) {
             rows += 1
             return
@@ -439,6 +440,7 @@ public final class LibrarySources {
         else { return }
         Self.release(ids)
         ids = change.ids
+        model.healthProposals.follow(shown)
         if awaitingFirst, let shown {
             awaitingFirst = false
             // Only after the photos are in: a filmstrip out of sight doesn't take them, and one placing itself
@@ -477,11 +479,17 @@ public final class LibrarySources {
         Self.release(ids)
         ids = [:]
         awaitingFirst = false
+        model?.healthProposals.follow(nil)
     }
 
     /// Whether the photos of the source shown have all arrived.
     @_spi(Harness) public var isListing: Bool {
         awaitingFirst
+    }
+
+    /// The index's ID of the photo at `url`, while it's one of the source shown's.
+    func indexID(ofShown url: URL) -> Int64? {
+        ids[url]
     }
 
     /// The index's IDs of `photos`, from the source shown when they're among its photos, else from the index.

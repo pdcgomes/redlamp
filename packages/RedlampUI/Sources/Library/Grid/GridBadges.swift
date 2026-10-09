@@ -24,6 +24,9 @@ enum GridBadges {
         /// The first cell of a raw and its JPEG shown as one: the others' extensions (`+JPG`), filled while it's
         /// closed and outlined while it's open.
         case pairText(String, open: Bool)
+        /// What a Library Health check proposes for the photo and found in it (LIB-40): a pill with the proposal's
+        /// symbol and the finding's word, or in a cell too small for both, the word alone in smaller letters.
+        case proposal(HealthMark.Proposal, String, compact: Bool)
 
         /// The badge's size in points.
         var size: CGSize {
@@ -35,8 +38,54 @@ enum GridBadges {
             case .ratingSlots: CGSize(width: 8 + 5 * 7, height: 11)
             case let .stackCount(count, _): CGSize(width: GridBadges.textWidth("\(count)") + 9, height: 14)
             case let .pairText(text, _): CGSize(width: GridBadges.textWidth(text) + 9, height: 14)
+            case let .proposal(_, word, compact):
+                compact ? CGSize(width: GridBadges.wordWidth(word, compact: true) + 8, height: 13)
+                    : CGSize(width: GridBadges.wordWidth(word, compact: false) + 25, height: 16)
             }
         }
+    }
+
+    /// The proposal badge for `mark` in a thumbnail `width` points wide: with its symbol where that fits, else the
+    /// word alone in smaller letters.
+    static func proposal(_ mark: HealthMark, width: CGFloat) -> Kind {
+        let full = Kind.proposal(mark.proposal, mark.word, compact: false)
+        return full.size.width <= width - 6 ? full : .proposal(mark.proposal, mark.word, compact: true)
+    }
+
+    private nonisolated static func wordFont(compact: Bool) -> NSFont {
+        NSFont.systemFont(ofSize: compact ? 8.5 : 10, weight: .semibold)
+    }
+
+    nonisolated static func wordWidth(_ word: String, compact: Bool) -> CGFloat {
+        (word as NSString).size(withAttributes: [.font: wordFont(compact: compact)]).width.rounded(.up)
+    }
+
+    /// The symbol of a proposal: to the Trash, kept, renamed, left out, or nothing proposed.
+    private static func symbol(of proposal: HealthMark.Proposal) -> String {
+        switch proposal {
+        case .trash: "trash.fill"
+        case .keep: "checkmark"
+        case .rename: "pencil"
+        case .leftOut: "hand.raised.fill"
+        case .none: "exclamationmark.triangle.fill"
+        }
+    }
+
+    /// A proposal badge's fill: the Trash's orange, a kept copy's green, a rename's blue, the rest as stacks' pills.
+    private static func fill(of proposal: HealthMark.Proposal) -> NSColor {
+        switch proposal {
+        case .trash: NSColor(srgbRed: 0.78, green: 0.33, blue: 0.06, alpha: 0.94)
+        case .keep: NSColor(srgbRed: 0.13, green: 0.49, blue: 0.27, alpha: 0.94)
+        case .rename: NSColor(srgbRed: 0.16, green: 0.38, blue: 0.74, alpha: 0.94)
+        case .leftOut, .none: NSColor(white: 0.08, alpha: 0.86)
+        }
+    }
+
+    /// The dashed frame around a photo the check's batch acts on: orange for the Trash, blue for a rename.
+    static func frameColor(of proposal: HealthMark.Proposal) -> CGColor {
+        let color = proposal == .rename ? NSColor(srgbRed: 0.35, green: 0.6, blue: 1, alpha: 1)
+            : NSColor(srgbRed: 1, green: 0.58, blue: 0.2, alpha: 1)
+        return color.cgColor
     }
 
     private nonisolated static var textFont: NSFont {
@@ -163,8 +212,44 @@ enum GridBadges {
             drawPill("\(count)", open: open, size: size, in: context)
         case let .pairText(text, open):
             drawPill(text, open: open, size: size, in: context)
+        case let .proposal(proposal, word, compact):
+            drawProposal(proposal, word, compact: compact, size: size, scale: scale, in: context)
         }
         return context.makeImage()
+    }
+
+    private static func drawProposal(
+        _ proposal: HealthMark.Proposal, _ word: String, compact: Bool, size: CGSize, scale: CGFloat,
+        in context: CGContext,
+    ) {
+        let pill = CGPath(
+            roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5),
+            cornerWidth: size.height / 2 - 0.5, cornerHeight: size.height / 2 - 0.5, transform: nil,
+        )
+        context.addPath(pill)
+        context.setFillColor(fill(of: proposal).cgColor)
+        context.fillPath()
+        if proposal == .leftOut || proposal == .none {
+            context.addPath(pill)
+            context.setStrokeColor(NSColor(white: 1, alpha: 0.35).cgColor)
+            context.setLineWidth(1)
+            context.strokePath()
+        }
+        let font = wordFont(compact: compact)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(white: 1, alpha: 0.96)]
+        let textSize = (word as NSString).size(withAttributes: attributes)
+        var left = (size.width - textSize.width) / 2
+        if !compact {
+            Symbol.draw(
+                symbol(of: proposal), pointSize: 8, weight: .semibold, color: RGBA(white: 1).opacity(0.96),
+                centeredAt: CGPoint(x: 10.5, y: size.height / 2), scale: scale,
+            )
+            left = 18
+        }
+        (word as NSString).draw(
+            at: CGPoint(x: left, y: (size.height - textSize.height) / 2),
+            withAttributes: attributes,
+        )
     }
 
     /// A stack's or a pair's badge: `text` in a pill, filled while closed and outlined while open.

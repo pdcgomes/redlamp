@@ -42,6 +42,9 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private var editObservation: LibraryObservation?
     private var groupsObservation: LibraryObservation?
     private var stacksObservation: LibraryObservation?
+    private var proposalsObservation: LibraryObservation?
+    /// The proposals of the Library Health check shown, which its cells draw (LIB-40).
+    private lazy var proposals = model.healthProposals
     private var trackers: [Tracker] = []
     /// The cells on screen, by item (a row of the photos, or grouped, a header or a photo), and those out of
     /// sight waiting to be used again.
@@ -159,6 +162,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         editObservation = nil
         groupsObservation = nil
         stacksObservation = nil
+        proposalsObservation = nil
         trackers.forEach { $0.cancel() }
         trackers = []
         wasShown = false
@@ -172,6 +176,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
         groupsObservation = model.gridGroups.observe { [weak self] change in self?.groupsChanged(change) }
         stacksObservation = model.gridStacks.observe { [weak self] change in self?.stacksChanged(change) }
+        proposalsObservation = proposals.observe { [weak self] in self?.proposalsChanged() }
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
@@ -764,6 +769,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             photoID(ofItem: index).map { model.stackBadges(of: $0, in: stacks) }
         } ?? (nil, nil)
         cell.isFocusSuggested = suggestedFrames.contains(item.url)
+        cell.healthMark = proposals.mark(for: item.url)
         cell.isMenuTarget = index == menuItem
         cell.root.isHidden = false
         if cell.image == nil || cell.edge < edge || cell.shownEdit != edit {
@@ -792,6 +798,20 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         if cell.image == nil || cell.edge < edge || cell.shownEdit != edit, cell.item?.url == item.url {
             cell.request = request
         }
+    }
+
+    /// The Library Health check's proposals changed: the cells on screen draw them, or once the grid is shown again.
+    private func proposalsChanged() {
+        guard isShown, wasShown, !isStale else {
+            staleRows.formUnion(IndexSet(cells.values.lazy.map(\.row).filter { $0 >= 0 }))
+            return
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for (item, cell) in cells {
+            place(item, cell, refresh: false)
+        }
+        CATransaction.commit()
     }
 
     /// The thumbnails of these photos show another edit: their cells ask for them, or once the grid is
@@ -1160,7 +1180,9 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         -> String {
         guard let index = gridLayout.item(at: point), index < shownCount else { return "" }
         switch content(ofItem: index) {
-        case let .photo(row): return model.items[row].name + (stackDescription(ofItem: index).map { ", \($0)" } ?? "")
+        case let .photo(row):
+            return model.items[row].name + (stackDescription(ofItem: index).map { ", \($0)" } ?? "")
+                + (proposals.mark(for: model.items[row].url).map { ": \($0.sentence)" } ?? "")
         case .header: return headers[index].map { "\($0.title) (click to open or close, ⌥-click for every group)" } ?? ""
         case .none: return ""
         }
@@ -1209,8 +1231,10 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
             element.setAccessibilityParent(content)
             element.setAccessibilityFrame(frame(index))
             element.setAccessibilityLabel(item.name)
-            let value = [cell.showsUneditedPreview ? "Unedited preview" : nil, stackDescription(ofItem: index)]
-                .compactMap(\.self).joined(separator: "; ")
+            let value = [
+                cell.showsUneditedPreview ? "Unedited preview" : nil, stackDescription(ofItem: index),
+                cell.healthMark.map { "\($0.word): \($0.sentence)" },
+            ].compactMap(\.self).joined(separator: "; ")
             element.setAccessibilityValue(value.isEmpty ? nil : value)
             element.setAccessibilityIdentifier("grid.\(item.url.lastPathComponent)")
             element.setAccessibilitySelected(cell.isActive || cell.isInSelection)
@@ -1516,6 +1540,18 @@ final class LibraryGridContentView: NSView {
     /// The items a grid made by `make` or found by `grid(in:)` has: its cells, and grouped, its headers.
     @MainActor public static func items(in view: NSView) -> Int {
         (view as? LibraryGridView)?.shownCount ?? 0
+    }
+
+    /// What the cells on screen of a grid made by `make` or found by `grid(in:)` draw of a Library Health check's
+    /// proposals (LIB-40), by the photo's name: the badge's word, and " (framed)" when it's framed.
+    @MainActor public static func proposals(in view: NSView) -> [String: String] {
+        guard let grid = view as? LibraryGridView else { return [:] }
+        var shown: [String: String] = [:]
+        for cell in grid.cells.values where !cell.root.isHidden {
+            guard let item = cell.item, cell.proposalShown != nil, let mark = cell.healthMark else { continue }
+            shown[item.name] = mark.word + (cell.proposalFrames?.frame == nil ? "" : " (framed)")
+        }
+        return shown
     }
 
     /// What a click sets in an expanded cell.

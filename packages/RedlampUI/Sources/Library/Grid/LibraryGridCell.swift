@@ -20,7 +20,20 @@ final class LibraryGridCell {
     private var badges: [Badge: CALayer] = [:]
 
     private enum Badge: Hashable {
-        case flag, stack, edited, rating, cloud, mark, stackCount, pairText
+        case flag, stack, edited, rating, cloud, mark, stackCount, pairText, proposal
+    }
+
+    /// The dashed frame of a photo a Library Health check's batch acts on (LIB-40).
+    private var proposalFrame: CAShapeLayer?
+
+    /// What the Library Health check shown proposes for the photo, and found in it (LIB-40): a pill over the
+    /// thumbnail, and a dashed frame around it when the check's batch acts on it, in every style and size.
+    var healthMark: HealthMark? {
+        didSet {
+            if healthMark != oldValue {
+                showBadges(of: item)
+            }
+        }
     }
 
     /// A frame of a focus stack the app suggests merging (LIB-28).
@@ -131,7 +144,8 @@ final class LibraryGridCell {
         self.scale = scale
         background.frame = CGRect(origin: .zero, size: frame.size)
         thumbnail.frame = geometry.image
-        for layer in [root, background, thumbnail] + Array(badges.values) + [text, label, chip].compactMap(\.self) {
+        for layer in [root, background, thumbnail] + Array(badges.values)
+            + [text, label, chip, proposalFrame].compactMap(\.self) {
             layer.contentsScale = scale
         }
         if let item {
@@ -189,6 +203,19 @@ final class LibraryGridCell {
         item = nil
         row = -1
         stackBadges = (nil, nil)
+        healthMark = nil
+    }
+
+    /// The proposal badge shown, for the tests.
+    var proposalShown: GridBadges.Kind? {
+        guard let layer = badges[.proposal], !layer.isHidden, let healthMark else { return nil }
+        return GridBadges.proposal(healthMark, width: geometry.image.width)
+    }
+
+    /// The proposal badge's frame in the cell and the dashed frame's, while they're shown, for the tests.
+    var proposalFrames: (badge: CGRect, frame: CGRect?)? {
+        guard let layer = badges[.proposal], !layer.isHidden else { return nil }
+        return (layer.frame, proposalFrame?.isHidden == false ? proposalFrame?.path?.boundingBoxOfPath : nil)
     }
 
     /// The stack badge at `point`, in the cell: whether it's a raw and its JPEG's rather than a stack's count; nil
@@ -242,6 +269,7 @@ final class LibraryGridCell {
             x: geometry.image.midX, y: geometry.image.midY,
         ))
         showStackBadges(besideDocument: shows && badges[.stack]?.isHidden == false)
+        showProposal()
         let colour = GridBadges.color(of: metadata)
         if shows, let colour {
             let layer = label ?? makeLayer { label = $0 }
@@ -287,6 +315,46 @@ final class LibraryGridCell {
             set(.stackCount, count, left: CGPoint(x: right - (count?.size.width ?? 0), y: 9))
             set(.pairText, pair, left: CGPoint(x: 18, y: 9))
         }
+    }
+
+    /// A Library Health check's proposal, in every style, as the photo's decision is what its list is for: the pill
+    /// over the thumbnail's middle, or in an expanded cell along its bottom, clear of the badges in its corners; and
+    /// the dashed frame just outside the thumbnail, inside the selection's outline.
+    private func showProposal() {
+        guard let healthMark, item != nil else {
+            set(.proposal, nil)
+            proposalFrame?.isHidden = true
+            return
+        }
+        let image = geometry.image
+        let kind = GridBadges.proposal(healthMark, width: image.width)
+        let centre = geometry.style == .expanded
+            ? CGPoint(x: image.midX, y: image.maxY - kind.size.height / 2 - 4)
+            : CGPoint(x: image.midX, y: image.midY)
+        set(.proposal, kind, centre: centre)
+        guard healthMark.isFramed else {
+            proposalFrame?.isHidden = true
+            return
+        }
+        let frame = proposalFrame ?? makeProposalFrame()
+        let outline = image.insetBy(dx: -2.5, dy: -2.5)
+        if frame.path?.boundingBoxOfPath != outline {
+            frame.path = CGPath(roundedRect: outline, cornerWidth: 3, cornerHeight: 3, transform: nil)
+        }
+        frame.strokeColor = GridBadges.frameColor(of: healthMark.proposal)
+        frame.isHidden = false
+    }
+
+    private func makeProposalFrame() -> CAShapeLayer {
+        let frame = CAShapeLayer()
+        frame.actions = Self.noActions.merging(["path": NSNull(), "strokeColor": NSNull()]) { first, _ in first }
+        frame.fillColor = nil
+        frame.lineWidth = 1.5
+        frame.lineDashPattern = [4, 3]
+        frame.contentsScale = scale
+        root.insertSublayer(frame, above: thumbnail)
+        proposalFrame = frame
+        return frame
     }
 
     private func set(_ badge: Badge, _ kind: GridBadges.Kind?, centre: CGPoint? = nil, left: CGPoint? = nil) {

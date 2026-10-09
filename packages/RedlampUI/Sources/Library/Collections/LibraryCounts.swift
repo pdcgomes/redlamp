@@ -17,6 +17,8 @@ struct LibraryCounts: Sendable, Equatable {
     var collectionPhotos: [CollectionPath: Int] = [:]
     /// The index's IDs of the previous import's photos it has and can read.
     var previousImport: [Int64] = []
+    /// Duplicate candidates no recorded hash confirms yet, which Exact Duplicates lists once they're read whole.
+    var unconfirmedDuplicates = 0
 
     /// The photos `source` holds; nil for a set, and for an entry that isn't offered.
     func count(of source: LibrarySource) -> Int? {
@@ -64,6 +66,7 @@ struct LibraryCounts: Sendable, Equatable {
                 counts.entries[source] = count
             }
         }
+        counts.unconfirmedDuplicates = try await engine.healthFindings(.duplicates).unconfirmed
         if let previous {
             let urls = previous.photos.map { URL(fileURLWithPath: $0, isDirectory: false) }
             let found = await Set(LibraryService.indexIDs(of: urls, in: core.index).values)
