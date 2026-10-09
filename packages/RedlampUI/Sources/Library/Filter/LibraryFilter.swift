@@ -121,11 +121,17 @@ struct LibraryListFilter: Sendable, Hashable {
     var query: LibraryQuery?
     var sort: QuerySort?
     var reversed = false
+    /// The source's Tighter–Looser setting, which the query's `is:unpicked-moment` finds moments with
+    /// (LIB-41); the default for a query without it, so the setting changes nothing else's list.
+    var moments = MomentSetting()
 
-    init(query: LibraryQuery? = nil, sort: LibrarySort = LibrarySort()) {
+    init(query: LibraryQuery? = nil, sort: LibrarySort = LibrarySort(), moments: MomentSetting = MomentSetting()) {
         self.query = query
         self.sort = sort.query
         reversed = sort.field == .folder && !sort.ascending
+        if query?.findsMoments == true {
+            self.moments = moments
+        }
     }
 
     var isEmpty: Bool {

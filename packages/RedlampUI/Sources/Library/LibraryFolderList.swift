@@ -469,6 +469,7 @@ private extension LibraryFolderList {
             } else {
                 let list = try await engine.list(
                     source, matching: filter.query ?? .all, sort: filter.sort ?? QuerySort(.name),
+                    moments: filter.moments,
                 )
                 queried = clock.now - started
                 ids = filter.sort == nil ? mapping.walkOrder().filter(list.contains)

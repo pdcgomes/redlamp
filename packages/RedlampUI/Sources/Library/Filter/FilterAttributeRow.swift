@@ -4,8 +4,8 @@ import RedlampDocument
 import RedlampLibrary
 
 /// The filter bar's Attribute section, as Lightroom Classic's: flags, the rating with its comparison,
-/// colour labels, edited or not, kinds of file, marked photos, and missing and offline ones. Each
-/// button sets its field's filter in the query, which the text shows.
+/// colour labels, edited or not, kinds of file, marked photos, missing and offline ones, and the moments
+/// without a pick (LIB-41). Each button sets its field's filter in the query, which the text shows.
 final class FilterAttributeRow: NSView {
     private let model: EditorModel
     private var tracker: Tracker?
@@ -20,6 +20,9 @@ final class FilterAttributeRow: NSView {
     private let marked: FilterToggle
     private let missing: FilterToggle
     private let offline: FilterToggle
+    private let unpicked = FilterToggle(
+        symbol: "flag.slash", identifier: "library.filter.unpicked-moments", tip: "Only Moments without a Pick",
+    )
 
     init(model: EditorModel) {
         self.model = model
@@ -83,6 +86,7 @@ final class FilterAttributeRow: NSView {
         marked.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.marked) }
         missing.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.missing) }
         offline.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.offline) }
+        unpicked.onPress = { [weak self] _ in self?.model.libraryFilters?.toggleUnpickedMoments() }
         comparison.set(
             [("≥", 0), ("≤", 1), ("=", 2)], chosen: 0,
         )
@@ -93,6 +97,7 @@ final class FilterAttributeRow: NSView {
             (filterLabel("Edit"), [edited, unedited]),
             (filterLabel("Kind"), FilterAttributes.offeredKinds.compactMap { kinds[$0] }),
             (filterLabel("Status"), [marked, missing, offline]),
+            (filterLabel("Moment"), [unpicked]),
         ]
         for group in groups {
             addSubview(group.label)
@@ -149,21 +154,54 @@ final class FilterAttributeRow: NSView {
         marked.isOn = attributes.marked
         missing.isOn = attributes.missing
         offline.isOn = attributes.offline
+        unpicked.isOn = attributes.unpickedMoments
     }
 
     override func layout() {
         super.layout()
+        let (gap, labelled) = fitting()
         var x: CGFloat = 12
-        for group in groups {
-            let width = filterWidth(group.label)
-            group.label.frame = CGRect(x: x, y: (bounds.height - 16) / 2, width: width, height: 16)
-            x += width + 4
+        for (index, group) in groups.enumerated() {
+            let shown = labelled.contains(index)
+            if group.label.isHidden == shown {
+                group.label.isHidden = !shown
+            }
+            if shown {
+                let width = filterWidth(group.label)
+                group.label.frame = CGRect(x: x, y: (bounds.height - 16) / 2, width: width, height: 16)
+                x += width + 4
+            }
             for control in group.controls {
-                let controlWidth = (control as? FilterToggle)?.fittingWidth ?? 40
+                let controlWidth = Self.width(of: control)
                 control.frame = CGRect(x: x, y: (bounds.height - 20) / 2, width: controlWidth, height: 20)
                 x += controlWidth + 1
             }
-            x += 12
+            x += gap
         }
+    }
+
+    /// The gap after each group, and the groups shown with their labels: every label and the widest gap that
+    /// fit; else as the row narrows, gaps down to 4 points, then without the labels of the groups whose buttons
+    /// are symbols that say what they are, the flags', the stars' and the colours', so every button stays in reach.
+    private func fitting() -> (gap: CGFloat, labelled: Set<Int>) {
+        let labels = groups.map { filterWidth($0.label) + 4 }
+        let controls = groups.reduce(CGFloat(12)) { width, group in
+            group.controls.reduce(width) { $0 + Self.width(of: $1) + 1 }
+        }
+        let count = CGFloat(groups.count)
+        var width = controls + labels.reduce(0, +)
+        guard width + 12 * count > bounds.width else { return (12, Set(groups.indices)) }
+        let gap = min(12, max(4, ((bounds.width - width) / count).rounded(.down)))
+        width += gap * count
+        var labelled = Set(groups.indices)
+        for index in 0 ..< min(3, groups.count) where width > bounds.width {
+            labelled.remove(index)
+            width -= labels[index]
+        }
+        return (gap, labelled)
+    }
+
+    private static func width(of control: NSView) -> CGFloat {
+        (control as? FilterToggle)?.fittingWidth ?? 40
     }
 }

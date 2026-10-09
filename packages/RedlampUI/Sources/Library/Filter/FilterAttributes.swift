@@ -4,8 +4,9 @@ import RedlampLibrary
 
 /// What the Attribute section shows of a filter's rules, and the filters it writes back (LIB-18):
 /// flags, the rating and its comparison, colour labels, edited or not, kinds of file, marked, and
-/// missing and offline photos. Each is the first filter on its field at the top of the rules that
-/// keeps photos and that the section can show; anything else stays in the text as typed.
+/// missing and offline photos, and the moments without a pick (LIB-41). Each is the first filter on its
+/// field at the top of the rules that keeps photos and that the section can show; anything else stays
+/// in the text as typed.
 struct FilterAttributes: Equatable {
     var flags: Set<FlagChoice> = []
     var rating: Rating?
@@ -15,6 +16,8 @@ struct FilterAttributes: Equatable {
     var marked = false
     var missing = false
     var offline = false
+    /// `is:unpicked-moment` alone in a filter at the top.
+    var unpickedMoments = false
 
     struct Rating: Equatable {
         var comparison: LibraryQuery.Comparison
@@ -102,7 +105,11 @@ struct FilterAttributes: Equatable {
         marked = Self.values(rules, .marked) == [.bool(true)]
         missing = Self.values(rules, .missing) == [.bool(true)]
         offline = Self.values(rules, .offline) == [.bool(true)]
+        unpickedMoments = rules.filters(on: .trait).contains { $0.filter == Self.unpickedMoments }
     }
+
+    /// The filter keeping the photos in moments without a pick.
+    static let unpickedMoments = LibraryQuery.Filter(.trait, .equal, [.trait(.unpickedMoment)])
 
     /// The values of the first filter on `field` that keeps photos with `:`.
     private static func values(_ rules: QueryRules, _ field: LibraryQuery.Field) -> [LibraryQuery.Value]? {
@@ -192,6 +199,24 @@ public extension LibraryFilters {
         default: true
         }
         edit { $0.replacingFilters(on: field, with: FilterAttributes.filter(field, yes: !on)) }
+    }
+
+    /// The photos in moments without a pick only (LIB-41), or every photo again: `is:unpicked-moment`
+    /// added to the rules, narrowing them, or taken out, the other traits staying as they are.
+    func toggleUnpickedMoments() {
+        let term = FilterAttributes.unpickedMoments
+        edit { rules in
+            var rules = rules
+            if let found = rules.filters(on: .trait).first(where: { $0.filter == term }) {
+                rules.rules.remove(at: found.index)
+            } else {
+                if rules.match != .all, !rules.rules.isEmpty {
+                    rules = QueryRules(match: .all, rules: [.group(rules)])
+                }
+                rules.rules.append(.filter(term, negated: false))
+            }
+            return QueryRules(LibraryQuery(rules))
+        }
     }
 
     internal var attributes: FilterAttributes {

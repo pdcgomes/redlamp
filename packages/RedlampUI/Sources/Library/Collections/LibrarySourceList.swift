@@ -158,6 +158,7 @@ final class LibrarySourceList: Sendable {
         if filter.query != nil || filter.sort != nil {
             let list = try await engine.list(
                 source, matching: filter.query ?? .all, sort: filter.sort ?? QuerySort(.captured),
+                moments: filter.moments,
             )
             queried = clock.now - started
             ids = filter.sort == nil ? ids.filter(list.contains) : list.ids.filter { mapping.holds($0) }

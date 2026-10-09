@@ -59,6 +59,8 @@ public final class LibraryFilters {
     @ObservationIgnored private var sources: [SourceFilter] = []
     /// The source's photos, as the query engine knows them.
     @ObservationIgnored private var photos: PhotoSource?
+    /// The source's Tighter–Looser setting, which `is:unpicked-moment` finds its moments with (LIB-41).
+    @ObservationIgnored public private(set) var moments = MomentSetting()
     /// The list of the Library panel's entry or the collection shown, which its filter is handed to.
     @ObservationIgnored weak var sourceList: LibrarySourceList?
     /// The query the photos are filtered by while the text has an error.
@@ -69,7 +71,7 @@ public final class LibraryFilters {
     @ObservationIgnored private var findingSuggestion: Task<Void, Never>?
     /// The search for a suggestion for the query last handed to the list, started with it (`suggest`).
     @ObservationIgnored private var suggesting: (
-        query: LibraryQuery, photos: PhotoSource, task: Task<QuerySuggestion?, Never>,
+        query: LibraryQuery, photos: PhotoSource, moments: MomentSetting, task: Task<QuerySuggestion?, Never>,
     )?
     @ObservationIgnored private var countAgain = false
     @ObservationIgnored private var lastChange = ContinuousClock.now
@@ -167,7 +169,7 @@ public final class LibraryFilters {
     /// What the library's list of the source kept under `key` is filtered and sorted by.
     func request(for key: String) -> LibraryListFilter {
         if key == source {
-            return LibraryListFilter(query: filter.isEnabled ? applied : nil, sort: sort)
+            return LibraryListFilter(query: filter.isEnabled ? applied : nil, sort: sort, moments: moments)
         }
         let kept = sources.last { $0.source == key }
         let filter = isLocked ? filter : kept?.filter
@@ -245,6 +247,16 @@ public final class LibraryFilters {
         guard sort != self.sort else { return }
         self.sort = sort
         changed()
+    }
+
+    /// The source shown finds its moments with `setting` (LIB-41): a filter with `is:unpicked-moment` is
+    /// handed to the source's list again, and counted again.
+    public func setMoments(_ setting: MomentSetting) {
+        guard setting != moments else { return }
+        moments = setting
+        guard filter.isEnabled, applied?.findsMoments == true else { return }
+        withdrawOffers()
+        apply()
     }
 
     /// Keeps the filter as sources change, or lets each source have its own again.
@@ -385,8 +397,9 @@ public final class LibraryFilters {
             withdrawOffers()
             return
         }
+        let moments = moments
         findingRemoval = Task { [weak self] in
-            let found = try? await engine.removal(from: query, in: photos)
+            let found = try? await engine.removal(from: query, in: photos, moments: moments)
             guard !Task.isCancelled, let self else { return }
             if removal != found {
                 removal = found
@@ -416,12 +429,15 @@ public final class LibraryFilters {
             suggesting = nil
             return
         }
-        if let suggesting, suggesting.query == query, suggesting.photos == photos {
+        let moments = query.findsMoments ? moments : MomentSetting()
+        if let suggesting, suggesting.query == query, suggesting.photos == photos, suggesting.moments == moments {
             return
         }
         suggesting?.task.cancel()
-        let task = Task.detached(priority: .userInitiated) { try? await engine.suggestion(for: query, in: photos) }
-        suggesting = (query, photos, task)
+        let task = Task.detached(priority: .userInitiated) {
+            try? await engine.suggestion(for: query, in: photos, moments: moments)
+        }
+        suggesting = (query, photos, moments, task)
     }
 
     /// The filter changed: the offers, and the search for them, go.
@@ -479,9 +495,9 @@ public final class LibraryFilters {
             while let self, ContinuousClock.now - lastChange < Self.columnDelay {
                 try? await Task.sleep(for: lastChange + Self.columnDelay - ContinuousClock.now)
             }
-            guard let requests = self?.columnRequests() else { return }
+            guard let requests = self?.columnRequests(), let moments = self?.moments else { return }
             do {
-                for try await counts in engine.columns(requests, in: photos) {
+                for try await counts in engine.columns(requests, in: photos, moments: moments) {
                     guard let self, source == key else { break }
                     if columns[counts.index] != counts {
                         columns[counts.index] = counts
@@ -522,9 +538,9 @@ public final class LibraryFilters {
             completionRange = nil
             return
         }
-        let source = photos ?? .allPhotographs
+        let (source, moments) = (photos ?? .allPhotographs, moments)
         completing = Task { [weak self] in
-            let values = await engine.completions(term.value, field: term.field, limit: 8, in: source)
+            let values = await engine.completions(term.value, field: term.field, limit: 8, in: source, moments: moments)
             guard !Task.isCancelled, let self else { return }
             let fields = term.field == nil ? FilterTerm.fields(startingWith: term.value) : []
             completions = (fields + values.map(FilterCompletion.init)).map { $0.negated(term.negated) }

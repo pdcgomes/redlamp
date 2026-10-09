@@ -127,6 +127,10 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
                 _ = (model.folder, model.library.includesSubfolders, model.library.shownSource)
                 model.followSource()
             },
+            Tracker { [weak self] in
+                guard let self else { return }
+                model.libraryFilters?.setMoments(MomentSetting(looseness: model.libraryViews.looseness))
+            },
             Tracker { [weak self] in self?.update() },
             Tracker { [weak self] in
                 guard let self, let filters = model.libraryFilters else { return }

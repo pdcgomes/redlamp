@@ -147,9 +147,24 @@ struct LibraryFilterTests {
         }
     }
 
-    /// The folder indexed, open in an editor from the library, its subfolders shown when `subfolders`.
-    private func open(subfolders: Bool = false) async throws -> (EditorModel, LibraryService) {
-        for (shade, photo) in Self.photos.enumerated() {
+    /// Photos in moments by the camera's clock: M01 and M02 at 10:00, M01 picked; M03 and M04 after a pause of
+    /// 140 s, which starts a moment up to two steps looser; M05 and M06 at noon; and M07 without a capture time.
+    static let moments = [
+        Photo(path: "M01.JPG", date: "2024:06:14 10:00:00", flag: .pick),
+        Photo(path: "M02.JPG", date: "2024:06:14 10:00:10"),
+        Photo(path: "M03.JPG", date: "2024:06:14 10:02:30"),
+        Photo(path: "M04.JPG", date: "2024:06:14 10:02:40"),
+        Photo(path: "M05.JPG", date: "2024:06:14 12:00:00"),
+        Photo(path: "M06.JPG", date: "2024:06:14 12:00:10"),
+        Photo(path: "M07.PNG"),
+    ]
+
+    /// The folder of `photos` indexed, open in an editor from the library, its subfolders shown when
+    /// `subfolders`.
+    private func open(
+        _ photos: [Photo] = Self.photos, subfolders: Bool = false,
+    ) async throws -> (EditorModel, LibraryService) {
+        for (shade, photo) in photos.enumerated() {
             try write(photo, shade: shade)
         }
         let library = FolderLibrary()
@@ -361,6 +376,66 @@ struct LibraryFilterTests {
         let panorama = try #require(filters.completions.first)
         #expect(panorama.text == "is:panorama " && panorama.title == "Panorama")
         #expect(panorama.count == 1 && panorama.detail == "Trait · 1", "DSC_0005.JPG, twice as wide as it's tall")
+    }
+
+    @Test func `the moments without a pick are a term of the text, the Attribute section and completion alike`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _) = try await open(Self.moments)
+        let filters = try #require(model.libraryFilters)
+        model.showLibrary(.grid)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+        window.setContentSize(NSSize(width: 1600, height: 1000))
+        defer { window.contentViewController = nil }
+
+        try await filtered(model, "is:unpicked-moment")
+        #expect(names(model) == ["M03.JPG", "M04.JPG", "M05.JPG", "M06.JPG", "M07.PNG"])
+        #expect(filters.attributes.unpickedMoments && filters.listed?.total == 7)
+        filters.show(.attribute, adding: true)
+        model.perform(.toggleFilterBar)
+        let bar = try #require(Self.find(LibraryFilterBarView.self, in: window.contentView))
+        let row = try #require(Self.find(FilterAttributeRow.self, in: bar))
+        try await eventually { !bar.isHidden && !row.isHidden }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let button = try #require(Self.view("library.filter.unpicked-moments", in: row))
+        #expect(button.accessibilityValue() as? String == "on")
+        let outside = row.subviews.filter { !($0 is NSTextField) && !row.bounds.contains($0.frame) }
+        #expect(outside.isEmpty, "every button in the Attribute section's \(row.bounds): \(outside.map(\.frame))")
+        model.perform(.toggleFilterBar)
+        model.setLooseness(3)
+        try await eventually { model.items.count == 3 }
+        #expect(names(model) == ["M05.JPG", "M06.JPG", "M07.PNG"], "three steps looser, M03 joins M01's moment")
+        #expect(filters.moments == MomentSetting(looseness: 3), "the bar follows the source's setting, hidden or not")
+
+        let noon = try #require(model.items.first { $0.name == "M06.JPG" }?.url)
+        model.select(noon)
+        model.cull(.flag(.pick))
+        try await eventually { model.items.count == 1 }
+        #expect(names(model) == ["M07.PNG"], "a pick at noon covers its moment")
+
+        filters.complete("unpi", cursor: 4)
+        try await eventually { filters.completions.first?.kind == "Trait" }
+        let completion = try #require(filters.completions.first)
+        #expect(completion.text == "is:unpicked-moment " && completion.title == "Moments without a Pick")
+        #expect(completion.detail == "Trait · 1", "the folder's photos it finds, with the folder's setting")
+        filters.endCompletion()
+
+        filters.toggleUnpickedMoments()
+        try await listed(model)
+        #expect(filters.filter.text.isEmpty && model.items.count == 7 && !filters.attributes.unpickedMoments)
+        filters.setText("rating>=1 OR flag:pick")
+        filters.toggleUnpickedMoments()
+        try await listed(model)
+        #expect(filters.filter.text == "(rating>=1 OR flag:pick) is:unpicked-moment" && model.items.isEmpty)
+        #expect(filters.attributes.unpickedMoments)
+        filters.setText("is:panorama,unpicked-moment")
+        #expect(!filters.attributes.unpickedMoments, "a trait among others is the text's")
+        filters.clear()
+        model.setLooseness(0)
     }
 
     @Test func `a filter that finds nothing offers to take out the term in its way, as a button in the bar`(
