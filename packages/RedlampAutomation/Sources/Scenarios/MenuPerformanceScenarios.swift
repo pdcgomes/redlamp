@@ -8,9 +8,10 @@
     /// The menu bar's cost (LIB-14): SwiftUI asks every item what it shows again whenever anything the menus read
     /// changes. A rebuild timed by itself in Develop, in the grid of a copy of lib-20k (or of `REDLAMP_MENU_FIXTURE`)
     /// and with all its photos selected, the menus' checks timed alone, and the rebuilds counted while → is held in the
-    /// grid, while stacks open and close, and as a dialog starts and ends, the main thread watched through each. With
-    /// `REDLAMP_MENU_PROFILE` set, the main thread is sampled through each phase too. The copy is the scenario's own, a
-    /// clone in the external disk's scratch folder, removed afterwards; nothing of the fixture's is touched.
+    /// grid, while stacks open and close, and as a dialog starts and ends, the main thread watched through each. Held
+    /// arrows that rebuild the menus once in ten presses or more fail it. With `REDLAMP_MENU_PROFILE` set, the main
+    /// thread is sampled through each phase too. The copy is the scenario's own, a clone in the external disk's scratch
+    /// folder, removed afterwards; nothing of the fixture's is touched.
     enum MenuPerformanceScenarios {
         static let all: [Scenario] = [menuBar]
 
@@ -102,6 +103,7 @@
 
             // → held in the grid, a key every 30 ms as key repeat sends them.
             let presses = 200
+            let arrowsMark = try app.menuMark()
             try lines.append(watched("arrows") {
                 let right = UnicodeScalar(NSRightArrowFunctionKey).map(String.init) ?? ""
                 for _ in 0 ..< presses {
@@ -109,6 +111,7 @@
                     app.pause(1.0 / 30)
                 }
             } + ", over \(presses) presses")
+            let arrowRebuilds = try app.menuRebuilds(since: arrowsMark).rebuilds
 
             // Stacks opened and closed one at a time, each in a turn of its own.
             let tops = try app.main { model -> [Int64] in
@@ -145,6 +148,12 @@
             try lines.append(timedChecks("grid-all-selected", app))
             try app.main { $0.deselectOtherPhotos() }
             app.pause(1)
+
+            // A selection's move changes what an item shows only now and then, as at the folder's first photo.
+            try app.expect(
+                arrowRebuilds < presses / 10,
+                "held arrows rebuilt the menu bar \(arrowRebuilds) times in \(presses) presses",
+            )
         }
 
         /// The menu bar as AppKit has it: each menu's class, delegate and auto-enabling, and each item's class, target,
