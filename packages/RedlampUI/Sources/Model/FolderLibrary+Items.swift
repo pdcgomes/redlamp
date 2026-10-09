@@ -5,11 +5,12 @@ import RedlampLibrary
 /// The photos shown, in order (`FolderLibrary.items`): every one's row, as a folder lists them or a small source's
 /// list reads them; or, for a large source shown from the library, the photos' IDs and the rows read so far, the
 /// others read as their cells appear (`FolderLibrary.row(at:)`), since reading a million rows takes most of a
-/// second.
+/// second. A folder of more than `largestRead` photos shown from the library is a large source as well
+/// (`LibraryFolderList.Large`).
 ///
 /// Code that can be shown a large source asks for a row with `row(_:)`, which has none until it's read; the
-/// subscript stands in a placeholder for a row not read, which only code for folders' and small sources' photos
-/// may meet.
+/// subscript stands in a placeholder for a row not read, which only code for folders listed here and small
+/// sources' photos may meet.
 public struct LibraryItems: RandomAccessCollection, MutableCollection, RangeReplaceableCollection,
     ExpressibleByArrayLiteral, Sendable {
     /// Every row, in order, unless the photos are a large source's.
@@ -242,14 +243,14 @@ extension FolderLibrary {
     /// Reads the rows of a large source's photos `ids` not read yet, returning once they're in, or once another source
     /// is shown.
     func read(_ ids: some Collection<Int64>) async {
-        guard items.readsOnRequest, let list = fromLibrary.sourceList else { return }
+        guard items.readsOnRequest, let list = fromLibrary.rowReader else { return }
         let shown = photoList
         let missing = ids.filter { shown.contains($0) && items.readRow($0) == nil }
         guard !missing.isEmpty else { return }
         list.hold(missing)
         let generation = generation
         let rows = try? await list.rows(of: missing)
-        guard self.generation == generation, fromLibrary.sourceList === list else { return }
+        guard self.generation == generation, fromLibrary.rowReader === list else { return }
         took(rows, asked: missing, keeping: true)
     }
 
@@ -262,7 +263,7 @@ extension FolderLibrary {
 
     /// Asks for the rows of the photos `ids` that aren't read yet, for a large source.
     func askForRows(ofPhotos ids: some Sequence<Int64>) {
-        guard items.readsOnRequest, let list = fromLibrary.sourceList else { return }
+        guard items.readsOnRequest, let list = fromLibrary.rowReader else { return }
         var new: [Int64] = []
         for id in ids where items.readRow(id) == nil && fromLibrary.rows.asked.insert(id).inserted {
             new.append(id)
@@ -275,11 +276,11 @@ extension FolderLibrary {
         let generation = generation
         // After this turn, so what's asked for while laying out is read together.
         Task { [weak self] in
-            guard let self, self.generation == generation, fromLibrary.sourceList === list else { return }
+            guard let self, self.generation == generation, fromLibrary.rowReader === list else { return }
             let asked = fromLibrary.rows.waiting
             fromLibrary.rows.waiting = []
             let rows = try? await list.rows(of: asked)
-            guard self.generation == generation, fromLibrary.sourceList === list else { return }
+            guard self.generation == generation, fromLibrary.rowReader === list else { return }
             took(rows, asked: asked)
         }
     }
@@ -301,7 +302,7 @@ extension FolderLibrary {
                 gone.append(id)
             }
         }
-        fromLibrary.sourceList?.release(gone)
+        fromLibrary.rowReader?.release(gone)
         guard !fresh.isEmpty, let rows else { return }
         if !keeping {
             letGo(making: fresh.count)
@@ -366,7 +367,7 @@ extension FolderLibrary {
             }
             fromLibrary.sourcePaths = paths
             items.forget(leaving)
-            fromLibrary.sourceList?.release(leaving)
+            fromLibrary.rowReader?.release(leaving)
             return
         }
         var rows: [Int64: LibraryItem] = [:]
@@ -382,15 +383,15 @@ extension FolderLibrary {
         items = LibraryItems(ids: photoIDs, read: rows)
         fromLibrary.sourceKeys = keys
         fromLibrary.sourcePaths = paths
-        fromLibrary.sourceList?.release([], all: true)
-        fromLibrary.sourceList?.hold(kept.union(fromLibrary.rows.asked))
+        fromLibrary.rowReader?.release([], all: true)
+        fromLibrary.rowReader?.hold(kept.union(fromLibrary.rows.asked))
         scheduler.submit(.background) { withExtendedLifetime(freed) {} }
     }
 
-    /// The list a large source's rows are read from, for reading them off the main thread; nil for photos whose rows
-    /// are all read.
-    var rowSource: LibrarySourceList? {
-        items.readsOnRequest ? fromLibrary.sourceList : nil
+    /// What a large source's rows are read from, for reading them off the main thread; nil for photos whose rows are
+    /// all read.
+    var rowSource: LargeListRows? {
+        items.readsOnRequest ? fromLibrary.rowReader : nil
     }
 
     /// The active photo's ID, while it's one of a large source's, whose row is always kept.

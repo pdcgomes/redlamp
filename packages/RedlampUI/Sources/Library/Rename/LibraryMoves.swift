@@ -56,8 +56,9 @@ extension FolderLibrary {
     /// where the active photo goes. Returns the IDs the photos shown again were given, by their URLs.
     @discardableResult
     func show(_ moves: LibraryMoves, before: () -> Void = {}) async -> [URL: Int64] {
-        // Nothing moves in the photos shown: a Library entry's or a collection's, whose list follows the batch.
-        if moves.moves.isEmpty, moves.restoring.isEmpty {
+        // Nothing moves in the photos shown: a Library entry's, a collection's or a large folder's, whose list follows
+        // the batch.
+        if moves.moves.isEmpty && moves.restoring.isEmpty || items.readsOnRequest {
             before()
             publish(LibraryDiff())
             return [:]

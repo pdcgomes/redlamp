@@ -148,9 +148,9 @@ final class DraggedPhotos {
     }
 
     /// The photos of `selection` among `items`, whose IDs are `ids`; a large source's rows not yet read are read from
-    /// its list, `source`.
+    /// `source`.
     init(
-        selection: PhotoSelection, items: LibraryItems, ids: ContiguousArray<Int64>, source: LibrarySourceList?,
+        selection: PhotoSelection, items: LibraryItems, ids: ContiguousArray<Int64>, source: LargeListRows?,
         fromLibrary: Bool,
     ) {
         count = selection.count
@@ -173,7 +173,7 @@ final class DraggedPhotos {
     }
 
     private nonisolated static func list(
-        _ selection: PhotoSelection, items: LibraryItems, ids: ContiguousArray<Int64>, source: LibrarySourceList?,
+        _ selection: PhotoSelection, items: LibraryItems, ids: ContiguousArray<Int64>, source: LargeListRows?,
     ) async -> Listed {
         var read: [Int64: LibraryItem] = [:]
         if items.readsOnRequest {

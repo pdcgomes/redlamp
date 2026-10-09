@@ -38,6 +38,7 @@ extension FolderLibrary {
             largestRead: largestRead, firstRead: firstRead, wanted: wanted,
         ) { change in deliver(change, generation) }
         fromLibrary.sourceList = list
+        fromLibrary.rowReader = list.largeRows
         filters?.sourceList = list
         return (generation, list)
     }
@@ -69,6 +70,13 @@ extension FolderLibrary {
     @discardableResult
     func showSource(_ change: LibrarySourceList.Change, generation: Int) -> Bool {
         guard showsSource(generation) else { return false }
+        take(change)
+        return true
+    }
+
+    /// `change`'s photos, each with its ID in the index, in place of those shown: a source's, or a large folder's
+    /// (`FolderLibrary+Library`).
+    func take(_ change: LibrarySourceList.Change) {
         let carried = change.previousCount >= 0 && change.previousCount == items.count
         let unchanged = carried && change.diff.isEmpty
         // Freeing tens of thousands of photos takes milliseconds: the photos replaced go off the main thread.
@@ -76,7 +84,7 @@ extension FolderLibrary {
         if let read = change.read {
             takeLarge(change, read: read)
         } else {
-            fromLibrary.sourceList?.release([], all: true)
+            fromLibrary.rowReader?.release([], all: true)
             fromLibrary.rows.asked = []
             fromLibrary.sourceKeys = change.keys
             fromLibrary.sourcePaths = change.paths
@@ -99,7 +107,6 @@ extension FolderLibrary {
                 shown: change.list.count, total: change.total, filter: filter, took: change.took,
             ))
         }
-        return true
     }
 
     /// A large source's `change`: its photos' IDs, with the rows read before that it still has, and those `read`
@@ -125,8 +132,8 @@ extension FolderLibrary {
             keys[id] = change.keys[id]
         }
         paths.merge(change.paths)
-        fromLibrary.sourceList?.release(leaving)
-        fromLibrary.sourceList?.hold(read.keys)
+        fromLibrary.rowReader?.release(leaving)
+        fromLibrary.rowReader?.hold(read.keys)
         fromLibrary.sourceKeys = keys
         fromLibrary.sourcePaths = paths
         items = LibraryItems(ids: list.ids, read: kept)

@@ -284,8 +284,11 @@ public final class FolderLibrary {
 
     /// Lists `folder` (and, with Show Photos in Subfolders, every folder beneath it) and shows its
     /// photos, then calls `opened` with them once the first ones are in (once, unless another
-    /// folder opens first). `nil` closes the open folder.
-    public func open(_ folder: URL?, opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in }) {
+    /// folder opens first); a large folder shown from the library calls it with its first screens', having read
+    /// those at `wanted` too (`LibraryFolderList`). `nil` closes the open folder.
+    public func open(
+        _ folder: URL?, wanted: [URL] = [], opened: @escaping @MainActor ([LibraryItem]) -> Void = { _ in },
+    ) {
         if let shownSource {
             leavingSource?(shownSource)
             self.shownSource = nil
@@ -308,7 +311,7 @@ public final class FolderLibrary {
         guard let service else { return list(folder, generation: generation, opened: opened) }
         service.show([folder])
         Task {
-            guard await !openFromLibrary(folder, generation: generation, opened: opened),
+            guard await !openFromLibrary(folder, generation: generation, wanted: wanted, opened: opened),
                   self.generation == generation
             else { return }
             list(folder, generation: generation, opened: opened)

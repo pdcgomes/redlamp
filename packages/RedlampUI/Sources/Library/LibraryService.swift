@@ -558,14 +558,16 @@ extension LibraryService {
     /// `folder`'s photos from the library, filtered and sorted as the filter bar has the folder,
     /// delivered to `deliver` as they change, until the list is closed.
     func list(
-        _ folder: URL, includingSubfolders: Bool,
+        _ folder: URL, includingSubfolders: Bool, largestRead: Int = LibrarySourceList.largestRead,
+        firstRead: Int = LibrarySourceList.firstRead, wanted: [URL] = [],
         deliver: @escaping @MainActor @Sendable (LibraryFolderList.Change) -> Void,
     ) -> LibraryFolderList? {
         guard let core else { return nil }
         filters.follow(folder, includingSubfolders: includingSubfolders)
         let list = LibraryFolderList(
             core: core, folder: folder, includingSubfolders: includingSubfolders,
-            filter: filters.request(for: folder, includingSubfolders: includingSubfolders), deliver: deliver,
+            filter: filters.request(for: folder, includingSubfolders: includingSubfolders), largestRead: largestRead,
+            firstRead: firstRead, wanted: wanted, deliver: deliver,
         )
         currentList = list
         return list

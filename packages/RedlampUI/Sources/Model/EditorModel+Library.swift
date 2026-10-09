@@ -50,7 +50,8 @@ public extension EditorModel {
         stackSuggestions = []
         onFolderChange?(url)
         rememberSourceView()
-        library.open(url) { [weak self] found in
+        let wanted = [target].compactMap(\.self) + libraryViews.keptPhotos(of: sourceKey(of: url))
+        library.open(url, wanted: wanted) { [weak self] found in
             self?.didList(found, select: target ?? self?.library.lastPhoto(in: url))
             self?.restoreSourceView()
         }

@@ -15,9 +15,9 @@ import Synchronization
 /// the latest filter winning, as the folders' lists do (`LibraryFolderList`).
 ///
 /// A source of more than `largestRead` photos is large: its rows aren't read as it changes, but as the grid and the
-/// filmstrip ask for them (`rows(of:)`), since reading a million takes most of a second. Each change hands over its
+/// filmstrip ask for them (`largeRows`), since reading a million takes most of a second. Each change hands over its
 /// list, with the rows read for it: the first screens' and those of `wanted` photos with the first change, and
-/// with every change those of the photos the main thread holds rows of (`hold`) that it changed.
+/// with every change those of the photos the main thread holds rows of that it changed.
 ///
 /// A photo's badges are its `.redlamp` sidecar's, as the folders' lists show them.
 final class LibrarySourceList: Sendable {
@@ -53,9 +53,8 @@ final class LibrarySourceList: Sendable {
     let source: PhotoSource
     /// Sources with more photos than this are large.
     let largestRead: Int
-    /// The rows of a large source's first photos its first change brings.
-    private let firstRead: Int
-    private let index: LibraryIndex
+    /// A large source's rows, read as they're asked for.
+    let largeRows: LargeListRows
     private let state = Mutex(State())
 
     private struct State {
@@ -64,10 +63,6 @@ final class LibrarySourceList: Sendable {
         var closed = false
         var filter = LibraryListFilter()
         var events: AsyncStream<Event>.Continuation?
-        /// The photos the main thread holds rows of, or has asked for, while the source is large.
-        var held = Set<Int64>()
-        /// The folders' paths the rows asked for were read with.
-        var folders: [Int64: String] = [:]
     }
 
     private enum Event: Sendable {
@@ -96,8 +91,8 @@ final class LibrarySourceList: Sendable {
     ) {
         self.source = source
         self.largestRead = largestRead
-        self.firstRead = firstRead
-        index = core.index
+        let rows = LargeListRows(index: core.index, firstRead: firstRead)
+        largeRows = rows
         let (live, index, engine) = (core.live, core.index, core.engine)
         let (events, continuation) = AsyncStream.makeStream(of: Event.self)
         state.withLock { state in
@@ -144,7 +139,7 @@ final class LibrarySourceList: Sendable {
                        source: source,
                    ) {
                     if change.read != nil {
-                        try? await readRows(for: &change, changed: mapping.rereading, first: first, wanted: wanted)
+                        try? await rows.read(into: &change, changed: mapping.rereading, first: first, wanted: wanted)
                     }
                     first = false
                     handedFilter = filter
@@ -186,36 +181,6 @@ final class LibrarySourceList: Sendable {
 
     // MARK: - A large source's rows
 
-    /// The main thread holds the rows of the photos `ids`, or has asked for them: each change brings them again
-    /// when it changes them.
-    func hold(_ ids: some Sequence<Int64>) {
-        state.withLock { $0.held.formUnion(ids) }
-    }
-
-    /// The main thread no longer holds the rows of the photos `ids`; `all` lets go of every one.
-    func release(_ ids: some Sequence<Int64>, all: Bool = false) {
-        state.withLock { state in
-            if all {
-                state.held = []
-            } else {
-                state.held.subtract(ids)
-            }
-        }
-    }
-
-    /// The rows of a large source's photos `ids`, as the grid shows them, with their content keys and paths;
-    /// photos the index no longer has are left out.
-    func rows(of ids: [Int64]) async throws -> Rows {
-        let known = state.withLock { $0.folders }
-        let read = try await Mapping.read(ids, folders: known, index: index)
-        if !read.folders.isEmpty {
-            state.withLock { $0.folders.merge(read.folders) { _, new in new } }
-        }
-        var rows = Rows()
-        rows.take(read.parts)
-        return rows
-    }
-
     /// Rows read for a large source, by ID, as the main thread takes them.
     struct Rows: Sendable {
         var items: [Int64: LibraryItem] = [:]
@@ -235,35 +200,9 @@ final class LibrarySourceList: Sendable {
         }
     }
 
-    /// Reads into a large source's `change` the rows it brings: those of its first screens and of the photos at the
-    /// URLs `wanted` with the `first` change, and those of the photos the main thread holds that `changed` names (all
-    /// of them when it's nil, as after the list was made afresh), the rows kept from before the source was large
-    /// among them.
-    private func readRows(for change: inout Change, changed: Set<Int64>?, first: Bool, wanted: [URL]) async throws {
-        var held = state.withLock { $0.held }
-        if let kept = change.read {
-            held.formUnion(kept.keys)
-        }
-        var reading = changed.map { held.intersection($0) } ?? held
-        if first {
-            reading.formUnion(change.list.ids.prefix(firstRead))
-            if !wanted.isEmpty {
-                await reading.formUnion(LibraryService.indexIDs(of: wanted, in: index).values)
-            }
-        }
-        reading = reading.filter(change.list.contains)
-        guard !reading.isEmpty else { return }
-        let rows = try await rows(of: Array(reading))
-        change.read?.merge(rows.items) { _, new in new }
-        for id in reading where rows.items[id] != nil {
-            change.keys[id] = rows.keys[id]
-        }
-        change.paths.merge(rows.paths)
-    }
-
     /// The change handing over the photos `filter` finds of `mapping`'s, in its sort's order; `before` is the
     /// filter of the change handed over before, nil for the first.
-    private static func change(
+    static func change(
         handing filter: LibraryListFilter, after before: LibraryListFilter?, from mapping: inout Mapping,
         engine: QueryEngine, source: PhotoSource,
     ) async throws -> Change {
@@ -394,6 +333,12 @@ final class LibrarySourceList: Sendable {
             self.ids = ids
             hasList = true
             inStep = true
+        }
+
+        /// A large list's photos as `list` has them, in an order of its own (`LibraryFolderList.Large`), `changed`
+        /// naming those whose rows changed (nil when any may have): it stays large, whatever its count.
+        mutating func take(large list: PhotoList, changed: [Int64]?) {
+            takeLarge(list, ids: Array(list.ids), changed: changed)
         }
 
         /// A large source's photos as `list` has them, `changed` naming those whose rows it changed (nil when any

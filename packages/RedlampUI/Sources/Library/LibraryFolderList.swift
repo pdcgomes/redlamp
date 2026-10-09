@@ -33,6 +33,9 @@ final class LibraryFolderList: Sendable {
         var keys: [URL: ContentKey] = [:]
         /// The filtered or sorted list, which replaces every photo shown.
         var ordered: Ordered?
+        /// A large folder's photos' IDs in Folders' order, filtered or not, with the rows read for them, as a large
+        /// source's change has them (`Large`); nothing else is set.
+        var large: LibrarySourceList.Change?
     }
 
     /// A filtered or sorted list in its order, and how it differs from the list handed over before.
@@ -59,6 +62,10 @@ final class LibraryFolderList: Sendable {
 
     let folder: URL
     let includesSubfolders: Bool
+    /// Folders with more photos than this are large (`Large`).
+    let largestRead: Int
+    /// A large folder's rows, read as they're asked for.
+    let largeRows: LargeListRows
     private let state = Mutex(State())
 
     private struct State {
@@ -88,13 +95,18 @@ final class LibraryFolderList: Sendable {
     }
 
     /// The list opens once LibraryLive has applied the changes it has gathered, so it holds every
-    /// photo indexed so far.
+    /// photo indexed so far. A large folder's first change brings the rows of its first `firstRead` photos and of
+    /// those at `wanted` (the view's active, selected and top photos).
     init(
         core: LibraryCore, folder: URL, includingSubfolders: Bool, filter: LibraryListFilter = LibraryListFilter(),
-        deliver: @escaping @MainActor @Sendable (Change) -> Void,
+        largestRead: Int = LibrarySourceList.largestRead, firstRead: Int = LibrarySourceList.firstRead,
+        wanted: [URL] = [], deliver: @escaping @MainActor @Sendable (Change) -> Void,
     ) {
         self.folder = folder
         includesSubfolders = includingSubfolders
+        self.largestRead = largestRead
+        let rows = LargeListRows(index: core.index, firstRead: firstRead)
+        largeRows = rows
         let (live, index, engine) = (core.live, core.index, core.engine)
         let (events, continuation) = AsyncStream.makeStream(of: Event.self)
         state.withLock { state in
@@ -126,29 +138,47 @@ final class LibraryFolderList: Sendable {
             }
             var mapping = Mapping(folder: folder, includesSubfolders: includingSubfolders)
             var handed = Handed()
+            var large: Large?
             for await event in events {
                 let filter = state.withLock { $0.filter }
-                if !filter.isEmpty, !handed.isOrdered, mapping.hasList {
-                    handed.takeOver(&mapping)
+                let update: PhotoListUpdate? = if case let .update(update) = event {
+                    update
+                } else {
+                    nil
                 }
-                let orders: Bool
-                switch event {
-                case let .update(update):
-                    let change = try? await mapping.change(for: update, index: index)
-                    if let change, filter.isEmpty, !handed.isOrdered {
-                        handed.filter = filter
-                        await deliver(change)
-                        orders = false
-                    } else {
-                        orders = change != nil
+                if large == nil, !mapping.hasList, let update, update.list.count > largestRead {
+                    large = Large(
+                        folder: folder, includesSubfolders: includingSubfolders, core: core, rows: rows, wanted: wanted,
+                    )
+                }
+                if var taking = large {
+                    let change = try? await taking.change(taking: update, filter: filter)
+                    large = taking
+                    if let change {
+                        await deliver(Change(large: change))
                     }
-                case .filter:
-                    orders = mapping.hasList && filter != handed.filter
-                }
-                if orders, let ordered = try? await handed.next(
-                    filter, from: &mapping, engine: engine, source: source, changed: event.isUpdate,
-                ) {
-                    await deliver(Change(ordered: ordered))
+                } else {
+                    if !filter.isEmpty, !handed.isOrdered, mapping.hasList {
+                        handed.takeOver(&mapping)
+                    }
+                    let orders: Bool
+                    if let update {
+                        let change = try? await mapping.change(for: update, index: index)
+                        if let change, filter.isEmpty, !handed.isOrdered {
+                            handed.filter = filter
+                            await deliver(change)
+                            orders = false
+                        } else {
+                            orders = change != nil
+                        }
+                    } else {
+                        orders = mapping.hasList && filter != handed.filter
+                    }
+                    if orders, let ordered = try? await handed.next(
+                        filter, from: &mapping, engine: engine, source: source, changed: event.isUpdate,
+                    ) {
+                        await deliver(Change(ordered: ordered))
+                    }
                 }
                 if event.isUpdate {
                     handing.yield()
@@ -183,7 +213,9 @@ final class LibraryFolderList: Sendable {
         events?.finish()
         task?.cancel()
     }
+}
 
+extension LibraryFolderList {
     /// What maps one list's updates to changes: the IDs shown, and their folders' paths.
     struct Mapping: Sendable {
         let folder: URL
@@ -415,14 +447,7 @@ final class LibraryFolderList: Sendable {
         /// `items` in Folders' order: each folder's photos by name, a folder before its subfolders,
         /// subfolders in Finder's order (`LibraryItem.walkPrecedes`), each folder ranked once.
         static func ordered(_ items: [LibraryItem]) -> [LibraryItem] {
-            let folders = Set(items.map(\.folderPath)).sorted { lhs, rhs in
-                let left = lhs.split(separator: "/")
-                let right = rhs.split(separator: "/")
-                for (x, y) in zip(left, right) where x != y {
-                    return FileOrder.precedes(String(x), String(y))
-                }
-                return left.count < right.count
-            }
+            let folders = Set(items.map(\.folderPath)).sorted(by: foldersPrecede)
             let ranks = Dictionary(folders.enumerated().map { ($1, $0) }) { first, _ in first }
             let names = items.map(\.name)
             let order = items.indices.map { (rank: ranks[items[$0].folderPath] ?? 0, index: $0) }
@@ -430,6 +455,17 @@ final class LibraryFolderList: Sendable {
                     lhs.rank != rhs.rank ? lhs.rank < rhs.rank : FileOrder.precedes(names[lhs.index], names[rhs.index])
                 }
             return order.map { items[$0.index] }
+        }
+
+        /// Whether the folder at the path `lhs` comes before the one at `rhs` in Folders' order: a folder before its
+        /// subfolders, each level in Finder's order.
+        static func foldersPrecede(_ lhs: String, _ rhs: String) -> Bool {
+            let left = lhs.split(separator: "/")
+            let right = rhs.split(separator: "/")
+            for (x, y) in zip(left, right) where x != y {
+                return FileOrder.precedes(String(x), String(y))
+            }
+            return left.count < right.count
         }
     }
 }

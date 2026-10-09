@@ -36,6 +36,8 @@ struct FromLibrary {
     var sourcePaths: PhotoPaths?
     /// A large source's rows asked for and on screen (`FolderLibrary+Items`).
     var rows = SourceRows()
+    /// What the rows of the large source or folder shown are read from as they're asked for.
+    var rowReader: LargeListRows?
     /// Every photo of the open folder shown from the library has its ID in the index as its ID here: as its list
     /// first hands them over, not when photos listed here are taken over from it.
     var indexIDs = false
@@ -131,29 +133,33 @@ extension FolderLibrary {
     /// How long the first photos from the library may take before the folder is listed instead.
     static let libraryPatience = Duration.seconds(10)
 
-    /// Starts showing `folder` from the library if it can be; false when it's to be listed.
+    /// Starts showing `folder` from the library if it can be; false when it's to be listed. A large folder's first
+    /// photos come with the rows of those at `wanted` (`LibraryFolderList`).
     func openFromLibrary(
-        _ folder: URL, generation: Int, opened: @escaping @MainActor ([LibraryItem]) -> Void,
+        _ folder: URL, generation: Int, wanted: [URL], opened: @escaping @MainActor ([LibraryItem]) -> Void,
     ) async -> Bool {
         guard let service, service.isReady,
               await service.canShow(folder, includingSubfolders: includesSubfolders),
               self.generation == generation
         else { return false }
-        show(folder, from: service, generation: generation, opened: opened)
+        show(folder, from: service, generation: generation, wanted: wanted, opened: opened)
         return true
     }
 
     /// Follows the open folder's photo list. Its first change replaces what's shown, or, when the
-    /// folder was listed here, changes only what differs.
+    /// folder was listed here, changes only what differs; a large folder's replaces it.
     private func show(
-        _ folder: URL, from service: LibraryService, generation: Int,
+        _ folder: URL, from service: LibraryService, generation: Int, wanted: [URL] = [],
         opened: (@MainActor ([LibraryItem]) -> Void)?,
     ) {
         fromLibrary.waiting = false
         fromLibrary.observation = nil
         fromLibrary.awaitingFirst = true
         fromLibrary.opened = opened
-        fromLibrary.list = service.list(folder, includingSubfolders: includesSubfolders) { [weak self] change in
+        fromLibrary.list = service.list(
+            folder, includingSubfolders: includesSubfolders, largestRead: largestRead, firstRead: firstRead,
+            wanted: wanted + [lastPhoto(in: folder)].compactMap(\.self),
+        ) { [weak self] change in
             self?.received(change, generation: generation)
         }
         Task { [weak self] in
@@ -178,6 +184,9 @@ extension FolderLibrary {
 
     private func received(_ change: LibraryFolderList.Change, generation: Int) {
         guard generation == self.generation, fromLibrary.list != nil else { return }
+        if let large = change.large {
+            return show(large: large)
+        }
         if let ordered = change.ordered {
             return show(ordered)
         }
@@ -209,6 +218,23 @@ extension FolderLibrary {
         } else {
             adopt(all.items, generation: generation)
         }
+    }
+
+    /// A large folder's change (`LibraryFolderList.Large`): its photos' IDs in Folders' order, filtered or not, with
+    /// the
+    /// rows read for it, as a large source's are; the others are read as they're asked for (`FolderLibrary+Items`).
+    /// The first replaces the photos listed here, if the folder was, and brings those its view opens on.
+    private func show(large change: LibrarySourceList.Change) {
+        fromLibrary.awaitingFirst = false
+        fromLibrary.indexIDs = true
+        fromLibrary.keys = [:]
+        fromLibrary.rowReader = fromLibrary.list?.largeRows
+        take(change)
+        guard let opened = fromLibrary.opened else { return }
+        fromLibrary.opened = nil
+        listedDirectories = openFolder.map { [$0.path] } ?? []
+        opened(items.indices.prefix(LibrarySources.warmedAsShown).compactMap(items.row))
+        refreshStacks()
     }
 
     /// Takes over the photos listed here from the library's, off the main thread: photos only one

@@ -143,7 +143,12 @@ public extension EditorModel {
 
     /// The open folder as a source of the grid, with or without its subfolders.
     internal var sourceKey: String? {
-        folder.map { (library.includesSubfolders ? "+" : "") + $0.path }
+        folder.map(sourceKey(of:))
+    }
+
+    /// `folder` as a source of the grid, with or without its subfolders.
+    internal func sourceKey(of folder: URL) -> String {
+        (library.includesSubfolders ? "+" : "") + folder.path
     }
 
     /// Keeps the open source's view as it's left: its size, cell style, place and selection.
