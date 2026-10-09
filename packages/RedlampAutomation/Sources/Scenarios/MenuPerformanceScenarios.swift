@@ -208,43 +208,60 @@
             )
         }
 
-        static func describe(_ rebuilds: (count: Int, turns: [Double], bodies: [Double])) -> String {
-            let turns = rebuilds.turns.sorted()
-            let bodies = rebuilds.bodies.sorted()
-            guard !turns.isEmpty else { return "\(rebuilds.count) menu rebuilds" }
+        static func describe(_ work: MenuWork) -> String {
+            let turns = work.turns.sorted()
+            let bodies = work.bodies.sorted()
+            let refreshes = work.refreshes.sorted()
+            let checks = refreshes.isEmpty ? "" : String(
+                format: "; %d runs of the checks, %.1f ms in all, median %.3f ms, max %.3f ms", refreshes.count,
+                refreshes.reduce(0, +), refreshes[refreshes.count / 2], refreshes.last ?? 0,
+            )
+            guard !turns.isEmpty else { return "\(work.rebuilds) menu rebuilds" + checks }
             return String(
                 format: "%d menu rebuilds in %d turns, %.1f ms in all, a turn's median %.2f ms, p95 %.2f ms, max "
                     + "%.2f ms; the body's median %.2f ms",
-                rebuilds.count, turns.count, turns.reduce(0, +), turns[turns.count / 2],
+                work.rebuilds, turns.count, turns.reduce(0, +), turns[turns.count / 2],
                 turns[min(turns.count - 1, Int(Double(turns.count) * 0.95))], turns.last ?? 0,
                 bodies.isEmpty ? 0 : bodies[bodies.count / 2],
-            )
+            ) + checks
         }
     }
 
+    /// The menu bar's work since a mark: how many rebuilds, the milliseconds of each turn holding one and of each body,
+    /// and of each run of `MenuBarState`'s checks.
+    struct MenuWork: Sendable {
+        var rebuilds: Int
+        var turns: [Double]
+        var bodies: [Double]
+        var refreshes: [Double]
+    }
+
     extension RunningApp {
-        /// Where the menu bar's rebuilds stand, for `menuRebuilds(since:)`.
+        /// Where the menu bar's work stands, for `menuRebuilds(since:)`.
         struct MenuMark: Sendable {
             let rebuilds: Int
             let turns: Int
             let bodies: Int
+            let refreshes: Int
         }
 
         func menuMark() throws -> MenuMark {
             try main { _ in
                 let probe = MenuBarProbe.shared
-                return MenuMark(rebuilds: probe.rebuilds, turns: probe.turns.count, bodies: probe.bodies.count)
+                return MenuMark(
+                    rebuilds: probe.rebuilds, turns: probe.turns.count, bodies: probe.bodies.count,
+                    refreshes: probe.refreshes.count,
+                )
             }
         }
 
-        /// The menu bar's rebuilds since `mark`: how many, and the milliseconds of each turn holding one, and of each
-        /// body.
-        func menuRebuilds(since mark: MenuMark) throws -> (count: Int, turns: [Double], bodies: [Double]) {
+        func menuRebuilds(since mark: MenuMark) throws -> MenuWork {
             try main { _ in
                 let probe = MenuBarProbe.shared
-                return (
-                    probe.rebuilds - mark.rebuilds, Array(probe.turns.dropFirst(mark.turns)),
-                    Array(probe.bodies.dropFirst(mark.bodies)),
+                return MenuWork(
+                    rebuilds: probe.rebuilds - mark.rebuilds, turns: Array(probe.turns.dropFirst(mark.turns)),
+                    bodies: Array(probe.bodies.dropFirst(mark.bodies)),
+                    refreshes: Array(probe.refreshes.dropFirst(mark.refreshes)),
                 )
             }
         }
