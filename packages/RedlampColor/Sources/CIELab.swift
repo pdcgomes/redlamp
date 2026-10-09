@@ -1,13 +1,42 @@
 import Foundation
 import simd
 
-/// CIELAB (D65 white) and the CIEDE2000 colour difference, for colour regression tests.
+/// CIELAB and the CIEDE2000 colour difference: relative to D65 for colour regression tests, and
+/// to D50 for the histogram's readout.
 public enum CIELab {
     private static let white = RGBPrimaries.sRGB.toXYZ * SIMD3<Double>(1, 1, 1)
 
+    /// The ICC profile connection space's white (D50), as ICC.1 gives it.
+    public static let d50White = SIMD3<Double>(0.9642, 1, 0.8249)
+
+    /// Bradford's cone response matrix (Lam 1985), as ICC.1 Annex E uses it.
+    private static let bradford = simd_double3x3(rows: [
+        SIMD3(0.8951, 0.2664, -0.1614),
+        SIMD3(-0.7502, 1.7135, 0.0367),
+        SIMD3(0.0389, -0.0685, 1.0296),
+    ])
+
+    /// Linear Display P3 to XYZ adapted to D50 by Bradford.
+    private static let displayP3ToD50: simd_double3x3 = {
+        let source = bradford * white
+        let target = bradford * d50White
+        let adapt = bradford.inverse * simd_double3x3(diagonal: target / source) * bradford
+        return adapt * RGBPrimaries.displayP3.toXYZ
+    }()
+
     /// Linear sRGB to L*a*b*, relative to the sRGB (D65) white.
     public static func fromLinearSRGB(_ rgb: SIMD3<Double>) -> SIMD3<Double> {
-        let xyz = RGBPrimaries.sRGB.toXYZ * rgb / white
+        lab(RGBPrimaries.sRGB.toXYZ * rgb / white)
+    }
+
+    /// Linear Display P3 to L*a*b* relative to D50, adapted by Bradford, as ICC profiles and
+    /// Photoshop report it.
+    public static func d50(fromLinearDisplayP3 rgb: SIMD3<Double>) -> SIMD3<Double> {
+        lab(displayP3ToD50 * rgb / d50White)
+    }
+
+    /// L*a*b* of XYZ already divided by its white's.
+    private static func lab(_ xyz: SIMD3<Double>) -> SIMD3<Double> {
         func f(_ t: Double) -> Double {
             t > 216.0 / 24389 ? cbrt(t) : t * 841.0 / 108 + 4.0 / 29
         }

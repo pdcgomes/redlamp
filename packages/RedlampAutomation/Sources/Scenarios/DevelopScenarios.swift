@@ -323,7 +323,8 @@
         }
 
         static let histogram = Scenario(
-            "develop.histogram", "Dragging the histogram moves its region's slider; its corner shows clipping",
+            "develop.histogram",
+            "Dragging the histogram moves its region's slider; under it, the photo's values under the pointer",
             claims: [.feature("develop.histogram")],
         ) { app in
             try app.openWorking()
@@ -333,6 +334,21 @@
                 try app.wait("the histogram to move \(parameter.spec.label)") { $0.value(parameter) != before }
             }
             try app.choose(.resetAll)
+            try app.waitForCanvas()
+            try app.hover(.canvas, at: CGPoint(x: 0.5, y: 0.5))
+            try app.wait("the readout of the photo under the pointer") { $0.pixelReadout != nil }
+            let lab = try app.main { $0.showsLabReadout }
+            _ = try app.rightClick(.identifier("histogram"), choosing: ShortcutAction.labReadout.title)
+            try app.wait("the readout to switch") { $0.showsLabReadout != lab }
+            let readout = try app.main { $0.pixelReadout }
+            try app.expect(
+                readout.map { (0 ... 100).contains($0.lab.x) && $0.rgb.min() >= 0 && $0.rgb.max() <= 100 } == true,
+                "The readout is out of range: \(String(describing: readout))",
+            )
+            try app.main { model in
+                model.showsLabReadout = lab
+                model.hoverReadout(at: nil)
+            }
             app.covered(.feature("develop.histogram"), via: .mouse)
         }
     }

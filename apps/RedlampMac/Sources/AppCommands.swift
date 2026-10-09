@@ -103,6 +103,11 @@ struct AppCommands: Commands {
             }
             item(.zoomIn)
             item(.zoomOut)
+            Toggle(ShortcutAction.labReadout.title, isOn: Binding(
+                get: { model.showsLabReadout },
+                set: { _ in model.perform(.labReadout) },
+            ))
+            .disabled(!model.canPerform(.labReadout))
             Toggle("Show Photos in Subfolders", isOn: Binding(
                 get: { model.library.includesSubfolders },
                 set: { model.setIncludesSubfolders($0) },

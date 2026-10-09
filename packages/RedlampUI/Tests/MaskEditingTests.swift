@@ -198,6 +198,15 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         pointColorSample
     }
 
+    /// What the histogram's readout reads, and the points and edits it was asked about.
+    var readoutValue: PixelReadout? = PixelReadout(rgb: SIMD3(45.2, 44.8, 44.9), lab: SIMD3(48.1, -0.3, 0.8))
+    var readouts: [(point: CGPoint, area: CGSize, recipe: EditRecipe)] = []
+
+    func readout(at point: CGPoint, area: CGSize, recipe: EditRecipe) async -> PixelReadout? {
+        readouts.append((point, area, recipe))
+        return readoutValue
+    }
+
     var computed: [AIMask] = []
 
     var lastRequest: MaskRequest?

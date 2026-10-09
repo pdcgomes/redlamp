@@ -54,7 +54,14 @@ public final class EditorModel {
 
     // MARK: Current image
 
-    public private(set) var info: ImageInfo?
+    public private(set) var info: ImageInfo? {
+        didSet {
+            if info?.url != oldValue?.url {
+                pixelReadout = nil
+            }
+        }
+    }
+
     /// Counts photos opened. The engine analyses whatever photo is open when a request reaches
     /// it, so a result applies only if the visit it started in is still the current one: not
     /// after a switch to another photo, nor after switching back.
@@ -276,6 +283,23 @@ public final class EditorModel {
 
     /// A middle-grey surround and white frame for judging colour (ISO 12646).
     public var colorAssessment = false
+
+    /// What the photo renders as under the pointer, for the histogram's line (UX-32); nil while
+    /// the pointer isn't over the photo.
+    public internal(set) var pixelReadout: PixelReadout?
+    /// The histogram's line shows L*a*b* rather than RGB (Lightroom Classic's Show Lab Color
+    /// Values). Kept across launches.
+    public var showsLabReadout = UserDefaults.standard.bool(forKey: "app.redlamp.labReadout") {
+        didSet { UserDefaults.standard.set(showsLabReadout, forKey: "app.redlamp.labReadout") }
+    }
+
+    /// The photo point under the pointer, as the canvas reports it.
+    @ObservationIgnored var readoutPoint: CGPoint?
+    /// The edit the canvas was last asked to show, which the readout reads.
+    @ObservationIgnored var readoutRecipe: EditRecipe?
+    @ObservationIgnored var readoutTask: Task<Void, Never>?
+    /// The point or the edit changed while a readout was being made.
+    @ObservationIgnored var readoutStale = false
 
     public var eyedropperActive = false {
         didSet {
@@ -1169,6 +1193,8 @@ public final class EditorModel {
         request.visualizePointColor = visualizePointColorRange ? selectedPointColorSwatch?.id : nil
         request.comparison = isComparing ? beforeRecipe : nil
         engine.render(request)
+        readoutRecipe = displayed
+        refreshReadout()
     }
 
     /// Frames received from the engine, the latest ones' render times, and the time from each

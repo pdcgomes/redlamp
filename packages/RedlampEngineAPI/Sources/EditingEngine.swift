@@ -53,6 +53,11 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// colour the eyedropper gives a new swatch.
     func pointColorInput(sampledAt point: CGPoint, radius: Double, recipe: EditRecipe) async -> OKLCh?
 
+    /// What the current image renders as with `recipe` around `point` of the frame as shown
+    /// (normalised, origin top-left, after the crop), averaged over `area` (fractions of the frame's
+    /// width and height): the histogram's readout. Overlays such as clipping warnings never reach it.
+    func readout(at point: CGPoint, area: CGSize, recipe: EditRecipe) async -> PixelReadout?
+
     /// Computes AI masks of the current image: one for Subject, Background or Sky, one per person
     /// for People. Throws `MaskComputationError` when the mask can't be made.
     func computeMasks(_ request: MaskRequest) async throws -> [AIMask]
@@ -207,6 +212,10 @@ public extension EditingEngine {
     }
 
     func pointColorInput(sampledAt _: CGPoint, radius _: Double, recipe _: EditRecipe) async -> OKLCh? {
+        nil
+    }
+
+    func readout(at _: CGPoint, area _: CGSize, recipe _: EditRecipe) async -> PixelReadout? {
         nil
     }
 

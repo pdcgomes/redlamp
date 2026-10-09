@@ -50,20 +50,24 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
     private var hasPhoto = false
     private var showClipping = false
     private var summary: [String] = []
+    private var readout: [String]?
     private var regionValue = 0.0
 
     /// What the drawn layers last showed, so an update that changes neither draws nothing.
     private struct Content: Equatable {
         var region: Region?
-        var summary: [String]
+        /// Nil while the readout takes the summary's place.
+        var summary: [String]?
     }
 
+    /// The readout changes as the pointer moves, so it's drawn over the graph rather than with it.
     private struct Overlay: Equatable {
         var region: Region?
         var regionValue: Double
         var showClipping: Bool
         var shadowsClipped: Bool
         var highlightsClipped: Bool
+        var readout: [String]?
     }
 
     private var content: Content?
@@ -139,6 +143,7 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
             histogram = model.histogram
             hasPhoto = model.info != nil
             summary = model.info?.exposureSummary ?? []
+            readout = model.pixelReadout.map { EditorModel.readoutParts($0, lab: model.showsLabReadout) }
             showClipping = model.showClipping
             regionValue = region.map { model.value($0.parameter) } ?? 0
             update()
@@ -146,7 +151,7 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
     }
 
     private func update() {
-        let content = Content(region: shownRegion, summary: summary)
+        let content = Content(region: shownRegion, summary: readout == nil ? summary : nil)
         if content != self.content {
             self.content = content
             setNeedsContentDisplay()
@@ -154,6 +159,7 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
         let overlay = Overlay(
             region: shownRegion, regionValue: regionValue, showClipping: showClipping,
             shadowsClipped: histogram.shadowsClipped, highlightsClipped: histogram.highlightsClipped,
+            readout: readout,
         )
         if overlay != self.overlay {
             if overlay.region != self.overlay?.region {
@@ -219,12 +225,17 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
             context.fill(band)
         }
 
-        drawSummary(y: graph.maxY + Self.spacing, scale: scale)
+        if readout == nil {
+            drawLine(summary, y: graph.maxY + Self.spacing, scale: scale)
+        }
     }
 
     override func drawOverlay(in _: CGRect) {
         drawIndicator(clipped: histogram.shadowsClipped, color: .systemBlue, trailing: false)
         drawIndicator(clipped: histogram.highlightsClipped, color: .systemRed, trailing: true)
+        if let readout {
+            drawLine(readout, y: Self.graphHeight + Self.spacing, scale: backingScale, color: Palette.value.nsColor)
+        }
         if let region = shownRegion {
             let spec = region.parameter.spec
             TextLine.draw(
@@ -300,8 +311,14 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
         )
     }
 
-    private func drawSummary(y: CGFloat, scale: CGFloat) {
-        let parts = summary.isEmpty ? [" "] : summary
+    /// The line under the graph: the capture summary, or the readout while the pointer is over the photo.
+    private func drawLine(
+        _ parts: [String],
+        y: CGFloat,
+        scale: CGFloat,
+        color: NSColor = Palette.secondaryLabel.nsColor,
+    ) {
+        let parts = parts.isEmpty ? [" "] : parts
         let font = Self.captionFont
         let widths = parts.map { ceil(TextLine.width($0, font: font) * scale) / scale }
         let total = widths.reduce(0, +) + 12 * CGFloat(parts.count - 1)
@@ -309,8 +326,11 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
         let height = TextLine.lineHeight(font)
         for (part, width) in zip(parts, widths) {
             TextLine.draw(
-                part, font: font, color: Palette.secondaryLabel.nsColor,
-                in: CGRect(x: x, y: y, width: width, height: height), scale: scale,
+                part,
+                font: font,
+                color: color,
+                in: CGRect(x: x, y: y, width: width, height: height),
+                scale: scale,
             )
             x += width + 12
         }
@@ -371,6 +391,25 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
         dragRegion = nil
         dragStart = nil
         model.endEdit()
+    }
+
+    /// Lightroom Classic's histogram menu: the readout in L*a*b* rather than RGB.
+    override func menu(for _: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        let item = NSMenuItem(
+            title: ShortcutAction.labReadout.title,
+            action: #selector(toggleLabReadout),
+            keyEquivalent: "",
+        )
+        item.target = self
+        item.state = model.showsLabReadout ? .on : .off
+        item.setAccessibilityIdentifier("histogram.labReadout")
+        menu.addItem(item)
+        return menu
+    }
+
+    @objc private func toggleLabReadout() {
+        model.perform(.labReadout)
     }
 
     // MARK: - Tooltips

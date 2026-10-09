@@ -117,6 +117,7 @@
             case .clipping: .toggle(action) { "\($0.showClipping)" }
             case .rawClipping: .toggle(action) { "\($0.showRawClipping)" }
             case .colorAssessment: .toggle(action) { "\($0.colorAssessment)" }
+            case .labReadout: .toggle(action) { "\($0.showsLabReadout)" }
             case .infoOverlay:
                 ActionCheck(action: action, observe: { "\($0.infoOverlay)" }, restore: { app in
                     try app.main { $0.infoOverlay = 0 }

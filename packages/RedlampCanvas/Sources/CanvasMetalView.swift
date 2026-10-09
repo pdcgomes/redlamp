@@ -37,6 +37,11 @@ public final class CanvasMetalView: NSView {
 
     var coveredEventMonitor: Any?
     var onSample: (CGPoint) -> Void = { _ in }
+    /// The photo point under the pointer as it moves (normalised, as `onSample`'s), nil once it
+    /// leaves the photo.
+    var onHover: ((CGPoint?) -> Void)?
+    private var hoverArea: NSTrackingArea?
+    private var hovered: CGPoint?
     /// ⌘-scroll over the canvas, in notches (positive away from you), with Shift held or not.
     /// Returns whether it took the event; otherwise it zooms or pans as plain scrolling does.
     var onCommandScroll: ((Double, Bool) -> Bool)?
@@ -280,6 +285,38 @@ public final class CanvasMetalView: NSView {
         case .zoom: addCursorRect(bounds, cursor: controller.isZoomedIn ? .openHand : .arrow)
         case .none: break
         }
+    }
+
+    override public func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea {
+            removeTrackingArea(hoverArea)
+        }
+        let area = NSTrackingArea(
+            rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+        )
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
+    override public func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        hover(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override public func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        hover(at: nil)
+    }
+
+    /// Reports the photo point under `location` (in view points) to `onHover` when it changes.
+    func hover(at location: CGPoint?) {
+        guard interactive, let onHover else { return }
+        let point = location.flatMap { controller.imagePoint(for: $0) }
+        guard point != hovered else { return }
+        hovered = point
+        onHover(point)
     }
 
     /// A non-interactive canvas (the Navigator) leaves clicks to the SwiftUI views over it.

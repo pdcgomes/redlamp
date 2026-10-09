@@ -157,6 +157,25 @@
             }
         }
 
+        /// Moves the pointer over `target` to `point` (0...1 across and down its frame), as the
+        /// tracking area under it reports a move to the view carrying the target's identifier.
+        func hover(_ target: Target, at point: CGPoint = CGPoint(x: 0.5, y: 0.5)) throws {
+            let location = try location(point, on: target)
+            let identifier = target.identifier
+            try main { _ in
+                guard let window = Views.editorWindow, let root = window.contentView?.superview,
+                      let view = Views.all(NSView.self, in: root)
+                      .first(where: { $0.accessibilityIdentifier() == identifier }),
+                      let event = NSEvent.mouseEvent(
+                          with: .mouseMoved, location: location, modifierFlags: [],
+                          timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                          context: nil, eventNumber: 0, clickCount: 0, pressure: 0,
+                      )
+                else { throw ScenarioFailure("\(target) can't be hovered") }
+                view.mouseMoved(with: event)
+            }
+        }
+
         /// Where `point` of `target` is in the window, which it must be on: a press beside the window
         /// reaches nothing, as a panel slid off it shows.
         private func location(_ point: CGPoint, on target: Target) throws -> NSPoint {

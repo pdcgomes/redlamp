@@ -197,11 +197,11 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Zoom, pan and brush sizes in every tool | Yes | Done | | | UX-15 | The wheel zooms and Space pans while masking, healing and cropping, and every brush sizes with [ and ] or ⌘-scroll |
 | Panels that hide automatically or stay up | Yes | Done | Different | | UX-19 | The filmstrip hides automatically or stays up with the photo fitted above it (View › Filmstrip, its right-click menu, Settings); Lightroom offers Auto Hide & Show, Auto Hide and Manual for each panel |
 | Histogram you can drag to adjust | Yes | Done | | | | |
-| RGB values of the pixel under the pointer | Yes | Undecided | | | UX-32 | Under the histogram |
+| RGB and L*a*b* values of the pixel under the pointer | Yes | Done | Different | | UX-32 | Under the histogram; RGB in Display P3, where Lightroom uses Melissa RGB, and L*a*b* relative to D50 |
 | Panel on/off switches | Yes | Undecided | | | UX-30 | Turn a panel's settings off and on without losing them |
 | Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
 | A value on every control, and values that scrub when dragged | Yes | In progress | | P2 | UX-28, UX-29 | The grading wheels, curve points, Base Look Amount and the Masks panel's sizes and ranges get values |
-| Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 97 actions on 96 key bindings |
+| Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 98 actions on 96 key bindings |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |
 | Soft proofing | Yes (Classic) | Planned | | P4 | | |

@@ -127,6 +127,34 @@ struct HistogramGraphViewTests {
         #expect(draws.count == 0)
     }
 
+    @Test func `the readout takes the summary's place and redraws only its line as it changes`() async throws {
+        let (model, engine, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let view = HistogramGraphView(model: model)
+        let window = window(view)
+        defer { window.close() }
+        try await show(histogram(shift: 0), model: model, engine: engine, step: 1)
+        model.pixelReadout = PixelReadout(rgb: SIMD3(10, 20, 30), lab: SIMD3(20, 1, -1))
+        try await Task.sleep(for: .milliseconds(20))
+        view.layoutSubtreeIfNeeded()
+        try display(#require(view.layer))
+
+        let draws = Draws()
+        LayerDrawnView.drawObserver = { drawn, event in
+            if drawn === view, case .drew = event {
+                draws.count += 1
+            }
+        }
+        defer { LayerDrawnView.drawObserver = nil }
+        for step in 1 ... 5 {
+            model.pixelReadout = PixelReadout(rgb: SIMD3(Double(step), 20, 30), lab: SIMD3(20, 1, -1))
+            try await Task.sleep(for: .milliseconds(20))
+            view.layoutSubtreeIfNeeded()
+            try display(#require(view.layer))
+        }
+        #expect(draws.count == 5, "each change redraws the overlay alone")
+    }
+
     @Test func `the graph looks the same for each histogram, clipping and hovered region`() async throws {
         let (model, engine, cleanup) = try await openEditor()
         defer { cleanup() }

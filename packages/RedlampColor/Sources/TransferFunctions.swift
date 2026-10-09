@@ -14,6 +14,11 @@ public enum SRGB {
     }
 
     @inlinable
+    public static func encode(_ x: Double) -> Double {
+        x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055
+    }
+
+    @inlinable
     public static func decode(_ x: Double) -> Double {
         x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
     }

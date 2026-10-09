@@ -13,6 +13,7 @@ extension ShortcutAction {
         .clipping: ["clipping", "blown", "warning", "overexposed"],
         .rawClipping: ["sensor", "raw", "clipped", "overexposed"],
         .colorAssessment: ["grey", "gray", "surround", "proof"],
+        .labReadout: ["lab", "l*a*b*", "readout", "values", "pixel", "histogram", "measure"],
         .infoOverlay: ["info", "metadata", "exif"],
         .lightsOut: ["dim", "lights", "focus"],
         .fullScreenPreview: ["present", "full screen", "fullscreen"],
@@ -105,6 +106,7 @@ extension ShortcutAction {
         case .clipping: "exclamationmark.triangle"
         case .rawClipping: "camera.aperture"
         case .colorAssessment: "square.dashed"
+        case .labReadout: "eyedropper.halffull"
         case .infoOverlay: "info.circle"
         case .lightsOut: "lightbulb"
         case .fullScreenPreview: "arrow.up.left.and.arrow.down.right"

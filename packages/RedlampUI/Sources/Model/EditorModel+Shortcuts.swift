@@ -48,6 +48,7 @@ public extension EditorModel {
         case .clipping: showClipping.toggle()
         case .rawClipping: showRawClipping.toggle()
         case .colorAssessment: colorAssessment.toggle()
+        case .labReadout: showsLabReadout.toggle()
         case .infoOverlay: infoOverlay = (infoOverlay + 1) % 3
         case .lightsOut: lightsOut = (lightsOut + 1) % 3
         case .fullScreenPreview: togglePresentation()
@@ -210,7 +211,8 @@ public extension EditorModel {
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout, .toggleZoom, .zoomIn, .zoomOut,
              .clipping, .rawClipping, .colorAssessment, .infoOverlay:
             return photo
-        case .lightsOut, .fullScreenPreview, .toggleToolbar, .toggleSidePanels, .toggleAllPanels, .toggleFilmstrip,
+        case .labReadout, .lightsOut, .fullScreenPreview, .toggleToolbar, .toggleSidePanels, .toggleAllPanels,
+             .toggleFilmstrip,
              .toggleLeftPanel, .toggleRightPanel, .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading,
              .panelDetail, .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             return true

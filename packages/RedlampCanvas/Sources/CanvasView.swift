@@ -66,6 +66,7 @@ public struct CanvasView: NSViewRepresentable {
     /// Scrolling and pinching over views drawn on the canvas (a tool's overlay) zoom and pan it.
     let forwardsCoveredEvents: Bool
     let onSample: (CGPoint) -> Void
+    let onHover: ((CGPoint?) -> Void)?
     let onCommandScroll: ((Double, Bool) -> Bool)?
 
     public init(
@@ -77,8 +78,10 @@ public struct CanvasView: NSViewRepresentable {
         whiteFrame: Double = 0,
         forwardsCoveredEvents: Bool = false,
         onSample: @escaping (CGPoint) -> Void = { _ in },
+        onHover: ((CGPoint?) -> Void)? = nil,
         onCommandScroll: ((Double, Bool) -> Bool)? = nil,
     ) {
+        self.onHover = onHover
         self.surround = surround
         self.whiteFrame = whiteFrame
         self.forwardsCoveredEvents = forwardsCoveredEvents
@@ -105,6 +108,7 @@ public struct CanvasView: NSViewRepresentable {
         view.whiteFrame = whiteFrame
         view.forwardsCoveredEvents = forwardsCoveredEvents
         view.onSample = onSample
+        view.onHover = onHover
         view.onCommandScroll = onCommandScroll
     }
 }
