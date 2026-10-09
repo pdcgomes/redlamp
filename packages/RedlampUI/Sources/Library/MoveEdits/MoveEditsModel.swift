@@ -98,12 +98,7 @@ final class MoveEditsModel {
         let path = LibraryService.path(root)
         return try? await index.read { reader -> (id: Int64, placement: RootRecord.Sidecars, photos: Int)? in
             guard let record = try reader.root(path: path) else { return nil }
-            let statement = try reader.database.cached("""
-            SELECT count(*) FROM photos
-            WHERE sidecar_modified IS NOT NULL AND folder IN (SELECT id FROM folders WHERE root = ?)
-            """)
-            try statement.bind(record.id, at: 1)
-            return try (record.id, record.sidecars, statement.first { $0.int(at: 0) } ?? 0)
+            return try (record.id, record.sidecars, reader.photoCount(withSidecarsInRoot: record.id))
         } ?? nil
     }
 

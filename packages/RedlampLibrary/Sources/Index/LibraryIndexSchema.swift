@@ -7,8 +7,13 @@ extension LibraryIndex {
     /// The schema's steps in order: the first makes version 1 from an empty database.
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
-        migrateToVersion6, migrateToVersion7,
+        migrateToVersion6, migrateToVersion7, migrateToVersion8,
     ]
+
+    /// The version of the schema this build makes and opens.
+    public static var schemaVersion: Int {
+        migrations.count
+    }
 
     static func createVersion1(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion1)
@@ -37,6 +42,10 @@ extension LibraryIndex {
     static func migrateToVersion7(_ database: SQLiteDatabase) throws {
         try QueryFunctions.register(on: database)
         try database.execute(schemaVersion7)
+    }
+
+    static func migrateToVersion8(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion8)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -203,5 +212,14 @@ extension LibraryIndex {
     INSERT INTO photo_text (rowid, name, keywords, title, caption)
       SELECT id, redlamp_text(name), redlamp_text(keywords), redlamp_text(title), redlamp_text(caption)
       FROM photo_text_rows;
+    """
+
+    /// The photos with a `.redlamp` sidecar, by folder (LIB-11): Move Edits and Metadata… counts a root's as its
+    /// sheet opens (`photoCount(withSidecarsInRoot:)`), which visited every photo of the root through
+    /// `(folder, name)` and read its row, 35 ms the first time in a launch for 150,000 photos, and takes 1.1 ms with
+    /// it. Built in 0.11 s at a million photos, 0.65 s while the file isn't in memory, it takes 1.6 MB for their
+    /// 150,000 with sidecars.
+    static let schemaVersion8 = """
+    CREATE INDEX IF NOT EXISTS photos_sidecars ON photos (folder) WHERE sidecar_modified IS NOT NULL;
     """
 }

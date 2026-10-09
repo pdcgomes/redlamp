@@ -100,7 +100,7 @@ struct IndexTextMigrationTests {
                 },
             )
         }
-        #expect(version == LibraryIndex.migrations.count && version == 7)
+        #expect(version == LibraryIndex.migrations.count && version >= 7)
         #expect(tokenizer?.contains("tokenize='trigram remove_diacritics 1'") == true)
 
         let after = try await index.read { reader in

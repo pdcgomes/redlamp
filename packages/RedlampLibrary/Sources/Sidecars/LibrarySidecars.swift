@@ -332,4 +332,19 @@ public extension IndexQueries {
         try statement.bind(root, at: 1)
         return try statement.first { $0.int(at: 0) } ?? 0
     }
+
+    /// How many photos in `root`'s folders have a `.redlamp` sidecar, as the index last read them: from the index of
+    /// those photos by folder, without reading a photo's row.
+    func photoCount(withSidecarsInRoot root: Int64) throws -> Int {
+        let statement = try database.cached(LibrarySidecars.sidecarCount)
+        try statement.bind(root, at: 1)
+        return try statement.first { $0.int(at: 0) } ?? 0
+    }
+}
+
+extension LibrarySidecars {
+    /// `photoCount(withSidecarsInRoot:)`'s query, which `photos_sidecars` answers.
+    static let sidecarCount = """
+    SELECT count(*) FROM photos WHERE sidecar_modified IS NOT NULL AND folder IN (SELECT id FROM folders WHERE root = ?)
+    """
 }

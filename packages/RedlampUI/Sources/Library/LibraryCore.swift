@@ -58,9 +58,8 @@ final class LibraryCore: Sendable {
     static let fileLimit: rlim_t = 4096
     /// Photos an XMP sync takes at a time, so the library's batches asked for meanwhile go between them.
     static let xmpBatch = 500
-    /// The version of the index's schema this build opens: `LibraryIndex`'s count of migrations, which it
-    /// doesn't make public.
-    static let indexVersion = 7
+    /// The version of the index's schema this build opens.
+    static let indexVersion = LibraryIndex.schemaVersion
 
     private static let log = Logger(subsystem: "app.redlamp.mac", category: "library")
 
