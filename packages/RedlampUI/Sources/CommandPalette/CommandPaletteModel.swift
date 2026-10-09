@@ -117,7 +117,8 @@ public final class CommandPaletteModel {
         case .filterPreset, .page(.filterPresets): return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
         case .customLabel: return editor.selection != nil && !editor.isModalDialogOpen
         case .libraryName(.folder, _), .photo: return !editor.isModalDialogOpen
-        case .libraryName, .photosNamed: return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
+        case .libraryName, .photosNamed, .queryTerm: return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
+        case .queryField: return true
         default: break
         }
         // Sliders, pickers and choices change Develop's photo, which the Library module doesn't show.
@@ -280,6 +281,9 @@ public final class CommandPaletteModel {
             recordingStep { editor.setSliderValue(parameter, value) }
             report(.applied(item.kind))
             close(.applied)
+        case let .queryField(field):
+            setText(field)
+            revealText(selectAll: false)
         default:
             clearPreview()
             recordingStep { apply(item.kind) }

@@ -530,6 +530,12 @@ public final class LibraryFilters {
 
     // MARK: - Completion
 
+    /// The photos completion counts a trait's or an orientation's among, and the setting `is:unpicked-moment`
+    /// finds their moments with: the source's, as the bar shows it, for the bar and the palette alike (LIB-19).
+    var completionScope: (photos: PhotoSource, moments: MomentSetting) {
+        (photos ?? .allPhotographs, moments)
+    }
+
     /// Offers what the term ending at `cursor` in `text` could be: a field, or a value from the index.
     public func complete(_ text: String, cursor: Int) {
         completing?.cancel()
@@ -538,7 +544,7 @@ public final class LibraryFilters {
             completionRange = nil
             return
         }
-        let (source, moments) = (photos ?? .allPhotographs, moments)
+        let (source, moments) = completionScope
         completing = Task { [weak self] in
             let values = await engine.completions(term.value, field: term.field, limit: 8, in: source, moments: moments)
             guard !Task.isCancelled, let self else { return }

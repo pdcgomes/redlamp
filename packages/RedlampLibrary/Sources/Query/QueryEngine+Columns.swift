@@ -416,12 +416,42 @@ public extension QueryEngine {
         guard !typed.isEmpty, limit > 0, let (store, vocabulary, generation) = await loadedSnapshot() else {
             return []
         }
-        var completions = await Task.detached(priority: .userInitiated) { [self] in
+        let completions = await Task.detached(priority: .userInitiated) { [self] in
             vocabulary.completions(typed, fields: fields, limit: limit, storeNames: storeNames(of: store))
         }.value
+        return await counted(
+            completions, in: source, moments: moments, store: store, vocabulary: vocabulary, generation: generation,
+        )
+    }
+
+    /// Every value of `field` completion offers without its text: the traits, the orientations or the colour
+    /// labels, in that order, each trait and orientation with the photos of `source` it finds, as `completions`
+    /// counts them; none for another field, whose values are the library's names (LIB-19).
+    func values(
+        of field: LibraryQuery.Field, in source: PhotoSource = .allPhotographs,
+        moments: MomentSetting = MomentSetting(),
+    ) async -> [QueryCompletion] {
+        let values: [QueryCompletion] = switch field {
+        case .trait: LibraryQuery.Trait.allCases.map { QueryCompletion(field: .trait, value: $0.rawValue) }
+        case .orientation: PhotoOrientation.allCases.map { QueryCompletion(field: .orientation, value: $0.rawValue) }
+        case .label: ColorLabel.allCases.map { QueryCompletion(field: .label, value: $0.rawValue) }
+        default: []
+        }
+        guard !values.isEmpty, let (store, vocabulary, generation) = await loadedSnapshot() else { return values }
+        return await counted(
+            values, in: source, moments: moments, store: store, vocabulary: vocabulary, generation: generation,
+        )
+    }
+
+    /// `completions` with each trait's and orientation's count of the photos of `source` it finds.
+    private func counted(
+        _ completions: [QueryCompletion], in source: PhotoSource, moments: MomentSetting, store: ColumnStore,
+        vocabulary: QueryVocabulary, generation: Int,
+    ) async -> [QueryCompletion] {
         guard completions.contains(where: { $0.counted != nil }),
               let photos = try? await rows(of: source, in: store, vocabulary: vocabulary, generation: generation)
         else { return completions }
+        var completions = completions
         for (place, completion) in completions.enumerated() {
             guard let query = completion.counted,
                   var found = try? await matches(

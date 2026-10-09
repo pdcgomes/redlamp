@@ -92,11 +92,20 @@ struct CommandPaletteLibraryTests {
         }
     }
 
-    /// The folder indexed and open in an editor from the library, with its subfolders.
-    private func open() async throws -> EditorModel {
+    /// The folder indexed and open in an editor from the library, with its subfolders; with `damaged`, an empty
+    /// JPEG in Studio too, written a while ago.
+    private func open(damaged: Bool = false) async throws -> EditorModel {
         for (shade, photo) in Self.photos.enumerated() {
             try write(photo, shade: shade)
         }
+        if damaged {
+            let empty = root.appending(path: "Studio/Empty.JPG")
+            try Data().write(to: empty)
+            try FileManager.default.setAttributes(
+                [.modificationDate: Date().addingTimeInterval(-600)], ofItemAtPath: empty.path,
+            )
+        }
+        let count = Self.photos.count + (damaged ? 1 : 0)
         let library = FolderLibrary()
         library.add([root])
         let paths = LibraryPaths(root: base.appending(path: "Library", directoryHint: .isDirectory))
@@ -115,7 +124,7 @@ struct CommandPaletteLibraryTests {
         library.setIncludesSubfolders(true)
         model.open([root])
         try await eventually(seconds: 20) {
-            library.isShownFromLibrary && !library.isListing && library.count == Self.photos.count
+            library.isShownFromLibrary && !library.isListing && library.count == count
         }
         try #require(library.isShownFromLibrary)
         return model
@@ -255,5 +264,89 @@ struct CommandPaletteLibraryTests {
         palette = try await search("img_000", in: model)
         try palette.activate(#require(libraryRows(palette).last))
         #expect(filters.filter.text == "name:img_000")
+    }
+
+    // MARK: - Terms of the query language
+
+    @Test func `the palette completes the query's terms as the bar's text does, a trait with the photos it finds`(
+    ) async throws {
+        defer { cleanUp() }
+        let model = try await open(damaged: true)
+        model.openCommandPalette()
+        let damaged = try await #require(libraryRows(search("is:dam", in: model)).first)
+        #expect(damaged.kind == .queryTerm("is:damaged") && damaged.title == "Damaged Files")
+        #expect(damaged.context == "is:damaged · 1 photo", "the bar's source's damaged file")
+        let unread = try await libraryRows(search("unread", in: model))
+        #expect(
+            unread.first?.kind == .queryTerm("is:damaged"),
+            "the trait found by its synonym; no row for the unreadable field, whose values the palette doesn't complete",
+        )
+        let fields = try await libraryRows(search("c", in: model)).filter {
+            if case .queryField = $0.kind {
+                true
+            } else {
+                false
+            }
+        }
+        #expect(fields.map(\.title) == ["camera:", "collection:", "city:"], "fields the palette completes, three")
+        let moments = try await libraryRows(search("unpicked", in: model))
+        #expect(moments
+            .contains { $0.kind == .queryTerm("is:unpicked-moment") && $0.title == "Moments without a Pick" })
+        let negated = try await #require(libraryRows(search("-is:dam", in: model)).first)
+        #expect(negated.kind == .queryTerm("-is:damaged") && negated.title == "Not Damaged Files")
+        #expect(negated.context == "-is:damaged")
+        let traits = try await libraryRows(search("is:", in: model))
+        #expect(traits.map(\.kind) == LibraryQuery.Trait.allCases.map { .queryTerm("is:\($0.rawValue)") })
+        let red = try await libraryRows(search("red", in: model))
+        #expect(red.first?.kind == .queryTerm("label:red") && red.first?.title == "Red")
+
+        let palette = try await search("orien", in: model)
+        let field = try #require(libraryRows(palette).first)
+        #expect(field.kind == .queryField("orientation:") && field.context == "Field")
+        palette.activate(field)
+        #expect(model.commandPalette === palette && palette.text == "orientation:", "↵ types the field")
+        try await eventually { palette.library.text == "orientation:" && !palette.library.isSearching }
+        #expect(libraryRows(palette).map(\.kind) == PhotoOrientation.allCases.map {
+            .queryTerm("orientation:\($0.rawValue)")
+        })
+        palette.handle(.escape)
+    }
+
+    @Test func `choosing a term makes it one of the filter's, a trait beside the others, a value in its field's place`(
+    ) async throws {
+        defer { cleanUp() }
+        let model = try await open(damaged: true)
+        let filters = try #require(model.libraryFilters)
+        func choose(_ text: String) async throws {
+            model.openCommandPalette()
+            let palette = try await search(text, in: model)
+            let row = try #require(libraryRows(palette).first {
+                if case .queryTerm = $0.kind {
+                    true
+                } else {
+                    false
+                }
+            })
+            #expect(palette.isEnabled(row), "\(text)")
+            palette.select(row)
+            palette.activate(row)
+            #expect(model.commandPalette == nil, "\(text)")
+        }
+        try await choose("is:dam")
+        #expect(filters.filter.text == "is:damaged" && filters.isBarShown)
+        try await eventually { model.items.map(\.name) == ["Empty.JPG"] }
+        #expect(model.items.map(\.name) == ["Empty.JPG"])
+        try await choose("is:unpi")
+        #expect(filters.filter.text == "is:damaged is:unpicked-moment", "a trait goes beside the others")
+        try await choose("is:dam")
+        #expect(filters.filter.text == "is:damaged is:unpicked-moment", "a term the filter has changes nothing")
+        try await choose("label:re")
+        #expect(filters.filter.text == "is:damaged is:unpicked-moment label:red")
+        try await choose("label:blu")
+        #expect(filters.filter.text == "is:damaged is:unpicked-moment label:blue", "in the label's place")
+        filters.setText("rating>=3 OR flag:pick")
+        try await choose("-is:dam")
+        #expect(filters.filter.text == "(rating>=3 OR flag:pick) -is:damaged", "narrowing what the text finds")
+        filters.clear()
     }
 }

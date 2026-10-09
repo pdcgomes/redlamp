@@ -17,6 +17,13 @@
 
         /// Moves the palette's highlight to `item` with ↓ and presses ↵.
         func choosePaletteRow(_ item: PaletteItem) throws {
+            try submitPaletteRow(item)
+            try wait("the palette to close") { $0.commandPalette == nil }
+        }
+
+        /// Moves the palette's highlight from the first row to `item` with ↓ and presses ↵, the palette staying open
+        /// or not.
+        func submitPaletteRow(_ item: PaletteItem) throws {
             let index = try main { $0.commandPalette?.rows.firstIndex(of: item) ?? -1 }
             try expect(index >= 0, "\(item.title) isn't among the palette's rows")
             for _ in 0 ..< index {
@@ -24,12 +31,11 @@
             }
             try wait("\(item.title) highlighted") { $0.commandPalette?.selectedItem == item }
             try paletteKey(.submit)
-            try wait("the palette to close") { $0.commandPalette == nil }
         }
     }
 
     enum PaletteLibraryScenarios {
-        static let all: [Scenario] = [names]
+        static let all: [Scenario] = [names, terms]
 
         static let names = Scenario(
             "library.palette-names",
@@ -71,6 +77,43 @@
             }
             try app.choosePaletteRow(row)
             try app.wait("the photo shown") { $0.selection?.lastPathComponent == photo }
+            app.covered([.feature("workspace.palette"), .feature("library.filter")], via: .key)
+        }
+
+        static let terms = Scenario(
+            "library.palette-terms",
+            "⌘K completes the query's terms as the filter bar's text does: a field's row types the field, is: lists "
+                + "the traits, Damaged Files with the folder's damaged file among them, and its row makes it the "
+                + "filter's term",
+            claims: [.feature("workspace.palette"), .feature("library.filter")],
+        ) { app in
+            let scratch = try SourcesScratch(app, photos: ["A.jpg", "B.jpg"], empty: ["Empty.jpg"])
+            defer { app.removeScratch(scratch) }
+            try scratch.index(app)
+            try app.main { $0.libraryFilters?.setFilter(LibraryFilter()) }
+            defer { try? app.resetFilter() }
+
+            try app.press(.commandPalette)
+            try app.wait("the palette") { $0.commandPalette != nil }
+            guard let field = try app.searchPalette("orien").first(where: { $0.kind == .queryField("orientation:") })
+            else { throw ScenarioFailure("No row for the orientation field") }
+            try app.submitPaletteRow(field)
+            try app.wait("↵ to type the field, and its values listed") { model in
+                model.commandPalette.map { palette in
+                    palette.text == "orientation:" && palette.library.text == "orientation:"
+                        && !palette.library.isSearching && palette.library.items.count == 3
+                } == true
+            }
+
+            let traits = try app.searchPalette("is:")
+            guard let damaged = traits.first(where: { $0.kind == .queryTerm("is:damaged") }) else {
+                throw ScenarioFailure("Damaged Files isn't among the traits: \(traits.map(\.title))")
+            }
+            try app.expect(damaged.context == "is:damaged · 1 photo", "Damaged Files counts \(damaged.context)")
+            try app.choosePaletteRow(damaged)
+            try app.wait("the term in the filter, and the empty file alone", timeout: 20) { model in
+                model.libraryFilters?.filter.text == "is:damaged" && model.items.map(\.name) == ["Empty.jpg"]
+            }
             app.covered([.feature("workspace.palette"), .feature("library.filter")], via: .key)
         }
     }

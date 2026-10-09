@@ -82,6 +82,12 @@ import RedlampLibrary
     case photo(String)
     /// The photos whose names hold the text: ↵ filters by it (`name:`).
     case photosNamed(String)
+    /// A term of the query language the search completed, as the language writes it (`is:damaged`,
+    /// `-label:red`): ↵ makes it one of the filter's terms (LIB-19).
+    case queryTerm(String)
+    /// A field of the query language whose name starts with the search, with its `:` (`orientation:`): ↵
+    /// types it in the search, for its values to be completed.
+    case queryField(String)
 
     /// What ↵ does, for the hint bar.
     var verb: String {
@@ -92,7 +98,8 @@ import RedlampLibrary
         case .setValue: "Set"
         case .historyStep, .snapshot: "Go"
         case .libraryName(.folder, _), .photo: "Show"
-        case .libraryName, .photosNamed: "Filter"
+        case .libraryName, .photosNamed, .queryTerm: "Filter"
+        case .queryField: "Type"
         default: "Apply"
         }
     }
@@ -104,7 +111,7 @@ import RedlampLibrary
         case .page: 1
         case .slider: 2
         case .action: 3
-        case .libraryName, .photo, .photosNamed: 5
+        case .libraryName, .photo, .photosNamed, .queryTerm, .queryField: 5
         default: 4
         }
     }

@@ -292,10 +292,15 @@ enum PaletteCatalog {
 
     // MARK: - The library
 
-    /// The rows for the library's names, then its photos found by name, and when more photos have
-    /// the name than are listed, one filtering by it (LIB-19).
+    /// The fields whose values the palette lists as terms of the query language rather than as names (LIB-19).
+    static let termFields: [LibraryQuery.Field] = [.label, .trait, .orientation]
+
+    /// The rows for the library's names, and the terms for colour and custom labels, traits and orientations, then
+    /// its photos found by name, and when more photos have the name than are listed, one filtering by it (LIB-19).
     static func libraryItems(names: [QueryCompletion], photos: PhotosNamed?) -> [PaletteItem] {
-        var items = names.map(libraryItem)
+        var items = names.map { name in
+            termFields.contains(name.field) ? termItem(name, negated: false) : libraryItem(name)
+        }
         guard let photos else { return items }
         for photo in photos.photos {
             let url = URL(fileURLWithPath: photo.path)
@@ -332,6 +337,24 @@ enum PaletteCatalog {
         default: ("Place", "mappin.and.ellipse")
         }
         return PaletteItem(kind: .libraryName(name.field, name.value), title: title, context: context, symbol: symbol)
+    }
+
+    /// The row for a completed term of the query language, with `-` before it when `negated`: titled as the bar's
+    /// completion titles it, the term as the language writes it beside, and a trait's or an orientation's photos.
+    static func termItem(_ completion: QueryCompletion, negated: Bool) -> PaletteItem {
+        let shown = FilterCompletion(completion)
+        let term = (negated ? "-" : "") + completion.term
+        let count = negated ? nil : completion.count.map { $0 == 1 ? "1 photo" : "\($0.formatted()) photos" }
+        return PaletteItem(
+            kind: .queryTerm(term), title: negated ? "Not \(shown.title)" : shown.title,
+            context: ([term] + (count.map { [$0] } ?? [])).joined(separator: " · "),
+            symbol: "line.3.horizontal.decrease.circle",
+        )
+    }
+
+    /// The row for a field of the query language, which ↵ types in the search.
+    static func fieldItem(_ field: String) -> PaletteItem {
+        PaletteItem(kind: .queryField(field), title: field, context: "Field", symbol: "text.cursor")
     }
 
     private static func recipeItem(_ recipe: Recipe) -> PaletteItem {

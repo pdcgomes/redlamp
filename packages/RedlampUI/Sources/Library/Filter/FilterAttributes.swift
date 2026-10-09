@@ -226,6 +226,26 @@ public extension LibraryFilters {
         }
     }
 
+    /// `query`, a term of the language, as one more of the filter's, as the palette adds it (LIB-19): a filter on a
+    /// field takes the place of the field's that keep photos, as a column's choice does; a trait goes beside the
+    /// others, as the Attribute section puts one; anything else, a term with `-` among them, narrows the rules as
+    /// it is. A term the rules have already changes nothing.
+    func narrow(by query: LibraryQuery) {
+        let rule = QueryRules.Rule(query)
+        edit { rules in
+            if case let .filter(filter, negated: false) = rule, filter.field != .trait {
+                return rules.replacingFilters(on: filter.field, with: filter)
+            }
+            guard rules.match != .all || !rules.rules.contains(rule) else { return rules }
+            var rules = rules
+            if rules.match != .all, !rules.rules.isEmpty {
+                rules = QueryRules(match: .all, rules: [.group(rules)])
+            }
+            rules.rules.append(rule)
+            return QueryRules(LibraryQuery(rules))
+        }
+    }
+
     internal var attributes: FilterAttributes {
         FilterAttributes(rules)
     }

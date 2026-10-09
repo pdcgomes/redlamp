@@ -111,6 +111,8 @@ extension CommandPaletteModel {
             editor.open([URL(fileURLWithPath: path)])
         case let .photosNamed(text):
             filterLibrary(by: LibraryQuery.Filter(.name, .equal, [.text(text)]))
+        case let .queryTerm(term):
+            filterLibrary(adding: term)
         default:
             break
         }

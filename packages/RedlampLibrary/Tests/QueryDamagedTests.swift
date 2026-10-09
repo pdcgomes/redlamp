@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import Testing
 @testable import RedlampLibrary
 
@@ -115,6 +116,24 @@ struct QueryDamagedTests {
         #expect(all.first == QueryCompletion(field: .trait, value: "damaged", count: 2), "the source's own photos")
         let health = await engine.completions("dama", field: .trait, in: .health(.damaged))
         #expect(health.first?.count == 3, "Damaged Files' photos, the one that can't be read among them")
+    }
+
+    @Test func `every trait, orientation and colour label is offered with nothing typed, as the palette lists them`(
+    ) async throws {
+        let cards = try await Cards.make()
+        defer { cards.remove() }
+        let engine = QueryEngine(index: cards.sandbox.index)
+        try await engine.load()
+        let traits = await engine.values(of: .trait)
+        #expect(traits.map(\.term) == LibraryQuery.Trait.allCases.map { "is:\($0.rawValue)" })
+        #expect(traits.first { $0.value == "damaged" }?.count == 2, "the source's own photos, as completion counts")
+        let health = await engine.values(of: .trait, in: .health(.damaged))
+        #expect(health.first { $0.value == "damaged" }?.count == 3)
+        let orientations = await engine.values(of: .orientation)
+        #expect(orientations.map(\.value) == PhotoOrientation.allCases.map(\.rawValue))
+        #expect(orientations.allSatisfy { $0.count != nil })
+        #expect(await engine.values(of: .label).map(\.value) == ColorLabel.allCases.map(\.rawValue))
+        #expect(await engine.values(of: .keyword).isEmpty, "keywords are the library's names, completed as typed")
     }
 
     @Test func `a smart collection of damaged files holds those that can't be read, as other collections don't`(
