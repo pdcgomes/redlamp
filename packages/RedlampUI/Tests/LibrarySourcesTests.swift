@@ -81,6 +81,35 @@ struct LibrarySourcesTests {
         #expect(sources.shown == nil && model.items.count == 2, "a folder opened ends the source")
     }
 
+    @Test func `an entry's photos have the index's IDs, found from their URLs, and photos listed after it are given IDs above them`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["Shoot/A.JPG", "Shoot/B.JPG", "Other/C.JPG"])
+        let model = try await sandbox.open()
+        let library = model.library
+        let sources = model.librarySources
+        let core = try #require(sandbox.service?.core)
+        #expect(sources.show(.allPhotographs))
+        try await sandbox.eventually { !sources.isListing && model.items.count == 3 }
+        let urls = model.items.map(\.url)
+        let indexed = await LibraryService.indexIDs(of: urls, in: core.index)
+        #expect(indexed.count == 3)
+        #expect(Array(library.photoIDs) == urls.compactMap { indexed[$0] })
+        for (place, url) in urls.enumerated() {
+            #expect(library.index(of: url) == place && library.photoID(of: url) == indexed[url])
+            #expect(library.url(ofPhoto: library.photoIDs[place]) == url)
+            #expect(library.contentKey(of: url) != nil, "\(url.lastPathComponent)'s content key, by its ID")
+        }
+        #expect(library.index(of: sandbox.photo("Shoot/Z.JPG")) == nil)
+
+        model.showFolder(sandbox.folder("Shoot"))
+        try await sandbox.eventually { model.folder != nil && model.items.count == 2 }
+        let highest = try #require(indexed.values.max())
+        #expect(library.photoIDs.allSatisfy { $0 >= highest + FolderLibrary.ownIDMargin }, "\(library.photoIDs)")
+        #expect(library.photoID(of: sandbox.photo("Shoot/A.JPG")) == library.photoIDs.first)
+    }
+
     @Test func `Library Health's checks are offered while they find something, each shown with its photos`(
     ) async throws {
         let sandbox = SourcesSandbox()
