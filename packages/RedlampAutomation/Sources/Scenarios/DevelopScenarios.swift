@@ -452,7 +452,7 @@
     }
 
     enum WorkspaceScenarios {
-        static let all: [Scenario] = [panels, palette, shortcutsSheet, toolbar, themes, settings, welcome]
+        static let all: [Scenario] = [panels, hidePanels, palette, shortcutsSheet, toolbar, themes, settings, welcome]
 
         static let panels = Scenario(
             "workspace.panels", "Panel headers open, solo and reset; the left panels open and close",
@@ -480,6 +480,45 @@
             }
             try app.main { $0.expandedPanels = [.basic, .toneCurve, .colorMixer] }
             app.covered(.feature("workspace.panels"), via: .mouse)
+        }
+
+        /// #358: Tab hides the side panels for a bigger view of the photo, as in Lightroom. The working
+        /// photo is a landscape one, which at Fit is as wide as the room between the panels.
+        static let hidePanels = Scenario(
+            "workspace.hide-panels",
+            "Tab hides the side panels, and the photo grows into their room, rendered again at its new size",
+            claims: [.feature("workspace.panels")],
+        ) { app in
+            try app.openWorking()
+            try app.waitForCanvas()
+            /// On screen at the size the stage needs, to the pixel the engine rounds to.
+            @MainActor func rendered(_ model: EditorModel) -> Bool {
+                guard let frame = model.frames.current?.size else { return false }
+                let target = model.canvas.renderTarget.size
+                return abs(frame.width - target.width) <= 1 && abs(frame.height - target.height) <= 1
+            }
+            try app.wait("the photo rendered at Fit", until: rendered)
+            let (shown, fit) = try app.main { model in
+                (model.canvas.stageInsets, model.canvas.imageRect(in: model.canvas.viewSize))
+            }
+
+            try app.press(.toggleSidePanels)
+            try app.wait("Tab to give the photo the panels' room, rendered again at its new size") { model in
+                let canvas = model.canvas
+                let photo = canvas.imageRect(in: canvas.viewSize)
+                let stage = canvas.stage(in: canvas.viewSize)
+                return !model.leftPanelVisible && !model.rightPanelVisible
+                    && canvas.stageInsets.leading < shown.leading && canvas.stageInsets.trailing < shown.trailing
+                    && photo.width > fit.width + 1
+                    && (abs(photo.width - stage.width) < 0.5 || abs(photo.height - stage.height) < 0.5)
+                    && rendered(model)
+            }
+            try app.press(.toggleSidePanels)
+            try app.wait("Tab again to bring the panels back, and the photo's size with them") { model in
+                model.leftPanelVisible && model.rightPanelVisible && model.canvas.stageInsets == shown
+                    && model.canvas.imageRect(in: model.canvas.viewSize) == fit && rendered(model)
+            }
+            app.covered(.feature("workspace.panels"), via: .key)
         }
 
         static let palette = Scenario(
