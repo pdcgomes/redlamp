@@ -28,14 +28,7 @@ extension LibraryCommand {
                 description: "unknown grouping \(keyName): \(names.dropLast().joined(separator: ", ")) or \(names.last ?? "")",
             )
         }
-        let (tighter, looser) = try (options.int("--tighter"), options.int("--looser"))
-        guard tighter == nil || looser == nil else {
-            throw CLIError(description: "groups takes --tighter or --looser, not both")
-        }
-        if let steps = tighter ?? looser, !(0 ... MomentSetting.loosest).contains(steps) {
-            throw CLIError(description: "--tighter and --looser take 0 to \(MomentSetting.loosest) steps")
-        }
-        let setting = MomentSetting(looseness: looser ?? -(tighter ?? 0))
+        let setting = try momentSetting(options, command: "groups")
         let sortName = options.value("--sort") ?? QuerySort.Key.captured.rawValue
         guard let sortKey = QuerySort.Key(rawValue: sortName) else {
             let names = QuerySort.Key.allCases.map(\.rawValue)
@@ -69,5 +62,17 @@ extension LibraryCommand {
         for line in report.lines() {
             print(line)
         }
+    }
+
+    /// The Tighter–Looser setting `--tighter` or `--looser` asks for, steps from the default.
+    static func momentSetting(_ options: Arguments, command: String) throws -> MomentSetting {
+        let (tighter, looser) = try (options.int("--tighter"), options.int("--looser"))
+        guard tighter == nil || looser == nil else {
+            throw CLIError(description: "\(command) takes --tighter or --looser, not both")
+        }
+        if let steps = tighter ?? looser, !(0 ... MomentSetting.loosest).contains(steps) {
+            throw CLIError(description: "--tighter and --looser take 0 to \(MomentSetting.loosest) steps")
+        }
+        return MomentSetting(looseness: looser ?? -(tighter ?? 0))
     }
 }

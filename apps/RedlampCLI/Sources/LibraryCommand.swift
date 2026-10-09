@@ -12,7 +12,7 @@ enum LibraryCommand {
            redlamp library index <folder>… --index <path> [--profile <profile>]
            redlamp library search <query> --index <path> [--collection <name or path>]
                                   [--sort captured|name|rating|edited|modified|size] [--descending]
-                                  [--json] [--limit <n>]
+                                  [--tighter <n> | --looser <n>] [--json] [--limit <n>]
            redlamp library stats --index <path> [--json]
            redlamp library sidecars <root> --index <path> [--move beside|mac] [--dry-run] [--json]
            redlamp library names <template> --index <path> [<query>] [--json] [--limit <n>]
@@ -89,8 +89,9 @@ enum LibraryCommand {
                camera:"X-T5" date:2024-06..2024-08 sunset), over the index at <path> and prints the photos'
                paths in order (when they were taken, unless --sort says otherwise), then how many photos it
                found and how long it took. --collection searches a collection, a set or a smart collection
-               instead of the whole library, and <query> may then be left out. --limit prints only the first
-               <n>; --json prints JSON.
+               instead of the whole library, and <query> may then be left out. is:unpicked-moment finds the
+               photos in moments without a pick, the moments found as groups finds them, with --tighter or
+               --looser. --limit prints only the first <n>; --json prints JSON.
       stats    prints what the index at <path> holds: its photos and folders, its roots and where each keeps
                its sidecars, its volumes and which are offline, how many photos are edited, rated, picked,
                rejected and labelled, and the sizes of the index and of the store beside it. --json prints JSON.
@@ -158,9 +159,10 @@ enum LibraryCommand {
                moment starting at a pause longer than 60 s and four times the pace of the photos around it, the
                two moved together by up to 4 steps of --tighter or --looser), day, folder, camera, lens,
                orientation, moment-camera (each moment's photos by camera, for two bodies whose clocks disagree)
-               or none, a stack always whole. Prints each group with how many photos and picks it has and the
-               filter that finds it, the moments without a pick, and a summary: the days, cameras, lenses, ISO,
-               shutter and aperture ranges, pairs and stacks. --json prints JSON.
+               or none, a stack always whole; <query>'s is:unpicked-moment finds moments with the same setting.
+               Prints each group with how many photos and picks it has and the filter that finds it, the
+               moments without a pick, and a summary: the days, cameras, lenses, ISO, shutter and aperture
+               ranges, pairs and stacks. --json prints JSON.
       metadata prints each photo <query> finds with its rating, flag, label, mark, IPTC Core's fields,
                collections and stack as the index shows them; set gives them ratings, flags, labels (a
                colour's name in any label set, or a custom label), marks and IPTC Core's fields (--title,

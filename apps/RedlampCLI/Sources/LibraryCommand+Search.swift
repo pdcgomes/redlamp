@@ -4,9 +4,12 @@ import RedlampLibrary
 extension LibraryCommand {
     /// `redlamp library search`: runs a query over an index (LIB-06), or over the photos of a collection,
     /// a set or a smart collection with `--collection` (LIB-23), and prints the photos' paths in order,
-    /// then how many photos the query found and how long it took (`LibrarySearch`).
+    /// then how many photos the query found and how long it took (`LibrarySearch`). `is:unpicked-moment`
+    /// finds moments as `--tighter` or `--looser` has them (LIB-41).
     static func search(_ arguments: [String]) async throws {
-        let options = try Arguments(arguments, valued: ["--index", "--sort", "--limit", "--collection"])
+        let options = try Arguments(
+            arguments, valued: ["--index", "--sort", "--limit", "--collection", "--tighter", "--looser"],
+        )
         guard !options.positional.isEmpty || options.value("--collection") != nil, let path = options.value("--index")
         else {
             throw CLIError(description: "search needs a query or --collection, and --index\n\n\(usage)")
@@ -32,6 +35,7 @@ extension LibraryCommand {
         if let limit, limit < 0 {
             throw CLIError(description: "--limit needs a whole number, 0 or more")
         }
+        let moments = try momentSetting(options, command: "search")
         let url = URL(fileURLWithPath: path)
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw CLIError(description: "no index at \(url.path) (make one with redlamp library index)")
@@ -46,7 +50,9 @@ extension LibraryCommand {
             }
             collection = found
         }
-        let search = try await LibrarySearch.run(query, in: collection, sort: sort, limit: limit, index: index)
+        let search = try await LibrarySearch.run(
+            query, in: collection, sort: sort, limit: limit, moments: moments, index: index,
+        )
         await index.close()
         if options.has("--json") {
             try print(String(decoding: search.json(), as: UTF8.self))
