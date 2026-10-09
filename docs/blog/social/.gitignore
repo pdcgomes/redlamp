@@ -1,4 +1,4 @@
-# Renders from .cursor/skills/redlamp-blog/card/render.py; each kit's card.json makes them again.
+# Renders from .cursor/skills/redlamp-blog/card/render.py, or a kit's own card.py; each kit's card.json or card.py makes them again.
 *.png
 *.gif
 *.mp4
