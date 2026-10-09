@@ -64,6 +64,8 @@ interface Share {
 
 interface Post {
   slug: string;
+  /** Where it's published: redlamp.app/<section>/<slug>, from web/content/<section>/<slug>/. "blog" when left out. */
+  section?: "blog" | "articles";
   title: string;
   /** From the front matter. */
   published: string;
@@ -631,7 +633,7 @@ function UpNext({ post, marks, setMarks }: { post: Post; marks: ShareMarks; setM
         <Eyebrow>Up next</Eyebrow>
         <H2>{`Announce ${post.title}`}</H2>
         <Text size="small" tone="secondary">
-          {`Published ${day(post.published)} at redlamp.app/blog/${post.slug}`}
+          {`Published ${day(post.published)} at redlamp.app/${post.section ?? "blog"}/${post.slug}`}
         </Text>
       </Stack>
       <Grid columns={THUMBS[post.slug] ? "minmax(0, 320px) minmax(0, 1fr)" : 1} gap={18} align="start">
@@ -726,7 +728,7 @@ function PostsTab({ marks, setMarks }: { marks: ShareMarks; setMarks: SetCanvasS
               {post.summary}
             </Text>
             <Text size="small" tone="tertiary">
-              {`redlamp.app/blog/${post.slug} · ${post.commits}`}
+              {`redlamp.app/${post.section ?? "blog"}/${post.slug} · ${post.commits}`}
             </Text>
             {post.note ? <Text size="small">{post.note}</Text> : null}
             {post.shares.map((share) => (
@@ -760,7 +762,9 @@ function PostsTab({ marks, setMarks }: { marks: ShareMarks; setMarks: SetCanvasS
             ) : null}
             {post.images.length > 0 ? (
               <CollapsibleSection title="The post's own images" count={post.images.length}>
-                <OpenFiles files={post.images.map((name) => ({ label: name, path: `${REPO}/web/content/blog/${post.slug}/${name}` }))} />
+                <OpenFiles
+                  files={post.images.map((name) => ({ label: name, path: `${REPO}/web/content/${post.section ?? "blog"}/${post.slug}/${name}` }))}
+                />
               </CollapsibleSection>
             ) : null}
             {post.chat ? (

@@ -19,12 +19,14 @@ Every blog post is tracked in one canvas, the blog room: the posts that are live
 | The card | [card/card.html](card/card.html) and [card/render.py](card/render.py) |
 | Where things stand | [room.py](room.py) `status` |
 
+Articles, the site's technical pieces (`web/content/articles/<slug>/index.md`, at redlamp.app/articles), are announced and tracked the same way as posts: a kit in `docs/blog/social/<slug>/`, and a post in the room with `section: "articles"`. The first, Linear vs scene-referred, has its card drawn in pixel art with the pixel-graphics skill, by `card.py` in its kit, instead of [card/card.html](card/card.html).
+
 Read `~/.cursor/skills-cursor/canvas/SKILL.md` once per session before the first write to the room. Link the room in every reply that changes it: `[Blog room](/Users/pedrogomes/.cursor/projects/Users-pedrogomes-src-darkroom/canvases/blog-room.canvas.tsx)`.
 
 ## Every time: know where things stand
 
 1. **Read the owner's marks first.** The room keeps them in `blog-room.canvas.data.json`, beside it, under `needsYou` (`{ "<id>": { "state": "done" | "skipped" | "asked", "at": "…" } }`) and `shares` (`{ "<share id>": { "state": "posted" | "scheduled" | "draft" | "skipped", "at": "…" } }`, where `draft` is the owner's Not posted). Never write that file. Fold each mark into `room`: the share's `state` and `when`, a row in `posted` that says it rests on the owner's mark, and the channel's status line in the kit's `posts.md`. A Needs you item that names the share then shows as done by itself. When the owner gives a post's address on the platform, it goes in the share's `link` and the `posted` row.
-2. **Run `python3 .cursor/skills/redlamp-blog/room.py status`.** Never take dates or states from memory. It lists the posts on main with their dates, drafts and whether redlamp.app serves them; each kit's files; the fact sheets; and blog files that are only on another branch or uncommitted in a worktree.
+2. **Run `python3 .cursor/skills/redlamp-blog/room.py status`.** Never take dates or states from memory. It lists the posts and articles on origin/main with their dates, drafts and whether redlamp.app serves them; each kit's files; the fact sheets; and blog files that are only on another branch or uncommitted in a worktree.
 3. **Bring the room up to date in the same turn:** `summary`, `upNext`, `needsYou`, `posts`, `pipeline`, `posted`, a `log` entry and `updated`. Say plainly what you didn't check.
 
 ## Writing a post
