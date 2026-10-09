@@ -26,8 +26,9 @@ export async function starCount(): Promise<number | null> {
 export type Release = { version: string | null; url: string };
 
 /**
- * The latest release's zip, refreshed hourly; null before the first release. If GitHub can't
- * be reached, the latest release's page with no version, so the download button stays.
+ * The latest release's disk image, or its zip for a release without one, refreshed hourly; null
+ * before the first release. If GitHub can't be reached, the latest release's page with no
+ * version, so the download button stays.
  */
 export async function latestRelease(): Promise<Release | null> {
   const fallback = { version: null, url: `${site.github}/releases/latest` };
@@ -39,9 +40,10 @@ export async function latestRelease(): Promise<Release | null> {
       tag_name?: string;
       assets?: { name: string; browser_download_url: string }[];
     };
-    const zip = body.assets?.find((asset) => /^Redlamp-.+\.zip$/.test(asset.name));
-    if (!body.tag_name || !zip) return fallback;
-    return { version: body.tag_name.replace(/^v/, ""), url: zip.browser_download_url };
+    const named = (pattern: RegExp) => body.assets?.find((asset) => pattern.test(asset.name));
+    const download = named(/^Redlamp-.+\.dmg$/) ?? named(/^Redlamp-.+\.zip$/);
+    if (!body.tag_name || !download) return fallback;
+    return { version: body.tag_name.replace(/^v/, ""), url: download.browser_download_url };
   } catch {
     return fallback;
   }
