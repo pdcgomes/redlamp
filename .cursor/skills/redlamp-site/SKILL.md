@@ -10,7 +10,7 @@ The website presents the README. Much of it is read from the repository when it 
 ## Stack and commands
 
 - Next.js 16 (App Router), React 19, Tailwind CSS 4 and TypeScript, with `marked` for the blog and Vercel Web Analytics. Add no dependencies: the npm registry is unreachable from the sandbox, so only `npm install --offline` works.
-- Server components by default. `"use client"` only where there's interaction: `MobileMenu`, `Lightbox`, `HeroShots`, `Gallery`, `YouTubeFilm`, `Comparison`, `CameraList`, `FilmTable`, `StarNudge`.
+- Server components by default. `"use client"` only where there's interaction: `MobileMenu`, `Lightbox`, `HeroShots`, `Gallery`, `YouTubeFilm`, `Comparison`, `CameraList`, `FilmTable`, `StarNudge`, and the articles' interactive figures.
 - `mise run site` serves it on http://localhost:3000 (running `npm ci` first if `node_modules` is missing); `mise run site -- build` builds it.
 - Before every `dev` and `build`, `scripts/sync-assets.mjs` copies `docs/images`, `docs/images/film` and `docs/brand`, and the blog posts' images, into `public/synced/` (gitignored).
 - Check with `cd web && npm test && npm run typecheck && npm run build`. Tests are `lib/*.test.ts` under `node --test`. Add `scripts/roadmap-sync.py --check` and `scripts/camera-list.py --check` when the README, tracker, comparison or cameras change.
@@ -26,6 +26,7 @@ The website presents the README. Much of it is read from the repository when it 
 | `/cameras/test` | How to run the camera bench: steps and screenshots in `content/camera-bench.ts`, counts from `lib/cameras.ts` |
 | `/performance` | `docs/performance/metrics.json` and `history.jsonl` through `lib/performance.ts`, drawn by `components/charts/` |
 | `/blog`, `/blog/<slug>`, `/blog/feed.xml` | `content/blog/<slug>/index.md` through `lib/blog.ts`; `web/README.md` has the front matter. Each post's card and its X and LinkedIn copy, and the blog room that tracks every post: `.cursor/skills/redlamp-blog/SKILL.md` |
+| `/articles`, `/articles/<slug>` | Technical articles: `content/articles/<slug>/index.md` through `lib/articles.ts`, with the blog's front matter and Markdown, and interactive figures from `components/articles/` placed by `<div data-figure="name"></div>` lines (`web/README.md`, Articles) |
 | `/api/…` | The relays the app posts to, such as `/api/feedback` (`lib/feedback.ts`, `lib/github-app.ts`), described in `web/README.md` |
 | `/api/whats-new` | The app's What's New feed, linked from no page: `content/whats-new/<id>/index.md` through `lib/whats-new.ts`; `web/README.md` has the front matter |
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Copies the screenshots, film assets and brand files the website and the explainer video
 // use from docs/ into each project's public/synced, so they are never committed twice, and
-// the blog posts' and What's New items' images into the website's.
+// the blog posts', articles' and What's New items' images into the website's.
 // On Vercel this needs "Include files outside the root directory in the Build Step".
 
 import { cpSync, existsSync, mkdirSync, rmSync, readdirSync } from "node:fs";
@@ -44,9 +44,9 @@ for (const target of targets) {
   }
 }
 
-// Each blog post's and What's New item's own images sit beside its index.md, in
+// Each blog post's, article's and What's New item's own images sit beside its index.md, in
 // web/content/<kind>/<slug>/.
-for (const kind of ["blog", "whats-new"]) {
+for (const kind of ["blog", "articles", "whats-new"]) {
   const content = path.join(repo, "web", "content", kind);
   if (!existsSync(content)) continue;
   for (const post of readdirSync(content, { withFileTypes: true })) {

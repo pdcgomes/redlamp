@@ -1,12 +1,18 @@
 /**
  * The blog: one Markdown file per post, `content/blog/<slug>/index.md`, with its images beside it,
- * rendered into static pages when the site builds. Relative imports only, so `node --test` can load it.
+ * rendered into static pages when the site builds. Articles (`lib/articles.ts`) are read and rendered
+ * the same way from `content/articles/`. Relative imports only, so `node --test` can load it.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Marked, type Tokens } from "marked";
 import { readFrontMatter } from "./front-matter.ts";
+
+/** Where a post lives: its folder under `content/`, and its images' under `public/synced/`. */
+export type Section = "blog" | "articles";
+
+const noun: Record<Section, string> = { blog: "Blog post", articles: "Article" };
 
 export type Post = {
   slug: string;
@@ -28,26 +34,27 @@ export type Post = {
 };
 
 /** Where a post's own file is served from once `scripts/sync-assets.mjs` has copied it; absolute paths stay. */
-export function assetPath(slug: string, src: string): string {
-  return /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(src) ? src : `/synced/blog/${slug}/${src.replace(/^\.\//, "")}`;
+export function assetPath(slug: string, src: string, section: Section = "blog"): string {
+  return /^([a-z][a-z0-9+.-]*:|\/|#)/i.test(src) ? src : `/synced/${section}/${slug}/${src.replace(/^\.\//, "")}`;
 }
 
 /** Reads a post's front matter (`lib/front-matter.ts`); `files` are the ones beside its index.md. */
-export function parsePost(slug: string, source: string, files: string[] = []): Post {
+export function parsePost(slug: string, source: string, files: string[] = [], section: Section = "blog"): Post {
+  const name = noun[section];
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    throw new Error(`Blog post folder "${slug}" is its URL, so name it in lowercase letters, digits and hyphens`);
+    throw new Error(`${name} folder "${slug}" is its URL, so name it in lowercase letters, digits and hyphens`);
   }
   const front = readFrontMatter(source);
-  if (!front) throw new Error(`Blog post "${slug}" has no front matter`);
+  if (!front) throw new Error(`${name} "${slug}" has no front matter`);
   const { fields } = front;
   const required = (key: string) => {
     const value = fields.get(key);
-    if (!value) throw new Error(`Blog post "${slug}" needs a ${key} in its front matter`);
+    if (!value) throw new Error(`${name} "${slug}" needs a ${key} in its front matter`);
     return value;
   };
   const date = required("date");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    throw new Error(`Blog post "${slug}" has a date that isn't YYYY-MM-DD: ${date}`);
+    throw new Error(`${name} "${slug}" has a date that isn't YYYY-MM-DD: ${date}`);
   }
   const cover = fields.get("cover");
   return {
@@ -55,7 +62,7 @@ export function parsePost(slug: string, source: string, files: string[] = []): P
     title: required("title"),
     summary: required("summary"),
     date,
-    cover: cover ? assetPath(slug, cover) : undefined,
+    cover: cover ? assetPath(slug, cover, section) : undefined,
     coverAlt: fields.get("coverAlt"),
     pixelArt: fields.get("pixelArt") === "true",
     draft: fields.get("draft") === "true",
@@ -70,15 +77,15 @@ export function parsePost(slug: string, source: string, files: string[] = []): P
  * shows the poster instead to readers who ask for reduced motion; headings get ids from their text;
  * raw HTML passes through, since posts are the project's own writing.
  */
-export function renderMarkdown(slug: string, markdown: string, files: readonly string[] = []): string {
+export function renderMarkdown(slug: string, markdown: string, files: readonly string[] = [], section: Section = "blog"): string {
   const image = ({ href, title, text }: Tokens.Image, inFigure = false) => {
     const img =
-      `<img src="${escape(assetPath(slug, href))}" alt="${escape(text)}" loading="lazy" decoding="async"` +
+      `<img src="${escape(assetPath(slug, href, section))}" alt="${escape(text)}" loading="lazy" decoding="async"` +
       `${title && !inFigure ? ` title="${escape(title)}"` : ""}>`;
     const gif = href.replace(/^\.\//, "").match(/^(.+)\.gif$/i);
     const poster = gif ? `${gif[1]}-poster.png` : undefined;
     return poster && files.includes(poster)
-      ? `<picture><source srcset="${escape(assetPath(slug, poster))}" media="(prefers-reduced-motion: reduce)">${img}</picture>`
+      ? `<picture><source srcset="${escape(assetPath(slug, poster, section))}" media="(prefers-reduced-motion: reduce)">${img}</picture>`
       : img;
   };
   const marked = new Marked({
@@ -104,6 +111,28 @@ export function renderMarkdown(slug: string, markdown: string, files: readonly s
   return marked.parse(markdown, { async: false });
 }
 
+export type Part = { html: string } | { figure: string };
+
+/**
+ * A post's HTML cut at its figure lines, `<div data-figure="name"></div>` on a line of their own in
+ * the Markdown, so the page can put an interactive figure in each one's place. HTML that is only
+ * whitespace is dropped.
+ */
+export function splitFigures(html: string): Part[] {
+  const parts: Part[] = [];
+  let last = 0;
+  for (const match of html.matchAll(/<div data-figure="([a-z0-9]+(?:-[a-z0-9]+)*)"><\/div>/g)) {
+    const start = match.index ?? 0;
+    const before = html.slice(last, start);
+    if (before.trim()) parts.push({ html: before });
+    parts.push({ figure: match[1] });
+    last = start + match[0].length;
+  }
+  const rest = html.slice(last);
+  if (rest.trim()) parts.push({ html: rest });
+  return parts;
+}
+
 function headingId(text: string): string {
   return text
     .replace(/<[^>]*>|[`*_~]/g, "")
@@ -118,13 +147,13 @@ function escape(text: string): string {
 }
 
 /** Every post in `dir` (one folder each, holding an `index.md`), newest first. */
-export function readPosts(dir: string, { drafts = false } = {}): Post[] {
+export function readPosts(dir: string, { drafts = false, section = "blog" }: { drafts?: boolean; section?: Section } = {}): Post[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && existsSync(path.join(dir, entry.name, "index.md")))
     .map((entry) => {
       const folder = path.join(dir, entry.name);
-      return parsePost(entry.name, readFileSync(path.join(folder, "index.md"), "utf8"), readdirSync(folder));
+      return parsePost(entry.name, readFileSync(path.join(folder, "index.md"), "utf8"), readdirSync(folder), section);
     })
     .filter((post) => drafts || !post.draft)
     .sort((a, b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug));

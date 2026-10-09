@@ -47,6 +47,13 @@ draft: true              # optional: shown by `mise run site`, left out of produ
 - A post without a title, summary or date stops the build, naming the post.
 - `npm test` covers the front matter and Markdown rules in `lib/blog.ts`.
 
+## Articles
+
+Technical articles, longer than posts and often interactive, are `content/articles/<slug>/index.md`. They take the blog's front matter and Markdown rules, images and drafts included, and become `/articles/<slug>`, listed at `/articles` and in the sitemap, each with its own share card.
+
+- A line of its own, `<div data-figure="name"></div>`, places one of the article's figures: a React component in `components/articles/<slug>/`, listed under the article's slug in `components/articles/figures.ts`. Figures that respond to the reader are client components (`"use client"`); the rest render when the site builds.
+- A figure line that `figures.ts` doesn't list for the article stops the build, naming the article and the figure.
+
 ## What's New
 
 Redlamp's What's New window (`packages/RedlampUI/Sources/WhatsNew`) shows each release's highlights once after an update, and again from Help › What's New in Redlamp. It reads them from `GET /api/whats-new`, which is built with the site, linked from no page and left out of the sitemap. Each highlight is `content/whats-new/<id>/index.md`, with its screenshot beside it:

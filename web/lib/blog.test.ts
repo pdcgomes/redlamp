@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { formatDate, parsePost, readPosts, renderMarkdown } from "./blog.ts";
+import { formatDate, parsePost, readPosts, renderMarkdown, splitFigures } from "./blog.ts";
 
 const source = `---
 title: Why I'm building Redlamp
@@ -106,6 +106,28 @@ test("renderMarkdown escapes an ampersand in alt text and captions once", () => 
 
 test("parsePost rejects a folder name that can't be a URL", () => {
   assert.throws(() => parsePost("Why I'm here", source), /Why I'm here.*lowercase/);
+});
+
+test("an article's errors name it as an article, and its files resolve to the articles' folder", () => {
+  assert.throws(() => parsePost("tone", source.replace(/^title: .*\n/m, ""), [], "articles"), /^Error: Article "tone" needs a title/);
+  assert.equal(parsePost("tone", source.replace("date:", "cover: curve.png\ndate:"), [], "articles").cover, "/synced/articles/tone/curve.png");
+  assert.match(renderMarkdown("tone", "![The curve](curve.png)", [], "articles"), /src="\/synced\/articles\/tone\/curve\.png"/);
+});
+
+test("splitFigures cuts the HTML at each figure line and keeps the HTML around them", () => {
+  const html = renderMarkdown("tone", 'Before.\n\n<div data-figure="encoding"></div>\n\n## After\n\n<div data-figure="grey-scale"></div>\n');
+  const parts = splitFigures(html);
+  assert.deepEqual(
+    parts.map((part) => ("figure" in part ? `figure:${part.figure}` : "html")),
+    ["html", "figure:encoding", "html", "figure:grey-scale"],
+  );
+  assert.match((parts[0] as { html: string }).html, /<p>Before\.<\/p>/);
+  assert.match((parts[2] as { html: string }).html, /<h2 id="after">After<\/h2>/);
+});
+
+test("splitFigures leaves HTML without figure lines whole", () => {
+  assert.deepEqual(splitFigures("<p>Hello.</p>\n"), [{ html: "<p>Hello.</p>\n" }]);
+  assert.deepEqual(splitFigures('<p>A <code>data-figure="x"</code> mention.</p>'), [{ html: '<p>A <code>data-figure="x"</code> mention.</p>' }]);
 });
 
 function folder(posts: Record<string, string>): string {
