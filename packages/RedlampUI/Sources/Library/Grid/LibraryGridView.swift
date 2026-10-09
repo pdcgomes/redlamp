@@ -44,7 +44,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     private var stacksObservation: LibraryObservation?
     private var proposalsObservation: LibraryObservation?
     /// The proposals of the Library Health check shown, which its cells draw (LIB-40).
-    private lazy var proposals = model.healthProposals
+    lazy var proposals = model.healthProposals
     private var trackers: [Tracker] = []
     /// The cells on screen, by item (a row of the photos, or grouped, a header or a photo), and those out of
     /// sight waiting to be used again.
@@ -61,7 +61,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// The headers on screen, by item, and those waiting to be used again.
     private(set) var headers: [Int: GroupHeaderCell] = [:]
     private var headerPool: [GroupHeaderCell] = []
-    private var prefetching: [URL: UInt64] = [:]
+    var prefetching: [URL: UInt64] = [:]
     /// The selection as last followed. Cells are drawn from these, not from the model, which can be a turn
     /// ahead.
     private var selected: URL?
@@ -69,17 +69,17 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// The photos the grid has: the library's count when it last reloaded or changed.
     private(set) var shownCount = 0
     /// Photos came or went while the grid was hidden, or it hasn't loaded yet.
-    private var isStale = true
+    var isStale = true
     /// Rows whose badges changed while the grid was hidden.
-    private var staleRows = IndexSet()
+    var staleRows = IndexSet()
     /// The cells on screen when the grid last scrolled.
     private var visibleRows = 0 ..< 0
     /// Times every cell was reloaded: once the grid has been shown, a module switch reloads nothing.
     private(set) var reloads = 0
     /// Whether the grid was on screen when it last looked.
-    private var wasShown = false
-    private var texts: [GridText.Key: CGImage] = [:]
-    private var drawingTexts: Set<GridText.Key> = []
+    var wasShown = false
+    var texts: [GridText.Key: CGImage] = [:]
+    var drawingTexts: Set<GridText.Key> = []
     private var headerTexts: [GroupHeaderText.Key: CGImage] = [:]
     private var drawingHeaderTexts: Set<GroupHeaderText.Key> = []
     /// The group whose header showed the focus when the selection was last followed.
@@ -87,7 +87,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// The content's tooltip area is made.
     private var hasToolTip = false
     /// A rubber band being drawn: where it started, and the selection it adds to (with ⇧ or ⌘).
-    private var band: Band?
+    var band: Band?
     /// A press on a photo, which a drag takes along, and where a keyword dragged over the grid would land
     /// (`LibraryGridView+Drag`).
     var photoPress: PhotoPress?
@@ -95,14 +95,14 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// Where the painter's stroke last reached (`LibraryGridView+Painter`).
     var lastPaint: CGPoint?
     /// The item whose context menu is open.
-    private var menuItem: Int?
+    var menuItem: Int?
     /// The frames of the focus stacks the app suggests merging (`EditorModel.stackSuggestions`), as last followed.
-    private var suggestedFrames: Set<URL> = []
+    var suggestedFrames: Set<URL> = []
     /// The cells' accessibility elements, by photo, and the headers', by group, as last asked for.
-    private var elements: [URL: GridCellElement] = [:]
-    private var headerElements: [Int: GridCellElement] = [:]
+    var elements: [URL: GridCellElement] = [:]
+    var headerElements: [Int: GridCellElement] = [:]
 
-    private struct Band {
+    struct Band {
         let start: CGPoint
         let base: PhotoSelection?
         var current: CGPoint
@@ -143,16 +143,16 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         fatalError("init(coder:) is not supported")
     }
 
-    private var isShown: Bool {
+    var isShown: Bool {
         isInShownModule(model)
     }
 
-    private var scale: CGFloat {
+    var scale: CGFloat {
         window?.backingScaleFactor ?? 2
     }
 
     /// The long edge a cell's thumbnail is decoded at, for its image's size on this screen.
-    private var edge: Int {
+    var edge: Int {
         GridThumbnails.edge(forPixels: gridLayout.geometry.image.width * scale)
     }
 
@@ -243,7 +243,9 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         super.layout()
         relayout()
     }
+}
 
+extension LibraryGridView {
     /// Shown: what changed while it was hidden, the thumbnails its cells lack, the selection, and the active
     /// photo, or the place the source was left at, scrolled into view.
     private func show() {
@@ -420,14 +422,14 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     // MARK: - Items
 
     /// What an item shows: a row of the photos, or grouped, a group's header or a photo.
-    private enum Item {
+    enum Item {
         case photo(row: Int)
         case header(group: Int)
         /// A photo the list no longer has, until the groups follow it.
         case none
     }
 
-    private func content(ofItem index: Int) -> Item {
+    func content(ofItem index: Int) -> Item {
         guard sections != nil || shownStacks != nil else {
             return model.items.indices.contains(index) ? .photo(row: index) : .none
         }
@@ -438,7 +440,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     /// The photo item `index` shows, by its ID; nil for a header.
-    private func photoID(ofItem index: Int) -> Int64? {
+    func photoID(ofItem index: Int) -> Int64? {
         guard sections != nil || shownStacks != nil else {
             let ids = model.library.photoIDs
             return ids.indices.contains(index) ? ids[index] : nil
@@ -447,7 +449,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     /// The stacks the cells show, grouped or not.
-    private var cellStacks: StackedList? {
+    var cellStacks: StackedList? {
         shownGroups?.stacked ?? shownStacks
     }
 
@@ -470,14 +472,14 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     /// The item showing row `row`'s photo; nil when its group or its stack is closed.
-    private func item(ofRow row: Int) -> Int? {
+    func item(ofRow row: Int) -> Int? {
         guard shownGroups != nil || shownStacks != nil else { return row }
         let ids = model.library.photoIDs
         guard ids.indices.contains(row) else { return nil }
         return shownGroups?.index(of: ids[row]) ?? shownStacks?.index(of: ids[row])
     }
 
-    private func item(of url: URL) -> Int? {
+    func item(of url: URL) -> Int? {
         model.library.index(of: url).flatMap(item(ofRow:))
     }
 
@@ -569,7 +571,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         }
     }
 
-    private func scroll(toTop y: CGFloat) {
+    func scroll(toTop y: CGFloat) {
         let clip = scrollView.contentView
         let top = min(max(y, 0), max(content.frame.height - clip.bounds.height, 0))
         guard abs(clip.bounds.minY - top) >= 0.5 else { return }
@@ -689,7 +691,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     /// Sets `header` to item `index`, its group's header, where the layout puts it.
-    private func place(header: Int, _ cell: GroupHeaderCell) {
+    func place(header: Int, _ cell: GroupHeaderCell) {
         guard case let .header(group) = content(ofItem: header), let shownGroups else { return }
         let groups = model.gridGroups
         let shown = shownGroups.groups
@@ -740,7 +742,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
 
     /// Sets `cell` to item `index` where the layout puts it: its photo, thumbnail, badges and selection, and,
     /// with `refresh`, its text.
-    private func place(_ index: Int, _ cell: LibraryGridCell, refresh: Bool) {
+    func place(_ index: Int, _ cell: LibraryGridCell, refresh: Bool) {
         // A large source's row not read yet shows once it is; a closed stack's photos are read with its cell.
         if let id = photoID(ofItem: index), let stacked = cellStacks?.photos(of: id), !stacked.isEmpty {
             model.library.askForRows(ofPhotos: stacked)
@@ -782,124 +784,6 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
         }
         if refresh || cell.textKey == nil {
             showText(in: cell, item)
-        }
-    }
-
-    // MARK: - Thumbnails
-
-    private func requestThumbnail(for cell: LibraryGridCell, _ item: LibraryItem, edge: Int) {
-        if let id = cell.request {
-            cell.request = nil
-            thumbnails.cancel(id)
-        }
-        let edit = thumbnails.edit(for: item)
-        let request = thumbnails.request(item, edge: edge, lane: .onScreen) { [weak cell] image in
-            guard let cell, cell.item?.url == item.url else { return }
-            cell.request = nil
-            if let image {
-                cell.setImage(image, edge: edge, edit: edit)
-            }
-        }
-        if cell.image == nil || cell.edge < edge || cell.shownEdit != edit, cell.item?.url == item.url {
-            cell.request = request
-        }
-    }
-
-    /// The Library Health check's proposals changed: the cells on screen draw them, or once the grid is shown again.
-    private func proposalsChanged() {
-        guard isShown, wasShown, !isStale else {
-            staleRows.formUnion(IndexSet(cells.values.lazy.map(\.row).filter { $0 >= 0 }))
-            return
-        }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        for (item, cell) in cells {
-            place(item, cell, refresh: false)
-        }
-        CATransaction.commit()
-    }
-
-    /// The thumbnails of these photos show another edit: their cells ask for them, or once the grid is
-    /// shown again.
-    private func editsShown(_ urls: [URL]) {
-        let rows = IndexSet(urls.compactMap(model.library.index(of:)))
-        guard isShown, !isStale else {
-            staleRows.formUnion(rows)
-            return
-        }
-        for item in rows.compactMap(item(ofRow:)) {
-            if let cell = cells[item] {
-                place(item, cell, refresh: false)
-            }
-        }
-    }
-
-    /// The thumbnails of a screen above and below `shown`, the items on screen, at look-ahead priority; those
-    /// further away are no longer asked for.
-    private func prefetch(around shown: Range<Int>) {
-        let screen = shown.count
-        let near = max(shown.lowerBound - screen, 0) ..< min(shown.upperBound + screen, shownCount)
-        model.library.askForRows(at: near.lazy.compactMap(row(ofItem:)))
-        let items = model.items
-        let edge = edge
-        var wanted = Set<URL>()
-        for index in near where !shown.contains(index) {
-            guard let row = row(ofItem: index), let item = items.row(row) else { continue }
-            wanted.insert(item.url)
-            guard prefetching[item.url] == nil, thumbnails.cached(item, edge: edge) == nil else { continue }
-            prefetching[item.url] = thumbnails.request(item, edge: edge, lane: .lookAhead) { [weak self] _ in
-                self?.prefetching.removeValue(forKey: item.url)
-            }
-        }
-        for (url, id) in prefetching where !wanted.contains(url) {
-            prefetching.removeValue(forKey: url)
-            thumbnails.cancel(id)
-        }
-    }
-
-    // MARK: - Expanded cells' text
-
-    private func showText(in cell: LibraryGridCell, _ item: LibraryItem) {
-        guard gridLayout.style == .expanded else { return }
-        let details = details.details(for: item.url)
-        let lines = GridText.Lines(name: item.name, date: details?.date ?? "", settings: details?.settings ?? "")
-        let key = GridText.Key(lines: lines, width: gridLayout.geometry.text.width, scale: scale)
-        guard cell.textKey != key || cell.textKey == nil else { return }
-        if let image = texts[key] {
-            return cell.setText(image, for: key)
-        }
-        cell.setText(nil, for: key)
-        guard drawingTexts.insert(key).inserted else { return }
-        let space = thumbnails.colorSpace
-        model.library.scheduler.submit(.onScreen) {
-            let image = GridText.render(key, in: space)
-            Task { @MainActor [weak self] in self?.drew(key, image) }
-        }
-    }
-
-    private func drew(_ key: GridText.Key, _ image: CGImage?) {
-        drawingTexts.remove(key)
-        guard let image else { return }
-        if texts.count > 400 {
-            let shown = Set(cells.values.compactMap(\.textKey))
-            texts = texts.filter { shown.contains($0.key) }
-        }
-        texts[key] = image
-        for cell in cells.values where cell.textKey == key {
-            cell.setText(image, for: key)
-        }
-    }
-
-    private func requestDetails(for shown: Range<Int>) {
-        let items = model.items
-        details.request(shown.compactMap { row(ofItem: $0).flatMap(items.row) }) { [weak self] urls in
-            guard let self, gridLayout.style == .expanded else { return }
-            let arrived = Set(urls)
-            for cell in cells.values {
-                if let item = cell.item, arrived.contains(item.url) {
-                    showText(in: cell, item)
-                }
-            }
         }
     }
 
@@ -1006,7 +890,7 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     }
 
     /// The item showing photo `id`'s cell; nil when it has none on show.
-    private func item(of id: Int64) -> Int? {
+    func item(of id: Int64) -> Int? {
         model.library.photoList.index(of: id).flatMap(item(ofRow:))
     }
 
@@ -1018,590 +902,5 @@ final class LibraryGridView: NSView, NSViewToolTipOwner {
     /// Takes the keyboard, as the Library grid does when it's shown.
     func takeFocus() {
         window?.makeFirstResponder(content)
-    }
-
-    // MARK: - Mouse
-
-    fileprivate func pressed(_ event: NSEvent) {
-        let point = content.convert(event.locationInWindow, from: nil)
-        window?.makeFirstResponder(content)
-        photoPress = nil
-        if event.modifierFlags.contains(.control) {
-            if let menu = menu(at: point) {
-                NSMenu.popUpContextMenu(menu, with: event, for: content)
-            }
-            return
-        }
-        if paints(event, at: point) {
-            return
-        }
-        guard let index = gridLayout.item(at: point), index < shownCount else {
-            let flags = event.modifierFlags
-            band = Band(
-                start: point,
-                base: flags.contains(.shift) || flags.contains(.command) ? model.photoSelection : nil,
-                current: point,
-            )
-            return
-        }
-        let row: Int
-        switch content(ofItem: index) {
-        case let .header(group):
-            return model.toggleGroup(group, all: event.modifierFlags.contains(.option))
-        case .none: return
-        case let .photo(found): row = found
-        }
-        guard let url = model.library.items.row(row)?.url else { return }
-        let frame = gridLayout.frame(forItem: index)
-        let plain = event.modifierFlags.isDisjoint(with: [.command, .shift])
-        let inCell = CGPoint(x: point.x - frame.minX, y: point.y - frame.minY)
-        if event.clickCount == 1, plain, let pair = cells[index]?.stackBadge(at: inCell),
-           let id = photoID(ofItem: index) {
-            model.gridStacks.toggle(badgeOf: id, pair: pair)
-        } else if event.clickCount == 1, plain, let target = gridLayout.geometry.target(at: inCell) {
-            cull(target, item: index, row: row, event: event)
-        } else if event.clickCount >= 2 {
-            model.openInLoupe(url)
-        } else if plain, model.isMultiSelecting,
-                  model.library.photoID(of: url).map(model.photoSelection.contains) == true {
-            // The selection stays for a drag; a click without one selects the photo alone as it ends.
-            photoPress = PhotoPress(point: point, url: url, item: index, selectsOnRelease: true)
-        } else {
-            model.clickInGrid(
-                url,
-                toggling: event.modifierFlags.contains(.command),
-                extending: event.modifierFlags.contains(.shift),
-            )
-            photoPress = PhotoPress(point: point, url: url, item: index, selectsOnRelease: false)
-        }
-    }
-
-    /// A click on an expanded cell's stars, flag, mark or label: on the photo, or on the selection when the
-    /// photo is in it. A star the photo's rating already ends at clears it, as does the flag of a pick; the
-    /// label chip offers the labels.
-    private func cull(_ target: GridCellGeometry.Target, item index: Int, row: Int, event: NSEvent) {
-        guard let item = model.library.items.row(row) else { return }
-        let metadata = item.metadata
-        switch target {
-        case let .star(stars): model.cull(.rating(metadata.rating == stars ? 0 : stars), fromCell: item.url)
-        case .flag: model.cull(.flag(metadata.flag == .pick ? nil : .pick), fromCell: item.url)
-        case .mark: model.cull(.mark(!metadata.mark), fromCell: item.url)
-        case .label:
-            menuItem = index
-            cells[index]?.isMenuTarget = true
-            NSMenu.popUpContextMenu(LibraryGridMenu.labels(for: item.url, model: model), with: event, for: content)
-        }
-    }
-
-    fileprivate func dragged(_ event: NSEvent) {
-        guard !LibraryDrags.follow(event), !paintsAlong(event), !dragsPhotos(event), band != nil else { return }
-        content.autoscroll(with: event)
-        extendBand(to: content.convert(event.locationInWindow, from: nil))
-        startAutoscroll()
-    }
-
-    fileprivate func released(_ event: NSEvent) {
-        guard !LibraryDrags.follow(event), !endsStroke() else { return }
-        releasePhotoPress()
-        guard let band else { return }
-        band.timer?.invalidate()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        band.layer.removeFromSuperlayer()
-        CATransaction.commit()
-        self.band = nil
-    }
-
-    /// The rubber band to `point`: drawn once it has moved a few points, and selecting the cells it meets.
-    private func extendBand(to point: CGPoint) {
-        guard var band else { return }
-        band.current = point
-        let rect = CGRect(
-            x: min(band.start.x, point.x), y: min(band.start.y, point.y),
-            width: abs(point.x - band.start.x), height: abs(point.y - band.start.y),
-        )
-        if !band.isDrawn, max(rect.width, rect.height) >= 3 {
-            band.isDrawn = true
-            band.layer.actions = LibraryGridCell.noActions
-            band.layer.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
-            band.layer.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.8).cgColor
-            band.layer.borderWidth = 1
-            band.layer.zPosition = 10
-            content.layer?.addSublayer(band.layer)
-        }
-        self.band = band
-        guard band.isDrawn else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        band.layer.frame = rect
-        CATransaction.commit()
-        model.selectInBand(
-            gridLayout.items(meeting: rect).filter { $0 < shownCount }.compactMap(row(ofItem:)), adding: band.base,
-        )
-    }
-
-    /// Scrolls on while the pointer is held above or below the grid.
-    private func startAutoscroll() {
-        guard band?.timer == nil else { return }
-        band?.timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.autoscrollStep() }
-        }
-    }
-
-    private func autoscrollStep() {
-        guard band != nil, let window else { return }
-        let point = content.convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        let visible = scrollView.contentView.bounds
-        let step: CGFloat = point.y < visible.minY ? point.y - visible.minY : point.y > visible.maxY
-            ? point.y - visible.maxY : 0
-        guard step != 0 else { return }
-        scroll(toTop: visible.minY + max(min(step, 40), -40))
-        extendBand(to: CGPoint(x: point.x, y: min(max(point.y, 0), content.frame.height)))
-    }
-
-    // MARK: - Context menus
-
-    fileprivate func menu(at point: CGPoint) -> NSMenu? {
-        if let index = gridLayout.item(at: point), index < shownCount {
-            switch content(ofItem: index) {
-            case let .photo(row):
-                guard let url = model.library.items.row(row)?.url else { break }
-                let menu = LibraryGridMenu.menu(for: url, model: model)
-                menuItem = index
-                cells[index]?.isMenuTarget = true
-                return menu
-            case let .header(group): return LibraryGridMenu.menu(forGroup: group, model: model)
-            case .none: break
-            }
-        }
-        return LibraryGridMenu.menu(model: model)
-    }
-
-    fileprivate func menuClosed() {
-        if let index = menuItem {
-            cells[index]?.isMenuTarget = false
-        }
-        menuItem = nil
-    }
-
-    func view(_: NSView, stringForToolTip _: NSView.ToolTipTag, point: NSPoint, userData _: UnsafeMutableRawPointer?)
-        -> String {
-        guard let index = gridLayout.item(at: point), index < shownCount else { return "" }
-        switch content(ofItem: index) {
-        case let .photo(row):
-            guard let item = model.library.items.row(row) else { return "" }
-            return item.name + (stackDescription(ofItem: index).map { ", \($0)" } ?? "")
-                + (proposals.mark(for: item.url).map { ": \($0.sentence)" } ?? "")
-        case .header: return headers[index].map { "\($0.title) (click to open or close, ⌥-click for every group)" } ?? ""
-        case .none: return ""
-        }
-    }
-
-    /// What item `index`'s cell says of the stacks it's the first cell of, and of a focus stack suggested:
-    /// `a stack of 9, closed`.
-    private func stackDescription(ofItem index: Int) -> String? {
-        var parts: [String] = []
-        if let row = row(ofItem: index), let url = model.library.items.row(row)?.url, suggestedFrames.contains(url) {
-            parts.append("suggested for a focus stack")
-        }
-        guard let stacks = cellStacks, let id = photoID(ofItem: index) else {
-            return parts.isEmpty ? nil : parts.joined(separator: "; ")
-        }
-        let (stack, pair) = stacks.badges(of: id)
-        if let stack {
-            parts.append("a stack of \(stack.count), \(stack.isOpen ? "open" : "closed")")
-        }
-        if let pair {
-            parts
-                .append(
-                    "\(pair.count == 2 ? "a pair" : "\(pair.count) files as one photo"), \(pair.isOpen ? "open" : "closed")",
-                )
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: "; ")
-    }
-
-    // MARK: - Accessibility
-
-    /// The cells and headers on screen, for VoiceOver and the regression suite: each a button named for its
-    /// photo or its group (`grid.group.<index>`), the same element for a photo or a group while it stays on
-    /// screen, so VoiceOver keeps its place.
-    fileprivate func accessibleCells() -> [Any] {
-        guard let window else { return [] }
-        func frame(_ index: Int) -> CGRect {
-            window.convertToScreen(content.convert(gridLayout.frame(forItem: index), to: nil))
-        }
-        var elements: [URL: GridCellElement] = [:]
-        var headerElements: [Int: GridCellElement] = [:]
-        var children: [(Int, Any)] = cells.compactMap { index, cell -> (Int, Any)? in
-            guard let item = cell.item else { return nil }
-            let element = self.elements[item.url] ?? GridCellElement(grid: self)
-            element.item = index
-            element.setAccessibilityRole(.button)
-            element.setAccessibilityParent(content)
-            element.setAccessibilityFrame(frame(index))
-            element.setAccessibilityLabel(item.name)
-            let value = [
-                cell.showsUneditedPreview ? "Unedited preview" : nil, stackDescription(ofItem: index),
-                cell.healthMark.map { "\($0.word): \($0.sentence)" },
-            ].compactMap(\.self).joined(separator: "; ")
-            element.setAccessibilityValue(value.isEmpty ? nil : value)
-            element.setAccessibilityIdentifier("grid.\(item.url.lastPathComponent)")
-            element.setAccessibilitySelected(cell.isActive || cell.isInSelection)
-            elements[item.url] = element
-            return (index, element)
-        }
-        for (index, header) in headers where header.group >= 0 {
-            let element = self.headerElements[header.group] ?? GridCellElement(grid: self)
-            element.item = index
-            element.setAccessibilityRole(.disclosureTriangle)
-            element.setAccessibilityParent(content)
-            element.setAccessibilityFrame(frame(index))
-            element.setAccessibilityLabel(header.accessibilityText)
-            element.setAccessibilityValue(header.isOpen ? 1 : 0)
-            element.setAccessibilityExpanded(header.isOpen)
-            element.setAccessibilityIdentifier("grid.group.\(header.group)")
-            headerElements[header.group] = element
-            children.append((index, element))
-        }
-        self.elements = elements
-        self.headerElements = headerElements
-        return children.sorted { $0.0 < $1.0 }.map(\.1)
-    }
-
-    fileprivate func press(item index: Int) {
-        guard index < shownCount else { return }
-        switch content(ofItem: index) {
-        case let .photo(row): clickRow(row, extending: false)
-        case let .header(group): model.toggleGroup(group)
-        case .none: break
-        }
-    }
-}
-
-/// A cell or a header for VoiceOver: pressing it selects its photo, or opens or closes its group.
-private final class GridCellElement: NSAccessibilityElement {
-    var item = 0
-    weak var grid: LibraryGridView?
-
-    init(grid: LibraryGridView) {
-        self.grid = grid
-        super.init()
-    }
-
-    override func accessibilityPerformPress() -> Bool {
-        let (grid, item) = (grid, item)
-        MainActor.assumeIsolated { grid?.press(item: item) }
-        return true
-    }
-}
-
-// MARK: - Keys
-
-/// The keys the grid handles itself, by key code.
-private enum GridKey: UInt16 {
-    case left = 123, right = 124, down = 125, up = 126, home = 115, end = 119, pageUp = 116, pageDown = 121
-    case returnKey = 36, enter = 76, space = 49, zoom = 6
-
-    var opensLoupe: Bool {
-        [.returnKey, .enter, .space, .zoom].contains(self)
-    }
-}
-
-extension LibraryGridView {
-    /// The grid's own keys (the key monitor has the shortcuts first); true when the grid took the key.
-    fileprivate func handle(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard flags.isDisjoint(with: [.command, .control, .option]), shownCount > 0,
-              let key = GridKey(rawValue: event.keyCode) else { return false }
-        let extending = flags.contains(.shift)
-        if key.opensLoupe {
-            guard !extending, let selection = model.selection else { return false }
-            model.openInLoupe(selection, zoomed: key == .zoom)
-            return true
-        }
-        if let sections {
-            let current = model.selection.flatMap(item(of:))
-            if let target = target(of: key, from: current, in: sections), target != current,
-               let row = row(ofItem: target) {
-                clickRow(row, extending: extending)
-            }
-            return true
-        }
-        let last = shownCount - 1
-        let current = model.selection.flatMap(item(of:))
-        let target = current.map { self.target(of: key, from: $0, last: last) } ?? 0
-        if (0 ... last).contains(target), target != current, let row = row(ofItem: target) {
-            clickRow(row, extending: extending)
-        }
-        return true
-    }
-
-    /// Clicks row `row`'s photo, as a key that moves to it does: once it's read, for a large source's row.
-    private func clickRow(_ row: Int, extending: Bool) {
-        let library = model.library
-        guard library.photoIDs.indices.contains(row) else { return }
-        if let item = library.items.row(row) {
-            return model.clickInGrid(item.url, extending: extending)
-        }
-        let id = library.photoIDs[row]
-        library.whenRead([id]) { [weak self] in
-            guard let self, let url = library.url(ofPhoto: id) else { return }
-            model.clickInGrid(url, extending: extending)
-        }
-    }
-
-    /// The photo `key` moves to from item `current`, grouped: ↑ and ↓ to the cell above or below, into the
-    /// last or first row of the open group before or after; ← and → the photo before or after, across
-    /// headers; Home and End the first and last; Page Up and Page Down a screen's rows. From no photo on
-    /// show, the first.
-    private func target(of key: GridKey, from current: Int?, in sections: GridSections) -> Int? {
-        guard let current, current < shownCount, !sections.isHeader(current) else { return photoItem(from: 0, by: 1) }
-        let columns = gridLayout.columns
-        func vertical(_ from: Int, by offset: Int) -> Int {
-            let group = sections.group(ofItem: from)
-            let (first, count) = (sections.firsts[group] + 1, sections.cells[group])
-            let cell = from - first
-            let column = cell % columns
-            if offset < 0, cell >= columns {
-                return from - columns
-            }
-            // From a row above the last, down reaches the last row, even where it's short.
-            if offset > 0, cell / columns < (count - 1) / columns {
-                return min(from + columns, first + count - 1)
-            }
-            var next = group + offset
-            while next >= 0, next < sections.groups, sections.cells[next] == 0 {
-                next += offset
-            }
-            guard next >= 0, next < sections.groups else { return from }
-            let cells = sections.cells[next]
-            let start = offset < 0 ? (cells - 1) / columns * columns : 0
-            return sections.firsts[next] + 1 + min(start + column, cells - 1)
-        }
-        let page = max(gridLayout.rows(in: scrollView.contentView.bounds.height) - 1, 1)
-        switch key {
-        case .left: return photoItem(from: current - 1, by: -1)
-        case .right: return photoItem(from: current + 1, by: 1)
-        case .up: return vertical(current, by: -1)
-        case .down: return vertical(current, by: 1)
-        case .home: return photoItem(from: 0, by: 1)
-        case .end: return photoItem(from: shownCount - 1, by: -1)
-        case .pageUp, .pageDown:
-            var target = current
-            for _ in 0 ..< page {
-                target = vertical(target, by: key == .pageUp ? -1 : 1)
-            }
-            return target
-        case .returnKey, .enter, .space, .zoom: return current
-        }
-    }
-
-    /// The first photo's item from `start` on, going `step` (1 or -1), past headers.
-    private func photoItem(from start: Int, by step: Int) -> Int? {
-        var index = start
-        while index >= 0, index < shownCount {
-            if case .photo = content(ofItem: index) {
-                return index
-            }
-            index += step
-        }
-        return nil
-    }
-
-    /// The cell `key` moves to from cell `current`, of `last + 1`.
-    private func target(of key: GridKey, from current: Int, last: Int) -> Int {
-        let columns = gridLayout.columns
-        let page = max(gridLayout.rows(in: scrollView.contentView.bounds.height) - 1, 1) * columns
-        switch key {
-        case .left: return current - 1
-        case .right: return current + 1
-        case .up: return current - columns
-        // From a row above the last, down reaches the last row, even where it's short.
-        case .down: return current / columns < last / columns ? min(current + columns, last) : current
-        case .home: return 0
-        case .end: return last
-        case .pageUp: return max(current - page, 0)
-        case .pageDown: return min(current + page, last)
-        case .returnKey, .enter, .space, .zoom: return current
-        }
-    }
-}
-
-extension LibraryGridLayout {
-    var geometry: GridCellGeometry {
-        GridCellGeometry(size: size, style: style)
-    }
-}
-
-/// The grid's document view: the cells' layers' host. It takes the keyboard in the Library module and
-/// hands its keys, clicks and drags to the grid.
-final class LibraryGridContentView: NSView {
-    weak var grid: LibraryGridView?
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layerContentsRedrawPolicy = .never
-        setAccessibilityElement(true)
-        setAccessibilityRole(.grid)
-        setAccessibilityLabel("Grid")
-        setAccessibilityIdentifier("library.grid")
-        registerForDraggedTypes([LibraryDrags.keyword])
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
-
-    override var isFlipped: Bool {
-        true
-    }
-
-    override var wantsUpdateLayer: Bool {
-        true
-    }
-
-    override func updateLayer() {}
-
-    override var acceptsFirstResponder: Bool {
-        true
-    }
-
-    override func resetCursorRects() {
-        if grid?.model.keywordPainter.isOn == true {
-            addCursorRect(visibleRect, cursor: KeywordPainter.cursor)
-        }
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if grid?.handle(event) != true {
-            super.keyDown(with: event)
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        grid?.pressed(event)
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        grid?.dragged(event)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        grid?.released(event)
-    }
-
-    override func menu(for event: NSEvent) -> NSMenu? {
-        grid?.menu(at: convert(event.locationInWindow, from: nil))
-    }
-
-    override func didCloseMenu(_: NSMenu, with _: NSEvent?) {
-        grid?.menuClosed()
-    }
-
-    override func accessibilityChildren() -> [Any]? {
-        grid?.accessibleCells()
-    }
-
-    // MARK: - A keyword dropped (`LibraryGridView+Drag`)
-
-    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        grid?.keywordDragged(sender) ?? []
-    }
-
-    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        grid?.keywordDragged(sender) ?? []
-    }
-
-    override func draggingExited(_: (any NSDraggingInfo)?) {
-        grid?.showKeywordTarget(nil)
-    }
-
-    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        grid?.keywordDropped(sender) ?? false
-    }
-
-    override func concludeDragOperation(_: (any NSDraggingInfo)?) {
-        grid?.showKeywordTarget(nil)
-    }
-}
-
-@_spi(Harness) public enum LibraryGridViews {
-    /// The Library grid on its own, for measurements.
-    @MainActor public static func make(model: EditorModel) -> NSView {
-        LibraryGridView(model: model)
-    }
-
-    /// Scrolls a grid made by `make` to `fraction` (0 ... 1) of its height.
-    @MainActor public static func scroll(_ view: NSView, to fraction: Double) {
-        guard let grid = view as? LibraryGridView else { return }
-        let clip = grid.scrollView.contentView
-        let height = max(grid.content.frame.height - clip.bounds.height, 0)
-        clip.scroll(to: CGPoint(x: 0, y: height * fraction))
-        grid.scrollView.reflectScrolledClipView(clip)
-    }
-
-    /// The grid's thumbnails in memory, in bytes.
-    @MainActor public static func memoryUsed(_ view: NSView) -> Int {
-        (view as? LibraryGridView)?.thumbnails.memoryUsed ?? 0
-    }
-
-    /// How many times the grid in `window` has reloaded every cell.
-    @MainActor public static func reloads(in window: NSWindow) -> Int? {
-        (grid(in: window) as? LibraryGridView)?.reloads
-    }
-
-    /// The Library grid in `window`, made by the editor.
-    @MainActor public static func grid(in window: NSWindow) -> NSView? {
-        func find(_ view: NSView) -> LibraryGridView? {
-            (view as? LibraryGridView) ?? view.subviews.lazy.compactMap(find).first
-        }
-        return (window.contentView?.superview ?? window.contentView).flatMap(find)
-    }
-
-    /// The items a grid made by `make` or found by `grid(in:)` has: its cells, and grouped, its headers.
-    @MainActor public static func items(in view: NSView) -> Int {
-        (view as? LibraryGridView)?.shownCount ?? 0
-    }
-
-    /// What the cells on screen of a grid made by `make` or found by `grid(in:)` draw of a Library Health check's
-    /// proposals (LIB-40), by the photo's name: the badge's word, and " (framed)" when it's framed.
-    @MainActor public static func proposals(in view: NSView) -> [String: String] {
-        guard let grid = view as? LibraryGridView else { return [:] }
-        var shown: [String: String] = [:]
-        for cell in grid.cells.values where !cell.root.isHidden {
-            guard let item = cell.item, cell.proposalShown != nil, let mark = cell.healthMark else { continue }
-            shown[item.name] = mark.word + (cell.proposalFrames?.frame == nil ? "" : " (framed)")
-        }
-        return shown
-    }
-
-    /// What a click sets in an expanded cell.
-    public enum CellPart: Sendable {
-        case star(Int), flag, mark
-    }
-
-    /// Where a compact cell `size` points wide shows a closed stack's count of `count` photos (LIB-28), 0 ... 1 across
-    /// and down the cell.
-    public static func point(ofStackCount count: Int, size: Double) -> CGPoint {
-        let width = GridBadges.Kind.stackCount(count, open: false).size.width
-        return CGPoint(x: (size - 18 - width / 2) / size, y: 9 / size)
-    }
-
-    /// Where `part` of an expanded cell `size` points wide is, 0 ... 1 across and down the cell.
-    public static func point(of part: CellPart, size: Double) -> CGPoint {
-        let geometry = GridCellGeometry(size: CGFloat(size), style: .expanded)
-        let cell = geometry.cellSize
-        let point = switch part {
-        case let .star(stars):
-            CGPoint(
-                x: geometry.rating.x + 4 + 7 * CGFloat(stars - 1) + 3.5,
-                y: cell.height - GridCellGeometry.footerHeight / 2,
-            )
-        case .flag: geometry.flag
-        case .mark: geometry.mark
-        }
-        return CGPoint(x: point.x / cell.width, y: point.y / cell.height)
     }
 }

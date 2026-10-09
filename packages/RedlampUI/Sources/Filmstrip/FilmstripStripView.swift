@@ -343,7 +343,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             requestThumbnail(for: item, photo)
         }
     }
+}
 
+extension FilmstripStripView {
     // MARK: - Thumbnails
 
     func collectionView(
