@@ -295,13 +295,16 @@ final class LibrarySourceList: Sendable {
         /// times as many photos as are read.
         static let passFrom = 1024
         static let spread: Int64 = 16
+        /// The pass's parts read at once: of the index's four readers, one is left for searches and counts.
+        static let partsAtOnce = 3
 
         /// Photos `ids` as the grid shows them, from their rows, in parts, with the paths of the folders read for them,
         /// those `known` lacks at least. Many photos close together in ID are read in one pass over their range, in ID
-        /// order, a part on each of the index's readers, after every folder's path: a row read by its ID costs a lookup
-        /// each, 16 s in all for a million photos.
+        /// order, after every folder's path, a part of `part` IDs at a time on each of `partsAtOnce` readers, so a read
+        /// asked for meanwhile waits for one part at most: a row read by its ID costs a lookup each, 16 s in all for a
+        /// million photos.
         static func read(
-            _ ids: [Int64], folders known: [Int64: String], index: LibraryIndex,
+            _ ids: [Int64], folders known: [Int64: String], index: LibraryIndex, part: Int64 = 1 << 15,
         ) async throws -> (parts: [[Read]], folders: [Int64: String]) {
             guard ids.count >= passFrom, let low = ids.min(), let high = ids.max(),
                   high - low < Int64(ids.count) * spread
@@ -337,34 +340,35 @@ final class LibrarySourceList: Sendable {
             for id in ids {
                 wanted[Int(id - low) >> 6] |= 1 << UInt64((id - low) & 63)
             }
-            let (chosen, parts) = (wanted, Int64(4))
-            let size = (high - low) / parts + 1
+            let (chosen, size) = (wanted, max(part, 1))
+            @Sendable func reading(from start: Int64) async throws -> [Read] {
+                try await index.read { reader in
+                    let statement = try reader.database.cached("SELECT \(shown) FROM photos WHERE id BETWEEN ? AND ?")
+                    try statement.bind(start, at: 1)
+                    try statement.bind(min(start + size - 1, high), at: 2)
+                    var found: [Read] = []
+                    try statement.forEachRow { row in
+                        let bit = row.int64(at: 0) - low
+                        guard chosen[Int(bit >> 6)] & 1 << UInt64(bit & 63) != 0, let path = folders[row.int64(at: 1)]
+                        else { return }
+                        found.append(Self.read(row, folder: path))
+                    }
+                    return found
+                }
+            }
+            var starts = stride(from: low, through: high, by: Int(size)).makeIterator()
             let read = try await withThrowingTaskGroup(of: [Read].self) { group in
-                for part in 0 ..< parts {
-                    let (start, end) = (low + part * size, min(high, low + (part + 1) * size - 1))
-                    guard start <= end else { continue }
-                    group.addTask {
-                        try await index.read { reader in
-                            let statement = try reader.database.cached("""
-                            SELECT \(shown) FROM photos WHERE id BETWEEN ? AND ?
-                            """)
-                            try statement.bind(start, at: 1)
-                            try statement.bind(end, at: 2)
-                            var found: [Read] = []
-                            try statement.forEachRow { row in
-                                let bit = row.int64(at: 0) - low
-                                guard chosen[Int(bit >> 6)] & 1 << UInt64(bit & 63) != 0,
-                                      let path = folders[row.int64(at: 1)]
-                                else { return }
-                                found.append(Self.read(row, folder: path))
-                            }
-                            return found
-                        }
+                for _ in 0 ..< partsAtOnce {
+                    if let start = starts.next() {
+                        group.addTask { try await reading(from: start) }
                     }
                 }
                 var parts: [[Read]] = []
-                for try await part in group {
-                    parts.append(part)
+                while let found = try await group.next() {
+                    parts.append(found)
+                    if let start = starts.next() {
+                        group.addTask { try await reading(from: start) }
+                    }
                 }
                 return parts
             }
