@@ -2,7 +2,8 @@
 #
 # Fails when the release's disk image doesn't hold the app as it was signed:
 #
-# - it holds anything but Redlamp.app and a link to /Applications, hidden files aside;
+# - it holds anything but Redlamp.app and a link to /Applications, hidden files aside, or its
+#   window's picture and layout aren't the ones in scripts/dmg;
 # - anything in the app carries an extended attribute: Finder copies them into /Applications, and
 #   Gatekeeper on macOS 26 refuses an app tagged with the com.apple.provenance of the Mac that
 #   made it (#333);
@@ -20,6 +21,7 @@ NOTARIZED="${2:-}"
 [ -f "$DMG" ] || { echo "error: no disk image at $DMG" >&2; exit 1; }
 [ -z "$NOTARIZED" ] || [ "$NOTARIZED" = --notarized ] || { echo "error: unknown option $NOTARIZED" >&2; exit 1; }
 IMAGE="$(basename "$DMG")"
+LAYOUT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dmg"
 
 WORK="$(mktemp -d)"
 MOUNT="$WORK/mount"
@@ -57,6 +59,10 @@ if [ "$entries" != "Applications Redlamp.app " ] || [ "$(readlink "$MOUNT/Applic
     echo "error: $IMAGE holds ${entries:-nothing }rather than Redlamp.app and a link to /Applications" >&2
     failed=1
 fi
+if ! cmp -s "$MOUNT/.DS_Store" "$LAYOUT/DS_Store" || ! cmp -s "$MOUNT/.background/background.tiff" "$LAYOUT/background.tiff"; then
+    echo "error: $IMAGE's window doesn't have the picture and layout in scripts/dmg" >&2
+    failed=1
+fi
 APP="$MOUNT/Redlamp.app"
 if [ -d "$APP" ]; then
     attributes="$(xattr -rs "$APP" 2>&1 | sed -E 's/.*: //' | sort | uniq -c || true)"
@@ -77,4 +83,4 @@ if [ -d "$APP" ]; then
 fi
 
 [ "$failed" = 0 ] || exit 1
-echo "==> $IMAGE holds Redlamp.app beside a link to /Applications, with no extended attributes and its signature intact${NOTARIZED:+; the app and the image carry their tickets}."
+echo "==> $IMAGE holds Redlamp.app beside a link to /Applications in the window from scripts/dmg, with no extended attributes and its signature intact${NOTARIZED:+; the app and the image carry their tickets}."

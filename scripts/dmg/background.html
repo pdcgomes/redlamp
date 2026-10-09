@@ -1,0 +1,69 @@
+<!doctype html>
+<!--
+  The picture behind the disk image's window; scripts/dmg/background.sh renders it into
+  background.tiff. Finder draws Redlamp's icon centred at (160, 180) and the Applications link's
+  at (480, 180), 128 points across with their names below (scripts/dmg/layout.sh), so the lamp's
+  light falls on the wall around the first. The window shows 640 by 400 points; the last 20 points
+  of height are spare, in case its title bar is shorter than expected.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: "Inter";
+        font-weight: 500;
+        src: url("../../build/fonts/Inter-Medium.ttf");
+      }
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        position: relative;
+        width: 640px;
+        height: 420px;
+        overflow: hidden;
+        background:
+          radial-gradient(
+            circle at 160px 180px,
+            rgb(224 64 46 / 0.3) 0,
+            rgb(224 64 46 / 0.2) 60px,
+            rgb(224 64 46 / 0.1) 120px,
+            rgb(224 64 46 / 0.04) 190px,
+            rgb(224 64 46 / 0.01) 260px,
+            rgb(224 64 46 / 0) 330px
+          ),
+          linear-gradient(#171110, #0a0707);
+      }
+      svg {
+        position: absolute;
+        inset: 0;
+      }
+      p {
+        position: absolute;
+        top: 318px;
+        right: 0;
+        left: 0;
+        margin: 0;
+        color: rgb(243 238 232 / 0.72);
+        font: 500 14px/20px "Inter";
+        letter-spacing: 0.01em;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="640" height="420" viewBox="0 0 640 420" aria-hidden="true">
+      <path
+        d="M252 180 H386 M376 171 L387 180 L376 189"
+        fill="none"
+        stroke="rgb(217 208 203 / 0.42)"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+    <p>Drag Redlamp to Applications</p>
+  </body>
+</html>
