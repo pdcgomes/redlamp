@@ -101,7 +101,15 @@ struct LibraryFilterTests {
         UserDefaults(suiteName: suite)!
     }
 
+    private let opened = Opened()
+
+    @MainActor
+    final class Opened {
+        var service: LibraryService?
+    }
+
     func cleanUp() {
+        opened.service?.closeWithIndex()
         try? FileManager.default.removeItem(at: base)
         UserDefaults().removePersistentDomain(forName: suite)
     }
@@ -173,6 +181,7 @@ struct LibraryFilterTests {
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
         library.attach(service)
+        opened.service = service
         for _ in 0 ..< 2000 {
             if await service.canShow(root, includingSubfolders: true) {
                 break

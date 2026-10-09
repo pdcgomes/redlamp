@@ -84,6 +84,9 @@ public final class LibraryService {
     /// read from the index again.
     @ObservationIgnored var removed: (@MainActor () -> Void)?
     @ObservationIgnored private var writingAllXMP: Task<Void, Never>?
+    /// Finds where the sidecars go, then a minute on runs the index's weekly check: stopped by `close`, which the
+    /// check would otherwise outlive.
+    @ObservationIgnored private var checking: Task<Void, Never>?
     @ObservationIgnored private var memoryPressure: DispatchSourceMemoryPressure?
     /// Roots whose volumes change tracking has caught up with since launch, and that answer still.
     @ObservationIgnored private(set) var currentRoots: Set<String> = []
@@ -213,10 +216,11 @@ extension LibraryService {
             xmpSettings = core.xmpSettings
             core.syncXMP((defaults?.array(forKey: Self.xmpWaitingKey) as? [NSNumber])?.map(\.int64Value) ?? [])
             defaults?.removeObject(forKey: Self.xmpWaitingKey)
-            Task.detached(priority: .utility) { [weak self] in
+            checking = Task.detached(priority: .utility) { [weak self] in
                 let locator = try? await core.sidecars.locator()
                 await self?.placed(locator)
                 try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { return }
                 if await core.weeklyCheck() == false {
                     await self?.damaged()
                 }
@@ -232,6 +236,7 @@ extension LibraryService {
         opening?.cancel()
         following?.cancel()
         writingAllXMP?.cancel()
+        checking?.cancel()
         memoryPressure?.cancel()
         memoryPressure = nil
         guard let core else { return }
