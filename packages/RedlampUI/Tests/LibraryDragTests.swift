@@ -279,6 +279,44 @@ struct LibraryDragTests {
         #expect(sandbox.files(in: "Picked") == moved, "Redo moves again what was moved")
     }
 
+    @Test func `Copy to Folder stopped partway leaves one step for the copies made, which Undo moves to the Trash and Redo makes again`(
+    ) async throws {
+        let sandbox = DragSandbox()
+        defer {
+            LibraryService.pausePerStep = .zero
+            sandbox.close()
+        }
+        let names = (1 ... 6).map { "P\($0).JPG" }
+        try await sandbox.open(photos: names, folders: ["Picked"])
+        try await sandbox.emptyingTrash {
+            let model = try #require(sandbox.model)
+            let copies = { sandbox.files(in: "Picked").filter { !$0.hasPrefix(".") } }
+            model.selectAllPhotos()
+            LibraryService.pausePerStep = .milliseconds(300)
+            let stop = FileStop()
+            let copying = Task { await model.copySelection(to: sandbox.folder("Picked"), stop: stop) }
+            try await sandbox.eventually { copies().count >= 2 }
+            stop.stop()
+            #expect(await copying.value == nil, "a batch its Stop stopped isn't an error")
+            await model.filesMade()
+            let copied = copies()
+            #expect(copied.count >= 2 && copied.count < names.count, "\(copied)")
+            #expect(sandbox.files() == names.sorted() + ["Picked"], "the originals stay")
+            #expect(model.fileUndoTitles == ["Copy \(copied.count) Photos to Picked"])
+            LibraryService.pausePerStep = .zero
+
+            #expect(model.perform(.undo))
+            await model.filesMade()
+            #expect(copies().isEmpty)
+            #expect(model.perform(.redo))
+            await model.filesMade()
+            #expect(copies() == copied, "Redo copies again what was copied")
+            #expect(model.perform(.undo))
+            await model.filesMade()
+            #expect(copies().isEmpty)
+        }
+    }
+
     @Test func `Stop while Undo runs leaves each photo in one place, and ⌘Z takes back the rest`() async throws {
         let sandbox = DragSandbox()
         defer {
