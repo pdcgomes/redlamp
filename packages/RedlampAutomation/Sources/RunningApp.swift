@@ -328,6 +328,20 @@
             }
             return event
         }
+
+        /// The modifier keys changing to `modifiers`, as holding or letting go of them makes.
+        @MainActor static func flags(_ modifiers: NSEvent.ModifierFlags) throws -> NSEvent {
+            let code = modifiers.contains(.shift) ? kVK_Shift : modifiers.contains(.command) ? kVK_Command : kVK_Option
+            guard let event = NSEvent.keyEvent(
+                with: .flagsChanged, location: .zero, modifierFlags: modifiers,
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: EditorWindowController.frontWindow?.windowNumber ?? 0, context: nil,
+                characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: UInt16(code),
+            ) else {
+                throw ScenarioFailure("Couldn't make an event for the modifier keys")
+            }
+            return event
+        }
     }
 
     extension KeyCombo.Key {

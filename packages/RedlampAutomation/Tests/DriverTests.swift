@@ -1,6 +1,8 @@
 import AppKit
 import Foundation
+import Observation
 import RedlampEngineAPI
+import SwiftUI
 import Testing
 @testable import RedlampAutomation
 @_spi(Harness) import RedlampUI
@@ -113,6 +115,66 @@ struct DriverTests {
         #expect(Views.find("filmstrip.A.ARW", in: window) == nil)
     }
 
+    /// The Masks panel's controls are SwiftUI's, hosted in AppKit, and the run doesn't take the
+    /// app's focus: a tap finds each by the identifier behind it and reaches it in a window that
+    /// isn't key. SwiftUI's gestures (a row's tap) need a key window, as the canvas's do.
+    @Test func `a tap reaches SwiftUI's buttons, checkbox and menu in a window that isn't key`() async throws {
+        let state = TapState()
+        let window = NSWindow(
+            contentRect: CGRect(x: 200, y: 200, width: 320, height: 200), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: TapSpecimen(state: state))
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        func settle() async throws {
+            for _ in 0 ..< 10 {
+                window.layoutIfNeeded()
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+        func tap(_ identifier: String) async throws {
+            let frame = try #require(Views.find(identifier, in: window), "no \(identifier)")
+            #expect(window.contentView?.bounds.contains(NSPoint(x: frame.midX, y: frame.midY)) == true)
+            Views.tap(
+                at: NSPoint(x: frame.midX, y: frame.midY),
+                inWindow: window.windowNumber,
+                clicks: 1,
+                modifiers: [],
+            )
+            try await settle()
+        }
+        try await settle()
+        #expect(!window.isKeyWindow)
+
+        try await tap("test.button")
+        #expect(state.presses == ["button"])
+        try await tap("test.plain")
+        #expect(state.presses == ["button", "plain"])
+        try await tap("test.checkbox")
+        #expect(state.checked, "the checkbox tracks the press and reads the queued release")
+
+        let opened = OpenedMenu()
+        opened.watch { menu in
+            if let index = menu.items.firstIndex(where: { $0.title == "Second" }) {
+                menu.performActionForItem(at: index)
+            }
+            menu.cancelTracking()
+        }
+        defer { opened.stop() }
+        try await tap("test.menu")
+        #expect(opened.menu != nil, "the menu opened")
+        #expect(state.presses.last == "Second")
+    }
+
+    @Test func `holding a modifier makes the event the app's flags handling reads`() throws {
+        let event = try Keyboard.flags(.option)
+        #expect(event.type == .flagsChanged)
+        #expect(event.modifierFlags.contains(.option))
+        #expect(try Keyboard.flags([]).modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty)
+    }
+
     @Test func `the first responder names the field being typed in, not its field editor`() throws {
         let window = NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: 200, height: 60), styleMask: [.titled], backing: .buffered,
@@ -191,5 +253,47 @@ struct DriverTests {
 
     @Test func `the main thread's own calls run in place`() throws {
         #expect(try MainThread.run { 7 } == 7)
+    }
+}
+
+@MainActor @Observable
+private final class TapState {
+    var presses: [String] = []
+    var checked = false
+}
+
+/// The kinds of SwiftUI control the Masks panel has, each with an identifier.
+private struct TapSpecimen: View {
+    @Bindable var state: TapState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button("Press") { state.presses.append("button") }
+                .controlSize(.small)
+                .automationIdentifier("test.button")
+            Button {
+                state.presses.append("plain")
+            } label: {
+                Image(systemName: "eye")
+            }
+            .buttonStyle(.plain)
+            .automationIdentifier("test.plain")
+            Toggle("Check", isOn: $state.checked)
+                .toggleStyle(.checkbox)
+                .automationIdentifier("test.checkbox")
+            Menu {
+                Button("First") { state.presses.append("First") }
+                Button("Second") { state.presses.append("Second") }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .automationIdentifier("test.menu")
+        }
+        .padding(20)
+        .frame(width: 320, alignment: .leading)
     }
 }

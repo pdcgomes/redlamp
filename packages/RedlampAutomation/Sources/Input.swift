@@ -90,36 +90,37 @@
     public extension RunningApp {
         /// The target's frame in the editor window, scrolled into view first.
         func frame(of target: Target) throws -> NSRect {
+            let place = try place(of: target)
+            let editor = try main { _ in Views.editorWindow?.windowNumber }
+            try expect(place.window == editor, "\(target) is in a popover, not the editor window")
+            return place.frame
+        }
+
+        /// Where the target is: the window it's in (the editor's, or a popover in front of it)
+        /// and its frame there, scrolled into view first. A SwiftUI control is found as
+        /// VoiceOver finds it.
+        func place(of target: Target) throws -> (window: Int, frame: NSRect) {
             let identifier = target.identifier
             return try main { _ in
-                guard let window = Views.editorWindow else { throw ScenarioFailure("No editor window") }
-                if let root = window.contentView?.superview,
-                   let view = Views.all(NSView.self, in: root)
-                   .first(where: { $0.accessibilityIdentifier() == identifier }) {
-                    view.scrollToVisible(view.bounds)
-                    window.contentView?.layoutSubtreeIfNeeded()
-                }
-                guard let frame = Views.find(identifier, in: window) else {
+                guard Views.editorWindow != nil else { throw ScenarioFailure("No editor window") }
+                guard let place = Views.place(of: identifier) else {
                     throw ScenarioFailure("\(identifier) isn't on screen")
                 }
-                return frame
+                return place
             }
         }
 
-        /// Whether `target` is on screen now.
+        /// Whether `target` is on screen now, in the editor window or a popover in front of it.
         func exists(_ target: Target) throws -> Bool {
             let identifier = target.identifier
-            return try main { _ in
-                guard let window = Views.editorWindow else { return false }
-                return Views.find(identifier, in: window) != nil
-            }
+            return try main { _ in Views.place(of: identifier, scrolling: false) != nil }
         }
 
         /// Clicks `target` at `point` (0...1 across and down its frame).
         func click(_ target: Target, at point: CGPoint = CGPoint(x: 0.5, y: 0.5), count: Int = 1) throws {
-            let location = try location(point, on: target)
+            let (window, location) = try place(point, on: target)
             for clicks in 1 ... count {
-                try mouse([(.leftMouseDown, location, clicks), (.leftMouseUp, location, clicks)])
+                try mouse([(.leftMouseDown, location, clicks), (.leftMouseUp, location, clicks)], in: window)
             }
         }
 
@@ -128,14 +129,29 @@
             _ target: Target, from start: CGPoint = CGPoint(x: 0.5, y: 0.5), by offset: CGVector,
             steps: Int = 8, modifiers: NSEvent.ModifierFlags = [],
         ) throws {
-            let from = try location(start, on: target)
+            let (window, from) = try place(start, on: target)
             var events: [(NSEvent.EventType, NSPoint, Int)] = [(.leftMouseDown, from, 1)]
             for step in 1 ... steps {
                 let t = Double(step) / Double(steps)
                 events.append((.leftMouseDragged, NSPoint(x: from.x + offset.dx * t, y: from.y + offset.dy * t), 1))
             }
             events.append((.leftMouseUp, NSPoint(x: from.x + offset.dx, y: from.y + offset.dy), 1))
-            try mouse(events, modifiers: modifiers)
+            try mouse(events, in: window, modifiers: modifiers)
+        }
+
+        /// Clicks the control carrying `target`'s identifier, as the mouse does: a button, a
+        /// checkbox, a tile or a row, SwiftUI's or AppKit's, in the editor window or a popover in
+        /// front of it. The click may open a menu or a popover, so this doesn't wait for what it does.
+        func tap(
+            _ target: Target, at point: CGPoint = CGPoint(x: 0.5, y: 0.5), count: Int = 1,
+            modifiers: NSEvent.ModifierFlags = [],
+        ) throws {
+            let (window, location) = try place(point, on: target)
+            for clicks in 1 ... count {
+                post { _ in Views.tap(at: location, inWindow: window, clicks: clicks, modifiers: modifiers) }
+                pause(0.05)
+            }
+            pause(0.1)
         }
 
         /// ⌘-scrolls over `target` by `lines`, as a mouse wheel does.
@@ -188,6 +204,18 @@
             return location
         }
 
+        /// The window `target` is in, and where `point` of it is there, which it must be on.
+        private func place(_ point: CGPoint, on target: Target) throws -> (window: Int, location: NSPoint) {
+            let place = try place(of: target)
+            let location = Self.location(point, in: place.frame)
+            let bounds = try main { _ in NSApp.window(withWindowNumber: place.window)?.contentView?.bounds ?? .zero }
+            try expect(
+                bounds.contains(location),
+                "\(target) is off its window, at \(Views.describe(location)) of \(Views.describe(bounds))",
+            )
+            return (place.window, location)
+        }
+
         /// Window coordinates: y grows upwards; `point.y` 0 is the frame's top.
         private static func location(_ point: CGPoint, in frame: NSRect) -> NSPoint {
             NSPoint(x: frame.minX + frame.width * point.x, y: frame.maxY - frame.height * point.y)
@@ -198,18 +226,19 @@
         /// first mouse; there the events go to the view under the pointer, as the click after
         /// activation would.
         private func mouse(
-            _ events: [(NSEvent.EventType, NSPoint, Int)],
+            _ events: [(NSEvent.EventType, NSPoint, Int)], in number: Int? = nil,
             modifiers: NSEvent.ModifierFlags = [],
         ) throws {
             let pressed = PressedView()
             let kind = events.contains { $0.0 == .leftMouseDragged } ? "drag" : "click"
             for (type, location, clicks) in events {
                 post { _ in
-                    guard let window = Views.editorWindow, let event = NSEvent.mouseEvent(
-                        with: type, location: location, modifierFlags: modifiers,
-                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                        context: nil, eventNumber: 0, clickCount: clicks, pressure: type == .leftMouseUp ? 0 : 1,
-                    ) else { return }
+                    guard let window = number.flatMap(NSApp.window(withWindowNumber:)) ?? Views.editorWindow,
+                          let event = NSEvent.mouseEvent(
+                              with: type, location: location, modifierFlags: modifiers,
+                              timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                              context: nil, eventNumber: 0, clickCount: clicks, pressure: type == .leftMouseUp ? 0 : 1,
+                          ) else { return }
                     if type == .leftMouseDown {
                         let hit = window.contentView?.superview?.hitTest(location)
                         pressed.view = window.isKeyWindow || hit?.acceptsFirstMouse(for: event) == true ? nil : hit
@@ -470,6 +499,28 @@
                 }
             }
             try wait("\(target)'s context menu to open") { _ in opened.menu != nil }
+            return try pick(title, in: opened, of: target)
+        }
+
+        /// Clicks the menu button carrying `target`'s identifier through the window, as the mouse
+        /// does, and chooses `title` in the menu that opens, as a click on the item does. Returns
+        /// the menu's items, and whether each is checked.
+        @discardableResult
+        func choose(_ title: String, inMenuOf target: Target) throws -> [(title: String, on: Bool)] {
+            let (window, location) = try place(CGPoint(x: 0.5, y: 0.5), on: target)
+            let opened = OpenedMenu()
+            try main { _ in opened.watch() }
+            defer { try? main { _ in opened.stop() } }
+            // The menu tracks inside the press, so this doesn't return until it closes.
+            post { _ in Views.tap(at: location, inWindow: window, clicks: 1, modifiers: []) }
+            try wait("\(target)'s menu to open") { _ in opened.menu != nil }
+            return try pick(title, in: opened, of: target)
+        }
+
+        /// Chooses `title` (when given) in the menu that `opened` caught, and closes it.
+        private func pick(
+            _ title: String?, in opened: OpenedMenu, of target: Target,
+        ) throws -> [(title: String, on: Bool)] {
             let items = try main { _ -> [(title: String, on: Bool)] in
                 guard let menu = opened.menu else { return [] }
                 defer { menu.cancelTracking() }
@@ -478,12 +529,30 @@
                     guard let index = menu.items.firstIndex(where: { $0.title == title }) else {
                         throw ScenarioFailure("\(target)'s menu has no \(title): \(items.map(\.title))")
                     }
+                    guard menu.items[index].isEnabled else {
+                        throw ScenarioFailure("\(title) is disabled in \(target)'s menu")
+                    }
                     menu.performActionForItem(at: index)
                 }
                 return items
             }
-            try wait("\(target)'s context menu to close") { _ in opened.closed }
+            try wait("\(target)'s menu to close") { _ in opened.closed }
             return items
+        }
+
+        /// Holds `modifiers` down while `body` runs, as the keyboard does: the app's own handling
+        /// of the modifier keys sees them change, and so does a click's event.
+        func holding<T>(_ modifiers: NSEvent.ModifierFlags, _ body: () throws -> T) throws -> T {
+            let down = try main { _ in try Keyboard.flags(modifiers) }
+            post { _ in NSApp.sendEvent(down) }
+            pause(0.05)
+            defer {
+                if let up = try? main({ _ in try Keyboard.flags([]) }) {
+                    post { _ in NSApp.sendEvent(up) }
+                    pause(0.05)
+                }
+            }
+            return try body()
         }
 
         /// Types `text` into the popover in front, as keys reach the field it focuses: a Return ends
@@ -604,6 +673,71 @@
                 return children.lazy.compactMap { search($0, depth: depth + 1) }.first
             }
             return search(window, depth: 0)
+        }
+    }
+
+    // MARK: - SwiftUI's controls
+
+    extension Views {
+        /// The window showing the view carrying `identifier` (the editor's, or a popover in front
+        /// of it) and its frame there, scrolled into view first. A SwiftUI control carries its
+        /// identifier on an empty view behind it (`automationIdentifier`): SwiftUI builds no
+        /// accessibility to find it by until an assistive app asks.
+        static func place(of identifier: String, scrolling: Bool = true) -> (window: Int, frame: NSRect)? {
+            for window in [editorWindow, popoverWindow].compactMap(\.self) {
+                guard let root = window.contentView?.superview ?? window.contentView else { continue }
+                if scrolling,
+                   let view = all(NSView.self, in: root).first(where: { $0.accessibilityIdentifier() == identifier }) {
+                    view.scrollToVisible(view.bounds)
+                    window.contentView?.layoutSubtreeIfNeeded()
+                }
+                if let frame = find(identifier, in: window) {
+                    return (window.windowNumber, frame)
+                }
+            }
+            return nil
+        }
+
+        /// A click at `location` in the window numbered `number`, as the mouse makes one. The
+        /// release is queued before the press, so a control that tracks the press (a checkbox, a
+        /// menu's button) reads it as it reads the mouse's; one that doesn't is sent it after. In
+        /// a window that isn't key, AppKit spends a press on making it key unless the view under
+        /// the pointer accepts first mouse, so both go to that view, as the next click's would.
+        static func tap(at location: NSPoint, inWindow number: Int, clicks: Int, modifiers: NSEvent.ModifierFlags) {
+            guard let window = NSApp.window(withWindowNumber: number) else { return }
+            let events = [NSEvent.EventType.leftMouseDown, .leftMouseUp].compactMap { type in
+                NSEvent.mouseEvent(
+                    with: type, location: location, modifierFlags: modifiers,
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: number,
+                    context: nil, eventNumber: 0, clickCount: clicks, pressure: type == .leftMouseUp ? 0 : 1,
+                )
+            }
+            guard events.count == 2 else { return }
+            let hit = window.contentView?.superview?.hitTest(location)
+            let straight = window.isKeyWindow || hit?.acceptsFirstMouse(for: events[0]) == true ? nil : hit
+            lastPress = Press(
+                kind: "tap", location: location, window: describe(window),
+                found: ancestry(hit).joined(separator: " in "),
+                sentTo: straight.map(describe) ?? "the window", time: Date(),
+            )
+            NSApp.postEvent(events[1], atStart: false)
+            if let straight {
+                straight.mouseDown(with: events[0])
+            } else {
+                window.sendEvent(events[0])
+            }
+            guard let release = NSApp.nextEvent(
+                matching: .leftMouseUp,
+                until: .distantPast,
+                inMode: .default,
+                dequeue: true,
+            )
+            else { return }
+            if let straight {
+                straight.mouseUp(with: release)
+            } else {
+                window.sendEvent(release)
+            }
         }
     }
 

@@ -87,12 +87,17 @@
         /// Draws a gradient on the photo: dragged on the canvas when the run allows focus
         /// (SwiftUI gestures need a key window), otherwise through the shape the drag would make.
         func drawGradient(_ kind: MaskKind, operation: MaskOperation = .add, addingTo target: UUID? = nil) throws {
-            let before = try main { $0.masks.flatMap(\.components).count }
             if target == nil {
                 try press(kind == .linear ? .linearMask : .radialMask)
             } else {
                 try main { $0.startDrawing(kind, operation: operation, addingTo: target) }
             }
+            try drawArmedGradient(kind)
+        }
+
+        /// Draws the gradient a key, a menu or the Masks panel's picker armed, as `drawGradient` does.
+        func drawArmedGradient(_ kind: MaskKind) throws {
+            let before = try main { $0.masks.flatMap(\.components).count }
             if try focus() {
                 try drag(.canvas, from: CGPoint(x: 0.45, y: 0.35), by: CGVector(dx: 60, dy: -80))
                 covered(.mask(kind), via: .mouse)
