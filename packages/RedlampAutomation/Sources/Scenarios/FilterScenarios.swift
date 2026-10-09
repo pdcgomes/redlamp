@@ -120,7 +120,7 @@
     }
 
     enum FilterScenarios {
-        static let all: [Scenario] = [text, columns, sources, empty, suggestion]
+        static let all: [Scenario] = [text, columns, sources, empty, suggestion, moments, momentsPerformance]
 
         private static let raws: Set<String> = ["arw", "raf", "cr3", "nef", "dng", "orf", "pef", "rw2", "3fr"]
 
@@ -383,6 +383,98 @@
                 }
                 app.covered(.feature("library.filter"), via: .mouse)
             }
+        }
+
+        static let moments = Scenario(
+            "library.filter-moments",
+            "is:unpicked-moment, completed with Tab in the filter bar's text or chosen in its Attribute section, shows "
+                + "the photos of the folder's moments without a pick, as Group By has them, with the folder's "
+                + "Tighter–Looser setting",
+            claims: [.feature("library.filter")],
+        ) { app in
+            try app.withCulling { names in
+                try app.click(.identifier("grid.\(names[0])"))
+                try app.wait("\(names[0]) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [names[0]] }
+                try app.press(.flagPick)
+                try app.wait("\(names[0]) picked") { model in
+                    model.items.first { $0.name == names[0] }?.metadata.flag == .pick
+                }
+                try app.waitWritten()
+                let unpicked = try [0, MomentSetting.loosest].map { looseness in
+                    try app.main { model in
+                        model.setLooseness(looseness)
+                        model.setGroupKey(.moment)
+                    }
+                    try app.wait("the folder's moments, \(looseness) steps looser") { model in
+                        model.gridGroups.list
+                            .map { $0.groups.key == .moment && $0.groups.setting.looseness == looseness }
+                            == true && model.gridGroups.picks.reduce(0, +) > 0
+                    }
+                    return try app.main(Self.unpickedNames)
+                }
+                try app.main { model in
+                    model.setGroupKey(.ungrouped)
+                    model.setLooseness(0)
+                }
+                try app.expect(!unpicked[0].contains(names[0]), "\(names[0])'s moment has a pick")
+
+                try app.withFilterBar { all in
+                    try app.typeQuery("is:unpi")
+                    try app.wait("the moments without a pick offered") { model in
+                        model.libraryFilters?.completions.first?.text == "is:unpicked-moment "
+                    }
+                    try app.pressInWindow(KeyCombo(.tab))
+                    try app.wait("Tab to take it, and the photos of the moments without a pick", timeout: 20) { model in
+                        model.libraryFilters?.filter.text == "is:unpicked-moment " && model.library.isFiltered
+                            && Set(model.items.map(\.name)) == unpicked[0]
+                    }
+                    app.covered(.feature("library.filter"), via: .key)
+
+                    try app.clickView("library.filter.attribute", modifiers: .shift)
+                    try app.wait("the Attribute section") { model in
+                        model.libraryFilters?.filter.sections.contains(.attribute) == true
+                    }
+                    try app.clickView("library.filter.unpicked-moments")
+                    try app.wait("its Moment button to take the term out") { model in
+                        model.libraryFilters?.filter.text.isEmpty == true && model.items.count == all.count
+                    }
+                    try app.clickView("library.filter.unpicked-moments")
+                    try app.wait("and to put it back") { model in
+                        model.libraryFilters?.filter.text == "is:unpicked-moment"
+                            && Set(model.items.map(\.name)) == unpicked[0]
+                    }
+                    app.covered(.feature("library.filter"), via: .mouse)
+
+                    try app.choose(.groupByMoment)
+                    for _ in 0 ..< MomentSetting.loosest {
+                        try app.choose(.looserMoments)
+                    }
+                    try app.wait("the photos of the moments without a pick, four steps looser", timeout: 20) { model in
+                        model.libraryViews.looseness == MomentSetting.loosest
+                            && Set(model.items.map(\.name)) == unpicked[1]
+                    }
+                    app.covered(.feature("library.filter"), via: .menu)
+                    try app.main { model in
+                        model.setGroupKey(.ungrouped)
+                        model.setLooseness(0)
+                    }
+                }
+            }
+        }
+
+        /// The photos of the grid's moments without a pick, by name, as the toolbar counts them: from their badges.
+        @MainActor private static func unpickedNames(_ model: EditorModel) -> Set<String> {
+            guard let list = model.gridGroups.list else { return [] }
+            let picks = model.gridGroups.picks
+            var names = Set<String>()
+            for group in list.groups.indices where group < picks.count && picks[group] == 0 {
+                for id in list.groups.photos(ofGroup: group) {
+                    if let url = model.library.url(ofPhoto: id) {
+                        names.insert(url.lastPathComponent)
+                    }
+                }
+            }
+            return names
         }
     }
 #endif
