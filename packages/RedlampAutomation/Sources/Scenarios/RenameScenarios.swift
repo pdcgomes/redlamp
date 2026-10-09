@@ -320,12 +320,26 @@
             }
         }
 
+        /// With `REDLAMP_RENAME_PROFILE` set, each batch's main thread is sampled too, in the run's
+        /// `rename-profile-<phase>.txt` (`StackCallProfile`).
         static let performance = Scenario(
             "library.rename-performance",
             "Rename Photos' preview of 10,000 photos following each key of a template typed, then 1,000 raws renamed, "
                 + "moved to a folder and each taken back, the main thread watched throughout",
             tiers: [.performance], claims: [],
         ) { app in
+            let mainThread = try app.main { _ in mach_thread_self() }
+            let profiling = ProcessInfo.processInfo.environment["REDLAMP_RENAME_PROFILE"] != nil
+            func watching(_ name: String, _ body: () throws -> Void) throws
+                -> (summary: MainThreadMonitor.Summary?, seconds: Double) {
+                let profile = profiling ? StackPerformanceScenarios.StackCallProfile(thread: mainThread) : nil
+                defer {
+                    profile?.write(
+                        to: app.runDirectory.appending(path: "rename-profile-\(name).txt"), inside: "FolderOutlineView",
+                    )
+                }
+                return try app.watchingMainThread(name, body)
+            }
             var started = Date()
             let scratch = try RenamePerformanceScratch(app)
             defer { scratch.remove(app) }
@@ -372,7 +386,7 @@
             }
             // From Rename to the batch made, its progress on screen; the sheet's closing is AppKit's.
             let made = try app.main { $0.fileUndoCount }
-            let renaming = try app.watchingMainThread("rename") {
+            let renaming = try watching("rename") {
                 try app.clickInSheet("rename.rename")
                 try app.wait("the rename to be asked for", timeout: 900) { $0.fileUndoCount > made }
                 try app.run("the rename to be made", timeout: 900) { await $0.filesMade() }
@@ -382,7 +396,7 @@
                 scratch.photos(in: scratch.thousand).allSatisfy { $0.hasPrefix("Trip-") },
                 "Not every photo renamed",
             )
-            let undoRename = try app.watchingMainThread("rename-undo") {
+            let undoRename = try watching("rename-undo") {
                 try app.press(.undo)
                 try app.run("the rename's Undo", timeout: 900) { await $0.filesMade() }
             }
@@ -398,7 +412,7 @@
             try app.main { _ in EditorModel.moveToFolderAnswer = scratch.moved }
             let moves = try app.main { $0.fileUndoCount }
             let mark = try app.mark()
-            let moving = try app.watchingMainThread("move") {
+            let moving = try watching("move") {
                 try app.choose(.moveToFolder)
                 try app.explainingFiles(since: mark) {
                     try app.wait("the move to be asked for", timeout: 900) { $0.fileUndoCount > moves }
@@ -409,7 +423,7 @@
             try app.expect(
                 scratch.photos(in: scratch.moved).count == RenamePerformanceScratch.renamed, "Not every photo moved",
             )
-            let undoMove = try app.watchingMainThread("move-undo") {
+            let undoMove = try watching("move-undo") {
                 try app.press(.undo)
                 try app.run("the move's Undo", timeout: 900) { await $0.filesMade() }
             }
