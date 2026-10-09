@@ -35,6 +35,8 @@ options:
   --process <n>            render as process version n, as an edit made then would be
   --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome, reproduction, or
                            embedded (the camera profile's look a DNG carries); --profile works too
+  --anchor <stops>         with reproduction, where the camera puts a metered grey: the stops that
+                           take it to scene 0.18 (default: the edit's, or else the typical +1.03)
   --wb <mode>              asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
   --upright <mode>         auto, level, vertical or full, from the photo's own edges
   --heal <x>,<y>,<radius>  heal a spot (x, y 0...1 across the photo as shown, radius a fraction
@@ -101,6 +103,7 @@ func run(_ arguments: [String]) async throws {
     var keepsShadows = false
     var coverage = false
     var process: Int?
+    var anchor: Double?
     var request = StillRequest(recipe: recipe, purpose: .export)
     var index = 2
     func value() throws -> String {
@@ -193,6 +196,10 @@ func run(_ arguments: [String]) async throws {
                 throw CLIError(description: "unknown base look \(name)")
             }
             recipe.baseLook = look.reference
+        case "--anchor":
+            let text = try value()
+            guard let stops = Double(text) else { throw CLIError(description: "--anchor takes stops, not \(text)") }
+            anchor = stops
         case "--wb":
             let name = try value()
             guard let mode = WhiteBalanceMode(rawValue: name)
@@ -348,6 +355,10 @@ func run(_ arguments: [String]) async throws {
     if let process {
         recipe.processVersion = process
     }
+    if let anchor {
+        recipe.exposureAnchor = ExposureAnchor(stops: anchor, source: .target, camera: info.cameraName)
+    }
+    recipe = recipe.anchored(info.isRaw ? .typical(for: info.cameraName) : nil)
     if coverage {
         guard let last = recipe.masks.last else { throw CLIError(description: "--coverage needs a mask") }
         request.maskOverlay = last.id

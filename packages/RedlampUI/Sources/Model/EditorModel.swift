@@ -618,6 +618,10 @@ public final class EditorModel {
 
     /// Every recipe and Base Look on this machine.
     public let recipes: RecipeCatalog
+    /// Each camera's exposure anchor for Redlamp Reproduction (`EditorModel+Reproduction`).
+    public let cameras: CameraCalibrations
+    /// Why the last calibration couldn't be kept or forgotten, shown under the Base Look.
+    public internal(set) var calibrationMessage: String?
     /// The recipe under the pointer, rendered without being applied.
     public internal(set) var previewingRecipe: Recipe?
     /// An edit rendered in place of the photo's without being applied: the command
@@ -680,10 +684,11 @@ public final class EditorModel {
 
     public init(
         engine: any EditingEngine, recipes: RecipeCatalog? = nil, library: FolderLibrary? = nil,
-        thumbnailLoader: ThumbnailLoader? = nil,
+        thumbnailLoader: ThumbnailLoader? = nil, cameras: CameraCalibrations? = nil,
     ) {
         self.engine = engine
         self.recipes = recipes ?? RecipeCatalog(engine: engine)
+        self.cameras = cameras ?? CameraCalibrations()
         self.library = library ?? FolderLibrary()
         self
             .thumbnailLoader = thumbnailLoader ??
@@ -692,6 +697,7 @@ public final class EditorModel {
             }
         canvas.onRenderSizeChange = { [weak self] _ in self?.requestRender() }
         settingsSync.makeEngine = { [weak self] in self?.makeWorkerEngine?() }
+        settingsSync.photoAnchor = { [weak self] url in await self?.anchor(forPhotoAt: url) }
         settingsSync.saves = saves
         settingsSync.editor = self
         saves.reportResults { [weak self] url, write, outcome, superseded in
@@ -1462,7 +1468,7 @@ public final class EditorModel {
         if look == BuiltInBaseLook.monochrome.reference || recipes.package(for: look)?.parameters.isMonochrome == true {
             next.treatment = .blackAndWhite
         }
-        commit(next, .baseLook, "Base Look") { $0.baseLook.name }
+        commit(anchored(next), .baseLook, "Base Look") { $0.baseLook.name }
     }
 
     public func setWhiteBalanceMode(_ mode: WhiteBalanceMode) {

@@ -48,7 +48,7 @@ enum ImageAnalysis {
         let ratio = SIMD3<Float>(session.whiteBalanceRatio(for: recipe))
         let matrix = session.cameraToWorking
         let luma = Luma.rec2020
-        let gain = Float(pow(2, session.baselineExposure))
+        let gain = Float(pow(2, session.baseExposure(for: recipe)))
 
         var luminances: [Float] = []
         var peaks: [Float] = []

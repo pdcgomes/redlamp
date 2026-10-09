@@ -91,6 +91,7 @@ A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", 
 | `masks` | [mask] | `[]` | Local adjustments, applied in order on top of the global edit; at most 16. Written only when there are some. See [Masks](#masks). |
 | `spots` | [spot] | `[]` | Remove, Heal and Clone spots, applied in order before everything else. Written only when there are some. See [Spots](#spots). |
 | `appliedRecipe` | object? | | `{"id", "version", "name", "amount"}`, all required: the `.redrecipe` the edit was last built from, and its Amount in percent (0 to 200). Provenance only; rendering never reads it. |
+| `exposureAnchor` | object? | | `{"stops", "source", "camera"}`: under Redlamp Reproduction, where the photo's camera puts a metered grey. Written only with that look. See [Exposure anchor](#exposure-anchor). |
 | `crop` | rect | full frame | Written only when it isn't the full frame. See [Crop and geometry](#crop-and-geometry). |
 | `orientation` | object | none | Written only when the photo is turned or flipped. See [Crop and geometry](#crop-and-geometry). |
 
@@ -111,13 +112,25 @@ The look the edit renders with (Lightroom's profile), referenced as in the recip
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `id` | string | **Required.** Redlamp's own looks are `redlamp/base/` followed by `color` (the default), `neutral`, `vivid`, `landscape`, `portrait`, `monochrome` or `reproduction` (Redlamp Reproduction, which has no tone curve). Looks made or imported on the Mac are `local/…`, and looks baked from a photo's embedded camera profile `local/embedded/…`. An older Redlamp renders a look id it doesn't know with Redlamp Color's curve and shows the look as missing. |
+| `id` | string | **Required.** Redlamp's own looks are `redlamp/base/` followed by `color` (the default), `neutral`, `vivid`, `landscape`, `portrait`, `monochrome` or `reproduction` (Redlamp Reproduction, which has no tone curve; see [Exposure anchor](#exposure-anchor)). Looks made or imported on the Mac are `local/…`, and looks baked from a photo's embedded camera profile `local/embedded/…`. An older Redlamp renders a look id it doesn't know with Redlamp Color's curve and shows the look as missing. |
 | `version` | integer | Default 1. Published versions of a look never change. |
 | `name` | string | For display. Defaults to the built-in look's name, or else to the id. |
 | `amount` | number | Strength in percent, 0 to 200; 100 is the look as designed. Default 100. |
 | `contentHash` | hash? | Pins the look's table, for looks that have one, so a missing or changed table is noticed instead of rendering differently. |
 
 Edits never store file paths: installed looks live in `Application Support/Redlamp/Looks/`, found by `id`, `version` and `contentHash`.
+
+### Exposure anchor
+
+Under Redlamp Reproduction, where the photo's camera puts a metered 18% grey: the stops added to Exposure, in place of a DNG's BaselineExposure, that take that grey to scene 0.18. Written when the look arrives on a raw photo (chosen, pasted, synced or applied with a recipe), always for the photo's own camera, and taken out when the edit moves to another look. It is never copied from another photo, and `.redrecipe` files never hold one. A Redlamp Reproduction edit without one renders with the typical anchor; a bitmap has none.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `stops` | number | **Required.** The anchor in stops. The typical anchor is 1.03, a metered grey 3.5 stops below the raw's clip. |
+| `source` | string | **Required.** `target`, measured with Calibrate from Target, or `typical` for a camera without a calibration. A value a newer Redlamp wrote is kept. |
+| `camera` | string? | The camera it belongs to: the model the file states, after its make unless the model names it (`Canon EOS R5`). |
+
+Fields a newer Redlamp adds inside it are kept and written back unchanged.
 
 ### Parameters
 

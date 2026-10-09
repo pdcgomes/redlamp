@@ -122,6 +122,9 @@ public final class SettingsSync {
 
     /// An engine for photos that aren't open; nil leaves AI masks and Auto white balance as pasted.
     @ObservationIgnored var makeEngine: () -> (any EditingEngine)?
+    /// The exposure anchor a photo's edit gets under Redlamp Reproduction (nil when it isn't raw),
+    /// set by the editor; without it, the typical anchor.
+    @ObservationIgnored var photoAnchor: (@MainActor (URL) async -> ExposureAnchor?)?
     @ObservationIgnored let store: SidecarStore
     /// The editor's saves: a photo just left may still be on its way to disk. The batch's own
     /// saves go through their queue too, after those asked for before them.
@@ -554,7 +557,7 @@ public final class SettingsSync {
         case let .paste(source, selection):
             let pasted = start.pasting(source, selection)
                 .reusingAIMasks(from: current, in: EditRecipe.pastedMasks(from: source, selection))
-            next = pasted.recipe
+            next = await anchored(pasted.recipe, url)
             masks = pasted.recompute
             if selection.items.contains("whiteBalance") {
                 // As Shot is the photo's own, read when it opens; Auto is measured for it.
@@ -602,6 +605,19 @@ public final class SettingsSync {
             }
         }
         return (next, failedMasks)
+    }
+
+    /// `edit` with the photo's own exposure anchor (`EditRecipe.anchored`), its camera read from the
+    /// file only when the edit needs an anchor it hasn't got.
+    private func anchored(_ edit: EditRecipe, _ url: URL) async -> EditRecipe {
+        guard edit.baseLook.isReproduction,
+              edit.exposureAnchor == nil else { return edit.anchored(edit.exposureAnchor) }
+        let photo: ExposureAnchor? = if let photoAnchor {
+            await photoAnchor(url)
+        } else {
+            .typical(for: nil)
+        }
+        return edit.anchored(photo)
     }
 
     /// `sidecar` with its edit changed to `recipe` from `current`, in a history session of its own,

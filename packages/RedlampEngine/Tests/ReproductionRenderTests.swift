@@ -30,9 +30,11 @@ struct ReproductionRenderTests {
         lstar > 8 ? pow((lstar + 16) / 116, 3) : lstar / 903.3
     }
 
-    static func reproduction(amount: Double = 100) -> EditRecipe {
+    /// Redlamp Reproduction with an anchor of 0: the synthetic raws hold the scene's own values.
+    static func reproduction(amount: Double = 100, anchor: Double? = 0) -> EditRecipe {
         var recipe = EditRecipe()
         recipe.baseLook = BuiltInBaseLook.reproduction.reference.withAmount(amount)
+        recipe.exposureAnchor = anchor.map { ExposureAnchor(stops: $0, source: .target, camera: nil) }
         return recipe
     }
 
@@ -110,6 +112,47 @@ struct ReproductionRenderTests {
         #expect(double == full, "Amount 200 renders as 100")
     }
 
+    @Test func `without an anchor a grey the typical camera meters renders at 18%`() throws {
+        let metered = Float(0.18 * pow(2, -ExposureAnchor.typicalStops))
+        let session = try makeRaw(width: Self.block, height: Self.block) { _, _ in SIMD3(repeating: metered) }
+        let rendered = try patches(render(Self.reproduction(anchor: nil), session: session), count: 1)[0]
+        #expect(simd_reduce_max(simd_abs(rendered - SIMD3(repeating: 0.18))) < 0.0006, "renders \(rendered)")
+    }
+
+    @Test func `the anchor takes BaselineExposure's place only under the look`() throws {
+        let row = Self.greyRow
+        func session(baseline: Double) throws -> ImageSession {
+            try makeRaw(width: Self.block * row.count, height: Self.block, baselineExposure: baseline) { x, _ in
+                SIMD3(repeating: row[x / Self.block])
+            }
+        }
+        let dng = try session(baseline: 0.5)
+        var lifted = EditRecipe()
+        lifted[.exposure] = 0.5
+        #expect(
+            try render(EditRecipe(), session: dng) == render(lifted, session: session(baseline: 0)),
+            "Redlamp Color adds it",
+        )
+        let rendered = try patches(render(Self.reproduction(), session: dng), count: row.count)
+        for (value, pixel) in zip(row, rendered) {
+            #expect(abs(pixel.y - value) <= 0.0001 + 0.003 * value, "scene \(value) renders \(pixel) without it")
+        }
+    }
+
+    @Test func `Auto measures the light at the exposure the look renders with`() throws {
+        let session = try makeRaw(width: 64, height: 64, baselineExposure: 0.5) { x, y in
+            SIMD3(repeating: (x + y) % 2 == 0 ? 0.02 : 0.08)
+        }
+        let color = ImageAnalysis.autoTone(session: session, recipe: EditRecipe())[.exposure]
+        let matched = ImageAnalysis.autoTone(session: session, recipe: Self.reproduction(anchor: 0.5))[.exposure]
+        let brighter = ImageAnalysis.autoTone(session: session, recipe: Self.reproduction(anchor: 1.5))[.exposure]
+        #expect(color != nil && matched == color, "an anchor equal to BaselineExposure measures the same")
+        #expect(
+            (brighter ?? 0) < (color ?? 0),
+            "a stop more anchor asks for less Exposure: \(brighter ?? 0) from \(color ?? 0)",
+        )
+    }
+
     @Test func `a bitmap renders as the file, and Exposure scales its own light`() throws {
         let greys: [Float] = [0.02, 0.1, 0.18, 0.4, 0.9]
         let session = try makeBitmap(width: Self.block * greys.count, height: Self.block) { x, _ in
@@ -168,7 +211,9 @@ struct ReproductionRenderTests {
     }
 
     /// A linear raw whose camera RGB is linear sRGB, balanced as shot.
-    private func makeRaw(width: Int, height: Int, color: (Int, Int) -> SIMD3<Float>) throws -> ImageSession {
+    private func makeRaw(
+        width: Int, height: Int, baselineExposure: Double = 0, color: (Int, Int) -> SIMD3<Float>,
+    ) throws -> ImageSession {
         let black: Float = 512
         let white: Float = 16383
         var samples = [UInt16](repeating: 0, count: width * height * 3)
@@ -185,7 +230,7 @@ struct ReproductionRenderTests {
             width: width, height: height, layout: .linearRGB, samples: samples,
             blackLevels: [black, black, black], whiteLevel: white,
             asShotMultipliers: SIMD3(1, 1, 1), cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1], xyzToCamera: nil,
-            orientation: 0, baselineExposure: 0,
+            orientation: 0, baselineExposure: baselineExposure,
             info: ImageInfo(
                 url: URL(fileURLWithPath: "/synthetic-reproduction.dng"),
                 pixelSize: PixelSize(width: width, height: height), isRaw: true, sensorDescription: "synthetic",

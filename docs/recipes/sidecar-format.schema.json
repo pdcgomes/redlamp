@@ -105,6 +105,7 @@
           "description": "Remove, Heal and Clone spots, applied in order before everything else."
         },
         "appliedRecipe": { "$ref": "#/$defs/appliedRecipe" },
+        "exposureAnchor": { "$ref": "#/$defs/exposureAnchor" },
         "crop": { "$ref": "#/$defs/cropRect", "default": { "left": 0, "top": 0, "right": 1, "bottom": 1 } },
         "orientation": { "$ref": "#/$defs/orientation", "default": { "quarterTurns": 0, "mirrored": false } }
       },
@@ -274,6 +275,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "exposureAnchor": {
+      "description": "Under Redlamp Reproduction (redlamp/base/reproduction), where the photo's camera puts a metered 18% grey: the stops added to Exposure, in place of a DNG's BaselineExposure, that take it to scene 0.18. Always the photo's own camera's, never copied from another photo; written only with that look. Without one, the look renders with the typical anchor, 1.03.",
+      "type": "object",
+      "required": ["stops", "source"],
+      "properties": {
+        "stops": { "type": "number", "description": "The anchor in stops." },
+        "source": {
+          "type": "string",
+          "description": "target: measured with Calibrate from Target. typical: the camera has no calibration. A value a newer Redlamp wrote is kept."
+        },
+        "camera": { "type": "string", "description": "The camera it belongs to: the model the file states, after its make unless the model names it." }
+      },
+      "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },
     "appliedRecipe": {
       "description": "The .redrecipe the edit was last built from. Provenance only: rendering never reads it.",

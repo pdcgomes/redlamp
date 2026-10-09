@@ -130,7 +130,7 @@ struct BaseLookBrowser: View {
             if look.parameters.isMonochrome {
                 recipe.treatment = .blackAndWhite
             }
-            var request = StillRequest(recipe: recipe)
+            var request = StillRequest(recipe: model.anchored(recipe))
             request.maxLongEdge = 232
             if let image = try? await model.engine.renderStill(request) {
                 thumbnails[key(look)] = image

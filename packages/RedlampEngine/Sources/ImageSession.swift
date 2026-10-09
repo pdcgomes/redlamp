@@ -187,6 +187,13 @@ final class ImageSession: @unchecked Sendable {
             + analysis.pixels.withUnsafeBytes(\.count)
     }
 
+    /// The stops added to Exposure: a DNG's BaselineExposure or, under Redlamp Reproduction, the
+    /// edit's anchor (the typical one when it has none). A bitmap has neither.
+    func baseExposure(for recipe: EditRecipe) -> Double {
+        guard recipe.baseLook.isReproduction else { return baselineExposure }
+        return isRaw ? recipe.exposureAnchor?.stops ?? ExposureAnchor.typicalStops : 0
+    }
+
     /// Per-channel gains that move the as-shot balance to the requested white balance.
     func whiteBalanceRatio(for recipe: EditRecipe) -> SIMD3<Double> {
         guard isRaw, recipe.whiteBalanceMode != .asShot, let colorModel else { return SIMD3(1, 1, 1) }

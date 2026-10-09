@@ -457,6 +457,7 @@ enum RichSidecar {
         recipe.crop = CropRect(left: 0.08, top: 0.05, right: 0.94, bottom: 0.9)
         recipe.orientation = ImageOrientation(quarterTurns: 1, mirrored: true)
         recipe.appliedRecipe = AppliedRecipe(id: "redlamp/film/portra-400", version: 2, name: "Portra 400", amount: 120)
+        recipe.exposureAnchor = ExposureAnchor(stops: 0.94, source: .target, camera: "Canon EOS R5")
         recipe.pointColor = [
             PointColorSwatch(
                 color: .oklch(OKLCh(lightness: 0.64, chroma: 0.08, hue: 48)),

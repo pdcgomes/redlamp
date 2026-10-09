@@ -93,6 +93,8 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
     /// The camera profile look and lens correction every photo it opens carries.
     var embeddedBaseLook: (look: BaseLookReference, process: Int)?
     var lensCorrection: LensCorrection?
+    /// The camera the opened photo states.
+    var camera: (make: String, model: String)?
 
     /// Every photo `open` was asked for, in order. Opens run at once, off the main actor.
     let opened = Mutex<[URL]>([])
@@ -122,6 +124,8 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
         info.embeddedBaseLook = embeddedBaseLook?.look
         info.embeddedBaseLookProcess = embeddedBaseLook?.process
         info.lensCorrection = lensCorrection
+        info.make = camera?.make
+        info.model = camera?.model
         return info
     }
 

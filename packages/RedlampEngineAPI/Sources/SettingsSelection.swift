@@ -6,7 +6,8 @@ import Foundation
 /// The parts of an edit that aren't parameters.
 public enum EditField: String, Sendable, Hashable, CaseIterable {
     case treatment
-    /// The base look, with its Amount and the applied recipe's provenance.
+    /// The base look, with its Amount and the applied recipe's provenance. The exposure anchor
+    /// stays the photo's own: whoever pastes writes it (`EditRecipe.anchored`).
     case baseLook
     case whiteBalanceMode
     case pointCurve

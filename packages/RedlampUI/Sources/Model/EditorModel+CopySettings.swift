@@ -138,7 +138,7 @@ public extension EditorModel {
         let previous = history.indices.contains(historyIndex) ? history[historyIndex].id : nil
         let pasted = recipe.pasting(source, selection)
             .reusingAIMasks(from: recipe, in: EditRecipe.pastedMasks(from: source, selection))
-        var next = pasted.recipe
+        var next = anchored(pasted.recipe)
         let pastesWhiteBalance = selection.items.contains("whiteBalance")
         if pastesWhiteBalance, next.whiteBalanceMode == .asShot, let wb = info?.asShotWhiteBalance {
             next[.temperature] = wb.temperature

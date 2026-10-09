@@ -104,6 +104,12 @@ public struct ImageInfo: Codable, Sendable, Hashable {
     }
 
     public var cameraName: String? {
+        Self.cameraName(make: make, model: model)
+    }
+
+    /// A camera's name from the make and model its files state: the model, after the make
+    /// unless the model already names it.
+    public static func cameraName(make: String?, model: String?) -> String? {
         guard let model else { return make }
         guard let make, !model.localizedCaseInsensitiveContains(make) else { return model }
         return "\(make) \(model)"

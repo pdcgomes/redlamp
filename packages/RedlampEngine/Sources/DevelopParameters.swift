@@ -146,7 +146,7 @@ enum DevelopParameters {
         )
         p.wbRatio = SIMD4(SIMD3<Float>(session.whiteBalanceRatio(for: recipe)) * shift, 0)
 
-        let exposure = recipe[.exposure] + session.baselineExposure
+        let exposure = recipe[.exposure] + session.baseExposure(for: recipe)
         let contrast = recipe[.contrast] / 100 * 0.32 + (look.contrast - 1) * 0.6
         p.tone = SIMD4(
             Float(pow(2, exposure)),

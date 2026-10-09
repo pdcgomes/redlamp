@@ -12,7 +12,11 @@ public extension EditorModel {
             : self.recipe
         recipeApplication = (recipe, base)
         let apply = { [self] in
-            commit(recipe.apply(to: base, amount: amount, whiteBalance: resolveWhiteBalance), .recipe, "Recipe") { _ in
+            commit(
+                anchored(recipe.apply(to: base, amount: amount, whiteBalance: resolveWhiteBalance)),
+                .recipe,
+                "Recipe",
+            ) { _ in
                 recipe.name
             }
         }
@@ -52,7 +56,11 @@ public extension EditorModel {
     var recipeAmount: Double? {
         guard let application = recipeApplication, let applied = unobservedRecipe.appliedRecipe,
               applied.id == application.recipe.id,
-              application.recipe.apply(to: application.base, amount: applied.amount, whiteBalance: resolveWhiteBalance)
+              anchored(application.recipe.apply(
+                  to: application.base,
+                  amount: applied.amount,
+                  whiteBalance: resolveWhiteBalance,
+              ))
               == unobservedRecipe
         else { return nil }
         return applied.amount
@@ -67,9 +75,9 @@ public extension EditorModel {
     /// and `endEdit`) history records one step.
     func setRecipeAmount(_ amount: Double) {
         guard let application = recipeApplication else { return }
-        let next = application.recipe.apply(
+        let next = anchored(application.recipe.apply(
             to: application.base, amount: amount.rounded(), whiteBalance: resolveWhiteBalance,
-        )
+        ))
         guard next != recipe else { return }
         if editStart == nil {
             commit(next, .recipe, "Recipe Amount", value: Self.recipeAmountText)
@@ -114,7 +122,7 @@ public extension EditorModel {
     }
 
     internal func previewEdit(for recipe: Recipe) -> EditRecipe {
-        recipe.apply(to: self.recipe, whiteBalance: resolveWhiteBalance)
+        anchored(recipe.apply(to: self.recipe, whiteBalance: resolveWhiteBalance))
     }
 
     internal func resolveWhiteBalance(_ mode: WhiteBalanceMode) -> WhiteBalanceValue? {

@@ -28,7 +28,8 @@ struct SidecarGoldenTests {
     static let everything = #"{"format":"app.redlamp.edit","metadata":{"flag":"pick","label":"green","rating":4},"mod"#
         + #"ified":"1970-01-01T00:33:20Z","recipe":{"appliedRecipe":{"amount":80,"id":"local/test","name":"Test","vers"#
         + #"ion":1},"baseLook":{"amount":90,"contentHash":"abc","id":"user/film","name":"Film","version":2},"crop":{"b"#
-        + #"ottom":0.8,"left":0.1,"right":0.9,"top":0.1},"masks":[{"adjustments":{"local.exposure":-0.5},"amount":100,"#
+        + #"ottom":0.8,"left":0.1,"right":0.9,"top":0.1},"exposureAnchor":{"camera":"Canon EOS R5","source":"target","st"#
+        + #"ops":0.94},"masks":[{"adjustments":{"local.exposure":-0.5},"amount":100,"#
         + #""components":[{"id":"00000000-0000-0000-0000-000000000011","inverted":false,"operation":"add","shape":{"li"#
         + #"near":{"_0":{"end":{"x":0.5,"y":0.5},"start":{"x":0.5,"y":0}}}}},{"id":"00000000-0000-0000-0000-0000000000"#
         + #"12","inverted":false,"operation":"add","shape":{"radial":{"_0":{"center":{"x":0.4,"y":0.4},"feather":50,"r"#

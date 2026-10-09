@@ -78,6 +78,7 @@ enum SidecarSamples {
         ]
         recipe.baseLook = BaseLookReference(id: "user/film", version: 2, name: "Film", amount: 90, contentHash: "abc")
         recipe.appliedRecipe = AppliedRecipe(id: "local/test", version: 1, name: "Test", amount: 80)
+        recipe.exposureAnchor = ExposureAnchor(stops: 0.94, source: .target, camera: "Canon EOS R5")
         recipe.crop = CropRect(left: 0.1, top: 0.1, right: 0.9, bottom: 0.8)
         recipe.orientation = ImageOrientation(quarterTurns: 1)
         return Sidecar(

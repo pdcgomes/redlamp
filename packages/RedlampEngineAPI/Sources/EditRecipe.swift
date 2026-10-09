@@ -101,6 +101,9 @@ public struct EditRecipe: Sendable, Hashable {
     public var spots: [RetouchSpot] = []
     /// The shared recipe this edit was last built from.
     public var appliedRecipe: AppliedRecipe?
+    /// Under Redlamp Reproduction, where the photo's camera puts a metered grey: its own, written
+    /// when the look arrives and never copied from another photo (`EditRecipe.anchored`).
+    public var exposureAnchor: ExposureAnchor?
     /// The crop, in the straightened frame (see `GeometryMap`); its angle is `cropAngle`.
     public var crop: CropRect = .full
     /// The user's rotation and flip, after the camera's orientation.
@@ -152,6 +155,7 @@ public struct EditRecipe: Sendable, Hashable {
             && masks.isEmpty
             && spots.isEmpty
             && appliedRecipe == nil
+            && exposureAnchor == nil
             && crop.isFull
             && orientation.isIdentity
             && unknownValues.isEmpty
@@ -178,7 +182,7 @@ public struct EditRecipe: Sendable, Hashable {
 extension EditRecipe: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case version, processVersion, treatment, baseLook, whiteBalance, pointCurve, values, pointColor, masks
-        case appliedRecipe, crop, orientation, spots
+        case appliedRecipe, exposureAnchor, crop, orientation, spots
         /// Format version 1's name for `baseLook`; read, never written.
         case profile
     }
@@ -205,6 +209,7 @@ extension EditRecipe: Codable {
         masks = try container.decodeIfPresent([MaskLayer].self, forKey: .masks) ?? []
         spots = try container.decodeIfPresent([RetouchSpot].self, forKey: .spots) ?? []
         appliedRecipe = try container.decodeIfPresent(AppliedRecipe.self, forKey: .appliedRecipe)
+        exposureAnchor = try container.decodeIfPresent(ExposureAnchor.self, forKey: .exposureAnchor)
         crop = try container.decodeIfPresent(CropRect.self, forKey: .crop) ?? .full
         orientation = try container.decodeIfPresent(ImageOrientation.self, forKey: .orientation) ?? .identity
         unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
@@ -235,6 +240,7 @@ extension EditRecipe: Codable {
             try container.encode(spots, forKey: .spots)
         }
         try container.encodeIfPresent(appliedRecipe, forKey: .appliedRecipe)
+        try container.encodeIfPresent(exposureAnchor, forKey: .exposureAnchor)
         if !crop.isFull {
             try container.encode(crop, forKey: .crop)
         }

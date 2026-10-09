@@ -45,6 +45,7 @@ struct HandCodedTypeTests {
         var colored = everything.recipe
         colored.pointColor = [Self.pickedSwatch]
         try check(colored, renamed: ["whiteBalanceMode": "whiteBalance"])
+        try check(#require(everything.recipe.exposureAnchor))
         try check(#require(everything.snapshots.first))
         try check(#require(everything.metadata))
     }

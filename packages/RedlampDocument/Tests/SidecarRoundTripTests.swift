@@ -45,7 +45,7 @@ struct SidecarRoundTripTests {
         #expect(Set(root.keys) == ["format", "recipe", "snapshots", "metadata", "modified"])
         #expect(Set(recipe.keys) == [
             "version", "processVersion", "treatment", "baseLook", "whiteBalance", "pointCurve", "values", "masks",
-            "appliedRecipe", "crop", "orientation", "spots",
+            "appliedRecipe", "exposureAnchor", "crop", "orientation", "spots",
         ])
     }
 

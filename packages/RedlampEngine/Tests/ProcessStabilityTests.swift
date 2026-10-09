@@ -73,6 +73,9 @@ struct ProcessStabilityTests {
         /// Brush, luminance range, colour range and AI masks, Heal and Clone spots, an angled
         /// crop with Transform, and black and white with its mixer (`retouchEdit`).
         case retouch
+        /// Redlamp Reproduction with the typical exposure anchor, Exposure, Blacks against flare
+        /// and a gradient's own exposure (`reproductionEdit`).
+        case reproduction
     }
 
     static func referenceURL(process: Int, fixture: URL, edit: Edit) -> URL {
@@ -158,7 +161,30 @@ struct ProcessStabilityTests {
         switch edit {
         case .heavy: heavyEdit(process: process, info: info)
         case .retouch: try retouchEdit(process: process)
+        case .reproduction: reproductionEdit(process: process, info: info)
         }
+    }
+
+    /// Redlamp Reproduction as a copy stand uses it: the camera's anchor (the typical one here),
+    /// a little Exposure, Blacks lowered a touch for flare, and a gradient with its own exposure.
+    static func reproductionEdit(process: Int, info: ImageInfo) -> EditRecipe {
+        var recipe = EditRecipe()
+        recipe.processVersion = process
+        recipe.baseLook = BuiltInBaseLook.reproduction.reference
+        recipe = recipe.anchored(info.isRaw ? .typical(for: info.cameraName) : nil)
+        recipe[.exposure] = 0.3
+        recipe[.blacks] = -5
+        var gradient = MaskLayer(
+            id: UUID(uuidString: "9A4E2C61-7B3D-4F58-A1E9-5C0D2B3A4E71")!,
+            name: "Top",
+            components: [MaskComponent(
+                id: UUID(uuidString: "4D7F1B92-6E2A-4C3B-8D5F-2A1B0C9D8E7F")!,
+                shape: .linear(LinearMask(start: ImagePoint(x: 0.5, y: 0), end: ImagePoint(x: 0.5, y: 0.6))),
+            )],
+        )
+        gradient[.localExposure] = -0.6
+        recipe.masks = [gradient]
+        return recipe
     }
 
     /// One edit using everything process versions have changed: tone, Texture, Clarity and
