@@ -34,6 +34,7 @@ import RedlampLibrary
     @ObservationIgnored private var asked: Set<ShortcutAction> = []
     /// The actions whose checks the last refresh ran; nil for every action.
     @ObservationIgnored private var refreshed: Set<ShortcutAction>?
+    @ObservationIgnored private var refreshQueued = false
 
     public init(model: EditorModel) {
         self.model = model
@@ -42,25 +43,30 @@ import RedlampLibrary
 
     /// Whether `action`'s item is enabled.
     public func isEnabled(_ action: ShortcutAction) -> Bool {
-        ask(action)
+        guard ask(action) else { return action.isAvailable && model?.canPerform(action) == true }
         return shown.enabled.contains(action)
     }
 
     /// Whether `action`'s item has its checkmark.
     public func isChecked(_ action: ShortcutAction) -> Bool {
-        ask(action)
+        guard ask(action) else { return model.flatMap { Self.isOn(action, in: $0) } == true }
         return shown.checked.contains(action)
     }
 
-    /// An action asked about for the first time after the checks were narrowed to those asked before is checked in
-    /// the next turn.
-    private func ask(_ action: ShortcutAction) {
-        guard asked.insert(action).inserted, let refreshed, !refreshed.contains(action) else { return }
-        Self.onMainRunLoop { [weak self] in self?.refresh() }
+    /// Notes that the menus show `action`; false while the checks haven't run for it. An action asked about for the
+    /// first time after the checks were narrowed to those asked before is answered from the model until they run
+    /// again with it, in the next turn.
+    private func ask(_ action: ShortcutAction) -> Bool {
+        if asked.insert(action).inserted, let refreshed, !refreshed.contains(action), !refreshQueued {
+            refreshQueued = true
+            Self.onMainRunLoop { [weak self] in self?.refresh() }
+        }
+        return refreshed?.contains(action) ?? true
     }
 
     private func refresh() {
         guard let model else { return }
+        refreshQueued = false
         #if DEBUG || REDLAMP_PROFILING
             let started = CFAbsoluteTimeGetCurrent()
             defer { MenuBarProbe.shared.refreshed(since: started) }

@@ -38,7 +38,7 @@ struct MenuBarStateTests {
         }
     }
 
-    @Test func `every item's enabled state and checkmark follow the model through moves, a module switch and a group`()
+    @Test func `every item's enabled state and checkmark follow the model through moves, a module switch and a toggle`()
         async throws {
         let fixture = ModuleFixture()
         defer { fixture.cleanUp() }
@@ -58,9 +58,34 @@ struct MenuBarStateTests {
         #expect(menu.shown.module == .library)
         #expect(disagreements(menu, model) == [])
 
-        let group = try #require(ShortcutAction.allCases.first { $0.groupKey != nil && !menu.isChecked($0) })
-        model.perform(group)
-        try await fixture.eventually { menu.isChecked(group) }
+        // Group By's keys but None need a source shown from the library, which the fixture's folder isn't.
+        let toggle = ShortcutAction.autoAdvance
+        #expect(model.canPerform(toggle))
+        let wasOn = menu.isChecked(toggle)
+        model.perform(toggle)
+        defer { model.perform(toggle) }
+        try await fixture.eventually { menu.isChecked(toggle) != wasOn }
+        #expect(menu.isChecked(toggle) != wasOn)
+        #expect(disagreements(menu, model) == [])
+    }
+
+    @Test func `an item asked about once the checks have narrowed to others shows what the model has at once`()
+        async throws {
+        let fixture = ModuleFixture()
+        defer { fixture.cleanUp() }
+        try await fixture.open(count: 3)
+        let model = fixture.model
+        let menu = MenuBarState(model: model)
+        _ = menu.isEnabled(.nextPhoto)
+        model.perform(.nextPhoto)
+        try await fixture.settle()
+
+        let enabled: [ShortcutAction] = [.lightsOut, .copySettings, .previousPhoto]
+        #expect(enabled.allSatisfy(model.canPerform))
+        #expect(enabled.filter { !menu.isEnabled($0) } == [])
+        let group = try #require(ShortcutAction.allCases.first { $0.groupKey == model.libraryViews.groupKey })
+        #expect(menu.isChecked(group))
+        try await fixture.settle()
         #expect(disagreements(menu, model) == [])
     }
 
