@@ -106,10 +106,15 @@ final class FolderHolds: Sendable {
     /// Takes what `wait` asks for once it's free, those that waited for the same folders in the order asked; false
     /// when cancelled first.
     private func begin(_ wait: Wait, cancellable: Bool) async -> Bool {
-        let id = state.withLock { state in
+        let waiter = state.withLock { state -> UInt64? in
+            guard !Self.isFree(wait, in: state) else {
+                Self.take(wait, in: &state)
+                return nil
+            }
             state.last += 1
             return state.last
         }
+        guard let id = waiter else { return true }
         let waiting = {
             await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 let ready = self.state.withLock { state -> Bool? in
