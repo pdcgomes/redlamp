@@ -342,7 +342,9 @@ struct GroupedListTests {
         #expect(diff == PhotoListDiff(removed: IndexSet(integersIn: 1 ... 8), updated: [0]))
         #expect(!grouped.isVisible(viewID(id("a1"))) && grouped.isVisible(viewID(id("b1"))))
     }
+}
 
+extension GroupedListTests {
     // MARK: - Against a model
 
     /// Shoots of photos alone, bursts and raw and JPEG pairs from two cameras into two folders, hours
