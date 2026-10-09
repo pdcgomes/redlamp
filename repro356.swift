@@ -22,6 +22,7 @@ nonisolated(unsafe) var dry = false
 nonisolated(unsafe) var shots = true
 nonisolated(unsafe) var firstWait = 12.0
 nonisolated(unsafe) var laterWait = 8.0
+nonisolated(unsafe) var screenChoice = "main"
 
 func parseArguments() {
     var it = CommandLine.arguments.dropFirst().makeIterator()
@@ -36,6 +37,7 @@ func parseArguments() {
         case "--no-shots": shots = false
         case "--first-wait": firstWait = Double(it.next() ?? "") ?? firstWait
         case "--photos": photosOverride = it.next()
+        case "--screen": screenChoice = it.next() ?? screenChoice
         default: break
         }
     }
@@ -441,7 +443,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSToolbarDelegate {
         log("trusted: ax \(AXIsProcessTrusted()), postEvent \(CGPreflightPostEventAccess()), screenCapture \(CGPreflightScreenCaptureAccess())")
         installObservers()
         log("screens: \(NSScreen.screens.map { "\($0.frame) visible \($0.visibleFrame) @\($0.backingScaleFactor)x" })")
-        let visible = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
+        let others = NSScreen.screens.dropFirst().sorted { $0.frame.width > $1.frame.width }
+        let target = screenChoice == "external" ? (others.first ?? NSScreen.screens[0]) : NSScreen.screens[0]
+        log("editor goes on \(target.localizedName) \(target.frame) @\(target.backingScaleFactor)x")
+        let visible = target.visibleFrame
         let size = NSSize(width: min(1100, visible.width - 40), height: min(760, visible.height - 20))
         let editor = RinglessWindow(
             contentRect: NSRect(origin: .zero, size: size),
@@ -656,9 +661,11 @@ func waitFor(_ seconds: Double, _ cond: () -> Bool) -> Bool {
 
 func screenshot(_ name: String) {
     guard shots else { return }
+    var count: UInt32 = 0
+    CGGetActiveDisplayList(0, nil, &count)
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-    p.arguments = ["-x", "-t", "jpg", "\(outDir)/\(name).jpg"]
+    p.arguments = ["-x", "-t", "jpg"] + (1 ... max(1, Int(count))).map { "\(outDir)/\(name)-d\($0).jpg" }
     do {
         try p.run()
         p.waitUntilExit()

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Round 2: the Redlamp 0.2.7 release itself, driven from outside (drive356), on a photo from the
-# reporter's camera, on the runner's disk and on an exFAT disk image as the reporter's photos are;
-# then the copy of the dialog (repro356) with its photos on the exFAT image. The system log of
-# the app and the open panel's service is kept for the whole run.
+# Round 3: the reporter's setup. Export to starts on a previous destination, Edited, on an exFAT
+# volume with the photo, as theirs does; then the same with two more displays, a 2x main one and
+# a 1x one beside it with the editor on it, as their Mac has. The 0.2.7 release (drive356) and
+# the copy of the dialog (repro356).
 set -u
 cd "$(dirname "$0")"
 OUT="$PWD/out"
@@ -14,37 +14,32 @@ curl -sSL -o redlamp.zip https://github.com/pdcgomes/redlamp/releases/download/v
 ditto -x -k redlamp.zip apps/
 APP="$PWD/apps/Redlamp.app"
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")
-echo "app: $BUNDLE_ID $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
-codesign -dv "$APP" 2>&1 | grep -E "Identifier|TeamIdentifier|flags" | tee "$OUT/codesign.txt"
 defaults write "$BUNDLE_ID" welcome.shown -int 99
 
-mkdir -p Photos/Edited
-curl -sSL -o Photos/P1117458.RW2 "https://raw.pixls.us/getfile.php/7790/nice/Panasonic%20-%20DC-S5M2%20-%2014bit%20%283%3A2%29.RW2"
-shasum -a 256 Photos/P1117458.RW2
-
-hdiutil create -size 200m -fs ExFAT -volname RLPhotos -type UDIF -quiet exfat.dmg
+hdiutil create -size 300m -fs ExFAT -volname RLPhotos -type UDIF -quiet exfat.dmg
 hdiutil attach -quiet exfat.dmg
-mkdir -p /Volumes/RLPhotos/Photos/Edited
-cp Photos/P1117458.RW2 /Volumes/RLPhotos/Photos/
-mount | grep RLPhotos
+PHOTOS=/Volumes/RLPhotos/Photos
+mkdir -p "$PHOTOS/Edited"
+curl -sSL -o "$PHOTOS/P1117458.RW2" "https://raw.pixls.us/getfile.php/7790/nice/Panasonic%20-%20DC-S5M2%20-%2014bit%20%283%3A2%29.RW2"
+shasum -a 256 "$PHOTOS/P1117458.RW2"
+for i in 1 2 3; do sips -s format jpeg -z 400 600 /System/Library/Desktop\ Pictures/*.heic --out "$PHOTOS/Edited/P111745$i-redlamp.jpg" >/dev/null 2>&1 || true; done
+ls -la "$PHOTOS" "$PHOTOS/Edited"
+previous=$(printf '{"destinationFolder":"file://%s/Edited/"}' "$PHOTOS" | xxd -p | tr -d '\n')
+defaults write "$BUNDLE_ID" exportPrevious -data "$previous"
+defaults read "$BUNDLE_ID" exportPrevious | head -c 300; echo
 
-drive() { # <label> <photo> <open>
+drive() { # <label> <screen>
   local dir="$OUT/$1"
   mkdir -p "$dir"
   echo "::group::$1"
-  perl -e 'alarm shift; exec @ARGV' 240 bin/drive356 --app "$APP" --photo "$2" --open "$3" --out "$dir" >"$dir/log.txt" 2>&1
+  perl -e 'alarm shift; exec @ARGV' 240 bin/drive356 --app "$APP" --photo "$PHOTOS/P1117458.RW2" --open key --screen "$2" --out "$dir" >"$dir/log.txt" 2>&1
   echo "exit $?" >>"$dir/log.txt"
-  cat "$dir/log.txt" | cut -c1-600
+  cut -c1-600 "$dir/log.txt"
   echo "::endgroup::"
   grep -h "SUMMARY\|FAIL" "$dir/log.txt" | sed "s/^/$1: /" >>"$OUT/summary.txt" || true
   pkill -9 -x Redlamp 2>/dev/null
   sleep 3
 }
-
-drive app-key "$PWD/Photos/P1117458.RW2" key
-drive app-toolbar "$PWD/Photos/P1117458.RW2" toolbar
-drive app-previous "$PWD/Photos/P1117458.RW2" previous
-drive app-key-again "$PWD/Photos/P1117458.RW2" key
 
 make_bundle() { # <name> <bundle id> <binary>
   local app="$PWD/bundles/$1.app"
@@ -65,14 +60,34 @@ EOF
   codesign --force --sign - "$app" >/dev/null 2>&1
   echo "$app/Contents/MacOS/repro356"
 }
-dir="$OUT/copy-v027-exfat"
-mkdir -p "$dir"
-perl -e 'alarm shift; exec @ARGV' 200 "$(make_bundle exfat app.redlamp.repro356.exfat bin/repro356)" --variant v027 --open key --out "$dir" --photos /Volumes/RLPhotos/Photos >"$dir/log.txt" 2>&1
-grep -h "SUMMARY" "$dir/log.txt" | sed "s/^/copy-v027-exfat: /" >>"$OUT/summary.txt"
 
-drive app-key-exfat /Volumes/RLPhotos/Photos/P1117458.RW2 key
+copy() { # <label> <variant> <screen>
+  local dir="$OUT/$1"
+  mkdir -p "$dir"
+  echo "::group::$1"
+  perl -e 'alarm shift; exec @ARGV' 200 "$(make_bundle "$1" "app.redlamp.repro356.$1" bin/repro356)" --variant "$2" --open key --screen "$3" --photos "$PHOTOS" --out "$dir" >"$dir/log.txt" 2>&1
+  grep -E "launched|screens|editor goes|setter|NSOpenPanel|runModal|panel visible|RESULT|SUMMARY|FAIL|refusing|mapping" "$dir/log.txt" | cut -c1-400 | head -60
+  echo "::endgroup::"
+  grep -h "SUMMARY\|FAIL" "$dir/log.txt" | sed "s/^/$1: /" >>"$OUT/summary.txt" || true
+  sleep 2
+}
 
-log show --start "$START" --info --debug --style compact \
+drive app-edited-1display main
+
+bin/vdisplay 1512x982@2 3440x1440@1 >"$OUT/vdisplay.txt" 2>&1 &
+VD=$!
+sleep 8
+cat "$OUT/vdisplay.txt"
+system_profiler SPDisplaysDataType | sed -n '1,60p' >"$OUT/displays.txt"
+
+copy copy-v027-external v027 external
+copy copy-v026-external v026 external
+drive app-edited-external external
+drive app-edited-main2x main
+copy copy-v027-main2x v027 main
+
+kill $VD
+log show --start "$START" --info --style compact \
   --predicate 'process == "Redlamp" OR process CONTAINS[c] "openAndSavePanel" OR process == "repro356"' \
   >"$OUT/system.log" 2>&1
 wc -l "$OUT/system.log"

@@ -20,6 +20,7 @@ var outDir = "/tmp/drive356"
 var opening = "key"
 var attempts = 3
 var firstWait = 15.0
+var screenChoice = "main"
 do {
     var it = CommandLine.arguments.dropFirst().makeIterator()
     while let a = it.next() {
@@ -30,6 +31,7 @@ do {
         case "--open": opening = it.next() ?? opening
         case "--attempts": attempts = Int(it.next() ?? "") ?? attempts
         case "--first-wait": firstWait = Double(it.next() ?? "") ?? firstWait
+        case "--screen": screenChoice = it.next() ?? screenChoice
         default: break
         }
     }
@@ -46,9 +48,11 @@ func waitFor(_ seconds: Double, every: UInt32 = 50000, _ cond: () -> Bool) -> Bo
 }
 
 func screenshot(_ name: String) {
+    var count: UInt32 = 0
+    CGGetActiveDisplayList(0, nil, &count)
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-    p.arguments = ["-x", "-t", "jpg", "\(outDir)/\(name).jpg"]
+    p.arguments = ["-x", "-t", "jpg"] + (1 ... max(1, Int(count))).map { "\(outDir)/\(name)-d\($0).jpg" }
     try? p.run()
     p.waitUntilExit()
 }
@@ -227,6 +231,22 @@ screenshot("0-launched")
 guard editorUp else { exit(2) }
 Thread.sleep(forTimeInterval: 4)
 log("windows: \(axWindowTitles(pid))")
+var ids = [CGDirectDisplayID](repeating: 0, count: 8)
+var displayCount: UInt32 = 0
+CGGetActiveDisplayList(8, &ids, &displayCount)
+let displays = ids.prefix(Int(displayCount)).map { ($0, CGDisplayBounds($0), CGDisplayPixelsWide($0)) }
+log("displays: main \(CGMainDisplayID()); " + displays.map { "\($0.0) \($0.1) \($0.2) px wide" }.joined(separator: "; "))
+if screenChoice == "external", let external = displays.filter({ $0.0 != CGMainDisplayID() }).max(by: { $0.1.width < $1.1.width }) {
+    let app = AXUIElementCreateApplication(pid)
+    var v: CFTypeRef?
+    if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &v) == .success, let ws = v as? [AXUIElement],
+       let editor = ws.first(where: { axString($0, kAXTitleAttribute)?.hasPrefix(photoName) == true }) {
+        var point = CGPoint(x: external.1.minX + 60, y: external.1.minY + 60)
+        let r = AXUIElementSetAttributeValue(editor, kAXPositionAttribute as CFString, AXValueCreate(.cgPoint, &point)!)
+        Thread.sleep(forTimeInterval: 1)
+        log("moved the editor to display \(external.0): \(r.rawValue), now at \(axFrame(editor).map { "\($0)" } ?? "?")")
+    }
+}
 frontmost(pid)
 Thread.sleep(forTimeInterval: 1)
 
