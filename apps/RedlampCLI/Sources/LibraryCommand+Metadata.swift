@@ -28,7 +28,8 @@ extension LibraryCommand {
            redlamp library metadata presets remove <name> --index <path>
            redlamp library metadata undo --index <path> [--dry-run] [--json]
            redlamp library stacks stack <query> --index <path> [--top <name>] [--dry-run] [--json]
-           redlamp library stacks unstack|top <query> --index <path> [--dry-run] [--json]
+           redlamp library stacks unstack|remove|split|top <query> --index <path> [--dry-run] [--json]
+           redlamp library stacks move <query> --index <path> --by <places> [--dry-run] [--json]
 
     A capture time is the camera's, by its clock, with the shift its sidecar gives it; the photo's file is
     never changed. shift --by adds an amount (+1h30m, -90s, 2d, -05:00, or seconds) to each photo's; --to
@@ -96,6 +97,7 @@ extension LibraryCommand {
                 object["stack"] = photo.row.stack.map { stack -> [String: Any] in
                     var object: [String: Any] = ["top": stack.top]
                     object["id"] = stack.id?.uuidString
+                    object["position"] = stack.position
                     return object
                 }
                 object["otherApps"] = photo.row.otherFields.map(\.rawValue).sorted()
@@ -148,7 +150,10 @@ extension LibraryCommand {
             parts.append("collections " + collections.joined(separator: ", "))
         }
         if let stack = row.stack {
-            parts.append(stack.id.map { "stack \($0.uuidString)\(stack.top ? ", its top" : "")" } ?? "its burst's top")
+            let place = stack.position.map { ", place \($0 + 1)" } ?? ""
+            parts
+                .append(stack.id
+                    .map { "stack \($0.uuidString)\(stack.top ? ", its top" : "")\(place)" } ?? "its burst's top")
         }
         if row.captureShift != 0, let captured = row.captured {
             parts.append("taken \(CaptureTimeChange.describe(time: captured)), shifted "
@@ -504,14 +509,22 @@ extension LibraryCommand {
     // MARK: - Stacks
 
     /// The verbs `redlamp library stacks` hands here.
-    static let stackVerbs: Set = ["stack", "unstack", "top"]
+    static let stackVerbs: Set = ["stack", "unstack", "remove", "split", "move", "top"]
 
-    /// `stacks stack`, `unstack` and `top`: manual stacks of the photos a query finds.
+    /// `stacks stack`, `unstack`, `remove`, `split`, `move` and `top`: manual stacks of the photos a query finds,
+    /// as Lightroom Classic's Stacking has them.
     static func stackChange(_ arguments: [String]) async throws {
         let verb = arguments.first ?? ""
-        let options = try Arguments(arguments.dropFirst(), valued: ["--index", "--top"])
+        let options = try Arguments(arguments.dropFirst(), valued: ["--index", "--top", "--by"])
         guard let path = options.value("--index"), !options.positional.isEmpty else {
             throw CLIError(description: "stacks \(verb) needs a query and --index\n\n\(metadataUsage)")
+        }
+        var places: Int?
+        if verb == "move" {
+            guard let by = options.value("--by"), let offset = Int(by), offset != 0 else {
+                throw CLIError(description: "stacks move needs --by, a whole number of places other than 0")
+            }
+            places = offset
         }
         let query = try metadataQuery(options.positional.joined(separator: " "))
         try await withMetadata(path) { metadata in
@@ -532,6 +545,9 @@ extension LibraryCommand {
                 }
                 change = .stack(ids, top: top)
             case "unstack": change = .unstack(ids)
+            case "remove": change = .remove(ids)
+            case "split": change = .split(before: first)
+            case "move": change = .move(first, by: places ?? 0)
             default: change = .top(first)
             }
             try await planned(metadata.plan(change, in: stacks), metadata: metadata, options: options)

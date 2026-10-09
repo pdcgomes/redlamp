@@ -156,29 +156,31 @@ public extension LibraryMetadata {
     func plan(_ change: StackChange, in stacks: Stacks) async throws -> MetadataPlan {
         let current = try await index.read { try StackChoices($0) }
         var choices = current
-        let (title, changed): (String, [Int64]) = switch change {
+        let title: String
+        let changed: [Int64]
+        switch change {
         case let .stack(ids, top):
-            ("Stack \(Self.count(ids.count))", choices.stack(ids, top: top, in: stacks))
+            (title, changed) = ("Stack \(Self.count(ids.count))", choices.stack(ids, top: top, in: stacks))
         case let .unstack(ids):
-            ("Unstack \(Self.count(ids.count))", choices.unstack(ids, in: stacks))
+            changed = choices.unstack(ids, in: stacks)
+            title = "Unstack \(Self.count(Set(changed).count))"
         case let .remove(ids):
-            (
-                "Remove \(Self.count(ids.count)) from \(ids.count == 1 ? "its stack" : "their stacks")",
-                choices.remove(ids, in: stacks),
-            )
+            changed = choices.remove(ids, in: stacks)
+            title = "Remove \(Self.count(ids.count)) from \(ids.count == 1 ? "its stack" : "their stacks")"
         case let .split(id):
-            ("Split a stack", choices.split(before: id, in: stacks))
+            (title, changed) = ("Split a stack", choices.split(before: id, in: stacks))
         case let .move(id, offset, shown):
-            (
-                "Move a photo \(offset < 0 ? "up" : "down") its stack",
-                choices.move(id, by: offset, among: shown, in: stacks),
-            )
+            changed = choices.move(id, by: offset, among: shown, in: stacks)
+            title = "Move a photo \(offset < 0 ? "up" : "down") its stack"
         case let .place(ids, target):
-            ("Move \(Self.count(ids.count)) in their stack", choices.place(ids, at: target, in: stacks))
+            (title, changed) = (
+                "Move \(Self.count(ids.count)) in their stack",
+                choices.place(ids, at: target, in: stacks),
+            )
         case let .top(id):
-            ("Show a photo for its stack", choices.setTop(id, in: stacks))
+            (title, changed) = ("Show a photo for its stack", choices.setTop(id, in: stacks))
         case let .reset(ids):
-            ("Forget the stacks of \(Self.count(ids.count))", choices.reset(ids, in: stacks))
+            (title, changed) = ("Forget the stacks of \(Self.count(ids.count))", choices.reset(ids, in: stacks))
         }
         var batch = MetadataBatch(kind: .stacks, title: title)
         let ids = Array(Set(changed)).sorted()

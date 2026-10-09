@@ -43,7 +43,9 @@ enum LibraryCommand {
            redlamp library keywords delete <keyword>… --index <path> [--dry-run]
            redlamp library keywords undo --index <path>
            redlamp library stacks --index <path> [<query>] [--kind pairs|bursts|focus|manual] [--json]
-           redlamp library stacks stack|unstack|top <query> --index <path> [--top <name>] [--dry-run] [--json]
+           redlamp library stacks stack|unstack|remove|split|top <query> --index <path> [--top <name>] [--dry-run]
+                                  [--json]
+           redlamp library stacks move <query> --index <path> --by <places> [--dry-run] [--json]
            redlamp library groups --index <path> [<query>] [--collection <name or path>]
                                   [--by none|moment|day|folder|camera|lens|orientation|moment-camera]
                                   [--tighter <n> | --looser <n>] [--sort captured|name|rating|edited|modified|size]
@@ -152,9 +154,11 @@ enum LibraryCommand {
                focus-stack suggestions from capture settings, which the app confirms from thumbnails, and the
                manual stacks the index keeps. Prints each with its photos' paths, the top photo first, then how
                many of each it found and how long that took. <query> keeps the stacks holding a photo it
-               finds; --kind keeps one kind; --json prints JSON. stack, unstack and top make a manual stack
-               of the photos <query> finds (--top names the one shown), take them out of theirs, or show
-               the first for its stack, each photo's .redlamp keeping its place.
+               finds; --kind keeps one kind; --json prints JSON. stack makes a manual stack of the photos
+               <query> finds (--top names the one shown); unstack takes apart the stacks holding them, remove
+               takes them out of theirs; split splits the stack holding the first before it, top shows it for
+               its stack, and move moves it --by places down its stack (up when negative), the stack's order
+               then kept. Each photo's .redlamp keeps its place, a raw and its JPEG going together.
       groups   groups the photos <query> finds (every photo without one), or a collection's with --collection,
                in their order (--sort, as search has it): by moment, the default (photos taken together, a new
                moment starting at a pause longer than 60 s and four times the pace of the photos around it, the
