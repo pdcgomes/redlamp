@@ -3,7 +3,7 @@
   "description": "The camera coverage set: one CC0 sample per main camera maker and format from raw.pixls.us, beside the development samples in tests/fixtures/raw. `mise run fixtures` downloads them into tests/fixtures/cameras (never committed) and checks each file's SHA-256; the decode regression suite and the camera colour goldens check every one.",
   "gaps": [
     "Nikon's High Efficiency NEFs (HE and HE*, from the Z 8, Z 9, Z 6III, Z f, Z5 II and Z50 II) can't be decoded: LibRaw 0.22 reads only standard compression. They are refused as not supported yet (CAM-12).",
-    "Bodies newer than LibRaw 0.22.2: the Sony A7 V is refused; the Sony A1 II decodes with a black strip along the bottom.",
+    "Sony's 15-bit YCbCr ARWs (the A1 II's, the RX1R III's, the FX2's) render with a magenta cast (CAM-21).",
     "No CC0 samples of the Leica M11, SL3 or Q3, or of iPhones after the 12 Pro.",
     "Sigma's Foveon X3F files, GoPro's GPR and JPEG XL mosaic DNGs aren't supported."
   ],

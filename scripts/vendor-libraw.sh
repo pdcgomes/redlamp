@@ -82,10 +82,18 @@ rm -rf "$HEADERS"
 mkdir -p "$HEADERS/LibRaw"
 cp "$SRC"/libraw/*.h "$HEADERS/LibRaw/"
 cp "$SHIM" "$HEADERS/LibRaw/"
+# A commit between releases reports the last release's number, so the pin says which one it is.
+cat > "$HEADERS/LibRaw/redlamp_libraw_pin.h" <<EOF
+#ifndef REDLAMP_LIBRAW_PIN_H
+#define REDLAMP_LIBRAW_PIN_H
+static inline const char *rl_libraw_pin(void) { return "$VERSION"; }
+#endif
+EOF
 cat > "$HEADERS/LibRaw/module.modulemap" <<'EOF'
 module LibRaw {
     header "libraw.h"
     header "redlamp_libraw.h"
+    header "redlamp_libraw_pin.h"
     link "c++"
     link "z"
     export *

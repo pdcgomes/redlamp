@@ -15,9 +15,13 @@ public extension ImageDecoder {
         SupportedFormats.isRaw(url) ? RawDecoder.identify(file, url: url) : nil
     }
 
-    /// "LibRaw 0.22.2".
+    /// "LibRaw 0.22.2-Release", or for a commit between releases, which still reports the last
+    /// release's number, "LibRaw 0.22.0-Release (7bfffe2)".
     static var rawDecoderVersion: String {
-        "LibRaw \(String(cString: libraw_version()))"
+        let reported = "LibRaw \(String(cString: libraw_version()))"
+        let pin = String(cString: rl_libraw_pin())
+        let isCommit = pin.count == 40 && pin.allSatisfy(\.isHexDigit)
+        return isCommit ? "\(reported) (\(pin.prefix(7)))" : reported
     }
 }
 

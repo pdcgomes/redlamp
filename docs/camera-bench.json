@@ -2,8 +2,8 @@
  "format": 1,
  "description": "The camera bench's evidence per camera mode (docs/camera-bench.md), written by scripts/camera-bench.py.",
  "thresholds": "DEC-28 (proposed)",
- "decoder": "LibRaw 0.22.2",
- "generated": "2026-10-07",
+ "decoder": "LibRaw 7bfffe2efa508da00c0d8af299c37cd426a4528d",
+ "generated": "2026-10-09",
  "modes": [
   {
    "key": "Apple|iPhone10,1 back camera|lossless_dng_load_raw|16|4032x3024",
@@ -37429,6 +37429,187 @@
    ]
   },
   {
+   "key": "Panasonic|DC-S5M2|panasonicC8_load_raw|14|12008x8008",
+   "camera": "Panasonic DC-S5M2",
+   "label": "14-bit compressed RW2, 12008 × 8008",
+   "tier": "verified",
+   "verified": true,
+   "contributors": 1,
+   "photos": 1,
+   "conditions": [],
+   "needs": [
+    "baseISO",
+    "highISO",
+    "portrait",
+    "clippedHighlights",
+    "warmLight"
+   ],
+   "answers": {},
+   "checks": {
+    "decode.black": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    }
+   },
+   "problems": [],
+   "decoders": [
+    "LibRaw 0.22.2-Release"
+   ],
+   "redlamp": [
+    "0.2.6-prealpha"
+   ]
+  },
+  {
+   "key": "Panasonic|DC-S5M2|panasonicC8_load_raw|14|6008x4008",
+   "camera": "Panasonic DC-S5M2",
+   "label": "14-bit compressed RW2, 6008 × 4008",
+   "tier": "verified",
+   "verified": true,
+   "contributors": 1,
+   "photos": 13,
+   "conditions": [
+    "baseISO",
+    "highISO",
+    "portrait",
+    "clippedHighlights",
+    "warmLight"
+   ],
+   "needs": [],
+   "answers": {
+    "brightness": 2
+   },
+   "checks": {
+    "decode.black": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 5,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 13,
+     "warn": 0,
+     "fail": 0
+    }
+   },
+   "problems": [],
+   "decoders": [
+    "LibRaw 0.22.2-Release"
+   ],
+   "redlamp": [
+    "0.2.6-prealpha"
+   ]
+  },
+  {
    "key": "Panasonic|DC-S5M2X|panasonicC8_load_raw|14|6008x4008",
    "camera": "Panasonic DC-S5M2X",
    "label": "14-bit compressed RW2, 6008 × 4008",
@@ -54748,10 +54929,10 @@
    ]
   },
   {
-   "key": "SONY|ILCE-7M5|refused|-|0x0",
-   "camera": "SONY ILCE-7M5",
-   "label": "refused ARW",
-   "tier": "unconfirmed",
+   "key": "Sony|ILCE-7M5|sony_arw6_load_raw|14|4640x3088",
+   "camera": "Sony ILCE-7M5",
+   "label": "14-bit sony_arw6 ARW, 4640 × 3088",
+   "tier": "working",
    "verified": false,
    "contributors": 1,
    "photos": 1,
@@ -54766,23 +54947,75 @@
    ],
    "answers": {},
    "checks": {
-    "decode.opens": {
-     "pass": 0,
+    "decode.black": {
+     "pass": 1,
      "warn": 0,
-     "fail": 1
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
     }
    },
-   "problems": [
-    {
-     "check": "decode.opens",
-     "summary": "This body needs a newer LibRaw than 0.22.2.",
-     "tracker": "CAM-13",
-     "contributors": 1,
-     "photos": 1
-    }
-   ],
+   "problems": [],
    "decoders": [
-    "LibRaw 0.22.2-Release"
+    "LibRaw 0.22.0-Release (7bfffe2)"
    ],
    "redlamp": [
     "development"

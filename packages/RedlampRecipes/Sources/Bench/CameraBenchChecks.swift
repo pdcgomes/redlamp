@@ -48,26 +48,17 @@ public enum CameraBenchChecks {
     }
 
     /// Refusals a tracker row already covers: the formats Redlamp refuses itself name their row.
-    static func knownLimitation(_ identity: RawFileIdentity, error: any Error) -> (tracker: String, summary: String)? {
+    static func knownLimitation(_: RawFileIdentity, error: any Error) -> (tracker: String, summary: String)? {
         switch (error as? EngineError)?.notSupportedYetTracker {
         case "CAM-12":
-            return ("CAM-12", "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.")
+            ("CAM-12", "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.")
         case "CAM-10":
-            return ("CAM-10", "JPEG XL mosaic DNGs don't open yet.")
+            ("CAM-10", "JPEG XL mosaic DNGs don't open yet.")
         case let tracker?:
-            return (tracker, error.localizedDescription)
+            (tracker, error.localizedDescription)
         case nil:
-            break
+            nil
         }
-        let make = (identity.normalizedMake ?? identity.make ?? "").lowercased()
-        let model = (identity.normalizedModel ?? identity.model ?? "").uppercased().replacingOccurrences(
-            of: " ",
-            with: "",
-        )
-        if make.contains("sony"), ["ILCE-7M5", "ILCE-1M2"].contains(where: { model.hasSuffix($0) }) {
-            return ("CAM-13", "This body needs a newer LibRaw than 0.22.2.")
-        }
-        return nil
     }
 
     // MARK: - The decode

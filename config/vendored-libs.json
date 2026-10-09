@@ -1,8 +1,8 @@
 {
   "LibRaw": {
-    "version": "0.22.2",
+    "version": "7bfffe2efa508da00c0d8af299c37cd426a4528d",
     "license": "CDDL-1.0 (LibRaw is dual-licensed LGPL-2.1 / CDDL-1.0; Redlamp uses it under CDDL-1.0)",
-    "url": "https://github.com/LibRaw/LibRaw/archive/refs/tags/0.22.2.tar.gz",
-    "sha256": "627928088300ecde6ca91ffd202e189203f04ad61ad12f0fe9dc57b9a7a0fb3c"
+    "url": "https://github.com/LibRaw/LibRaw/archive/7bfffe2efa508da00c0d8af299c37cd426a4528d.tar.gz",
+    "sha256": "f155da0ae8120935bb3045b417f9da366170467210b2298ff22b95bfb98986e2"
   }
 }

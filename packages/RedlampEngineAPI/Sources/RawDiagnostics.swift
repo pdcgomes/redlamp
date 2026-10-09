@@ -90,7 +90,7 @@ public struct RawFileIdentity: Codable, Sendable, Hashable {
 }
 
 /// Lines along each edge of the image area that stay at the black level while the image
-/// inside doesn't: a strip the decoder left empty, such as the Sony A1 II's (CAM-13).
+/// inside doesn't: a strip the decoder left empty, such as LibRaw 0.22.2 left along the Sony A1 II's.
 public struct DarkEdges: Codable, Sendable, Hashable {
     public var top: Int
     public var bottom: Int
