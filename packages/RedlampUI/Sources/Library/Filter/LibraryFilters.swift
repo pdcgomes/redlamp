@@ -70,9 +70,15 @@ public final class LibraryFilters {
     @ObservationIgnored private var findingRemoval: Task<Void, Never>?
     @ObservationIgnored private var findingSuggestion: Task<Void, Never>?
     /// The search for a suggestion for the query last handed to the list, started with it (`suggest`).
-    @ObservationIgnored private var suggesting: (
-        query: LibraryQuery, photos: PhotoSource, moments: MomentSetting, task: Task<QuerySuggestion?, Never>,
-    )?
+    @ObservationIgnored private var suggesting: Suggesting?
+
+    private struct Suggesting {
+        let query: LibraryQuery
+        let photos: PhotoSource
+        let moments: MomentSetting
+        let task: Task<QuerySuggestion?, Never>
+    }
+
     @ObservationIgnored private var countAgain = false
     @ObservationIgnored private var lastChange = ContinuousClock.now
     /// The text has the keyboard: the active photo stays as it is until it's given back.
@@ -189,9 +195,11 @@ public final class LibraryFilters {
         read()
         changed()
     }
+}
 
+public extension LibraryFilters {
     /// Another filter for the source: a preset's, or the bar's attributes and columns.
-    public func setFilter(_ filter: LibraryFilter) {
+    func setFilter(_ filter: LibraryFilter) {
         guard filter != self.filter else { return }
         self.filter = filter
         read()
@@ -199,18 +207,18 @@ public final class LibraryFilters {
     }
 
     /// The rules the bar's attributes and columns change: the text becomes what they write.
-    public func edit(_ change: (QueryRules) -> QueryRules) {
+    func edit(_ change: (QueryRules) -> QueryRules) {
         setFilter(filter.with(change(rules)))
     }
 
     /// The query's rules as the bar's attributes and columns show them: while the text has an error,
     /// those of what it last read as.
-    public var rules: QueryRules {
+    var rules: QueryRules {
         error == nil ? filter.rules : applied.map(QueryRules.init) ?? QueryRules()
     }
 
     /// The filter on or off (⌘L), keeping it.
-    public func setEnabled(_ enabled: Bool) {
+    func setEnabled(_ enabled: Bool) {
         guard enabled != filter.isEnabled else { return }
         filter.isEnabled = enabled
         if enabled, filter.sections.isEmpty {
@@ -221,7 +229,7 @@ public final class LibraryFilters {
 
     /// A section of the bar shown or hidden; `adding` (⇧-click) keeps the others. None hides them all
     /// and turns the filter off.
-    public func show(_ section: FilterSection?, adding: Bool = false) {
+    func show(_ section: FilterSection?, adding: Bool = false) {
         var next = filter
         if let section {
             if adding {
@@ -237,13 +245,13 @@ public final class LibraryFilters {
         setFilter(next)
     }
 
-    public func setColumns(_ columns: [FacetColumn]) {
+    func setColumns(_ columns: [FacetColumn]) {
         var next = filter
         next.columns = Array(columns.prefix(LibraryFilter.maxColumns))
         setFilter(next)
     }
 
-    public func setSort(_ sort: LibrarySort) {
+    func setSort(_ sort: LibrarySort) {
         guard sort != self.sort else { return }
         self.sort = sort
         changed()
@@ -251,7 +259,7 @@ public final class LibraryFilters {
 
     /// The source shown finds its moments with `setting` (LIB-41): a filter with `is:unpicked-moment` is
     /// handed to the source's list again, and counted again.
-    public func setMoments(_ setting: MomentSetting) {
+    func setMoments(_ setting: MomentSetting) {
         guard setting != moments else { return }
         moments = setting
         guard filter.isEnabled, applied?.findsMoments == true else { return }
@@ -260,13 +268,13 @@ public final class LibraryFilters {
     }
 
     /// Keeps the filter as sources change, or lets each source have its own again.
-    public func setLocked(_ locked: Bool) {
+    func setLocked(_ locked: Bool) {
         guard locked != isLocked else { return }
         isLocked = locked
         remember()
     }
 
-    public func setBarShown(_ shown: Bool) {
+    func setBarShown(_ shown: Bool) {
         guard shown != isBarShown else { return }
         isBarShown = shown
         remember()
@@ -277,7 +285,7 @@ public final class LibraryFilters {
     }
 
     /// Clears the query, keeping the sections and columns.
-    public func clear() {
+    func clear() {
         var next = filter
         next.text = ""
         setFilter(next)
@@ -332,16 +340,16 @@ public final class LibraryFilters {
     // MARK: - Presets
 
     /// The preset the filter is, if it's one.
-    public var preset: FilterPreset? {
+    var preset: FilterPreset? {
         presets.first { $0.matches(filter) }
     }
 
-    public func choose(_ preset: FilterPreset) {
+    func choose(_ preset: FilterPreset) {
         setFilter(preset.filter)
     }
 
     /// Saves the filter as a preset called `name`, replacing the user's preset of that name.
-    public func save(as name: String) {
+    func save(as name: String) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, !FilterPreset.builtIn.contains(where: { $0.name == name }) else { return }
         presets.removeAll { !$0.isBuiltIn && $0.name == name }
@@ -349,7 +357,7 @@ public final class LibraryFilters {
         savePresets()
     }
 
-    public func delete(_ preset: FilterPreset) {
+    func delete(_ preset: FilterPreset) {
         guard !preset.isBuiltIn else { return }
         presets.removeAll { $0.id == preset.id }
         savePresets()
@@ -369,7 +377,7 @@ public final class LibraryFilters {
     // MARK: - What the library listed
 
     /// The library handed over the source's filtered or sorted list.
-    func listed(_ listing: LibraryListing) {
+    internal func listed(_ listing: LibraryListing) {
         listings += 1
         lastListed = LibraryListFilterSummary(
             query: listing.filter.query, sort: listing.filter.sort, reversed: listing.filter.reversed,
@@ -437,7 +445,7 @@ public final class LibraryFilters {
         let task = Task.detached(priority: .userInitiated) {
             try? await engine.suggestion(for: query, in: photos, moments: moments)
         }
-        suggesting = (query, photos, moments, task)
+        suggesting = Suggesting(query: query, photos: photos, moments: moments, task: task)
     }
 
     /// The filter changed: the offers, and the search for them, go.
@@ -454,7 +462,7 @@ public final class LibraryFilters {
     }
 
     /// Puts the name the bar offers in the misspelt word's place.
-    public func takeSuggestion() {
+    func takeSuggestion() {
         guard let suggestion else { return }
         edit { rules in
             guard rules.rules.indices.contains(suggestion.index),
@@ -468,7 +476,7 @@ public final class LibraryFilters {
     }
 
     /// Takes the term the bar offers out of the filter.
-    public func takeOutRemoval() {
+    func takeOutRemoval() {
         guard let removal else { return }
         edit { rules in
             guard rules.rules.indices.contains(removal.index), rules.rules[removal.index] == removal.rule else {
@@ -482,7 +490,7 @@ public final class LibraryFilters {
 
     /// Counts the metadata columns again, once what's under way is done: when the source's photos
     /// change, or the columns are shown.
-    public func countColumns() {
+    func countColumns() {
         guard isBarShown, filter.sections.contains(.metadata), let photos, let engine = service?.engine else { return }
         guard counting == nil else {
             countAgain = true
@@ -517,7 +525,7 @@ public final class LibraryFilters {
     }
 
     /// Each column's request: the filter without the choices of this column and those after it.
-    func columnRequests() -> [FacetColumnRequest] {
+    internal func columnRequests() -> [FacetColumnRequest] {
         let rules = filter.isEnabled ? rules : QueryRules()
         return filter.columns.indices.map { index in
             var narrowed = rules
@@ -532,12 +540,12 @@ public final class LibraryFilters {
 
     /// The photos completion counts a trait's or an orientation's among, and the setting `is:unpicked-moment`
     /// finds their moments with: the source's, as the bar shows it, for the bar and the palette alike (LIB-19).
-    var completionScope: (photos: PhotoSource, moments: MomentSetting) {
+    internal var completionScope: (photos: PhotoSource, moments: MomentSetting) {
         (photos ?? .allPhotographs, moments)
     }
 
     /// Offers what the term ending at `cursor` in `text` could be: a field, or a value from the index.
-    public func complete(_ text: String, cursor: Int) {
+    func complete(_ text: String, cursor: Int) {
         completing?.cancel()
         guard let term = FilterTerm(text, cursor: cursor), let engine = service?.engine else {
             completions = []
@@ -554,7 +562,7 @@ public final class LibraryFilters {
         }
     }
 
-    public func endCompletion() {
+    func endCompletion() {
         completing?.cancel()
         completions = []
         completionRange = nil

@@ -280,7 +280,9 @@ final class LibraryFilterBarView: NSView, NSTextFieldDelegate {
         }
         placeCompletions()
     }
+}
 
+extension LibraryFilterBarView {
     /// The completions under the text, in the view that holds the bar.
     private func placeCompletions() {
         guard let host = completions.superview else { return }
