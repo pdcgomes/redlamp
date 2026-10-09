@@ -177,6 +177,70 @@ struct QueryDamagedTests {
         #expect(try await cards.paths(engine.ids("is:damaged")) == (Self.found + ["Cards/Kept.jpg"]).sorted())
     }
 
+    @Test func `the term's photos are the check's, found without its findings' rows, paths or order`() async throws {
+        let cards = try await Cards.make()
+        defer { cards.remove() }
+        let engine = cards.health.engine
+        try await engine.load()
+        // The file that can't be read has no content key: Keep Anyway keeps it by its path, size and date.
+        let found = try await cards.health.findings(.damaged)
+        try await cards.health.keepAnyway([#require(cards.ids["Cards/Unreadable.jpg"])], in: found)
+        #expect(try await cards.paths(engine.ids("is:damaged")) == ["Cards/Cut.jpg", "Cards/Empty.jpg"])
+        let checker = HealthChecker(index: cards.sandbox.index, paths: cards.sandbox.paths)
+        let store = try #require(engine.snapshot()?.0)
+        for store in [store, nil] {
+            let checked = try await checker.damaged(store: store).photos.sorted()
+            #expect(try await checker.damagedPhotos(store: store).photos == checked, "with a store: \(store != nil)")
+            let among = try await checker.damagedPhotos(store: store, among: Array(cards.ids.values)).photos
+            #expect(among == checked, "among every photo, with a store: \(store != nil)")
+        }
+        // And with nothing kept anyway, the photos still being written left out.
+        let kept = try await cards.health.keptAnyway().map(\.kept)
+        try await cards.health.takeBack(kept)
+        let checked = try await checker.damaged(store: nil).photos.sorted()
+        #expect(cards.paths(checked) == (Self.found + ["Cards/Kept.jpg"]).sorted())
+        let lean = try await checker.damagedPhotos(store: nil)
+        #expect(lean.photos == checked && lean.keptAnyway.isEmpty)
+        let now = Date()
+        #expect(
+            lean.settles.map { $0 > now && $0 <= now + HealthChecker.settling } == true,
+            "Copying/Now.jpg's minute",
+        )
+    }
+
+    @Test func `the term's photos are kept across changes to the store, the photos changed looked at again`(
+    ) async throws {
+        let cards = try await Cards.make()
+        defer { cards.remove() }
+        let (engine, index) = (cards.health.engine, cards.sandbox.index)
+        try await engine.load()
+        #expect(try await cards.paths(engine.ids("is:damaged")) == Self.found)
+        let good = try #require(cards.ids["Cards/Good.jpg"])
+        func health(_ damage: PhotoHealth.Damage?) async throws {
+            try await index.write { writer in
+                let row = try #require(try writer.photo(id: good))
+                try writer.setHealth(
+                    damage.map { PhotoHealth(size: row.size, modified: row.modified, damage: $0) }, forPhoto: good,
+                    name: row.name,
+                )
+            }
+            try await engine.update(photos: [good])
+        }
+        // A rating on a photo it doesn't find leaves them as they were; the photo found empty when it's read again is
+        // among them, and once it's whole again it isn't.
+        try await index.write { try $0.setOrganising([.rating(3)], forPhotos: [good]) }
+        try await engine.update(photos: [good])
+        #expect(try await cards.paths(engine.ids("is:damaged")) == Self.found)
+        try await health(.empty)
+        #expect(try await cards.paths(engine.ids("is:damaged")) == (Self.found + ["Cards/Good.jpg"]).sorted())
+        try await health(nil)
+        #expect(try await cards.paths(engine.ids("is:damaged")) == Self.found)
+        // Keep Anyway changes no photo's row: the term finds its photos again.
+        let found = try await cards.health.findings(.damaged)
+        try await cards.health.keepAnyway([#require(cards.ids["Cards/Cut.jpg"])], in: found)
+        #expect(try await cards.paths(engine.ids("is:damaged")) == ["Cards/Empty.jpg", "Cards/Unreadable.jpg"])
+    }
+
     @Test func `before the store is ready, a search with the term waits for it rather than ask SQL`() async throws {
         let cards = try await Cards.make()
         defer { cards.remove() }

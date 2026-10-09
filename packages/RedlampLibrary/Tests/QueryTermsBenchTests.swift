@@ -68,6 +68,34 @@ struct QueryTermsBenchTests {
         Self.report("is:damaged, searched again: \(Self.spread(again))")
         Self.report("All Photographs filtered by is:damaged: \(Self.spread(lists))")
 
+        // The first search after a change to a photo the term doesn't find, as rating one in the grid makes; and the
+        // damaged files check's findings worked out in the same store, which the term's first search waited for
+        // before it found its photos alone.
+        let changing = QueryEngine(index: index, saving: nil)
+        try await changing.load()
+        let damagedIDs = try await Set(changing.ids("is:damaged"))
+        let others = try await index.read { reader in
+            try reader.database.prepare("SELECT id FROM photos WHERE id % 89 = 1 LIMIT 40").map { $0.int64(at: 0) }
+        }.filter { !damagedIDs.contains($0) }
+        var changed: [Duration] = []
+        var checks: [Duration] = []
+        let checker = HealthChecker(index: index, paths: LibraryPaths(root: index.url.deletingLastPathComponent()))
+        for (round, photo) in others.enumerated() {
+            try await index.write { try $0.setOrganising([.rating(round % 5 + 1)], forPhotos: [photo]) }
+            try await changing.update(photos: [photo])
+            var started = clock.now
+            let ids = try await changing.results(damaged).last?.count ?? 0
+            changed.append(clock.now - started)
+            #expect(ids == found)
+            let store = try #require(changing.snapshot()?.0)
+            started = clock.now
+            let checked = try await checker.damaged(store: store)
+            _ = store.rows(withIDs: checked.photos)
+            checks.append(clock.now - started)
+        }
+        Self.report("is:damaged, the first search after a photo it doesn't find changed: \(Self.spread(changed))")
+        Self.report("the damaged files check's findings worked out in that store: \(Self.spread(checks))")
+
         // Typed a character at a time, as the filter bar's text and the palette's search are.
         let engine = QueryEngine(index: index, saving: nil)
         try await engine.load()

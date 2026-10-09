@@ -40,6 +40,11 @@ protocol QuerySource: Sendable {
     func applying(_ ids: [Int64], to store: ColumnStore) async throws -> ColumnStore
     /// What Library Health's `check` finds among `store`'s photos (LIB-40).
     func healthFindings(_ check: HealthCheck, store: ColumnStore) async throws -> HealthFindings
+    /// The photos the damaged files check finds among `store`'s, or among those of `ids` when it's given, without
+    /// their findings (`is:damaged`).
+    func damagedPhotos(store: ColumnStore, among ids: [Int64]?) async throws -> DamagedPhotos
+    /// The damaged files check's findings kept anyway, which decide with the photos which it finds.
+    func keptDamaged() async throws -> [KeptAnyway]
     /// Photos `ids` that can be in a raw and JPEG pair, or every one when nil (LIB-40).
     func pairPhotos(of ids: [Int64]?) async throws -> [HealthPairs.Photo]
     /// What the pairs check finds under `rule` among `store`'s photos, judging only what changed in
@@ -115,6 +120,19 @@ extension QuerySource {
 
     func healthFindings(_ check: HealthCheck, store _: ColumnStore) async throws -> HealthFindings {
         HealthFindings(check: check)
+    }
+
+    func damagedPhotos(store: ColumnStore, among ids: [Int64]?) async throws -> DamagedPhotos {
+        var photos = try await healthFindings(.damaged, store: store).photos.sorted()
+        if let ids {
+            let among = Set(ids)
+            photos = photos.filter(among.contains)
+        }
+        return DamagedPhotos(photos: photos, keptAnyway: [], settles: nil)
+    }
+
+    func keptDamaged() async throws -> [KeptAnyway] {
+        []
     }
 
     func pairPhotos(of _: [Int64]?) async throws -> [HealthPairs.Photo] {
@@ -541,6 +559,14 @@ struct IndexQuerySource: QuerySource {
 
     func healthFindings(_ check: HealthCheck, store: ColumnStore) async throws -> HealthFindings {
         try await HealthChecker(index: index, paths: paths).findings(check, store: store)
+    }
+
+    func damagedPhotos(store: ColumnStore, among ids: [Int64]?) async throws -> DamagedPhotos {
+        try await HealthChecker(index: index, paths: paths).damagedPhotos(store: store, among: ids)
+    }
+
+    func keptDamaged() async throws -> [KeptAnyway] {
+        HealthChecker(index: index, paths: paths).keptDamaged
     }
 
     func pairPhotos(of ids: [Int64]?) async throws -> [HealthPairs.Photo] {

@@ -81,6 +81,9 @@ public final class QueryEngine: Sendable {
         /// What Library Health's checks found in this store, and the photos kept anyway (LIB-40).
         var health: [HealthCheck: HealthFindings] = [:]
         var keptAnyway: [Int64]?
+        /// The photos `is:damaged` found, kept across changes to the store, each looking again at the photos it read
+        /// again, until the store is loaded again (`install`).
+        var damaged: DamagedPhotos?
         /// The photos that can be in a pair, kept with the store once the pairs check is asked for.
         var pairs: HealthPairs?
         /// The names the store's columns hold, ranked for completion, and the lists they were made of.
@@ -379,6 +382,7 @@ public final class QueryEngine: Sendable {
             state.columnCounts.removeAll()
             state.health.removeAll()
             state.keptAnyway = nil
+            state.damaged = nil
             state.postings.removeAll()
             state.pairs = nil
             state.storeNames = nil
@@ -435,8 +439,14 @@ public final class QueryEngine: Sendable {
                 pairs = kept
             }
         }
-        let due = state.withLock { [pairs] state -> Bool in
+        var damaged = state.withLock { $0.damaged }
+        if let kept = damaged {
+            // Unless the store knows every photo that changed, which another process's writes keep from it.
+            damaged = changed.kind == .changed && changed.generation != nil ? await following(kept, changed) : nil
+        }
+        let due = state.withLock { [pairs, damaged] state -> Bool in
             state.pairs = pairs
+            state.damaged = damaged
             state.store = changed.store
             state.vocabulary = vocabulary
             state.generation += 1
@@ -472,6 +482,25 @@ public final class QueryEngine: Sendable {
             scheduleSave()
         }
     }
+
+    /// `kept`, the photos `is:damaged` found, after `changed`: the photos it read again looked at again; nil when it
+    /// read too many to be worth it, or the findings kept anyway changed.
+    private func following(_ kept: DamagedPhotos, _ changed: Changed) async -> DamagedPhotos? {
+        guard !changed.photos.isEmpty else { return kept }
+        guard changed.photos.count <= Self.damagedFollowing,
+              let again = try? await source.damagedPhotos(store: changed.store, among: changed.photos),
+              again.keptAnyway == kept.keptAnyway
+        else { return nil }
+        let read = Set(changed.photos)
+        return DamagedPhotos(
+            photos: (kept.photos.filter { !read.contains($0) } + again.photos).sorted(), keptAnyway: kept.keptAnyway,
+            settles: [kept.settles, again.settles].compactMap(\.self).min(),
+        )
+    }
+
+    /// Photos a change reads again, at most, that `is:damaged`'s photos follow, about 2 ms of looking: past them it
+    /// looks at all of them again when it's next asked.
+    private static let damagedFollowing = 1024
 
     /// Runs `body` after the changes asked for before, and before those asked for after: the store
     /// and the photos kept for the pairs check change only there.
@@ -681,7 +710,43 @@ public final class QueryEngine: Sendable {
             try Task.checkCancellation()
             return store.unpickedMoments(of: photos, setting: scope.setting)
         case .damaged:
-            return try await store.rows(withIDs: healthFindings(.damaged, in: store, generation: generation).photos)
+            return try await store.rows(withIDs: damagedPhotos(in: store, generation: generation))
+        }
+    }
+
+    /// The photos `is:damaged` finds in `store`: the damaged files check's, from its findings when they're kept for
+    /// this version of the store; or those kept since it was last asked, while the findings kept anyway are as they
+    /// were and no photo left out for having been written lately is to be listed; or else found without the
+    /// findings, which reads no finding's row or path, in the serial lane, so a change to the store goes after.
+    private func damagedPhotos(in _: ColumnStore, generation: Int) async throws -> [Int64] {
+        if let kept = state.withLock({ $0.generation == generation ? $0.health[.damaged] : nil }) {
+            return kept.photos
+        }
+        let keptAnyway = try await source.keptDamaged()
+        if let kept = keptDamaged(as: keptAnyway) {
+            return kept.photos
+        }
+        return try await serially { [self, source] in
+            if let kept = keptDamaged(as: keptAnyway) {
+                return kept.photos
+            }
+            guard let current = state.withLock({ $0.store }) else { return [] }
+            let found = try await Task.detached(priority: .userInitiated) {
+                try await source.damagedPhotos(store: current, among: nil)
+            }.value
+            state.withLock { $0.damaged = found }
+            return found.photos
+        }
+    }
+
+    /// The photos `is:damaged` found that are kept, while they stand: the findings kept anyway are `keptAnyway`, and
+    /// no photo left out for having been written lately is to be listed yet.
+    private func keptDamaged(as keptAnyway: [KeptAnyway]) -> DamagedPhotos? {
+        let now = now()
+        return state.withLock { state in
+            guard let kept = state.damaged, kept.keptAnyway == keptAnyway, kept.settles.map({ now < $0 }) ?? true
+            else { return nil }
+            return kept
         }
     }
 
