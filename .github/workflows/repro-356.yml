@@ -1,0 +1,26 @@
+name: Repro 356 on macOS 27
+on:
+  push:
+    branches: [repro/356-macos27]
+permissions:
+  contents: read
+jobs:
+  repro:
+    runs-on: xcode-27
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Machine
+        run: |
+          sw_vers
+          uname -m
+          system_profiler SPDisplaysDataType | sed -n '1,40p'
+      - name: Reproduce
+        run: bash run.sh
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repro-356
+          path: out/
+          retention-days: 7
