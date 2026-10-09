@@ -16,6 +16,9 @@ public extension LibraryIndex {
         private var cameraIDs: [String: Int64] = [:]
         private var lensIDs: [String: Int64] = [:]
         private var keywordIDs: [String: Int64] = [:]
+        /// The transaction wrote photos' text, which FTS5 writes as a segment as it commits; text only deleted
+        /// leaves the segments as they are.
+        private(set) var wroteText = false
 
         init(database: SQLiteDatabase, journal: IndexJournal? = nil, marks: IndexIDMarks? = nil) {
             self.database = database
@@ -558,6 +561,7 @@ extension LibraryIndex.Writer {
             guard found == true else { continue }
             try insert.bind(id, at: 1)
             try insert.run()
+            wroteText = true
         }
     }
 

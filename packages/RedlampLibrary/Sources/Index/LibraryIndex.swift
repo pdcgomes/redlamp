@@ -116,30 +116,31 @@ public final class LibraryIndex: Sendable {
     /// back when it throws. Writes run one at a time, in the order they're called. Once called,
     /// a write runs even if the calling task is cancelled. A transaction that changes the index bumps
     /// its generation (`IndexGeneration`), and one that gives IDs past the marks beside the index sets them
-    /// ahead before it commits (`IndexIDMarks`). One that writes the text index has it merged after, and
-    /// returns once none of its levels is crowded with segments (`IndexTextMerges`).
+    /// ahead before it commits (`IndexIDMarks`). One that writes photos' text has the text index merged after,
+    /// and returns once none of its levels is crowded with segments (`IndexTextMerges`).
     @discardableResult
     public func write<T: Sendable>(_ body: @escaping @Sendable (Writer) throws -> T) async throws -> T {
         let result = try await writer.run { [journal, marks, checkpoints] database -> Written<T> in
             checkpoints.copyIfFull()
             var staged: IndexGeneration?
             var gave = false
-            var committing = 0
+            var wroteText = false
             do {
                 let result = try database.transaction(.immediate) {
                     let before = database.totalChanges
                     journal.begin()
                     marks.begin()
-                    let result = try body(Writer(database: database, journal: journal, marks: marks))
+                    let writer = Writer(database: database, journal: journal, marks: marks)
+                    let result = try body(writer)
+                    wroteText = writer.wroteText
                     gave = try marks.save()
                     if database.totalChanges != before {
                         staged = try journal.stage(on: database)
                     }
-                    committing = database.totalChanges
                     return result
                 }
-                // FTS5 writes the transaction's text as it commits, and its structure.
-                let wroteText = database.totalChanges > committing
+                // A transaction that only took text out leaves no new segment: what it deleted is merged after the
+                // next write of text, at the next open, or when asked (`mergeText`), as the root sweep asks.
                 return Written(
                     result: result, changed: staged != nil, gaveIDs: gave && marks.ahead, wroteText: wroteText,
                     structure: wroteText ? (try? Reader(database: database).textStructure()) : nil,

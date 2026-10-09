@@ -5,10 +5,11 @@ import Synchronization
 /// segments inside the commit of whichever write finds a merge due, counting each row deleted from a contentless
 /// table as a page written: a commit of 1,000 photos' keywords merged about 3,000 pages, a second or more at a million
 /// photos, and every write waiting for the writer waited with it. Automerge is off for every writer (`photo_text`'s
-/// own setting, set as the index opens), and after each transaction that writes the text index the merges follow
-/// on the writer's queue, a step at a time, each a transaction of its own of about `Limits.step`, so another write
+/// own setting, set as the index opens), and after each transaction that writes photos' text the merges follow on
+/// the writer's queue, a step at a time, each a transaction of its own of about `Limits.step`, so another write
 /// waits at most a step. They go on while FTS5 finds segments to merge, as automerge would have: four on a level
-/// (its `usermerge`), a merge under way, or a level a tenth deleted.
+/// (its `usermerge`), a merge under way, or a level a tenth deleted. Text only deleted, as a root's sweep deletes it,
+/// is merged with the next write of text, at the next open, or once the sweep is done.
 ///
 /// A write of text returns only once no level holds `Limits.crowded` segments: a writer writing text without pausing,
 /// an index build or a keyword batch of many transactions, goes at the merges' pace, searches look in few segments,
