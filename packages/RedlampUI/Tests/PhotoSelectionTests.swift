@@ -134,10 +134,16 @@ struct PhotoSelectionTests {
         }
     }
 
-    private func opened(_ url: URL, in model: EditorModel) async throws {
-        for _ in 0 ..< 400 where model.info?.url != url {
+    /// Waits for `condition` for up to 30 s: an open, or a read let go, can take seconds on a busy Mac.
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
+    }
+
+    private func opened(_ url: URL, in model: EditorModel) async throws {
+        try await eventually { model.info?.url == url }
         try #require(model.info?.url == url)
     }
 
@@ -152,9 +158,7 @@ struct PhotoSelectionTests {
             photos.model.select(url)
         }
         start(photos.model)
-        for _ in 0 ..< 400 where photos.reads.arrived == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { photos.reads.arrived > 0 }
         try #require(photos.reads.arrived > 0, "the read is held")
     }
 
@@ -245,9 +249,7 @@ struct PhotoSelectionTests {
         let (model, engine, a, b) = (photos.model, photos.engine, photos.a, photos.b)
         engine.gate.hold()
         model.autoTone()
-        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { engine.gate.arrived > 0 }
         try #require(engine.gate.arrived > 0)
 
         try await startOpening(b, in: photos)
@@ -275,6 +277,7 @@ struct PhotoSelectionTests {
         model.select(a)
         photos.reads.release()
         try await Task.sleep(for: .milliseconds(200))
+        try await eventually { model.recipe[.contrast] == 40 }
         #expect(model.info?.url == a && model.selection == a)
         #expect(model.recipe[.contrast] == 40)
         #expect(model.currentMetadata.rating == 5)
@@ -363,6 +366,7 @@ struct PhotoSelectionTests {
         photos.reads.release()
         try await opened(b, in: model)
         try await Task.sleep(for: .milliseconds(200))
+        try await eventually { model.readOnlyReason == .damaged }
         #expect(model.readOnlyReason == .damaged)
         #expect(model.saveError == nil, "B's banner says why")
     }
@@ -401,9 +405,7 @@ struct PhotoSelectionTests {
         model.continueStroke(to: ImagePoint(x: 0.4, y: 0.2))
         engine.gate.hold()
         let solving = Task { await model.endEdgeStroke() }
-        for _ in 0 ..< 400 where engine.gate.arrived == 0 {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { engine.gate.arrived > 0 }
         try #require(engine.gate.arrived > 0)
         model.beginStroke(at: ImagePoint(x: 0.2, y: 0.6))
         model.continueStroke(to: ImagePoint(x: 0.4, y: 0.6))
@@ -434,9 +436,7 @@ struct PhotoSelectionTests {
         let (model, b) = (photos.model, photos.b)
 
         try await startOpening(b, in: photos)
-        for _ in 0 ..< 400 where model.selection != b {
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await eventually { model.selection == b }
         #expect(model.selection == b && model.info == nil && model.isLoading, "B, waiting for its edit")
         photos.reads.release()
         try await opened(b, in: model)

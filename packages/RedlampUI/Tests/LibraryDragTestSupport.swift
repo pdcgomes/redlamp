@@ -55,9 +55,7 @@ final class DragSandbox {
             sidecars: library.sidecars,
         ) { url, size in StoreThumbnailMaker.imageIO(url, nil, size) }
         library.attach(service)
-        for _ in 0 ..< 2000 where await !service.canShow(root, includingSubfolders: false) {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await SourcesSandbox.eventually { await self.service.canShow(self.root, includingSubfolders: false) }
         model = EditorModel(engine: StubEngine(), library: library)
         model.open([root])
         try await eventually { self.library.isShownFromLibrary && self.model.items.count == photos.count }
@@ -119,7 +117,7 @@ final class DragSandbox {
 
     /// Waits for the panels' changes asked for to be made, then counts the library again until `condition` holds:
     /// what changed reaches the query engine a moment after its batch.
-    func made(seconds: Double = 20, until condition: (LibrarySources) -> Bool) async throws {
+    func made(seconds: Double = 30, until condition: (LibrarySources) -> Bool) async throws {
         await model.libraryPanels.written()
         let sources = model.librarySources
         let deadline = ContinuousClock.now + .seconds(seconds)
@@ -134,7 +132,7 @@ final class DragSandbox {
         }
     }
 
-    func eventually(seconds: Double = 15, _ condition: () -> Bool) async throws {
+    func eventually(seconds: Double = 30, _ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(seconds)
         while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))

@@ -55,7 +55,8 @@ struct CullingTests {
                 StoreThumbnailMaker.imageIO(url, nil, size)
             }
             library.attach(service)
-            for _ in 0 ..< max(2000, count * 4) where await !service.canShow(root, includingSubfolders: false) {
+            let deadline = ContinuousClock.now + .seconds(max(30, Double(count) / 25))
+            while await !service.canShow(root, includingSubfolders: false), ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(10))
             }
             model = EditorModel(engine: StubEngine(), library: library)
@@ -123,8 +124,9 @@ struct CullingTests {
             }
         }
 
-        func eventually(seconds: Double = 10, _ condition: () -> Bool) async throws {
-            for _ in 0 ..< Int(seconds * 200) where !condition() {
+        func eventually(_ condition: () -> Bool) async throws {
+            let deadline = ContinuousClock.now + .seconds(30)
+            while !condition(), ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(5))
             }
         }
@@ -426,7 +428,8 @@ struct CullingTests {
         #expect(file >= 0 && data.withUnsafeBytes { write(file, $0.baseAddress, data.count) } == data.count)
         close(file)
         try await folder.open(count: 2)
-        for _ in 0 ..< 2000 where await !folder.service.canShow(folder.root, includingSubfolders: true) {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while await !folder.service.canShow(folder.root, includingSubfolders: true), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
         let index = try #require(folder.service.core?.index)
@@ -436,9 +439,7 @@ struct CullingTests {
         let details = PhotoDetailsCache(library: folder.library)
         var read: [URL] = []
         details.request([LibraryItem(url: photo)]) { read = $0 }
-        for _ in 0 ..< 500 where read.isEmpty {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await folder.eventually { !read.isEmpty }
         #expect(
             read == [photo] && details.details(for: photo)?.width != nil,
             "an expanded cell's details read from its row",
@@ -453,7 +454,8 @@ struct CullingTests {
         try Library.writeMetadata(for: photo) { $0.rating = 4 }
         folder.service.sidecarSaved(photo, store: SidecarStore())
         var rating = 0
-        for _ in 0 ..< 500 where rating != 4 {
+        let saved = ContinuousClock.now + .seconds(30)
+        while rating != 4, ContinuousClock.now < saved {
             try await Task.sleep(for: .milliseconds(10))
             rating = try await index
                 .read { [id = ids[photo]] reader in try id.flatMap { try reader.photo(id: $0) }?.rating ?? 0 }

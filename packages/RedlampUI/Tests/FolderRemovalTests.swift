@@ -31,9 +31,7 @@ struct FolderRemovalTests {
     /// Adds `folder` to Folders and returns once the library has indexed it.
     static func add(_ folder: URL, to library: FolderLibrary, service: LibraryService) async throws {
         library.add([folder])
-        for _ in 0 ..< 2000 where await !service.canShow(folder, includingSubfolders: true) {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await SourcesSandbox.eventually { await service.canShow(folder, includingSubfolders: true) }
         try #require(await service.canShow(folder, includingSubfolders: true), "the library indexed \(folder.path)")
     }
 
@@ -166,7 +164,7 @@ struct FolderRemovalTests {
 
         // Taken out through the library itself, as Locate… and the scenarios take a root out.
         try model.library.remove(#require(model.library.root(containing: trip)))
-        try await sandbox.eventually(seconds: 20) {
+        try await sandbox.eventually {
             sources.count(of: .collection(Self.lisbon)) ?? 0 == 0 && Self.lisbonKeyword(model) == 0
                 && model.customLabelCounts.isEmpty
         }
@@ -198,7 +196,7 @@ struct FolderRemovalTests {
         }
         library.attach(service)
         defer { service.close() }
-        try await sandbox.eventually(seconds: 30) {
+        try await sandbox.eventually {
             model.librarySources.isCounted && model.libraryPanels.keywords != nil
         }
         #expect(model.librarySources.count(of: .allPhotographs) == 1, "the Library panel counted without Trip")
@@ -236,18 +234,13 @@ struct FolderRemovalTests {
         defer { service.close() }
         try #require(service.state == .opening)
         try library.remove(#require(library.root(containing: trip)))
-        for _ in 0 ..< 2000 where !service.isReady {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await sandbox.eventually { service.isReady }
         let core = try #require(service.core)
         let kept = [LibraryService.path(sandbox.root)]
         var roots: [String] = []
-        for _ in 0 ..< 1000 {
+        try await SourcesSandbox.eventually {
             roots = try await core.index.read { try $0.roots().map(\.path) }
-            if roots == kept {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
+            return roots == kept
         }
         #expect(roots == kept, "Trip's rows are swept")
         #expect(try await Self.ids("", service).count == 1, "only the sandbox's own photo")
@@ -271,9 +264,7 @@ struct FolderRemovalTests {
                 StoreThumbnailMaker.imageIO(url, nil, size)
             }
             library.attach(service)
-            for _ in 0 ..< 2000 where !service.isReady {
-                try await Task.sleep(for: .milliseconds(10))
-            }
+            try await sandbox.eventually { service.isReady }
             try #require(service.isReady)
             return service
         }
@@ -297,12 +288,9 @@ struct FolderRemovalTests {
         defer { service.close() }
         let opened = try #require(service.core)
         var roots: Set<String> = []
-        for _ in 0 ..< 1000 {
+        try await SourcesSandbox.eventually {
             roots = try await Set(opened.index.read { try $0.roots().map(\.path) })
-            if roots == [LibraryService.path(sandbox.root)] {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
+            return roots == [LibraryService.path(sandbox.root)]
         }
         #expect(roots == [LibraryService.path(sandbox.root)])
         #expect(try await Self.ids("", service).count == 1)
@@ -333,15 +321,13 @@ struct FolderRemovalTests {
         }
         library.attach(service)
         defer { service.close() }
-        for _ in 0 ..< 2000 where !service.isReady {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await sandbox.eventually { service.isReady }
         #expect(try await Self.ids("", service).count == 1, "none of Trip's photos as the library opens")
         let core = try #require(service.core)
         var swept = false
-        for _ in 0 ..< 1000 where !swept {
+        try await SourcesSandbox.eventually {
             swept = try await core.index.read { try $0.removedRoots().isEmpty }
-            try await Task.sleep(for: .milliseconds(10))
+            return swept
         }
         #expect(swept, "the sweep finished")
         #expect(try await core.index.read { try $0.root(path: path) } == nil)

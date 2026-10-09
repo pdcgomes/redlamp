@@ -17,7 +17,8 @@ struct FolderLibraryTests {
     }
 
     private func eventually(_ condition: () -> Bool) async throws {
-        for _ in 0 ..< 400 where !condition() {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
     }

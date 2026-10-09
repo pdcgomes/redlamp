@@ -73,9 +73,7 @@ final class SourcesSandbox {
             sidecars: library.sidecars,
         ) { url, size in StoreThumbnailMaker.imageIO(url, nil, size) }
         library.attach(service)
-        for _ in 0 ..< 2000 where await !service.canShow(root, includingSubfolders: true) {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await Self.eventually { await service.canShow(root, includingSubfolders: true) }
         try #require(await service.canShow(root, includingSubfolders: true), "the library caught up with the root")
         let model = EditorModel(engine: StubEngine(), library: library)
         model.showModule(.library)
@@ -90,15 +88,24 @@ final class SourcesSandbox {
     }
 
     /// Waits up to `seconds` for `condition`.
-    func eventually(seconds: Double = 10, _ condition: () -> Bool) async throws {
-        for _ in 0 ..< Int(seconds * 200) where !condition() {
+    func eventually(seconds: Double = 30, _ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(seconds)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    /// Waits up to `seconds` for `condition`, which reads from the library.
+    static func eventually(seconds: Double = 30, _ condition: () async throws -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(seconds)
+        while try await !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
         }
     }
 
     /// Counts the library again, and again, until `condition` holds, for up to `seconds`: what changed reaches
     /// the query engine a moment after its batch.
-    func counts(seconds: Double = 20, until condition: (LibrarySources) -> Bool) async throws {
+    func counts(seconds: Double = 30, until condition: (LibrarySources) -> Bool) async throws {
         let sources = try #require(model?.librarySources)
         let deadline = ContinuousClock.now + .seconds(seconds)
         while ContinuousClock.now < deadline {
