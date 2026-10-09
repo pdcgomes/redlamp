@@ -34,9 +34,9 @@
             let moves = try app.main { $0.fileUndoCount }
 
             try app.dragGridPhoto("A.jpg", onto: "folders." + scratch.picked.path)
-            try app.wait("A, its sidecar and C in Picked", timeout: 60) { model in
+            try app.wait("A, its sidecar and C in Picked, the move done", timeout: 60) { model in
                 scratch.files(in: scratch.picked) == ["A.jpg", "A.jpg.redlamp", "C.jpg"]
-                    && model.fileUndoCount == moves + 1
+                    && model.fileUndoCount == moves + 1 && !model.isModalDialogOpen
             }
             try app.wait("the grid without them") { $0.items.map(\.name) == ["B.jpg", "D.jpg"] }
             app.covered(.feature("library.folders"), via: .mouse)

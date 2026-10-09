@@ -4,13 +4,14 @@
     import RedlampDesign
     import RedlampDocument
     import RedlampEngineAPI
+    import RedlampLibrary
     @_spi(Harness) import RedlampUI
 
     /// Rename Photos and Move to Folder (LIB-25, LIB-26), on copies of the run's photos in a folder of the run's own,
     /// which the scenarios add to Folders and take out again: F2 and the menus, the sheet's template typed with a
     /// token put in from its menu, the preview, Rename, Move to Folder, and ⌘Z and ⇧⌘Z.
     enum RenameScenarios {
-        static let all: [Scenario] = [renamePhotos, moveToFolder, performance]
+        static let all: [Scenario] = [renamePhotos, moveToFolder, undoOrder, performance]
 
         static let renamePhotos = Scenario(
             "library.rename-photos",
@@ -103,6 +104,108 @@
             }
         }
 
+        static let undoOrder = Scenario(
+            "library.undo-order",
+            "A rating by its key, a keyword typed in the Keywording panel and Photo › Move to Folder…, made in turn, are "
+                + "taken back by ⌘Z newest first, the move, the keyword, then the rating, and made again by ⇧⌘Z in the "
+                + "order they were made; a keyword typed then reaches the photo the move's Undo brought back",
+            claims: [.action(.undo), .action(.redo)],
+        ) { app in
+            let scratch = try RenameScratch(app)
+            defer { scratch.remove(app) }
+            try scratch.show(app)
+            try app.main { model in
+                model.rightPanelVisible = true
+                if !model.libraryPanels.isExpanded(.keywording) {
+                    model.libraryPanels.toggle(.keywording)
+                }
+            }
+            try app.wait("the keyword list", timeout: 30) { $0.libraryPanels.keywordList != nil }
+            // The column slides in.
+            app.pause(0.6)
+            let (rated, moved) = (scratch.names[2], scratch.names[3])
+            let keyword = "E2E Order \(UUID().uuidString.prefix(6))"
+            @MainActor func rating(_ model: EditorModel) -> Int? {
+                model.items.first { $0.name == rated }?.metadata.rating
+            }
+            func written(_ name: String) -> PhotoMetadata? {
+                SidecarStore(locator: .besidePhotos).load(for: scratch.folder.appending(path: name))?.metadata
+            }
+            func settled() throws {
+                try app.run("the changes and their saves", timeout: 120) { model in
+                    while model.isWritingCulling {
+                        try? await Task.sleep(for: .milliseconds(20))
+                    }
+                    await model.libraryPanels.written()
+                    await model.filesMade()
+                    await model.library.service?.settled()
+                }
+            }
+
+            try app.click(.identifier("grid.\(rated)"))
+            try app.wait("\(rated) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [rated] }
+            try app.press(.rating3)
+            try app.wait("three stars on \(rated)") { rating($0) == 3 }
+            try app.typeInField("keywording.entry", keyword)
+            try app.wait("the keyword on \(rated)") { model in
+                model.libraryPanels.selection.hasEverywhere(KeywordPath(keyword)!) == true
+            }
+            try app.click(.identifier("grid.\(moved)"))
+            try app.wait("\(moved) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [moved] }
+            try app.main { _ in EditorModel.moveToFolderAnswer = scratch.picked }
+            try app.choose(.moveToFolder)
+            try app.wait("\(moved) in Picked", timeout: 60) { _ in scratch.photos(in: scratch.picked) == [moved] }
+            try settled()
+            try app.expect(written(rated)?.rating == 3, "\(rated)'s sidecar has its stars")
+            try app.expect(written(rated)?.keywords == [keyword], "\(rated)'s sidecar has the keyword")
+
+            try app.press(.undo)
+            try settled()
+            try app.wait("⌘Z to take back the move first", timeout: 30) { _ in
+                scratch.photos(in: scratch.picked).isEmpty && scratch.photos().contains(moved)
+            }
+            try app.expect(written(rated)?.keywords == [keyword], "the keyword stays while the move goes back")
+            try app.press(.undo)
+            try settled()
+            try app.wait("⌘Z to take back the keyword next", timeout: 30) { model in
+                (written(rated)?.keywords ?? []).isEmpty && rating(model) == 3
+            }
+            try app.press(.undo)
+            try settled()
+            try app.wait("⌘Z to take back the stars last", timeout: 30) { rating($0) == 0 }
+
+            // ⇧⌘Z, as the driver reaches a ⌘ key with ⇧: its menu item carrying it.
+            try app.expectKeyBinding(.redo)
+            try app.choose(.redo)
+            try settled()
+            try app.wait("⇧⌘Z to give the stars back first", timeout: 30) { model in
+                rating(model) == 3 && (written(rated)?.keywords ?? []).isEmpty
+            }
+            try app.choose(.redo)
+            try settled()
+            try app.wait("⇧⌘Z to put the keyword back next", timeout: 30) { _ in
+                written(rated)?.keywords == [keyword] && scratch.photos(in: scratch.picked).isEmpty
+            }
+            try app.choose(.redo)
+            try settled()
+            try app.wait("⇧⌘Z to move the photo again last", timeout: 30) { _ in
+                scratch.photos(in: scratch.picked) == [moved]
+            }
+
+            // The photo the move's Undo brings back, selected, takes a keyword typed in the panel.
+            try app.press(.undo)
+            try settled()
+            try app.wait("\(moved) back and selected", timeout: 30) { model in
+                scratch.photos().contains(moved) && model.selectedPhotos.map(\.lastPathComponent) == [moved]
+            }
+            try app.wait("the panel on \(moved)", timeout: 30) { $0.libraryPanels.selection.ids.count == 1 }
+            try app.typeInField("keywording.entry", keyword + " Back")
+            try settled()
+            try app.wait("the keyword on \(moved)'s sidecar", timeout: 30) { _ in
+                written(moved)?.keywords == [keyword + " Back"]
+            }
+        }
+
         static let performance = Scenario(
             "library.rename-performance",
             "Rename Photos' preview of 10,000 photos following each key of a template typed, then 1,000 raws renamed, "
@@ -157,7 +260,8 @@
             let made = try app.main { $0.fileUndoCount }
             let renaming = try app.watchingMainThread("rename") {
                 try app.clickInSheet("rename.rename")
-                try app.wait("the rename to be made", timeout: 900) { $0.fileUndoCount > made }
+                try app.wait("the rename to be asked for", timeout: 900) { $0.fileUndoCount > made }
+                try app.run("the rename to be made", timeout: 900) { await $0.filesMade() }
             }
             try app.waitForNoSheet("Rename Photos", timeout: 60)
             try app.expect(
@@ -183,7 +287,8 @@
             let moving = try app.watchingMainThread("move") {
                 try app.choose(.moveToFolder)
                 try app.explainingFiles(since: mark) {
-                    try app.wait("the photos moved", timeout: 900) { $0.fileUndoCount > moves }
+                    try app.wait("the move to be asked for", timeout: 900) { $0.fileUndoCount > moves }
+                    try app.run("the photos moved", timeout: 900) { await $0.filesMade() }
                 }
             }
             try app.waitForNoSheet("the move's progress", timeout: 60)
