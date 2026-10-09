@@ -90,14 +90,18 @@ public extension LibraryHealth {
     /// Runs `plan` once `check` finds nothing in its way, in the batch's turn among the file
     /// operations', so no other batch moves anything between them; otherwise throws
     /// `HealthError.changed`, having moved nothing. Duplicates go through LIB-39's own check, every copy
-    /// and the copy kept for it read whole again. Undo (`FileOperations.undo`) takes the batch back.
+    /// and the copy kept for it read whole again. `progress` hears of the batch's steps once its check
+    /// is done. Undo (`FileOperations.undo`) takes the batch back.
     @discardableResult
     func run(
         _ plan: HealthPlan, progress: (@Sendable (FileProgress) -> Void)? = nil,
     ) async throws -> FileOutcome {
         guard !plan.batch.steps.isEmpty else { throw HealthError.nothingToDo }
         let outcome: FileOutcome = if let duplicates = plan.duplicates {
-            try await finder().trash(duplicates, plan.batch, operations: operations)
+            try await operations.run(plan.batch, checkedBy: { [self, operations] in
+                let differences = try await finder().check(duplicates, plan.batch, operations: operations)
+                guard differences.isEmpty else { throw HealthError.changed(differences.map(\.description)) }
+            }, progress: progress)
         } else {
             try await operations.run(plan.batch, checkedBy: { [self] in
                 let differences = try await check(plan)
@@ -181,6 +185,11 @@ public struct HealthPlan: Sendable {
     /// The photos it acts on.
     public var photos: [Int64] {
         findings.map(\.photo)
+    }
+
+    /// The bytes of the photos it acts on, as the check found them, their sidecars aside.
+    public var bytes: Int64 {
+        findings.reduce(0) { total, finding in total + (expected[finding.photo]?.size ?? 0) }
     }
 
     /// Where each photo it acts on is, by ID.

@@ -4,10 +4,13 @@ import RedlampDocument
 public extension LibraryHealth {
     /// Keeps `photos`' findings in `findings` anyway: each by its content key, or by its path for a
     /// photo without one, and a duplicate's by its group's SHA-256 with its copies, so another copy
-    /// opens the group again. Lists follow.
-    func keepAnyway(_ photos: [Int64], in findings: HealthFindings) async throws {
-        let chosen = findings.findings.filter { photos.contains($0.photo) }
-        guard !chosen.isEmpty else { return }
+    /// opens the group again. Lists follow. Returns the entries it added, those already kept left out,
+    /// which `takeBack` takes back.
+    @discardableResult
+    func keepAnyway(_ photos: [Int64], in findings: HealthFindings) async throws -> [KeptAnyway] {
+        let wanted = Set(photos)
+        let chosen = findings.findings.filter { wanted.contains($0.photo) }
+        guard !chosen.isEmpty else { return [] }
         let rows = try await index.read { reader in
             try Dictionary(reader.photosWithPaths(chosen.map(\.photo)).map { ($0.photo.id, $0) }) { first, _ in first }
         }
@@ -25,12 +28,21 @@ public extension LibraryHealth {
                 entries.append(KeptAnyway(check: finding.check, key: key))
             }
         }
-        let kept = entries
+        return try await keepAnyway(entries)
+    }
+
+    /// Keeps `entries` anyway, those not kept already, as Keep Anyway made them: Redo after `takeBack`.
+    /// Lists follow. Returns the entries it added.
+    @discardableResult
+    func keepAnyway(_ entries: [KeptAnyway]) async throws -> [KeptAnyway] {
         try await changeDefinitions { definitions in
-            for entry in kept
+            var added: [KeptAnyway] = []
+            for entry in entries
                 where !definitions.keptAnyway.contains(where: { $0.check == entry.check && $0.key == entry.key }) {
                 definitions.keptAnyway.append(entry)
+                added.append(entry)
             }
+            return added
         }
     }
 
@@ -51,13 +63,17 @@ public extension LibraryHealth {
         }
     }
 
-    private func changeDefinitions(_ change: @escaping @Sendable (inout HealthDefinitions) -> Void) async throws {
+    private func changeDefinitions<T: Sendable>(
+        _ change: @escaping @Sendable (inout HealthDefinitions) -> T,
+    ) async throws -> T {
         let url = HealthDefinitions.url(in: paths)
-        try await LibraryIndex.offCaller {
+        let made = try await LibraryIndex.offCaller {
             var definitions = try HealthDefinitions.load(from: url)
-            change(&definitions)
+            let made = change(&definitions)
             try definitions.save(to: url)
+            return made
         }
         await changed()
+        return made
     }
 }

@@ -57,4 +57,38 @@ struct HealthKeepAnywayTests {
         let written = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         #expect(written["fromANewerBuild"] != nil)
     }
+
+    @Test func `Keep Anyway returns only the entries it added, which Undo takes back and Redo keeps again`(
+    ) async throws {
+        let copy = HealthImages.data(.jpeg, seed: 7)
+        let sandbox = try await HealthSandbox.make([
+            "A/IMG_1.jpg": copy, "B/IMG_1.jpg": copy, "C/IMG_1.jpg": copy, "Cards/Empty.jpg": Data(),
+        ])
+        defer { sandbox.remove() }
+        await sandbox.index()
+        let health = sandbox.library()
+        try await health.confirmDuplicates()
+        let duplicates = try await health.findings(.duplicates)
+        #expect(duplicates.proposed.count == 2)
+
+        // Two copies of one group are one entry, kept by the first; the second adds nothing.
+        let first = try await health.keepAnyway([duplicates.proposed[0]], in: duplicates)
+        #expect(first.count == 1 && first.first?.check == .duplicates)
+        let again = try await health.keepAnyway([duplicates.proposed[1]], in: duplicates)
+        #expect(again.isEmpty, "the group was kept already")
+        let damaged = try await health.findings(.damaged)
+        let kept = try await health.keepAnyway(damaged.photos, in: damaged)
+        #expect(kept.count == 1)
+
+        // Undo takes back the damaged file's entry alone; the group stays kept.
+        try await health.takeBack(kept)
+        #expect(try await health.findings(.damaged).findings.count == 1)
+        #expect(try await health.findings(.duplicates).isEmpty)
+
+        // Redo keeps it again, as it was.
+        let redone = try await health.keepAnyway(kept)
+        #expect(redone == kept)
+        #expect(try await health.findings(.damaged).isEmpty)
+        #expect(try await health.keepAnyway(kept).isEmpty, "kept already: nothing added")
+    }
 }
