@@ -726,6 +726,16 @@ struct MaskList: View {
                         model.hoveredMaskID = hovered
                     }
                 }
+                // A row taken away under the pointer, as deleting its mask does, gets no hover's
+                // end from SwiftUI.
+                .onDisappear {
+                    if hovered == mask.id {
+                        hovered = nil
+                    }
+                    if actionsOnScreen, model.hoveredMaskID == mask.id {
+                        model.hoveredMaskID = nil
+                    }
+                }
                 .onTapGesture(count: 2) {
                     draftName = mask.name
                     renaming = mask.id
@@ -1237,6 +1247,13 @@ struct ComponentRow: View {
             if inside {
                 model.hoveredComponentID = component.id
             } else if model.hoveredComponentID == component.id {
+                model.hoveredComponentID = nil
+            }
+        }
+        // A row taken away under the pointer, as deleting its component does, gets no hover's end
+        // from SwiftUI.
+        .onDisappear {
+            if model.hoveredComponentID == component.id {
                 model.hoveredComponentID = nil
             }
         }

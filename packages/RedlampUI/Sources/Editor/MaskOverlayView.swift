@@ -59,6 +59,13 @@ struct MaskOverlayView: View {
                                     model.hoveredMaskID = nil
                                 }
                             }
+                            // A pin taken away under the pointer, as a click on it does, gets no
+                            // hover's end from SwiftUI.
+                            .onDisappear {
+                                if model.hoveredMaskID == mask.id {
+                                    model.hoveredMaskID = nil
+                                }
+                            }
                             .help(mask.name)
                     }
                 }
