@@ -90,7 +90,7 @@ public extension EditorModel {
         return !stacks.allPhotos(of: stacks[group]).allSatisfy { !library.photoList.contains($0) || shown.contains($0) }
     }
 
-    /// Whether ⇧⌘G would take anything out of a stack: a photo selected is in a burst or a stack made by hand.
+    /// Whether ⇧⌘G would take a stack apart: a photo selected is in a burst or a stack made by hand.
     var canUnstackSelection: Bool {
         guard library.service?.isReady == true, let stacks = libraryViews.stacks?.list?.stacks else { return false }
         guard photoSelection.count > 1 else {
