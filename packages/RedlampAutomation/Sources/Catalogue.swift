@@ -21,6 +21,7 @@
             + CollectionScenarios.all
             + PanelScenarios.all
             + RenameScenarios.all
+            + MoveEditsScenarios.all
             + DragScenarios.all
             + SoakScenarios.all + PerformanceScenarios.all + PanelPerformanceScenarios.all
             + LibrarySourcesPerformanceScenarios.all
