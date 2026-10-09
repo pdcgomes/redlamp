@@ -232,6 +232,15 @@
                 ActionCheck(action: action, observe: { "\($0.eyedropperActive)" }, restore: { app in
                     try app.main { $0.eyedropperActive = false }
                 })
+            case .calibrateFromTarget:
+                ActionCheck(action: action, setUp: { app in
+                    try app.main { $0.setBaseLook(BuiltInBaseLook.reproduction.reference) }
+                }, observe: { "\($0.calibrationTargetActive)" }, restore: { app in
+                    try app.main { model in
+                        model.calibrationTargetActive = false
+                        model.undo()
+                    }
+                })
             case .newSnapshot:
                 ActionCheck(action: action, observe: { "\($0.snapshots.count)" }, restore: { app in
                     try app.main { model in model.snapshots.last.map(model.deleteSnapshot) }

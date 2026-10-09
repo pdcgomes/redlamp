@@ -68,7 +68,7 @@ extension EditorModel {
     }
 
     /// `readoutPixels` square of the photo as displayed, in fractions of the frame.
-    private var readoutArea: CGSize {
+    var readoutArea: CGSize {
         let shown = canvas.imageRect(in: canvas.viewSize)
         let scale = max(canvas.backingScale, 1)
         guard shown.width > 0, shown.height > 0 else { return CGSize(width: 0.004, height: 0.004) }

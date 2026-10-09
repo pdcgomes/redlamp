@@ -21,6 +21,13 @@ public extension FeedbackArea {
                     ["black and white", "b&w", "monochrome", "profile", "base look", "camera profile", "dcp"],
                 ),
                 FeedbackFeature(
+                    "reproduction", "Redlamp Reproduction and Calibrate from Target",
+                    [
+                        "reproduction", "scene-referred", "linear", "calibrate", "calibration", "target", "grey card",
+                        "colorchecker", "anchor", "stops", "copy stand", "artwork",
+                    ],
+                ),
+                FeedbackFeature(
                     "tone",
                     "Tone",
                     ["exposure", "contrast", "highlights", "shadows", "whites", "blacks", "brightness"],

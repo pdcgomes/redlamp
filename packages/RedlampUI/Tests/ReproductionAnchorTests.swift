@@ -115,6 +115,85 @@ struct ReproductionAnchorTests {
         #expect(!file.contains("exposureAnchor") && !file.contains("Canon"), "a .redrecipe holds no anchor")
     }
 
+    @Test func `calibrating on a patch makes it read its reference at Exposure 0, and keeps that for the camera`(
+    ) async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let cameras = CameraCalibrations(file: nil)
+        let editor = try await open(cameras: cameras)
+        editor.setBaseLook(BuiltInBaseLook.reproduction.reference)
+        editor.setValue(.exposure, 0.4)
+        let measured = editor.recipe
+        editor.calibrationTarget = CalibrationTarget(
+            point: CGPoint(x: 0.5, y: 0.5),
+            luminance: 0.11,
+            lstar: 39.6,
+            recipe: measured,
+        )
+        let steps = editor.history.count
+        editor.calibrate(toReference: 50)
+        let anchor = try #require(editor.recipe.exposureAnchor)
+        #expect(anchor.source == .target && anchor.camera == "Canon EOS R5")
+        #expect(editor.recipe[.exposure] == 0 && editor.history.count == steps + 1 && editor.calibrationTarget == nil)
+        // The patch's light scales by the change in Exposure and anchor: it now reads L* 50's.
+        let now = 0.11 * pow(2, anchor.stops + editor.recipe[.exposure] - ExposureAnchor.typicalStops - 0.4)
+        #expect(abs(now - EditorModel.luminance(lstar: 50)) < 1e-9)
+        #expect(cameras.entry(for: "Canon EOS R5")?.stops == anchor.stops)
+        #expect(editor.calibrationStatus.hasPrefix("Calibrated for Canon EOS R5 from a target, "))
+        #expect(editor.calibrationReference == 50)
+    }
+
+    @Test func `Set This Photo's Exposure normalises the photo and keeps nothing`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let cameras = CameraCalibrations(file: nil)
+        let editor = try await open(cameras: cameras)
+        editor.setBaseLook(BuiltInBaseLook.reproduction.reference)
+        editor.calibrationTarget = CalibrationTarget(
+            point: CGPoint(x: 0.5, y: 0.5), luminance: EditorModel.luminance(lstar: 50) / 2, lstar: 40,
+            recipe: editor.recipe,
+        )
+        editor.setExposure(toReference: 50)
+        #expect(editor.recipe[.exposure] == 1)
+        #expect(editor.recipe.exposureAnchor == .typical(for: "Canon EOS R5") && cameras.entries.isEmpty)
+        #expect(editor.calibrationStatus == "Not calibrated: typical exposure")
+    }
+
+    @Test func `the status line names what bends the rendering, and only that`() {
+        var recipe = EditRecipe()
+        recipe.baseLook = BuiltInBaseLook.reproduction.reference
+        recipe[.exposure] = 1.2
+        recipe[.temperature] = 4200
+        recipe[.sharpenAmount] = 80
+        recipe[.lensProfileDistortion] = 50
+        #expect(EditorModel.bendingControls(in: recipe).isEmpty, "White balance, Exposure, detail and lens don't")
+        recipe[.contrast] = 20
+        recipe[.saturation] = -10
+        #expect(EditorModel.bendingControls(in: recipe) == ["Contrast", "Saturation"])
+        recipe.baseLook = recipe.baseLook.withAmount(80)
+        recipe.treatment = .blackAndWhite
+        recipe[.grainAmount] = 30
+        #expect(EditorModel.bendingControls(in: recipe) == [
+            "Base Look Amount", "Contrast", "Saturation", "Black & White", "Effects",
+        ])
+        recipe.baseLook = recipe.baseLook.withAmount(150)
+        #expect(
+            !EditorModel.bendingControls(in: recipe).contains("Base Look Amount"),
+            "above 100 there's no curve either",
+        )
+    }
+
+    @Test func `the target tool and the eyedroppers are never on together`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let editor = try await open()
+        #expect(!editor.canPerform(.calibrateFromTarget), "only under Redlamp Reproduction")
+        editor.setBaseLook(BuiltInBaseLook.reproduction.reference)
+        #expect(editor.perform(.calibrateFromTarget) && editor.calibrationTargetActive)
+        editor.eyedropperActive = true
+        #expect(!editor.calibrationTargetActive)
+        editor.calibrationTargetActive = true
+        #expect(!editor.eyedropperActive && !editor.pointColorEyedropperActive)
+        #expect(editor.perform(.cancel) && !editor.calibrationTargetActive)
+    }
+
     @Test func `a sync gives each photo its own camera's anchor`() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
         let editor = try await open("A.CR3")

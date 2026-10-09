@@ -305,19 +305,34 @@ public final class EditorModel {
         didSet {
             if eyedropperActive {
                 pointColorEyedropperActive = false
+                calibrationTargetActive = false
             }
         }
     }
 
-    /// Point Color's eyedropper: a click on the photo adds a swatch of the colour there. It and
-    /// the white balance eyedropper are never on together.
+    /// Point Color's eyedropper: a click on the photo adds a swatch of the colour there. It, the
+    /// white balance eyedropper and Calibrate from Target are never on together.
     public var pointColorEyedropperActive = false {
         didSet {
             if pointColorEyedropperActive {
                 eyedropperActive = false
+                calibrationTargetActive = false
             }
         }
     }
+
+    /// Calibrate from Target (CAM-28): a click on the photo measures a target's grey patch.
+    public var calibrationTargetActive = false {
+        didSet {
+            if calibrationTargetActive {
+                eyedropperActive = false
+                pointColorEyedropperActive = false
+            }
+        }
+    }
+
+    /// The patch Calibrate from Target measured, while its popover asks for the reference L*.
+    public internal(set) var calibrationTarget: CalibrationTarget?
 
     /// The Point Color swatch the sliders edit (see `selectedPointColorSwatch`).
     public var selectedPointColorSwatchID: UUID? {

@@ -486,6 +486,16 @@
             return items
         }
 
+        /// Types `text` into the popover in front, as keys reach the field it focuses: a Return ends
+        /// with the field's action.
+        func typeInPopover(_ text: String) throws {
+            for character in text {
+                let event = try main { _ in try Keyboard.event(KeyCombo(.character(character))) }
+                post { _ in Views.popoverWindow?.sendEvent(event) }
+                pause(0.03)
+            }
+        }
+
         /// Clicks the control carrying `identifier` in the window titled `title`, such as a switch
         /// in Settings, through that window as the mouse does.
         func click(_ identifier: String, inWindowTitled title: String) throws {
@@ -567,6 +577,11 @@
     extension Views {
         static func window(titled title: String) -> NSWindow? {
             NSApp.windows.first { $0.isVisible && $0.title == title }
+        }
+
+        /// The popover in front, which is a window of its own.
+        static var popoverWindow: NSWindow? {
+            NSApp.windows.first { $0.isVisible && NSStringFromClass(type(of: $0)).contains("Popover") }
         }
 
         /// The pop-up button showing `shown` in the sheet in front. A sheet's SwiftUI controls give

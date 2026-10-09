@@ -8,6 +8,7 @@
         static let all: [Scenario] = [
             whiteBalance,
             treatment,
+            reproduction,
             toneAndPresence,
             toneCurve,
             colorMixer,
@@ -73,6 +74,82 @@
             try app.wait("the Base Look Amount to be 60") { $0.baseLook.amount == 60 }
             try app.main { $0.setBaseLook(BuiltInBaseLook.color.reference) }
             app.covered(.feature("develop.treatment"), via: .key)
+        }
+
+        /// L* 50 is 18.4% grey, 0.03 stops above the 18% grey the stops count from. The popover offers
+        /// 40 to start, so a patch that reads 50 shows the typed value reached it.
+        static let reproduction = Scenario(
+            "develop.reproduction",
+            "Redlamp Reproduction from the palette, calibrated on a patch: its L* and stops, and the status line",
+            claims: [.feature("develop.reproduction")],
+        ) { app in
+            try app.openWorking()
+            // A retry finds what the first attempt left: the photo's edit and the camera's calibration.
+            try app.main { $0.forgetCalibration() }
+            try app.choose(.resetAll)
+            try app.press(.commandPalette)
+            try app.wait("the palette") { $0.commandPalette != nil }
+            try app.main { $0.commandPalette?.setText(BuiltInBaseLook.reproduction.name) }
+            try app.wait("Redlamp Reproduction chosen in the palette") {
+                $0.commandPalette?.selectedItem?.kind == .baseLook(BuiltInBaseLook.reproduction.rawValue)
+            }
+            // The palette previews its selection, so the photo already shows the look.
+            try app.paletteKey(.submit)
+            var anchored = false
+            for _ in 0 ..< 50 where !anchored {
+                anchored = try app.main { $0.baseLook.isReproduction && $0.recipe.exposureAnchor?.source == .typical }
+                app.pause(0.1)
+            }
+            let state = try app.main { model in
+                "\(model.baseLook.name), anchor \(String(describing: model.recipe.exposureAnchor)), "
+                    + "steps \(model.history.map(\.title)), palette \(model.commandPalette == nil ? "closed" : "open")"
+            }
+            try app.expect(anchored, "Redlamp Reproduction with the camera's typical anchor, not \(state)")
+            if try app.main({ $0.commandPalette != nil }) {
+                try app.paletteKey(.escape)
+            }
+            try app.wait("the palette to close") { $0.commandPalette == nil }
+            // White balanced on the patch first, as the design asks: CIELAB's D50 white moves the
+            // luminance of a colour that isn't neutral, by 0.1 L* for a b* of 8.
+            try app.press(.whiteBalanceSelector)
+            try app.wait("the eyedropper") { $0.eyedropperActive }
+            try app.click(.canvas, at: CGPoint(x: 0.5, y: 0.5))
+            try app.wait("white balanced on the patch") { !$0.eyedropperActive && $0.whiteBalanceMode == .custom }
+            try app.main { $0.calibrationReference = 40 }
+            try app.choose(.calibrateFromTarget)
+            try app.wait("Calibrate from Target") { $0.calibrationTargetActive }
+            try app.click(.canvas, at: CGPoint(x: 0.5, y: 0.5))
+            try app.wait("the patch to be measured") { $0.calibrationTarget != nil }
+            try app.wait("the popover asking for its reference L*") { _ in Views.popoverWindow != nil }
+            app.pause(0.5)
+            let focused = try app.main { _ in Views.popoverWindow?.firstResponder is NSText }
+            try app.expect(focused, "The popover's reference L* field isn't ready to type in")
+            try app.typeInPopover("50\r")
+            try app.wait("the camera calibrated from the target") {
+                $0.calibrationTarget == nil && $0.recipe.exposureAnchor?.source == .target
+            }
+            try app.waitForCanvas()
+            try app.hover(.canvas, at: CGPoint(x: 0.5, y: 0.5))
+            try app.wait("the readout in stops") { $0.pixelReadout?.stops != nil }
+            let parts = try app.main { model in
+                model.pixelReadout
+                    .map { EditorModel.readoutParts($0, lab: true, approximate: model.readoutIsApproximate) }
+            }
+            try app.expect(
+                parts?.first == "L* 50.0" && parts?.last == "+0.03 EV",
+                "The patch reads \(parts ?? []) rather than L* 50.0 and +0.03 EV",
+            )
+            let status = try app.main { $0.calibrationStatus }
+            try app.expect(status.hasPrefix("Calibrated for"), "The status line says \(status)")
+            try app.drag(.slider(.contrast), from: CGPoint(x: 0.5, y: 0.5), by: CGVector(dx: 30, dy: 0))
+            try app.wait("the status line to name Contrast") { $0.reproductionChanges?.contains("Contrast") == true }
+            try app.main { model in
+                model.hoverReadout(at: nil)
+                model.forgetCalibration()
+            }
+            try app.choose(.resetAll)
+            try app.wait("Redlamp Color again") { $0.baseLook == BuiltInBaseLook.color.reference }
+            app.covered(.feature("develop.reproduction"), via: .mouse)
         }
 
         static let toneAndPresence = Scenario(

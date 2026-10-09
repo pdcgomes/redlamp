@@ -57,6 +57,7 @@ struct AppCommands: Commands {
             Divider()
             item(.autoTone)
             item(.autoWhiteBalance)
+            item(.calibrateFromTarget)
             item(.resetAll)
             Divider()
             item(.rotateLeft)

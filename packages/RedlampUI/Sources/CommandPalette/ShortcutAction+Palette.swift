@@ -42,6 +42,10 @@ extension ShortcutAction {
         .autoWhiteBalance: ["auto", "wb", "white balance"],
         .toggleBlackAndWhite: ["b&w", "bw", "monochrome", "mono", "black and white", "grayscale", "greyscale"],
         .whiteBalanceSelector: ["eyedropper", "wb", "white balance", "neutral", "picker"],
+        .calibrateFromTarget: [
+            "calibrate", "calibration", "target", "grey card", "gray card", "colorchecker", "chart", "metered",
+            "anchor", "reproduction", "exposure",
+        ],
         .newSnapshot: ["snapshot", "save state"],
         .newPreset: ["preset", "recipe", "save look"],
         .virtualCopy: ["duplicate", "copy"],
@@ -142,6 +146,7 @@ extension ShortcutAction {
         case .autoWhiteBalance: "thermometer.medium"
         case .toggleBlackAndWhite: "circle.lefthalf.filled"
         case .whiteBalanceSelector: "eyedropper"
+        case .calibrateFromTarget: "scope"
         case .newSnapshot: "camera"
         case .newPreset: "plus.square.on.square"
         case .virtualCopy: "square.on.square"

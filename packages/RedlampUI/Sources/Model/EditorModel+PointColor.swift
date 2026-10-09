@@ -79,9 +79,11 @@ public extension EditorModel {
         visualizePointColorRange = false
     }
 
-    /// A click on the canvas while an eyedropper is on.
+    /// A click on the canvas while an eyedropper or Calibrate from Target is on.
     func sampleEyedropper(at point: CGPoint) {
-        if pointColorEyedropperActive {
+        if calibrationTargetActive {
+            sampleCalibrationTarget(at: point)
+        } else if pointColorEyedropperActive {
             samplePointColor(at: point)
         } else {
             sampleWhiteBalance(at: point)
@@ -110,10 +112,12 @@ extension EditorModel {
         }
     }
 
-    /// Opening another photo turns both eyedroppers off.
+    /// Opening another photo turns both eyedroppers and Calibrate from Target off.
     func endEyedroppers() {
         eyedropperActive = false
         pointColorEyedropperActive = false
+        calibrationTargetActive = false
+        calibrationTarget = nil
     }
 
     /// A group header's reset, on the selected swatch.

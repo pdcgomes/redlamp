@@ -22,6 +22,7 @@ import SwiftUI
             controls("Treatment", TreatmentPicker()),
             controls("Base Look", BaseLookMenu()),
             HostedControl(model: model, BaseLookAmountRow()),
+            HostedControl(model: model, ReproductionStatusRow(), shown: { model.baseLook.isReproduction }),
             controls("White Balance", WhiteBalanceControls()),
             slider(.temperature, enabled: whiteBalanceSupported),
             slider(.tint, enabled: whiteBalanceSupported),
@@ -61,6 +62,9 @@ final class HostedControl: NSView, ProposalSizing, HeightProviding {
     private let resized: Resized
     /// SwiftUI's height at a width, until the content lays out at another height.
     private var measured: (width: CGFloat, height: CGFloat)?
+    /// Whether it's in the column, followed while it's in a window; nil when it always is.
+    private let shown: (@MainActor () -> Bool)?
+    private var tracker: Tracker?
 
     /// Told as the content lays out at a new height (a row appearing inside it), so the columns
     /// around it are measured again.
@@ -68,7 +72,8 @@ final class HostedControl: NSView, ProposalSizing, HeightProviding {
         var action: () -> Void = {}
     }
 
-    init(model: EditorModel, _ view: some View) {
+    init(model: EditorModel, _ view: some View, shown: (@MainActor () -> Bool)? = nil) {
+        self.shown = shown
         let resized = Resized()
         controller = NSHostingController(rootView: AnyView(
             view.environment(model).tint(Theme.nativeTint).focusEffectDisabled()
@@ -111,8 +116,17 @@ final class HostedControl: NSView, ProposalSizing, HeightProviding {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         measured = nil
+        tracker?.cancel()
+        tracker = nil
         if window != nil {
             invalidateColumnLayout()
+            if let shown {
+                tracker = Tracker { [weak self] in
+                    guard let self, isHidden == shown() else { return }
+                    isHidden.toggle()
+                    invalidateColumnLayout()
+                }
+            }
         }
     }
 

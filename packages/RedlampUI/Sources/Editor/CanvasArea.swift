@@ -26,7 +26,9 @@ import UniformTypeIdentifiers
                     controller: model.canvas,
                     clickAction: model.isSpacePanning ? .zoom
                         : [.masking, .crop, .heal].contains(model.activeTool) || model.isPlacingGuides
-                        ? .none : (model.eyedropperActive || model.pointColorEyedropperActive ? .sample : .zoom),
+                        ? .none
+                        : (model.eyedropperActive || model.pointColorEyedropperActive || model.calibrationTargetActive
+                            ? .sample : .zoom),
                     surround: model.colorAssessment
                         ? CanvasMetalView.assessmentSurround
                         : [CanvasMetalView.defaultSurround, 0.003, 0][min(model.lightsOut, 2)],
@@ -76,6 +78,11 @@ import UniformTypeIdentifiers
                 CompareOverlay()
             }
         }
+        .overlay {
+            if let target = model.calibrationTarget, model.info != nil {
+                CalibrationTargetAnchor(target: target)
+            }
+        }
         .overlay(alignment: .topLeading) {
             if model.infoOverlay > 0, model.lightsOut == 0, let info = model.info {
                 InfoOverlay(info: info, detailed: model.infoOverlay == 2)
@@ -90,7 +97,8 @@ import UniformTypeIdentifiers
                 if model.lightsOut == 0, model.commandPalette == nil,
                    model.exportStatus != nil
                    || model.isShowingOriginal || model.previewingRecipe != nil || model.previewingEdit != nil
-                   || model.eyedropperActive || model.pointColorEyedropperActive || model.drawingKind != nil
+                   || model.eyedropperActive || model.pointColorEyedropperActive || model.calibrationTargetActive
+                   || model.drawingKind != nil
                    || (model.notice != nil && !model.canStartOver)
                    || (model.info != nil && model.isBaseLookMissing) {
                     StatusPill(text: statusText)
@@ -197,6 +205,9 @@ import UniformTypeIdentifiers
         }
         if model.pointColorEyedropperActive {
             return "Click a colour to add a Point Color swatch  ·  Esc to cancel"
+        }
+        if model.calibrationTargetActive {
+            return "Click the target's grey patch to calibrate  ·  Esc to cancel"
         }
         if let recipe = model.previewingRecipe {
             return "Preview: \(recipe.name)"

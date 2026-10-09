@@ -102,6 +102,9 @@ public extension EditorModel {
         case .whiteBalanceSelector:
             guard info?.supportsWhiteBalance == true else { return false }
             eyedropperActive.toggle()
+        case .calibrateFromTarget:
+            guard canCalibrateFromTarget else { return false }
+            calibrationTargetActive.toggle()
         case .newSnapshot: createSnapshot()
         case .newPreset: RecipeActions.createRecipe(model: self)
         case .previousSetting: cycleFocusedParameter(by: -1)
@@ -237,6 +240,7 @@ public extension EditorModel {
              .exportWithPrevious:
             return photo
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
+        case .calibrateFromTarget: return canCalibrateFromTarget
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .filmLooks, .commandPalette:
             return true
         case .testCamera: return onTestCamera != nil
@@ -290,6 +294,9 @@ public extension EditorModel {
             cancelDrawing()
         } else if eyedropperActive {
             eyedropperActive = false
+        } else if calibrationTargetActive || calibrationTarget != nil {
+            calibrationTargetActive = false
+            calibrationTarget = nil
         } else if pointColorEyedropperActive {
             pointColorEyedropperActive = false
         } else if isPlacingGuides {

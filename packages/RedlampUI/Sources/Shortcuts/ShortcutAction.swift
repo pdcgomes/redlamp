@@ -113,7 +113,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     // Develop
     case undo, redo, copySettings, copySettingsAgain, pasteSettings, pastePrevious, resetAll
     case syncSettings, syncSettingsAgain, undoSync, toggleAutoSync
-    case autoTone, autoWhiteBalance, toggleBlackAndWhite, whiteBalanceSelector
+    case autoTone, autoWhiteBalance, toggleBlackAndWhite, whiteBalanceSelector, calibrateFromTarget
     case newSnapshot, newPreset, virtualCopy
     case previousSetting, nextSetting, increaseSetting, decreaseSetting, findAdjustment
 
@@ -153,8 +153,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
             .navigation
         case .undo, .redo, .copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious, .resetAll, .autoTone,
              .syncSettings, .syncSettingsAgain, .undoSync, .toggleAutoSync,
-             .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector, .newSnapshot, .newPreset,
-             .virtualCopy, .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment:
+             .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector, .calibrateFromTarget, .newSnapshot,
+             .newPreset, .virtualCopy, .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting,
+             .findAdjustment:
             .develop
         case .editTool, .cropTool, .healTool, .maskingTool, .cropAspectLock, .rotateLeft, .rotateRight, .brushMask,
              .linearMask,
@@ -222,6 +223,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .autoWhiteBalance: "Auto White Balance"
         case .toggleBlackAndWhite: "Convert to Black & White"
         case .whiteBalanceSelector: "White Balance Selector"
+        case .calibrateFromTarget: "Calibrate from Target"
         case .newSnapshot: "New Snapshot"
         case .newPreset: "New Recipe…"
         case .virtualCopy: "Create Virtual Copy"
@@ -327,6 +329,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .autoWhiteBalance: [.char("u", shift: true, command: true)]
         case .toggleBlackAndWhite: [.char("v")]
         case .whiteBalanceSelector: [.char("w")]
+        case .calibrateFromTarget: []
         case .newSnapshot: [.char("n", command: true)]
         case .newPreset: [.char("n", shift: true, command: true)]
         case .virtualCopy: [.char("'", command: true)]

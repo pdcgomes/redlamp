@@ -11,6 +11,10 @@
           "title" : "Treatment and Base Looks"
         },
         {
+          "id" : "develop.reproduction",
+          "title" : "Redlamp Reproduction and Calibrate from Target"
+        },
+        {
           "id" : "develop.tone",
           "title" : "Tone"
         },

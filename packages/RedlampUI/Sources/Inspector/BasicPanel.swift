@@ -13,6 +13,7 @@ import SwiftUI
             ControlRow(label: "Treatment") { TreatmentPicker() }
             ControlRow(label: "Base Look") { BaseLookMenu() }
             BaseLookAmountRow()
+            ReproductionStatusRow()
             ControlRow(label: "White Balance") { WhiteBalanceControls() }
             ParameterSlider(parameter: .temperature, enabled: supported)
             ParameterSlider(parameter: .tint, enabled: supported)
@@ -114,6 +115,7 @@ struct BaseLookMenu: View {
         }
         .menuStyle(.button)
         .controlSize(.small)
+        .accessibilityIdentifier("baseLook.menu")
         .help("The look under every slider (Lightroom: Profile). LUT looks can be imported from the Recipes panel.")
         .popover(isPresented: $browsing, arrowEdge: .leading) {
             BaseLookBrowser()
@@ -154,6 +156,49 @@ struct BaseLookAmountRow: View {
         }
         .onTapGesture(count: 2) { model.setBaseLookAmount(100) }
         .help("Base Look Amount: 0 turns the look off, 200 doubles it. Double-click to reset.")
+    }
+}
+
+/// Under Redlamp Reproduction: how the camera's exposure is calibrated, what bends the rendering
+/// away from the scene's own values, and Calibrate from Target with what follows it (TON-39, CAM-28).
+struct ReproductionStatusRow: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if model.baseLook.isReproduction {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(model.calibrationStatus)
+                    .accessibilityIdentifier("reproduction.calibration")
+                if let changes = model.reproductionChanges {
+                    Label(changes, systemImage: "exclamationmark.triangle")
+                        .accessibilityIdentifier("reproduction.changes")
+                }
+                if let message = model.calibrationMessage {
+                    Text(message).foregroundStyle(Theme.label)
+                }
+                HStack(spacing: 6) {
+                    Button("Calibrate from Target…") { _ = model.perform(.calibrateFromTarget) }
+                        .disabled(!model.canCalibrateFromTarget)
+                        .accessibilityIdentifier("reproduction.calibrate")
+                        .help(
+                            "Click a target's grey patch to calibrate this camera's exposure, after white balancing on it",
+                        )
+                    if model.canUpdateCalibration {
+                        Button("Update Calibration") { model.updateCalibration() }
+                            .help("Give this photo the camera's calibration as it is now")
+                    }
+                    if let entry = model.cameraCalibration {
+                        Button("Forget") { model.forgetCalibration() }
+                            .help("Forget the calibration for \(entry.camera); edits keep the exposure they have")
+                    }
+                }
+                .controlSize(.small)
+            }
+            .font(Theme.labelFont)
+            .foregroundStyle(Theme.secondaryLabel)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
