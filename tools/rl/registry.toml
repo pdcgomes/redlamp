@@ -408,4 +408,4 @@ run = "scripts/roadmap-sync.py && scripts/tracker-issues.py"
 
 [later]
 mise = ["fixtures", "fixtures-shoots", "maskeval", "notarize", "profile-data", "release", "render", "screenshots", "setup", "site", "vendor", "video"]
-redlamp = ["stack", "mask", "noise", "bench", "camera-bench", "mcp"]
+redlamp = ["stack", "mask", "noise", "bench", "camera-bench", "library", "mcp"]
