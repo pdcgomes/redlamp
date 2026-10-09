@@ -1,7 +1,7 @@
 # What Redlamp Can Learn from RAWmakase
 
 **Date:** 7 October 2026. **Subject:** RAWmakase v0.2.0 (`main` at `cfe010d`, 7 October 2026), the LibRaw commit its releases ship (master at `4f01440`, 2 October 2026), its documentation, release notes and issues.
-**Decisions and status:** on 7 October 2026 the owner accepted the slider work (UX-28, UX-29) and asked for the study's other lessons as Proposed rows in the [research intake tracker](research-tracker.md), for a decision later ([section 8](#8-decisions-and-tracker-rows)).
+**Decisions and status:** on 7 October 2026 the owner accepted the slider work (UX-28, UX-29) and asked for the study's other lessons as Proposed rows in the [research intake tracker](research-tracker.md), for a decision later ([section 8](#8-decisions-and-tracker-rows)). On 9 October 2026 the owner chose to move LibRaw to master's head (`7bfffe2`), and CAM-13 is done.
 
 RAWmakase is an open-source raw editor by Piotr Chmolowski, written in Rust, for macOS, Linux and Windows. It was started on 26 September 2026 and shipped 17 releases in its first eleven days; on 7 October it had 249 stars, 1,327 commits and 296 pull requests, almost all from agent branches. Its aim is "close, not exact, Lightroom parity": Lightroom Classic's Develop module rebuilt control by control, its responses fitted to Camera Raw's renders, with a way in for a Lightroom user's catalog, presets and profiles. This study asked how it compares with Redlamp, what it does differently or better, how it uses LibRaw, and what Redlamp should take from it.
 
