@@ -57,7 +57,7 @@ extension EditorModel {
     private func place(in folder: URL, copying: Bool) async {
         let stop = FileStop()
         let doing = copying ? "Copying" : "Moving"
-        let sheet = FileProgressSheet.present("\(doing) to \(folder.lastPathComponent)", editor: self, stop: stop)
+        let sheet = FileProgressSheet.present(doing, to: folder, editor: self, stop: stop)
         let error = await placeSelection(in: folder, copying: copying, progress: { sheet?.show($0) }, stop: stop)
         sheet?.close()
         guard let error, let window = EditorWindowController.frontWindow else { return }
@@ -131,13 +131,15 @@ final class FileProgressSheet {
     private let bar = NSProgressIndicator()
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
     private let stop: FileStop?
+    /// What the batch does, "Moving", as the label says while it runs.
     private let doing: String
     private weak var editor: EditorModel?
 
-    private init(_ title: String, editor: EditorModel, stop: FileStop?) {
+    private init(_ doing: String, to folder: URL, editor: EditorModel, stop: FileStop?) {
         self.editor = editor
         self.stop = stop
-        doing = title.hasPrefix("Copying") ? "Copying" : "Moving"
+        self.doing = doing
+        let title = "\(doing) to \(folder.lastPathComponent)"
         label = NSTextField(labelWithString: title + "…")
         bar.isIndeterminate = false
         bar.minValue = 0
@@ -167,10 +169,12 @@ final class FileProgressSheet {
         stopButton.action = #selector(stopClicked)
     }
 
-    /// Shows the sheet, unless another is up.
-    static func present(_ title: String, editor: EditorModel, stop: FileStop? = nil) -> FileProgressSheet? {
+    /// Shows the sheet for a batch `doing` what it does to `folder`, unless another is up.
+    static func present(
+        _ doing: String, to folder: URL, editor: EditorModel, stop: FileStop? = nil,
+    ) -> FileProgressSheet? {
         guard let parent = EditorWindowController.frontWindow, parent.attachedSheet == nil else { return nil }
-        let sheet = FileProgressSheet(title, editor: editor, stop: stop)
+        let sheet = FileProgressSheet(doing, to: folder, editor: editor, stop: stop)
         editor.isModalDialogOpen = true
         parent.beginSheet(sheet.window)
         return sheet
