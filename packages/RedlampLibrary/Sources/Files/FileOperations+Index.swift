@@ -10,6 +10,8 @@ struct IndexChanges: Sendable {
     var madeFolders: [String] = []
     var movedFolders: [FolderMove] = []
     var restoredPhotos: [(photo: RemovedPhoto, name: String)] = []
+    /// Copies' rows, under their own IDs.
+    var copiedPhotos: [RemovedPhoto] = []
     /// Each photo's path now.
     var placed: [Int64: String] = [:]
     /// Photos whose file or sidecar is another one now, by their paths: copied to another volume,
@@ -21,8 +23,8 @@ struct IndexChanges: Sendable {
 
     var isEmpty: Bool {
         restoredFolders.isEmpty && madeFolders.isEmpty && movedFolders.isEmpty && restoredPhotos.isEmpty
-            && placed.isEmpty && refreshed.isEmpty && removedPhotos.isEmpty && removedFolderTrees.isEmpty
-            && emptiedFolders.isEmpty
+            && copiedPhotos.isEmpty && placed.isEmpty && refreshed.isEmpty && removedPhotos.isEmpty
+            && removedFolderTrees.isEmpty && emptiedFolders.isEmpty
     }
 
     mutating func add(_ step: FileStep) {
@@ -59,6 +61,7 @@ struct IndexChanges: Sendable {
                 placed.removeValue(forKey: id)
                 refreshed.removeValue(forKey: id)
             }
+            copiedPhotos.removeAll { Set(ids).contains($0.photo.id) }
             if let top = step.removedFolders.first {
                 removedFolderTrees.append(top.id)
             }
@@ -87,6 +90,18 @@ struct IndexChanges: Sendable {
         case .recordOriginalNames, .clearOriginalNames:
             for photo in step.photos {
                 refreshed[photo.id] = photo.to
+            }
+        case .copy:
+            // Another file, whose identifier and sidecar's date are taken from it.
+            for copy in step.removed {
+                copiedPhotos.append(copy)
+                refreshed[copy.photo.id] = FilePlanner.composedLast(copy.folder + "/" + copy.photo.name)
+            }
+            let ids = Set(step.removed.map(\.photo.id))
+            removedPhotos.removeAll { ids.contains($0) }
+        case .detachCopies:
+            for photo in step.photos {
+                refreshed[photo.id] = FilePlanner.composedLast(photo.to)
             }
         }
     }
@@ -165,13 +180,23 @@ extension FileOperations {
                 guard let folder = try writer.folderID(forPath: photo.folder) else { continue }
                 try restored.append(writer.restorePhoto(photo, inFolder: folder, name: name))
             }
+            var stale: [Int64] = []
+            for copy in changes.copiedPhotos {
+                guard let folder = try writer.folderID(forPath: copy.folder) else { continue }
+                // A row holding the copy's place is of a file that's gone: its collections aren't the copy's.
+                if let holder = try writer.photo(folder: folder, name: copy.photo.name), holder.id != copy.photo.id {
+                    try writer.deletePhotos([holder.id])
+                    stale.append(holder.id)
+                }
+                try restored.append(writer.restorePhoto(copy, inFolder: folder, name: copy.photo.name))
+            }
             var moves: [(photo: Int64, folder: Int64, name: String)] = []
             for (id, path) in changes.placed.sorted(by: { $0.key < $1.key }) {
                 let (folderPath, name) = FilePlanner.split(path)
                 guard let folder = try writer.folderID(forPath: folderPath) else { continue }
                 moves.append((id, folder, name))
             }
-            let stale = try writer.placePhotos(moves)
+            stale += try writer.placePhotos(moves)
             for (id, fileID, sidecar) in attributes {
                 if changes.placed[id] != nil || fileID != nil {
                     try writer.setFileID(fileID, forPhoto: id)

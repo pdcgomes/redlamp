@@ -21,12 +21,16 @@ public extension FileOperations {
         return try await run(planUndo(target), progress: progress)
     }
 
-    /// The batch that undoes `id`, planned from where its photos are now.
+    /// The batch that undoes `id`, planned from where its photos are now; for a copy, the copies moved to the
+    /// Trash.
     func planUndo(_ id: UUID) async throws -> FileBatch {
         let journal = journal
         let (batch, logged) = try await LibraryIndex.offCaller { try journal.load(id) }
         guard batch.kind != .undo, logged.state == .finished || logged.state == .stopped else {
             throw FileOperationError.nothingToUndo
+        }
+        if batch.kind == .copy {
+            return try await planUndo(copies: batch, logged: logged)
         }
         let done = batch.steps.indices.filter { logged.done.contains($0) }.map { ($0, batch.steps[$0]) }
         var first: [Int64: String] = [:]
@@ -67,7 +71,7 @@ public extension FileOperations {
                 trashing.insert(step.inverse(trashed: []), at: 0)
             case .recordOriginalNames:
                 clearing.insert(step.inverse(trashed: []), at: 0)
-            case .clearOriginalNames:
+            case .clearOriginalNames, .copy, .detachCopies:
                 break
             }
         }
@@ -90,7 +94,10 @@ public extension FileOperations {
             var gone: [String] = []
             let present = moves.filter { move in
                 guard planner.entry(move.from) != nil else {
-                    gone.append(move.from)
+                    // Back where it was already, put there by an Undo that was stopped.
+                    if planner.entry(move.to) == nil {
+                        gone.append(move.from)
+                    }
                     return false
                 }
                 return true

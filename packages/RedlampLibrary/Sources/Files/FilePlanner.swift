@@ -14,6 +14,8 @@ final class FilePlanner: @unchecked Sendable {
     let locator: SidecarLocator
     private var listings: [String: Listing] = [:]
     private var volumes: [String: String] = [:]
+    /// The names without extensions each folder's files and folders hold, for copies' names.
+    private var copyStems: [String: Set<String>] = [:]
 
     /// Other apps' sidecars, named after a photo (`IMG_1234.ARW.xmp`) or its name without the
     /// extension (`IMG_1234.xmp`).
@@ -72,6 +74,7 @@ final class FilePlanner: @unchecked Sendable {
     /// Forgets the listings, so the next ones are read again.
     func forgetListings() {
         listings = [:]
+        copyStems = [:]
     }
 
     /// The volume `path` is on, or would be: its nearest folder that's there decides.
@@ -294,7 +297,129 @@ final class FilePlanner: @unchecked Sendable {
     /// A name for photos parked while a cycle of renames goes round: short, so it fits whatever
     /// the names around it.
     static func temporaryStem() -> String {
-        "Redlamp-renaming-" + String(UInt32.random(in: .min ... .max), radix: 16, uppercase: true)
+        temporaryPrefix + String(UInt32.random(in: .min ... .max), radix: 16, uppercase: true)
+    }
+
+    static let temporaryPrefix = "Redlamp-renaming-"
+
+    // MARK: - Copies
+
+    /// The name without its extension that a group of photos named `stem` takes in `folder` as copies: `stem`
+    /// itself while nothing there has it, and none of `taken` (the batch's other copies, folded with their
+    /// folders), otherwise a number after it, as the Finder names a copy it keeps beside another: `IMG_0001 2`,
+    /// and on from the number a name already ends with (`IMG_0001 3` for `IMG_0001 2`). A name is held by a file
+    /// or folder of that name with any extension, by its sidecars beside it, and, for each of `extensions`, by a
+    /// sidecar on this Mac at the copy's place.
+    func copyStem(_ stem: String, extensions: [String], in folder: String, taken: inout Set<String>) -> String {
+        var (base, number) = Self.copyNumber(of: stem)
+        var candidate = stem
+        while isHeld(candidate, extensions: extensions, in: folder) || taken.contains(Self.stemKey(folder, candidate)) {
+            number += 1
+            candidate = Self.fitted(base, " \(number)", extensions: extensions)
+        }
+        taken.insert(Self.stemKey(folder, candidate))
+        return candidate
+    }
+
+    /// `stem` without the copy's number it ends with, and that number; 1 when it has none.
+    static func copyNumber(of stem: String) -> (base: String, number: Int) {
+        guard let space = stem.lastIndex(of: " "), space != stem.startIndex else { return (stem, 1) }
+        let digits = stem[stem.index(after: space)...]
+        guard !digits.isEmpty, digits.count < 9, digits.first != "0", digits.allSatisfy(\.isASCII),
+              let number = Int(digits), number >= 2
+        else { return (stem, 1) }
+        return (String(stem[..<space]), number)
+    }
+
+    private static func stemKey(_ folder: String, _ stem: String) -> String {
+        NamingJob.fold(folder + "/" + stem)
+    }
+
+    /// `base` with `suffix` after it, its end cut so the longest of the copy's names, with its `.redlamp`, fits in
+    /// a name's 255 bytes.
+    private static func fitted(_ base: String, _ suffix: String, extensions: [String]) -> String {
+        let longest = extensions.map { $0.utf8.count + 1 }.max() ?? 0
+        var base = base
+        while !base.isEmpty, base.utf8.count + suffix.utf8.count + longest + NamingJob.sidecarBytes > 255 {
+            base.removeLast()
+        }
+        return base + suffix
+    }
+
+    /// Whether a file or folder in `folder` holds `stem`, or a sidecar on this Mac would be where a copy named
+    /// `stem` with one of `extensions` keeps its own.
+    private func isHeld(_ stem: String, extensions: [String], in folder: String) -> Bool {
+        if stems(in: folder).contains(NamingJob.fold(stem)) {
+            return true
+        }
+        return extensions.contains { ext in
+            let name = stem + (ext.isEmpty ? "" : "." + ext)
+            return locator.onThisMac(URL(fileURLWithPath: folder + "/" + name)).map { mac in
+                fileSystem.exists(mac)
+            } ?? false
+        }
+    }
+
+    /// The names without their extensions that the files and folders in `folder` hold, folded: a sidecar's
+    /// `IMG_0001.JPG.redlamp` and `IMG_0001.xmp` hold `IMG_0001`, as the photo does.
+    private func stems(in folder: String) -> Set<String> {
+        if let stems = copyStems[folder] {
+            return stems
+        }
+        var stems = Set<String>()
+        for name in listing(folder).entries.keys {
+            var name = name
+            while case let (base, ext) = NamingJob.split(name), NamingJob.sidecarExtensions.contains(ext) {
+                name = base
+            }
+            stems.insert(NamingJob.split(name).base)
+        }
+        copyStems[folder] = stems
+        return stems
+    }
+
+    /// Steps that copy each of `copies`, a group of photos sharing a folder and a name but for the extension, into
+    /// a folder under the names their moves give them, with their files: each group's copies (`removed`, under the
+    /// IDs the moves give them) in a step of their own, and their sidecars made their own every `namesPerStep`
+    /// copies, before which a batch can't stop.
+    func copySteps(_ copies: [(moves: [PhotoMove], rows: [RemovedPhoto])]) -> [FileStep] {
+        var steps: [FileStep] = []
+        var detaching: [PhotoMove] = []
+        for copy in copies {
+            guard let first = copy.moves.first else { continue }
+            let (from, name) = Self.split(first.from)
+            let (to, newName) = Self.split(first.to)
+            let group = Group(
+                from: from, stem: NamingJob.split(name).base, to: to, newStem: NamingJob.split(newName).base,
+                members: copy.moves,
+            )
+            let items = items(for: group).map { item in
+                var item = item
+                item.copies = true
+                return item
+            }
+            let renamed = NamingJob.fold(group.stem) != NamingJob.fold(group.newStem)
+            detaching += copy.moves.filter { move in
+                renamed || items.contains { item in
+                    switch item.role {
+                    case .sidecar: NamingJob.fold(item.source) == NamingJob.fold(move.from + ".redlamp")
+                    case .sidecarOnThisMac: item.source == locator.onThisMac(URL(fileURLWithPath: move.from))?.path
+                    default: false
+                    }
+                }
+            }
+            steps.append(FileStep(
+                kind: .copy, items: items, photos: copy.moves, removed: copy.rows, isSafe: detaching.isEmpty,
+            ))
+            if detaching.count >= FileOperations.namesPerStep {
+                steps.append(FileStep(kind: .detachCopies, photos: detaching))
+                detaching = []
+            }
+        }
+        if !detaching.isEmpty {
+            steps.append(FileStep(kind: .detachCopies, photos: detaching))
+        }
+        return steps
     }
 
     // MARK: - Checking
@@ -384,7 +509,23 @@ final class FilePlanner: @unchecked Sendable {
                     placed.remove(NamingJob.fold(folder))
                     vacated.insert(NamingJob.fold(folder))
                 }
-            case .recordOriginalNames, .clearOriginalNames:
+            case .copy:
+                var kept: [FileItem] = []
+                for item in step.items {
+                    guard let destination = item.destination, let item = atSource(item) else { continue }
+                    let destinationKey = NamingJob.fold(destination)
+                    if isThere(destination) {
+                        conflicts.append(FileConflict(path: destination, reason: .taken))
+                    }
+                    if item.role != .sidecarOnThisMac, !folderIsThere(Self.split(destination).folder) {
+                        conflicts.append(FileConflict(path: destination, reason: .noFolder))
+                    }
+                    vacated.remove(destinationKey)
+                    placed.insert(destinationKey)
+                    kept.append(item)
+                }
+                checked[number].items = kept
+            case .recordOriginalNames, .clearOriginalNames, .detachCopies:
                 break
             }
         }

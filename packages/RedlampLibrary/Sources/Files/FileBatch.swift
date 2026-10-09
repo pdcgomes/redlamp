@@ -1,16 +1,18 @@
 import Foundation
 import RedlampDocument
 
-/// One batch of the library's file operations (LIB-26): photos renamed or moved with their sidecars,
-/// folders made, moved or removed, photos and folders moved to the Trash, and put back from it, as
-/// steps that run in order, each with what it does to the index. `FileOperations` writes it to the
-/// journal, and syncs it, before anything moves; Undo is a batch of the steps' inverses, run
-/// backwards.
+/// One batch of the library's file operations (LIB-26): photos renamed, moved or copied with their
+/// sidecars, folders made, moved or removed, photos and folders moved to the Trash, and put back from
+/// it, as steps that run in order, each with what it does to the index. `FileOperations` writes it to
+/// the journal, and syncs it, before anything moves; Undo is a batch of the steps' inverses, run
+/// backwards, and a copy's Undo moves the copies to the Trash.
 public struct FileBatch: Sendable, Hashable, Identifiable {
     public enum Kind: String, Sendable, Hashable, Codable {
         case rename, move, newFolder, trash, undo
         /// Photos from Recently Trashed put back where they were.
         case putBack
+        /// Photos copied into a folder, each copy a photo of its own.
+        case copy
     }
 
     public let id: UUID
@@ -39,7 +41,7 @@ public struct FileBatch: Sendable, Hashable, Identifiable {
         self.undoes = undoes
     }
 
-    /// The photos the batch renames, moves or removes.
+    /// The photos the batch renames, moves or removes, or the copies it makes.
     public var photoCount: Int {
         Set(steps.flatMap { $0.photos.map(\.id) + $0.removed.map(\.photo.id) }).count
     }
@@ -61,18 +63,28 @@ public struct FileStep: Sendable, Hashable, Codable {
         /// (`PhotoMetadata.originalName`); taken out again when it's undone.
         case recordOriginalNames
         case clearOriginalNames
+        /// Files copied together, each to a place nothing held: a photo with its pair, its `.redlamp`
+        /// sidecars and other apps', each checked byte for byte; the originals stay. Each copy is a photo
+        /// of its own, with a row of its own (`removed`): its original's, under a new ID, in no
+        /// collection or stack.
+        case copy
+        /// The copies' sidecars made their own: out of the collections and the stack their originals
+        /// are in, and, for a copy given a number, its original's name recorded as its original name
+        /// unless it has one. Like original names, it can't be told done, so it's made again.
+        case detachCopies
     }
 
     public var kind: Kind
     public var items: [FileItem]
-    /// Photos it renames or moves (`move`), or whose original names it records or clears.
+    /// Photos it renames or moves (`move`), or whose original names it records or clears; for `copy`
+    /// and `detachCopies`, the copies, by their own IDs, from their originals' paths to their own.
     public var photos: [PhotoMove]
     /// Folders it renames or moves on their volume, keeping their rows.
     public var folders: [FolderMove]
     /// The folder it makes or removes.
     public var folder: String?
     /// Photos it takes out of the index (`trash`) or puts back (`putBack`), with their rows as they
-    /// were.
+    /// were; for `copy`, the copies' rows it adds.
     public var removed: [RemovedPhoto]
     /// Folders it takes out of the index or puts back, with their rows as they were, parents first.
     public var removedFolders: [RemovedFolder]
@@ -258,19 +270,25 @@ public struct FolderMove: Sendable, Hashable, Codable {
 }
 
 /// A photo's row as it was when the batch took it out of the index, to put back as it was: its
-/// keywords and collections too.
+/// keywords and collections too. For a copy, the row the copy gets.
 public struct RemovedPhoto: Sendable, Hashable, Codable {
     public var photo: IndexedPhoto
     /// Its folder's path.
     public var folder: String
     public var keywords: [String]
     public var collections: [CollectionPlace]
+    /// For a copy's row, the photo it's a copy of.
+    public var copyOf: Int64?
 
-    public init(photo: IndexedPhoto, folder: String, keywords: [String] = [], collections: [CollectionPlace] = []) {
+    public init(
+        photo: IndexedPhoto, folder: String, keywords: [String] = [], collections: [CollectionPlace] = [],
+        copyOf: Int64? = nil,
+    ) {
         self.photo = photo
         self.folder = folder
         self.keywords = keywords
         self.collections = collections
+        self.copyOf = copyOf
     }
 }
 
@@ -483,6 +501,12 @@ extension FileStep {
             FileStep(kind: .clearOriginalNames, photos: photos)
         case .clearOriginalNames:
             FileStep(kind: .recordOriginalNames, photos: photos)
+        case .copy:
+            // Rolled back, the copies' files are removed, as their rows are.
+            FileStep(kind: .trash, removed: removed)
+        case .detachCopies:
+            // The copies' sidecars go with them.
+            FileStep(kind: .detachCopies)
         }
     }
 }

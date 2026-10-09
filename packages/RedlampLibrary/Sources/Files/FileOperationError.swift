@@ -98,6 +98,12 @@ public struct FileOutcome: Sendable, Hashable {
     public var originalNamesSkipped: [String] = []
     /// How long recording and clearing original names in sidecars took.
     public var originalNamesTime = Duration.zero
+    /// Copies whose sidecar this build can't write, so they're still in their originals' collections and stack in
+    /// it, by path; the index has them in none.
+    public var copiesNotDetached: [String] = []
+    /// The photos it did, by index ID, once it's over: renamed, moved, moved to the Trash or put back; for a copy,
+    /// the photos it copied.
+    public var photoIDs: [Int64] = []
     /// Folders left where they were because something was put in them meanwhile.
     public var foldersLeft: [String] = []
     /// What couldn't be undone because it wasn't where the batch put it any more: emptied from the

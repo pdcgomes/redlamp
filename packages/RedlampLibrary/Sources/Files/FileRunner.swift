@@ -61,7 +61,28 @@ final class FileRunner: @unchecked Sendable {
             changeOriginalNames(of: step.photos, recording: true)
         case .clearOriginalNames:
             changeOriginalNames(of: step.photos, recording: false)
+        case .copy:
+            try copyItems(of: step, index, from: states)
+        case .detachCopies:
+            detachCopies(step.photos)
         }
+        try logDone(index)
+    }
+
+    /// Does sidecar step `index` (`writesSidecars`) for `photos` alone, those of its photos the steps before it have
+    /// put where it finds them, and logs it: what a batch stopping between a sidecar step's photos does for those
+    /// done, so it can stop after the photo in hand.
+    func perform(_ index: Int, photos: [PhotoMove]) throws {
+        switch batch.steps[index].kind {
+        case .recordOriginalNames: changeOriginalNames(of: photos, recording: true)
+        case .clearOriginalNames: changeOriginalNames(of: photos, recording: false)
+        case .detachCopies: detachCopies(photos)
+        case .move, .createFolder, .removeFolder, .trash, .putBack, .copy: return try perform(index)
+        }
+        try logDone(index)
+    }
+
+    private func logDone(_ index: Int) throws {
         if interruption == .beforeLogging(index) {
             throw FileOperations.ForcedQuit()
         }
@@ -106,6 +127,21 @@ final class FileRunner: @unchecked Sendable {
             changeOriginalNames(of: step.photos, recording: false)
         case .clearOriginalNames:
             changeOriginalNames(of: step.photos, recording: true)
+        case .copy:
+            for (item, state) in zip(step.items, states).reversed() {
+                guard let destination = item.destination else { continue }
+                try removeCopy(item, at: destination, state: state)
+            }
+        case .detachCopies:
+            // The copies go next, the steps before it being reversed after it: with their sidecars, made here
+            // for those that had none.
+            for copy in step.photos {
+                let url = URL(fileURLWithPath: copy.to)
+                for sidecar in [SidecarLocator.besidePhoto(url), store.locator.onThisMac(url)].compactMap(\.self)
+                    where fileSystem.exists(sidecar) {
+                    try fileSystem.removeItem(at: sidecar)
+                }
+            }
         }
         try log.undone(index)
     }
@@ -159,6 +195,38 @@ final class FileRunner: @unchecked Sendable {
                 throw FileOperationError.failed(path: item.source, message: Self.message(error))
             }
             if case let .withinStep(stepNumber, items) = interruption, stepNumber == index, trashedHere.count == items {
+                throw FileOperations.ForcedQuit()
+            }
+        }
+    }
+
+    /// Copies each of the step's items still to copy; when one fails, removes the copies it had made, then throws.
+    private func copyItems(of step: FileStep, _ index: Int, from states: [ItemState]?) throws {
+        var made: [(FileItem, String)] = []
+        for (number, item) in step.items.enumerated() {
+            guard let destination = item.destination, (states?[number] ?? .atSource) == .atSource else { continue }
+            do {
+                try copy(item, to: destination)
+                made.append((item, destination))
+            } catch let error as POSIXError where error.code == .ENOENT && !item.isRequired {
+                // A sidecar removed since the batch was checked: there's nothing to take along.
+            } catch {
+                if error is FileOperations.ForcedQuit {
+                    throw error
+                }
+                for (item, destination) in made.reversed() {
+                    do {
+                        try removeCopy(item, at: destination, state: .atDestination)
+                    } catch {
+                        throw FileOperationError.stuck(batch.id, path: destination, message: Self.message(error))
+                    }
+                }
+                if let error = error as? FileOperationError {
+                    throw error
+                }
+                throw FileOperationError.failed(path: item.source, message: Self.message(error))
+            }
+            if case let .withinStep(stepNumber, items) = interruption, stepNumber == index, made.count == items {
                 throw FileOperations.ForcedQuit()
             }
         }
@@ -250,6 +318,84 @@ extension FileRunner {
             throw error
         }
         try fileSystem.removeItem(at: source)
+    }
+
+    /// Copies `item` beside `destination` under a hidden name, checks every byte, and puts the copy in place without
+    /// replacing anything; the original stays. A `.redlamp` sidecar is read under file coordination, as
+    /// `SidecarStore` writes it, and one kept on this Mac gets the folders it goes in.
+    private func copy(_ item: FileItem, to destination: String) throws {
+        let (from, to) = (URL(fileURLWithPath: item.source), URL(fileURLWithPath: destination))
+        if item.role == .sidecarOnThisMac {
+            try fileSystem.createDirectory(at: to.deletingLastPathComponent(), withIntermediateDirectories: true)
+        }
+        let staging = Self.staging(for: to)
+        try? fileSystem.removeItem(at: staging)
+        let place = { [fileSystem] (source: URL) throws in
+            try fileSystem.copyItem(at: source, to: staging)
+            do {
+                try self.verify(source, staging)
+                try fileSystem.moveItem(at: staging, to: to)
+            } catch {
+                try? fileSystem.removeItem(at: staging)
+                throw error
+            }
+        }
+        guard item.role == .sidecar || item.role == .sidecarOnThisMac else { return try place(from) }
+        var result: Result<Void, any Error> = .success(())
+        var coordination: NSError?
+        NSFileCoordinator(filePresenter: nil)
+            .coordinate(readingItemAt: from, options: [], error: &coordination) { from in
+                result = Result { try place(from) }
+            }
+        if let coordination {
+            throw coordination
+        }
+        try result.get()
+    }
+
+    /// Removes the copy a step made of `item` at `destination` when `state` finds it there (`copyState`), and what a
+    /// copy cut short left beside it.
+    private func removeCopy(_: FileItem, at destination: String, state: ItemState) throws {
+        let copy = URL(fileURLWithPath: destination)
+        try? fileSystem.removeItem(at: Self.staging(for: copy))
+        guard state == .atDestination else { return }
+        try fileSystem.removeItem(at: copy)
+    }
+
+    /// Makes each copy's sidecar its own, as one batch (`SidecarStore.change`): out of the collections and the
+    /// stack its original is in, and, for a copy given another name, with its original's name as its original
+    /// name unless it has one, made for that where it has none. A sidecar this build can't write is left as it
+    /// is.
+    private func detachCopies(_ copies: [PhotoMove]) {
+        let failed = Mutex([String]())
+        store.change(copies.map { URL(fileURLWithPath: $0.to) }) { number, sidecar in
+            let (from, to) = (FilePlanner.split(copies[number].from).name, FilePlanner.split(copies[number].to).name)
+            let renamed = NamingJob.fold(from) != NamingJob.fold(to)
+            guard var sidecar = sidecar ?? (renamed ? Sidecar(recipe: EditRecipe()) : nil) else { return .keep }
+            var metadata = sidecar.metadata ?? PhotoMetadata()
+            var changed = false
+            if !metadata.collections.isEmpty {
+                metadata.collections = []
+                changed = true
+            }
+            if metadata.stack != nil {
+                metadata.stack = nil
+                changed = true
+            }
+            if renamed, metadata.originalName == nil {
+                metadata.originalName = from
+                changed = true
+            }
+            guard changed else { return .keep }
+            sidecar.metadata = metadata.isEmpty ? nil : metadata
+            sidecar.modified = Date()
+            return .saveOrRemove(sidecar)
+        } done: { result in
+            if case .failed = result.outcome {
+                failed.withLock { $0.append(copies[result.index].to) }
+            }
+        }
+        outcome.copiesNotDetached += failed.withLock { $0 }.sorted()
     }
 
     /// A copy a forced quit left in place with its source: checked again, then the source removed.
@@ -357,7 +503,7 @@ extension FileRunner {
     /// it, `.IMG_1234.ARW.redlamp.<UUID>`, beside the photos and on this Mac.
     func removeInterruptedSaves(locator: SidecarLocator) {
         var names: [String: Set<String>] = [:]
-        for step in batch.steps where Self.writesNames(step) {
+        for step in batch.steps where Self.writesSidecars(step) {
             for photo in step.photos {
                 for path in [photo.from, photo.to] {
                     let (folder, name) = FilePlanner.split(path)
@@ -412,10 +558,28 @@ extension FileRunner {
                     return .atDestination
                 }
                 return .neither
+            case .copy:
+                return copyState(of: item)
             default:
                 return state(of: item)
             }
         }
+    }
+
+    /// Where a copy is: at its destination once it's there, a file with its original's size and date, which a copy
+    /// keeps; still to make while its original is there; neither when the original has gone.
+    private func copyState(of item: FileItem) -> ItemState {
+        guard let destination = item.destination else { return .neither }
+        if let copy = try? fileSystem.attributes(of: URL(fileURLWithPath: destination)) {
+            // A sidecar may have been made its own since (`detachCopies`).
+            let isSidecar = item.isDirectory || item.role == .sidecar || item.role == .sidecarOnThisMac
+            let sameSize = item.size.map { $0 == copy.size } ?? true
+            let sameDate = item.modified.map { abs(copy.modified.timeIntervalSince($0)) < 1e-3 } ?? true
+            if isSidecar || sameSize && sameDate {
+                return .atDestination
+            }
+        }
+        return fileSystem.exists(URL(fileURLWithPath: item.source)) ? .atSource : .neither
     }
 
     /// The first step after `lastLogged` that a forced quit left undone, and how far it had got, from
@@ -432,14 +596,14 @@ extension FileRunner {
                 end += 1
             }
             let span = Array(index ... end)
-            let moves = span.filter { !Self.writesNames(steps[$0]) }
+            let moves = span.filter { !Self.writesSidecars(steps[$0]) }
             if moves.count > 1, let last = moves.last, progress(of: last).isDone {
-                names += span.filter { Self.writesNames(steps[$0]) }
+                names += span.filter { Self.writesSidecars(steps[$0]) }
                 index = end + 1
                 continue
             }
             for step in span {
-                if Self.writesNames(steps[step]) {
+                if Self.writesSidecars(steps[step]) {
                     names.append(step)
                     continue
                 }
@@ -453,8 +617,30 @@ extension FileRunner {
         return (steps.count, nil, names)
     }
 
-    static func writesNames(_ step: FileStep) -> Bool {
-        step.kind == .recordOriginalNames || step.kind == .clearOriginalNames
+    /// Where a batch asked to stop before step `index`, after one that isn't safe, can stop now: the sidecar step
+    /// that would make it safe (`writesSidecars`), for those of its photos the steps since the last safe one have
+    /// put where it finds them. Nil while a cycle of renames has a photo under a temporary name, or when the next
+    /// safe step doesn't write sidecars.
+    func stop(before index: Int) -> (step: Int, photos: [PhotoMove])? {
+        let steps = batch.steps
+        guard index > 0, index < steps.count, !steps[index - 1].isSafe,
+              let next = steps[index...].firstIndex(where: \.isSafe), Self.writesSidecars(steps[next])
+        else { return nil }
+        let start = (steps[..<index].lastIndex(where: \.isSafe) ?? -1) + 1
+        var placed: [Int64: String] = [:]
+        for step in steps[start ..< index] where step.kind == .move || step.kind == .copy {
+            for photo in step.photos {
+                placed[photo.id] = photo.to
+            }
+        }
+        guard !placed.values.contains(where: { FilePlanner.split($0).name.hasPrefix(FilePlanner.temporaryPrefix) })
+        else { return nil }
+        return (next, steps[next].photos.filter { placed[$0.id] == $0.to })
+    }
+
+    /// The steps that write photos' sidecars rather than move files, which can't be told done.
+    static func writesSidecars(_ step: FileStep) -> Bool {
+        step.kind == .recordOriginalNames || step.kind == .clearOriginalNames || step.kind == .detachCopies
     }
 
     /// Whether step `index` is done, not started, or partway, from where its files are.
@@ -467,9 +653,9 @@ extension FileRunner {
         case .removeFolder:
             let gone = step.folder.map { !fileSystem.exists(URL(fileURLWithPath: $0)) } ?? true
             return ([], gone, !gone)
-        case .recordOriginalNames, .clearOriginalNames:
+        case .recordOriginalNames, .clearOriginalNames, .detachCopies:
             return ([], false, true)
-        case .move, .putBack, .trash:
+        case .move, .putBack, .trash, .copy:
             let states = states(of: index)
             let isDone = states.allSatisfy { $0 == .atDestination || $0 == .neither }
                 && states.contains(.atDestination)

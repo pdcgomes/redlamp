@@ -149,7 +149,8 @@ public final class FileOperations: Sendable {
     }
 
     /// Runs the batch's steps from `start`, writing the index as it goes; rolls the batch back if a
-    /// step fails.
+    /// step fails. Cancelled, it stops after the step in hand once that's safe, or, between the photos of a
+    /// sidecar step to come, once it has written their sidecars for the photos done (`FileRunner.stop(before:)`).
     private func forward(
         _ runner: FileRunner, from start: Int, locator: SidecarLocator,
         progress: (@Sendable (FileProgress) -> Void)?,
@@ -158,13 +159,22 @@ public final class FileOperations: Sendable {
         let steps = batch.steps
         let cancelled = Cancellation()
         var next = start
+        var early: (step: Int, photos: [PhotoMove])?
         do {
             try await withTaskCancellationHandler {
                 while next < steps.count {
                     let first = next
-                    let end = try await LibraryIndex.offCaller {
+                    let (end, stopped) = try await LibraryIndex.offCaller {
+                        () -> (Int, (step: Int, photos: [PhotoMove])?) in
                         var index = first
                         while index < steps.count {
+                            if cancelled.isSet, index == 0 || steps[index - 1].isSafe {
+                                break
+                            }
+                            if cancelled.isSet, let stop = runner.stop(before: index) {
+                                try runner.perform(stop.step, photos: stop.photos)
+                                return (index, stop)
+                            }
                             try runner.perform(index)
                             index += 1
                             progress?(FileProgress(done: index, total: steps.count))
@@ -172,12 +182,18 @@ public final class FileOperations: Sendable {
                                 break
                             }
                         }
-                        return index
+                        return (index, nil)
                     }
                     var changes = IndexChanges()
                     steps[first ..< end].forEach { changes.add($0) }
+                    if let stopped {
+                        var step = steps[stopped.step]
+                        step.photos = stopped.photos
+                        changes.add(step)
+                    }
                     try await record(changes, locator: locator)
                     next = end
+                    early = stopped
                     if cancelled.isSet, next < steps.count {
                         break
                     }
@@ -195,15 +211,17 @@ public final class FileOperations: Sendable {
             try await rollBack(runner, steps: done.sorted(by: >), locator: locator, progress: progress)
             throw error
         }
-        let state: FileJournal.State = next < steps.count ? .stopped : .finished
+        // Stopped before its first step, it did nothing for Undo to take back.
+        let state: FileJournal.State = next == steps.count ? .finished : next == 0 ? .rolledBack : .stopped
         try await LibraryIndex.offCaller { try runner.log.state(state) }
         if let original = batch.undoes, state == .finished {
             try await LibraryIndex.offCaller { [journal] in try journal.log(original).state(.undone) }
         }
         var outcome = runner.outcome
         outcome.state = state
-        outcome.done = next
+        outcome.done = next + (early == nil ? 0 : 1)
         outcome.photos = Self.photos(in: steps[..<next])
+        outcome.photoIDs = Self.photoIDs(in: steps[..<next])
         outcome.gone = batch.gone
         return outcome
     }
@@ -307,8 +325,9 @@ public final class FileOperations: Sendable {
             outcome.recoveredFrom = logged.done.count
             return outcome
         }
-        // The steps logged done, then those a forced quit stopped before they were logged.
-        let lastLogged = logged.done.max() ?? -1
+        // The steps logged done, then those a forced quit stopped before they were logged. A sidecar step a stop
+        // made early (`FileRunner.stop(before:)`) comes after steps that aren't done, which go on from the first.
+        let lastLogged = ((0 ..< steps.count).first { !logged.done.contains($0) } ?? steps.count) - 1
         let (frontier, partial, names) = try await LibraryIndex.offCaller { runner.frontier(after: lastLogged) }
         var finishing = choice == .finish
         if finishing, frontier < steps.count {
@@ -390,11 +409,27 @@ public final class FileOperations: Sendable {
 
     static func photos(in steps: ArraySlice<FileStep>) -> Int {
         var ids = Set<Int64>()
-        for step in steps where step.kind == .move || step.kind == .trash || step.kind == .putBack {
+        for step in steps where [.move, .trash, .putBack, .copy].contains(step.kind) {
             ids.formUnion(step.photos.map(\.id))
             ids.formUnion(step.removed.map(\.photo.id))
         }
         return ids.count
+    }
+
+    /// The photos `steps` did, as `FileOutcome.photoIDs` has them, each once.
+    static func photoIDs(in steps: ArraySlice<FileStep>) -> [Int64] {
+        var seen = Set<Int64>()
+        var ids: [Int64] = []
+        for step in steps {
+            let done: [Int64] = switch step.kind {
+            case .move: step.photos.map(\.id).filter { $0 != 0 }
+            case .trash, .putBack: step.removed.map(\.photo.id)
+            case .copy: step.removed.compactMap(\.copyOf)
+            case .createFolder, .removeFolder, .recordOriginalNames, .clearOriginalNames, .detachCopies: []
+            }
+            ids += done.filter { seen.insert($0).inserted }
+        }
+        return ids
     }
 
     /// Where a step's items went in the Trash, in their order.

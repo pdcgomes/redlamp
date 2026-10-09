@@ -120,6 +120,10 @@ public extension LibraryIndex.Writer {
             }
             restored = removed.photo.id
             try movePhotos([(restored, folder, name)])
+            if removed.keywords.isEmpty {
+                // Its text went with the ID it was added under, and setting no keywords writes none.
+                try writeText(replacing: [restored])
+            }
         }
         try setKeywords(removed.keywords, forPhoto: restored)
         let place = try database.cached("""

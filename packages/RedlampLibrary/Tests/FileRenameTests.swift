@@ -248,7 +248,10 @@ struct FileRenameTests {
                 #expect(photo.sidecar ? sidecar?.metadata?.originalName == nil : sidecar == nil, "\(photo.path)")
             }
         }
-        #expect(renamed == outcome.originalNamesRecorded && renamed == FileOperations.namesPerStep, "a step's names")
+        #expect(
+            renamed == outcome.originalNamesRecorded && renamed >= 100 && renamed < FileOperations.namesPerStep,
+            "stopped after the photo in hand, the names of those renamed recorded",
+        )
         #expect(sandbox.leftovers().isEmpty)
 
         #expect(try await operations.undo().isFinished)
