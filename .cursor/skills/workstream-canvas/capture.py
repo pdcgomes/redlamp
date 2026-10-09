@@ -2,18 +2,25 @@
 
     python3 -m venv /tmp/rl-canvas-shot && /tmp/rl-canvas-shot/bin/pip install --quiet playwright pillow
     /tmp/rl-canvas-shot/bin/python .cursor/skills/workstream-canvas/capture.py <canvas.tsx> <out folder> \
-        overview=0,1 now=2:700 measured=5
+        [--data=<canvas.data.json>] [--set=tab=Bugs] overview=0,1 now=2:700 measured=5
 
 Each shot is `name=sections[:max height]`: the indices of the canvas's top-level sections (the
 children of its root element) to frame together, in CSS pixels at a 1368 px width, rendered at 2x
 in the dark theme. It compiles the canvas with the site's TypeScript (web/node_modules), serves it
 on 127.0.0.1, and drives the installed Google Chrome with the flags Cursor's sandbox needs.
 
+The canvas starts with no saved state unless --data gives it the `.canvas.data.json` beside it, so
+it shows the owner's marks and choices as Cursor does. Each --set=<key>=<value> then sets one key of
+that state (the value read as JSON when it parses, as text otherwise), such as the tab a canvas
+keeps under `tab`. --now=<ISO time> stops the page's clock at that time, so "3 min ago" reads as it
+did then.
+
 The runtime is Cursor's own (canvas-runtime.esm.js inside Cursor.app), so captures look as they do
 beside the chat; its path and the host object it expects (`window.__cursorCanvas` with `data` and
 `state` maps) are Cursor's internals and may change with an update.
 """
 import http.server
+import json
 import subprocess
 import sys
 import tempfile
@@ -31,7 +38,7 @@ FLAGS = ["--no-sandbox", "--disable-gpu-sandbox", "--use-angle=swiftshader", "--
 PAGE = """<!doctype html><html><head><meta charset="utf-8"></head><body><div id="root"></div>
 <script type="module">
 import { mountCanvas } from "./canvas-runtime.esm.js";
-window.__cursorCanvas = { data: new Map(), state: new Map() };
+window.__cursorCanvas = { data: new Map(Object.entries(__SEED__)), state: new Map() };
 mountCanvas(new URL("./canvas.js", import.meta.url).href);
 </script></body></html>"""
 COMPILE = """
@@ -44,12 +51,12 @@ fs.writeFileSync(process.argv[3], out.replace(/import\\s*\\{[^}]*\\}\\s*from\\s*
 PAD = 20
 
 
-def main(canvas: Path, out: Path, shots: list[str]) -> None:
+def main(canvas: Path, out: Path, shots: list[str], seed: dict, now: str | None = None) -> None:
     out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as site, tempfile.TemporaryDirectory() as profile:
         site = Path(site)
         (site / "canvas-runtime.esm.js").write_bytes(RUNTIME.read_bytes())
-        (site / "index.html").write_text(PAGE)
+        (site / "index.html").write_text(PAGE.replace("__SEED__", json.dumps(seed)))
         typescript = ROOT / "web/node_modules/typescript"
         subprocess.run(["node", "-e", COMPILE, str(typescript), str(canvas), str(site / "canvas.js")], check=True)
 
@@ -70,6 +77,8 @@ def main(canvas: Path, out: Path, shots: list[str]) -> None:
                 viewport={"width": 1368, "height": 1000}, device_scale_factor=2, color_scheme="dark",
             )
             page = context.new_page()
+            if now:
+                page.clock.set_fixed_time(now)
             page.goto(url)
             page.wait_for_function("document.querySelector('#root')?.firstElementChild?.children.length > 0")
             page.wait_for_timeout(1500)
@@ -94,7 +103,25 @@ def main(canvas: Path, out: Path, shots: list[str]) -> None:
         server.shutdown()
 
 
+def state(options: list[str]) -> dict:
+    seed: dict = {}
+    for option in options:
+        if option.startswith("--data="):
+            seed.update(json.loads(Path(option.removeprefix("--data=")).read_text()))
+    for option in options:
+        if option.startswith("--set="):
+            key, _, value = option.removeprefix("--set=").partition("=")
+            try:
+                seed[key] = json.loads(value)
+            except json.JSONDecodeError:
+                seed[key] = value
+    return seed
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
+    options = [arg for arg in sys.argv[3:] if arg.startswith("--")]
+    shots = [arg for arg in sys.argv[3:] if not arg.startswith("--")]
+    if len(sys.argv) < 4 or not shots:
         sys.exit(__doc__)
-    main(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), sys.argv[3:])
+    clock = next((option.removeprefix("--now=") for option in options if option.startswith("--now=")), None)
+    main(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve(), shots, state(options), clock)

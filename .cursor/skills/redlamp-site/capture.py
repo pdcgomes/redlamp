@@ -28,6 +28,14 @@ def main() -> None:
         for name, (viewport, scale) in VIEWPORTS.items():
             page = browser.new_context(viewport=viewport, device_scale_factor=scale).new_page()
             page.goto(url, wait_until="networkidle")
+            # A full-height screenshot doesn't scroll, so images marked loading="lazy" (the blog's
+            # figures) would never load below the fold.
+            page.evaluate(
+                """() => Promise.all([...document.images].map((image) => {
+                     image.loading = "eager";
+                     return image.decode().catch(() => null);
+                   }))"""
+            )
             element = page.locator(selector).first
             element.scroll_into_view_if_needed()
             page.wait_for_timeout(400)
