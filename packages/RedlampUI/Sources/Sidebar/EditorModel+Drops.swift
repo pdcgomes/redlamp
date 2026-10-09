@@ -102,6 +102,7 @@ extension EditorModel {
             title: "Move \(count) Photo\(count == 1 ? "" : "s") to \(folder.lastPathComponent)", photos: photos,
         )
         let relay = FileProgressRelay { progress?($0) }
+        push(step)
         let run = await fileSteps.make { [self] in
             await perform(step, undoing: false) { await service.move(ids, to: folder) { relay.send($0) } }
         }

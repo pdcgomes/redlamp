@@ -15,12 +15,8 @@ final class PanelStep {
     /// Each change's batch as it was made last, and its Undo as it was taken back last.
     var batches: [UUID?]
     var undos: [UUID?]
-    /// Culling's newest change when it was made or made again; and, when it was taken back, culling's newest
-    /// to make again and every change culling had: they tell Undo and Redo which of the two goes first, and
-    /// Redo that a change made since leaves nothing to make again.
-    var cullingBefore: CullingStep?
-    var cullingRedoBefore: CullingStep?
-    var cullingKnown: [CullingStep] = []
+    /// Its turn in Library's Undo and Redo (`EditorModel+LibraryUndo`).
+    var turn = 0
 
     init(title: String, changes: [PanelChange], photos: [URL], ids: [Int64]) {
         self.title = title
@@ -321,13 +317,11 @@ public extension LibraryPanels {
 
     // MARK: - Undo and Redo
 
-    /// Library's Undo: the panels' last change when it came after culling's last; nil when culling's goes
-    /// first.
+    /// Library's Undo: the panels' last change, when it's the newest of the library's changes; nil when another
+    /// kind's goes first.
     func undoInLibrary() -> Bool? {
-        guard let model, let step = undoSteps.last, model.cullingUndo.last === step.cullingBefore else { return nil }
-        undoSteps.removeLast()
-        step.cullingRedoBefore = model.cullingRedo.last
-        step.cullingKnown = model.cullingUndo + model.cullingRedo
+        guard let model, model.libraryUndoKind == .panels, let step = undoSteps.popLast() else { return nil }
+        step.turn = model.nextLibraryTurn()
         redoSteps.append(step)
         problem = nil
         model.activity.record(.action, "Undo \(step.title)")
@@ -336,17 +330,11 @@ public extension LibraryPanels {
         return true
     }
 
-    /// Library's Redo: the panels' change Undo took back last, when it was taken back after culling's; nil
-    /// when culling's goes first, or a change made since leaves nothing to make again.
+    /// Library's Redo: the panels' change Undo took back last, when it's the library's change taken back last;
+    /// nil when another kind's goes first.
     func redoInLibrary() -> Bool? {
-        guard let model, let step = nextRedo else {
-            if model.map({ isStale(redoSteps.last, in: $0) }) == true {
-                redoSteps.removeAll()
-            }
-            return nil
-        }
-        redoSteps.removeLast()
-        step.cullingBefore = model.cullingUndo.last
+        guard let model, model.libraryRedoKind == .panels, let step = redoSteps.popLast() else { return nil }
+        step.turn = model.nextLibraryTurn()
         undoSteps.append(step)
         problem = nil
         model.activity.record(.action, "Redo \(step.title)")
@@ -355,14 +343,13 @@ public extension LibraryPanels {
         return true
     }
 
-    /// True when Library's Undo would take back one of the panels' changes or culling's; nil when only
-    /// culling's could say.
+    /// True when Library's Undo would take back one of the panels' changes; nil when another kind's goes first.
     var canUndoInLibrary: Bool? {
-        undoSteps.isEmpty ? nil : true
+        model?.libraryUndoKind == .panels ? true : nil
     }
 
     var canRedoInLibrary: Bool? {
-        nextRedo == nil ? nil : true
+        model?.libraryRedoKind == .panels ? true : nil
     }
 
     /// Returns once every change asked for has been made.
@@ -383,22 +370,6 @@ public extension LibraryPanels {
 extension LibraryPanels {
     private enum Making {
         case change, undo, redo
-    }
-
-    /// The step Redo would make again: the panels' last taken back, when culling took back none after it and
-    /// no change was made since.
-    private var nextRedo: PanelStep? {
-        guard let model, let step = redoSteps.last, !isStale(step, in: model),
-              model.cullingRedo.last === step.cullingRedoBefore
-        else { return nil }
-        return step
-    }
-
-    /// Whether a culling change was made since `step` was taken back: a step culling didn't have then.
-    private func isStale(_ step: PanelStep?, in model: EditorModel) -> Bool {
-        guard let step else { return false }
-        let known = Set(step.cullingKnown.map(ObjectIdentifier.init))
-        return model.cullingUndo.contains { !known.contains(ObjectIdentifier($0)) }
     }
 
     /// Makes `changes` as one step with Undo, `overlay` showing it until the library has it. Made `onSelection`,
@@ -439,16 +410,15 @@ extension LibraryPanels {
         model.saves.enqueue(.track(nil, opened: model.sidecarToSave), for: url)
     }
 
-    /// `step` on Undo, newest; nothing left to Redo, culling's included.
+    /// `step` on Undo, newest; nothing left to Redo, of any kind.
     private func push(_ step: PanelStep) {
         guard let model else { return }
-        step.cullingBefore = model.cullingUndo.last
+        step.turn = model.nextLibraryTurn()
         undoSteps.append(step)
         if undoSteps.count > Self.undoLimit {
             undoSteps.removeFirst(undoSteps.count - Self.undoLimit)
         }
-        redoSteps.removeAll()
-        model.cullingRedo.removeAll()
+        model.endLibraryRedo()
     }
 
     private func enqueue(_ step: PanelStep, as making: Making) {

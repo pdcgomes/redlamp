@@ -9,8 +9,9 @@ import Synchronization
 ///   one change with Undo and Redo. It's shown at once in the grid, the filmstrip and the loupe, then made in
 ///   the background: as one of the library's batches (`LibraryMetadata`) for the photos it has indexed, the
 ///   photo Develop has open among them, each photo given its own values, and through the photos' own saves
-///   for the rest. Redo is the Undo of the Undo where the journal still has it. A photo whose sidecar the
-///   library can't read or write is reported in the activity log and shown as the library has it.
+///   for the rest. Redo is the Undo of the Undo where the journal still has it. Undo and Redo take turns with
+///   the library's other changes in the order they were made (`EditorModel+LibraryUndo`). A photo whose
+///   sidecar the library can't read or write is reported in the activity log and shown as the library has it.
 /// - **In Develop** each change reaches the active photo, as it always has, and isn't on Library's Undo.
 /// - A toggle (P, X, 6 to 9, a custom label, B) sets its value on every photo it reaches, or takes it off
 ///   them all when every one has it already. `[` and `]` step each photo's own rating.
@@ -58,9 +59,9 @@ public extension EditorModel {
             toggleAutoAdvance()
             return true
         case .undo where module == .library:
-            return undoCulling()
+            return libraryUndoKind == .culling && undoCulling()
         case .redo where module == .library:
-            return redoCulling()
+            return libraryRedoKind == .culling && redoCulling()
         case .decreaseRating where sizedBrush != nil, .increaseRating where sizedBrush != nil:
             return nil
         case .flagReject where module == .develop && activeTool == .crop:
@@ -75,8 +76,8 @@ public extension EditorModel {
     internal func canPerformCullingShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .autoAdvance: true
-        case .undo where module == .library: canUndoCulling
-        case .redo where module == .library: canRedoCulling
+        case .undo where module == .library: libraryUndoKind == .culling
+        case .redo where module == .library: libraryRedoKind == .culling
         default: CullingChange(action) == nil ? nil : canCull
         }
     }
@@ -149,6 +150,7 @@ public extension EditorModel {
     @discardableResult
     func undoCulling() -> Bool {
         guard module == .library, let step = cullingUndo.popLast() else { return false }
+        step.turn = nextLibraryTurn()
         cullingRedo.append(step)
         let shown = find(step) { shown, place in
             shown.matches(step.after[place], in: step.field) ? step.before[place] : nil
@@ -165,6 +167,7 @@ public extension EditorModel {
     @discardableResult
     func redoCulling() -> Bool {
         guard module == .library, let step = cullingRedo.popLast() else { return false }
+        step.turn = nextLibraryTurn()
         cullingUndo.append(step)
         let shown = find(step) { shown, place in
             shown.matches(step.before[place], in: step.field) ? step.after[place] : nil
@@ -207,18 +210,14 @@ public extension EditorModel {
         guard let step = cullingStep(change, rows: rows) else { return }
         let sequence = cullingQueue.request(step.photos)
         show(step.after, field: change.field, rows: step.rows, photoIDs: step.photoIDs, sequence: sequence)
+        step.turn = nextLibraryTurn()
         cullingUndo.append(step)
-        var dropped = cullingRedo
         if cullingUndo.count > Self.cullingUndoLimit {
-            dropped += cullingUndo.prefix(cullingUndo.count - Self.cullingUndoLimit)
+            let freed = DroppedSteps(Array(cullingUndo.prefix(cullingUndo.count - Self.cullingUndoLimit)))
             cullingUndo.removeFirst(cullingUndo.count - Self.cullingUndoLimit)
+            release(freed)
         }
-        cullingRedo.removeAll()
-        if !dropped.isEmpty {
-            let freed = DroppedSteps(dropped)
-            dropped = []
-            library.scheduler.submit(.background) { freed.steps = [] }
-        }
+        endLibraryRedo()
         var labels: Set<String> = []
         for values in step.after {
             if let label = values.customLabel {
@@ -227,6 +226,19 @@ public extension EditorModel {
         }
         remember(Array(labels))
         make(step, sequence: sequence, as: .change)
+    }
+
+    /// Nothing culling took back is made again.
+    internal func dropCullingRedo() {
+        guard !cullingRedo.isEmpty else { return }
+        let freed = DroppedSteps(cullingRedo)
+        cullingRedo = []
+        release(freed)
+    }
+
+    /// Lets go of `freed`'s steps in the background, `freed` holding the last reference to them.
+    private func release(_ freed: DroppedSteps) {
+        library.scheduler.submit(.background) { freed.steps = [] }
     }
 
     /// What `change` makes of the photos of `rows` that it changes, or nil when it changes none. It reads the
@@ -754,6 +766,8 @@ final class CullingStep {
     var saved: [Int] = []
     /// What their sidecars held before it, which Undo puts back: the grid may have shown other apps' values.
     let held = CullingHeld()
+    /// Its turn in Library's Undo and Redo (`EditorModel+LibraryUndo`).
+    var turn = 0
 
     init(
         title: String, field: CullingField, photos: [URL], rows: [Int], photoIDs: [Int64],
