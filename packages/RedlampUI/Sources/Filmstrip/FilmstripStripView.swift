@@ -50,6 +50,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var isRegrouping = false
     /// In sight when it last looked.
     private var wasInSight = false
+    /// Times every cell was made again.
+    private(set) var reloads = 0
 
     init(model: EditorModel) {
         self.model = model
@@ -164,6 +166,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     /// Shows the items afresh, counted at once: a reload counts them at the next layout, and a batch update before then
     /// would count its change twice, deleting rows the count no longer has.
     private func reload() {
+        reloads += 1
         followItems()
         collectionView.reloadData()
         collectionView.layoutSubtreeIfNeeded()

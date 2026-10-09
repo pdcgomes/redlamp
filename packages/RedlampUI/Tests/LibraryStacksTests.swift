@@ -271,6 +271,49 @@ struct LibraryStacksTests {
 
     // MARK: - Changes
 
+    @Test func `a filter's change in a list without stacks is no restack, and the filmstrip doesn't reload`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _, filmstrip, window) = try await open()
+        defer { window.contentView = nil }
+        let filters = try #require(model.libraryFilters)
+        var restacks = 0
+        let observation = model.gridStacks.observe { change in
+            if change == .restacked {
+                restacks += 1
+            }
+        }
+        defer { observation.invalidate() }
+        /// The filter's photos listed, and the stacking their change started done.
+        func filter(_ text: String, count: Int) async throws {
+            let made = model.gridStacks.stackingsMade
+            filters.setText(text)
+            try await eventually { model.items.count == count && model.gridStacks.stackingsMade > made }
+            try await Task.sleep(for: .milliseconds(50))
+            try #require(model.items.count == count && model.gridStacks.stackingsMade > made, "\(text)")
+        }
+
+        try await filter("date:2024-06-14T10:05..", count: 4)
+        try await eventually { restacks > 0 }
+        #expect(model.gridStacks.list == nil && strip(filmstrip) == 4 && restacks > 0, "the stacks filtered out")
+        let (reloads, before) = (filmstrip.reloads, restacks)
+        try await filter("date:2024-06-14T10:15..", count: 3)
+        try await filter("date:2024-06-14T10:05..", count: 4)
+        try await filter("date:2024-06-14T10:25..", count: 2)
+        #expect(restacks == before, "no stacks before or after")
+        #expect(filmstrip.reloads == reloads && strip(filmstrip) == 2, "the strip took the rows that came and went")
+        #expect(model.gridStacks.outline.hasStacks == false)
+
+        try await filter("", count: Self.photos.count)
+        try await eventually { model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true }
+        #expect(restacks == before + 1 && strip(filmstrip) == 6, "the burst and the pair back, closed")
+        try await filter("-name:B02", count: Self.photos.count - 1)
+        try await eventually { restacks == before + 2 }
+        let top = try #require(model.gridStacks.list?.cell(for: id(model, "B01.JPG")))
+        #expect(model.gridStacks.list?.badges(of: top).stack?.count == 2, "the burst's two frames left")
+        #expect(restacks == before + 2 && strip(filmstrip) == 6)
+    }
+
     @Test func `stacking, unstacking and a stack's top are changes Undo takes back, the grid following`() async throws {
         defer { cleanUp() }
         let (model, grid, _, window) = try await open()

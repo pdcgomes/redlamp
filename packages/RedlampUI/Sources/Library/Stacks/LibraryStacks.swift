@@ -137,7 +137,8 @@ import RedlampLibrary
     private struct Result: Sendable {
         /// Nil when the list shows no stack.
         var list: StackedList?
-        /// Whether its cells or their badges differ from the list it follows.
+        /// Whether its cells or their badges differ from the stacked list it follows; after none, whether it
+        /// shows a stack.
         var changed: Bool
         var indexIDs: [Int64: Int64]
     }
@@ -161,13 +162,15 @@ import RedlampLibrary
         }
         let stacks = found.relabelled(above: ids.max() ?? -1) { byIndex[$0] }
         var stacked: StackedList
-        var changed = true
+        var changed: Bool
         if let previous = request.previous {
             var selection = StackSelection()
             let (updated, diff) = previous.updated(list: request.list, stacks: stacks, selection: &selection)
             (stacked, changed) = (updated, !diff.isEmpty)
         } else {
             stacked = StackedList(request.list, stacks: stacks)
+            let shown = stacked.stacksShown
+            changed = shown.open + shown.closed > 0
         }
         if request.opensNew, stacked.stacksShown.closed > 0 {
             stacked.openAll()
