@@ -3,11 +3,14 @@ import RedlampEngineAPI
 import Synchronization
 
 /// A finding the user kept anyway (LIB-40): it's no longer listed, until it's taken back from the
-/// Kept Anyway list. Each is keyed by what the photo shows, so an index rebuild keeps it.
+/// Kept Anyway list. Each is keyed by what the photo shows, so an index rebuild keeps it, and by when its file
+/// was last modified, so a photo rewritten since is listed again.
 public struct KeptAnyway: Sendable, Hashable {
     public enum Key: Sendable, Hashable {
-        /// The photo's content key.
-        case content(ContentKey)
+        /// The photo's content key, and when its file was last modified; nil in an entry an earlier Redlamp
+        /// wrote, which keeps the photo whatever its date. The key reads only the file's start, and its date
+        /// tells a rewrite that keeps the size from the photo it kept.
+        case content(ContentKey, modified: Date?)
         /// A photo without a content key, an unreadable or empty one, by where it is and its file.
         case file(path: String, size: Int64, modified: Date)
         /// A duplicate group, by the full SHA-256 its copies share and how many there were: another
@@ -25,12 +28,13 @@ public struct KeptAnyway: Sendable, Hashable {
         self.key = key
     }
 
-    /// Whether it keeps a finding of `check` for a photo with `contentKey`, or without one at `path`
-    /// with `size` and `modified`.
+    /// Whether it keeps a finding of `check` for a photo with `contentKey` and `modified`, or without a
+    /// content key at `path` with `size` and `modified`.
     func keeps(_ check: HealthCheck.Kind, contentKey: Data?, path: String, size: Int64, modified: Date) -> Bool {
         guard check == self.check else { return false }
         switch key {
-        case let .content(key): return contentKey == key.data
+        case let .content(key, keptModified):
+            return contentKey == key.data && keptModified.map { LibraryIndexer.Run.same($0, modified) } != false
         case let .file(kept, keptSize, keptModified):
             return contentKey == nil && kept == path && keptSize == size
                 && LibraryIndexer.Run.same(keptModified, modified)
@@ -44,9 +48,10 @@ public struct KeptAnyway: Sendable, Hashable {
 /// photo's sidecar for them.
 ///
 /// The file is JSON, sorted and indented: `{"format": "app.redlamp.health", "version": 1, "keptAnyway":
-/// [{"check": "damaged", "contentKey": "…"}, {"check": "duplicates", "sha256": "…", "copies": 2},
-/// {"check": "damaged", "path": "/Photos/IMG_1.JPG", "size": 0, "modified": 1759700000}]}`. Keys a newer
-/// Redlamp wrote are kept, in the file and in each entry, and a file with a newer `version` is never
+/// [{"check": "damaged", "contentKey": "…", "modified": 1759700000}, {"check": "duplicates", "sha256": "…",
+/// "copies": 2}, {"check": "damaged", "path": "/Photos/IMG_1.JPG", "size": 0, "modified": 1759700000}]}`. An
+/// entry by content key without `modified`, as the first builds wrote them, keeps its photo whatever its date.
+/// Keys a newer Redlamp wrote are kept, in the file and in each entry, and a file with a newer `version` is never
 /// written over.
 public struct HealthDefinitions: Sendable, Hashable {
     public static let format = "app.redlamp.health"
@@ -174,7 +179,8 @@ extension KeptAnyway {
             return nil
         }
         if case let .string(hex)? = object["contentKey"], let key = ContentKey(hex: hex) {
-            self.init(check: check, key: .content(key))
+            let modified = number("modified").map(Date.init(timeIntervalSince1970:))
+            self.init(check: check, key: .content(key, modified: modified))
         } else if case let .string(hex)? = object["sha256"], let sha256 = Data(hex: hex),
                   let copies = number("copies") {
             self.init(check: check, key: .group(sha256: sha256, copies: Int(copies)))
@@ -194,8 +200,11 @@ extension KeptAnyway {
         var object = unknownFields
         object["check"] = .string(check.rawValue)
         switch key {
-        case let .content(key):
+        case let .content(key, modified):
             object["contentKey"] = .string(key.hex)
+            if let modified {
+                object["modified"] = .number(modified.timeIntervalSince1970)
+            }
         case let .file(path, size, modified):
             object["path"] = .string(path)
             object["size"] = .number(Double(size))

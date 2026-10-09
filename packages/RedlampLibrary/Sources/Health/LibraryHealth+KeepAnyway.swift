@@ -21,7 +21,7 @@ public extension LibraryHealth {
                 entries.append(KeptAnyway(check: .duplicates, key: .group(sha256: sha256, copies: copies)))
             } else if let (photo, folder) = rows[finding.photo] {
                 let key: KeptAnyway.Key = if let content = photo.contentKey.flatMap(ContentKey.init(data:)) {
-                    .content(content)
+                    .content(content, modified: photo.modified)
                 } else {
                     .file(path: folder + "/" + photo.name, size: photo.size, modified: photo.modified)
                 }

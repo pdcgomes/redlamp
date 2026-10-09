@@ -2,8 +2,9 @@ import Foundation
 import RedlampDocument
 
 extension HealthChecker {
-    /// The photos what's kept anyway names, each with its entry: by content key, by path for a photo
-    /// without one, and a duplicate group's copies by the full hash the index recorded for them.
+    /// The photos what's kept anyway names, each with its entry: by content key and modification date, by
+    /// path for a photo without one, and a duplicate group's copies by the full hash the index recorded for
+    /// them.
     func keptAnyway() async throws -> [(photo: Int64, kept: KeptAnyway)] {
         let entries = definitions.keptAnyway
         guard !entries.isEmpty else { return [] }
@@ -12,7 +13,7 @@ extension HealthChecker {
             var byContent: [Data: [KeptAnyway]] = [:]
             for entry in entries {
                 switch entry.key {
-                case let .content(key):
+                case let .content(key, _):
                     byContent[key.data, default: []].append(entry)
                 case let .file(path, size, modified):
                     if let photo = try reader.photo(path: path), photo.contentKey == nil, photo.size == size,
@@ -30,10 +31,15 @@ extension HealthChecker {
                 }
             }
             if !byContent.isEmpty {
-                try reader.database.cached("SELECT id, content_key FROM photos WHERE content_key IS NOT NULL")
+                try reader.database
+                    .cached("SELECT id, content_key, modified FROM photos WHERE content_key IS NOT NULL")
                     .forEachRow { row in
                         guard let key = row.data(at: 1), let kept = byContent[key] else { return }
-                        found += kept.map { (row.int64(at: 0), $0) }
+                        let modified = Date(timeIntervalSince1970: row.double(at: 2))
+                        for entry in kept
+                            where entry.keeps(entry.check, contentKey: key, path: "", size: 0, modified: modified) {
+                            found.append((row.int64(at: 0), entry))
+                        }
                     }
             }
             return found

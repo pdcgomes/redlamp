@@ -37,7 +37,7 @@ extension HealthChecker {
                     rule, drops: drops[group], store: store, names: names, texts: texts, into: &findings,
                 ) { dropped in
                     keys[dropped].map { key in
-                        definitions.keeps(.pairs, contentKey: key, path: "", size: 0, modified: .distantPast)
+                        definitions.keeps(.pairs, contentKey: key.key, path: "", size: 0, modified: key.modified)
                     } ?? false
                 }
                 return (findings, kept)

@@ -91,4 +91,53 @@ struct HealthKeepAnywayTests {
         #expect(try await health.findings(.damaged).isEmpty)
         #expect(try await health.keepAnyway(kept).isEmpty, "kept already: nothing added")
     }
+
+    @Test func `a photo rewritten past its content key's bytes, its size the same, is listed again`() async throws {
+        // A PNG with bytes after its end, longer than the 64 KiB its content key reads.
+        let long = HealthImages.data(.png, seed: 9) + Data(repeating: 0, count: 100 * 1024)
+        let sandbox = try await HealthSandbox.make(["Cards/IMG_3.png": long, "Cards/IMG_4.png": long + Data([1])])
+        defer { sandbox.remove() }
+        await sandbox.index()
+        let health = sandbox.library()
+        let damaged = try await health.findings(.damaged)
+        #expect(damaged.findings.count == 2)
+        let kept = try await health.keepAnyway(damaged.photos, in: damaged)
+        #expect(kept.allSatisfy {
+            if case .content(_, .some) = $0.key {
+                true
+            } else {
+                false
+            }
+        })
+        #expect(try await health.findings(.damaged).isEmpty)
+
+        // IMG_4's entry as the first builds wrote it, by its content key alone.
+        let url = HealthDefinitions.url(in: sandbox.paths)
+        var json = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let rows = try await sandbox.rows()
+        let fourth = try #require(rows["Cards/IMG_4.png"]?.contentKey.flatMap(ContentKey.init(data:)))
+        json["keptAnyway"] = try (#require(json["keptAnyway"] as? [[String: Any]])).map { entry in
+            entry["contentKey"] as? String == fourth.hex ? entry.filter { $0.key != "modified" } : entry
+        }
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+
+        // Both rewritten 80 KiB in, their sizes and content keys the same.
+        var third = long
+        third[80 * 1024] = 7
+        var fourthData = long + Data([1])
+        fourthData[80 * 1024] = 7
+        try sandbox.write(
+            ["Cards/IMG_3.png": third, "Cards/IMG_4.png": fourthData],
+            modified: HealthSandbox.written.addingTimeInterval(60),
+        )
+        await sandbox.index()
+        let rewritten = try await sandbox.rows()
+        #expect(rewritten["Cards/IMG_3.png"]?.contentKey == rows["Cards/IMG_3.png"]?.contentKey)
+        // Without lists to follow the index, a library of its own sees the photos as they are now.
+        let now = sandbox.library()
+        let listed = try await now.findings(.damaged)
+        #expect(try await sandbox.paths(listed.photos) == ["Cards/IMG_3.png"], "listed again; the older entry keeps")
+        let stillKept = try await now.keptAnyway()
+        #expect(stillKept.flatMap(\.photos) == [rewritten["Cards/IMG_4.png"]?.id].compactMap(\.self))
+    }
 }

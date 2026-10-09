@@ -59,15 +59,18 @@ struct HealthChecker: Sendable {
         }
     }
 
-    /// The content keys of photos `ids`, by ID.
-    func contentKeys(_ ids: [Int64]) async throws -> [Int64: Data] {
+    /// The content keys of photos `ids`, with when their files were last modified, by ID.
+    func contentKeys(_ ids: [Int64]) async throws -> [Int64: (key: Data, modified: Date)] {
         try await index.read { reader in
-            let statement = try reader.database.cached("SELECT content_key FROM photos WHERE id = ?")
-            var keys: [Int64: Data] = [:]
+            let statement = try reader.database.cached("SELECT content_key, modified FROM photos WHERE id = ?")
+            var keys: [Int64: (key: Data, modified: Date)] = [:]
             for id in ids {
                 try statement.bind(id, at: 1)
-                if let key = try statement.first({ $0.data(at: 0) }) ?? nil {
-                    keys[id] = key
+                let found = try statement.first { row in
+                    row.data(at: 0).map { ($0, Date(timeIntervalSince1970: row.double(at: 1))) }
+                }
+                if let (key, modified) = found ?? nil {
+                    keys[id] = (key, modified)
                 }
             }
             return keys
