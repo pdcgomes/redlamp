@@ -27,17 +27,20 @@ struct PeoplePickerView: View {
                     ))
                     .toggleStyle(.checkbox)
                     .font(Theme.labelFont)
+                    .automationIdentifier("masks.people.separate")
                 }
             }
             HStack {
                 Button("Cancel") { model.closePeoplePicker() }
                     .keyboardShortcut(.cancelAction)
+                    .automationIdentifier("masks.people.cancel")
                 Spacer()
                 Button(createTitle) {
                     Task { await model.createPeopleMasks() }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(picker.chosen.isEmpty || picker.parts.isEmpty || model.aiMaskProgress != nil)
+                .automationIdentifier("masks.people.create")
             }
             .controlSize(.small)
         }
@@ -63,6 +66,7 @@ struct PeoplePickerView: View {
                         ))
                         .toggleStyle(.checkbox)
                         .font(Theme.labelFont)
+                        .automationIdentifier("masks.people.all")
                     }
                     LazyVGrid(columns: crops, alignment: .leading, spacing: 8) {
                         ForEach(people) { person in
@@ -120,6 +124,7 @@ struct PeoplePickerView: View {
         .help("\(chosen ? "Leave out" : "Include") \(picker.name(of: person))")
         .accessibilityLabel(picker.name(of: person))
         .accessibilityAddTraits(chosen ? .isSelected : [])
+        .automationIdentifier("masks.people.person.\(person.id)")
     }
 
     private var partsList: some View {
@@ -149,6 +154,7 @@ struct PeoplePickerView: View {
                     .toggleStyle(.checkbox)
                     .font(Theme.labelFont)
                     .lineLimit(1)
+                    .automationIdentifier("masks.people.part.\(part.rawValue)")
                 }
             }
         }
@@ -163,6 +169,19 @@ struct PeoplePickerView: View {
 
     private var targetName: String? {
         picker.mode.target.flatMap { target in model.maskOutlines.first { $0.id == target }?.name }
+    }
+}
+
+/// The People picker while it's open, in the list's place, with the panel's margins.
+struct OpenPeoplePicker: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let picker = model.peoplePicker {
+            PeoplePickerView(picker: picker)
+                .padding(.horizontal, Theme.panelPadding)
+                .padding(.bottom, 12)
+        }
     }
 }
 

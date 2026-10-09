@@ -179,6 +179,15 @@ extension HarnessScene {
                 HarnessEditor.ensureMask()
                 return MaskingPanelViews.make(model: $0)
             },
+            panelParity(
+                id: "masks-panel",
+                title: "Masks",
+                symbol: "circle.dashed.inset.filled",
+                reference: { MasksPanelNext() },
+            ) {
+                HarnessEditor.prepareMasks(MasksParityState.launchDefault)
+                return MasksPanelViews.make(model: $0)
+            },
             panelParity(id: "inspector", title: "Inspector column", symbol: "sidebar.right", reference: {
                 InspectorView().frame(height: 760)
             }) {
@@ -215,6 +224,74 @@ extension HarnessScene {
                 ReferencePanelViews.calibration(model: $0)
             },
         ]
+    }
+}
+
+/// What the Masks panel's parity scene shows (`--masks-state`), as each changes the panel's rows.
+enum MasksParityState: String {
+    /// No masks: the picker in the list's place.
+    case none
+    /// A radial gradient, selected.
+    case radial
+    /// A radial gradient with a linear one subtracted, the second selected.
+    case components
+    /// A brush armed in a mask: the drawing hint and the brush's settings.
+    case brush
+    /// A luminance range, its stops and the drawing hint.
+    case luminance
+    /// A Subject mask from Apple Vision: Feather, Edge and the refinements.
+    case subject
+
+    static var launchDefault: MasksParityState {
+        HarnessLaunch.value(after: "--masks-state").flatMap(MasksParityState.init(rawValue:)) ?? .radial
+    }
+}
+
+extension HarnessEditor {
+    /// Brings the editor to `state` once the photo is open; again does nothing.
+    static func prepareMasks(_ state: MasksParityState) {
+        Task {
+            while model.info == nil {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            model.activeTool = .masking
+            let kinds = Set(model.masks.flatMap(\.components).compactMap(\.shape.kind))
+            switch state {
+            case .none:
+                model.deleteAllMasks()
+            case .radial:
+                ensureMask()
+            case .components:
+                guard kinds != [.radial, .linear] else { return }
+                model.deleteAllMasks()
+                model.drawMask(.radial(RadialMask(
+                    center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.15, feather: 50,
+                )))
+                guard let mask = model.selectedMaskID else { return }
+                model.startDrawing(.linear, operation: .subtract, addingTo: mask)
+                model.beginDrawing(.linear(LinearMask(
+                    start: ImagePoint(x: 0.5, y: 0.2), end: ImagePoint(x: 0.5, y: 0.45),
+                )))
+                model.finishDrawing()
+            case .brush:
+                ensureMask()
+                while model.masks.isEmpty {
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                if !model.isBrushing, let mask = model.selectedMaskID {
+                    model.startDrawing(.brush, addingTo: mask)
+                }
+            case .luminance:
+                guard !kinds.contains(.luminanceRange) else { return }
+                model.deleteAllMasks()
+                model.startDrawing(.luminanceRange)
+                await model.sampleLuminanceRange(at: ImagePoint(x: 0.5, y: 0.5))
+            case .subject:
+                guard !kinds.contains(.subject) else { return }
+                model.deleteAllMasks()
+                await model.createAIMask(.subject)
+            }
+        }
     }
 }
 

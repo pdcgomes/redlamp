@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
@@ -92,6 +93,7 @@ struct MasksHeaderBar: View {
 /// options.
 struct MaskOverlayOptions: View {
     @Environment(EditorModel.self) private var model
+    private static let opacitySpec = FieldSpec(range: 0 ... 100, unit: "%")
 
     var body: some View {
         @Bindable var model = model
@@ -105,6 +107,7 @@ struct MaskOverlayOptions: View {
                     }
                 }
                 .labelsHidden()
+                .automationIdentifier("masks.overlay.mode")
             }
             GridRow {
                 Text("Color")
@@ -115,14 +118,17 @@ struct MaskOverlayOptions: View {
                 }
                 .labelsHidden()
                 .disabled(!tints)
+                .automationIdentifier("masks.overlay.color")
             }
             GridRow {
                 Text("Opacity")
                 HStack {
                     Slider(value: $model.maskOverlayOpacity, in: 0 ... 1)
-                    Text("\(Int((model.maskOverlayOpacity * 100).rounded()))%")
-                        .monospacedDigit()
-                        .frame(width: 36, alignment: .trailing)
+                    ValueFieldControl(
+                        spec: Self.opacitySpec, value: (model.maskOverlayOpacity * 100).rounded(),
+                        identifier: "masks.overlay.opacity", onChange: { model.maskOverlayOpacity = $0 / 100 },
+                    )
+                    .frame(width: ValueFieldControl.width(for: "100%"), height: Metrics.rowHeight)
                 }
                 .disabled(!tints)
             }
@@ -309,6 +315,7 @@ struct MaskActionsMenu: View {
         .buttonStyle(.plain)
         .fixedSize()
         .help("Update AI Masks, Delete All Masks")
+        .automationIdentifier("masks.actions")
     }
 }
 
@@ -324,6 +331,8 @@ struct NoMaskSelected: View {
 /// Mask presets: Lightroom-style adaptive ones, which compute their masks for the photo, and
 /// the user's own.
 struct MaskPresetsMenu: View {
+    /// Its symbol alone, as the Masks panel's header has room for (`MasksPanelNext`).
+    var compact = false
     @Environment(EditorModel.self) private var model
 
     var body: some View {
@@ -344,12 +353,18 @@ struct MaskPresetsMenu: View {
                 }
             }
         } label: {
-            Label("Presets", systemImage: "wand.and.stars").font(Theme.labelFont)
+            if compact {
+                Image(systemName: "wand.and.stars").font(Theme.labelFont)
+            } else {
+                Label("Presets", systemImage: "wand.and.stars").font(Theme.labelFont)
+            }
         }
         .menuStyle(.button)
         .controlSize(.small)
         .fixedSize()
-        .help("Apply a mask preset")
+        .help(compact ? "Mask Presets" : "Apply a mask preset")
+        .accessibilityLabel("Mask Presets")
+        .automationIdentifier("masks.presets")
     }
 }
 
@@ -416,11 +431,13 @@ struct ModelDownloadNotice: View {
                     }
                     Spacer()
                     Button("Not Now") { model.declinePendingModel() }
+                        .automationIdentifier("masks.download.notNow")
                     Button("Download") {
                         onDownload()
                         Task { await model.downloadPendingModel() }
                     }
                     .keyboardShortcut(.defaultAction)
+                    .automationIdentifier("masks.download")
                 }
                 .controlSize(.small)
             }
@@ -463,6 +480,7 @@ struct DrawingHint: View {
                     model.cancelDrawing()
                 }
                 .controlSize(.mini)
+                .automationIdentifier("masks.hint.done")
             }
             if model.isRefiningEdges {
                 EdgeBrushSize()
@@ -488,13 +506,19 @@ struct DrawingHint: View {
 /// The Refine Edge brush's size, and whether a stroke is being solved.
 struct EdgeBrushSize: View {
     @Environment(EditorModel.self) private var model
+    private static let sizeSpec = FieldSpec(range: 1 ... 100)
 
     var body: some View {
         @Bindable var model = model
         HStack(spacing: 8) {
             Text("Size")
-            Slider(value: $model.edgeBrushSize, in: 1 ... 100)
+            Slider(value: $model.edgeBrushSize, in: Self.sizeSpec.range)
                 .controlSize(.mini)
+            ValueFieldControl(
+                spec: Self.sizeSpec, value: model.edgeBrushSize.rounded(), identifier: "masks.edgeBrush.size",
+                onChange: { model.edgeBrushSize = $0 },
+            )
+            .frame(width: ValueFieldControl.width(for: "100"), height: Metrics.rowHeight)
             ProgressView()
                 .controlSize(.mini)
                 .opacity(model.isSolvingEdges ? 1 : 0)
@@ -674,6 +698,7 @@ struct MaskList: View {
                                 model.renameMask(mask.id, to: draftName)
                                 renaming = nil
                             }
+                            .automationIdentifier("masks.row.\(mask.id.uuidString).name")
                     } else {
                         Text(mask.name)
                             .font(Theme.labelFont)
@@ -681,7 +706,10 @@ struct MaskList: View {
                     }
                     Spacer()
                     Button {
-                        if actionsOnScreen, NSEvent.modifierFlags.contains(.option) {
+                        // The click's own flags, or the keyboard's when it arrives without them.
+                        let option = NSApp.currentEvent?.modifierFlags.contains(.option) == true
+                            || NSEvent.modifierFlags.contains(.option)
+                        if actionsOnScreen, option {
                             model.showMaskAlone(mask.id)
                         } else {
                             model.toggleMaskVisibility(mask.id)
@@ -692,6 +720,8 @@ struct MaskList: View {
                             .foregroundStyle(Theme.secondaryLabel)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(mask.isVisible ? "Hide \(mask.name)" : "Show \(mask.name)")
+                    .automationIdentifier("masks.row.\(mask.id.uuidString).eye")
                     .help(actionsOnScreen
                         ?
                         (mask
@@ -710,12 +740,18 @@ struct MaskList: View {
                         .fixedSize()
                         .foregroundStyle(Theme.secondaryLabel)
                         .help("Rename, Duplicate, Save as Mask Preset, Delete")
+                        .accessibilityLabel("\(mask.name)'s actions")
+                        .automationIdentifier("masks.row.\(mask.id.uuidString).menu")
                     }
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 28)
                 .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.selection : .clear))
                 .contentShape(Rectangle())
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(mask.name)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .automationIdentifier("masks.row.\(mask.id.uuidString)")
                 .onHover { inside in
                     if inside {
                         hovered = mask.id
@@ -814,14 +850,7 @@ struct SelectedMaskEditor: View {
             if usesPicker {
                 // Invert and Amount lead the mask's settings (`MasksPanelNext`).
                 SubsectionHeader(title: mask.name, parameters: []) {
-                    Toggle("Invert", isOn: Binding(
-                        get: { mask.inverted }, set: { model.setMaskInverted(mask.id, $0) },
-                    ))
-                    .toggleStyle(.checkbox)
-                    .controlSize(.mini)
-                    .font(Theme.captionFont)
-                    .help("Invert the whole mask")
-                    ResetMaskButton(mask: mask)
+                    MaskHeaderControls(mask: mask)
                 }
                 ParameterSlider(parameter: .maskAmount)
                 Spacer().frame(height: 6)
@@ -864,16 +893,8 @@ struct SelectedMaskEditor: View {
                 ParameterSlider(parameter: .maskAIFeather)
                     .padding(.top, 6)
                 ParameterSlider(parameter: .maskAIEdge)
-                if usesPicker, kind != .depthRange, let component = model.selectedComponentOutline {
-                    HStack(spacing: 6) {
-                        Button("Refine Edges") { Task { await model.refineEdges(component.id, in: mask.id) } }
-                            .help("Solve the mask's edge again from the photo")
-                        Button("Refine Edge Brush") { model.startRefiningEdges(component.id, in: mask.id) }
-                            .help("Paint over an edge to solve it again, hair by hair")
-                    }
-                    .controlSize(.small)
-                    .font(Theme.labelFont)
-                    .padding(.top, 2)
+                if usesPicker, kind != .depthRange {
+                    AIComponentTools(mask: mask)
                 }
             default:
                 EmptyView()
@@ -949,7 +970,11 @@ struct AutoMaskToggle: View {
         .toggleStyle(.checkbox)
         .controlSize(.small)
         .font(Theme.labelFont)
+        // A small checkbox is 14.12 pt tall; a whole height puts it, and the rows under it, on
+        // the same pixels in the AppKit panel, which hosts it on its own.
+        .frame(height: 14)
         .help("Keeps the brush to colors like the one under its center")
+        .automationIdentifier("masks.brush.autoMask")
     }
 }
 
@@ -967,6 +992,7 @@ struct ColorSampleList: View {
             if samples.count > 1 {
                 Button("Remove Last") { model.removeColorSample(at: samples.count - 1) }
                     .controlSize(.mini)
+                    .automationIdentifier("masks.colorRange.removeLast")
             }
         }
     }
@@ -974,21 +1000,39 @@ struct ColorSampleList: View {
 
 /// Luminance Range: a lightness bar with four handles, and the luminance map.
 struct LuminanceRangeEditor: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            LuminanceRangeBar()
+            LuminanceMapToggle()
+        }
+    }
+}
+
+struct LuminanceRangeBar: View {
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        RangeBar(
+            title: "Luminance Range", colors: [.black, .white],
+            range: model.selectedLuminanceRange ?? LuminanceRangeMask(),
+            onChange: { model.setLuminanceRange($0) }, historyName: "Luminance Range", kind: .luminanceRange,
+        )
+    }
+}
+
+/// Show Luminance Map, under the range's bar. The AppKit panel hosts it on its own, as it
+/// does Auto Mask, so it lands on the same pixels.
+struct LuminanceMapToggle: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
-        VStack(alignment: .leading, spacing: 6) {
-            RangeBar(
-                title: "Luminance Range", colors: [.black, .white],
-                range: model.selectedLuminanceRange ?? LuminanceRangeMask(),
-                onChange: { model.setLuminanceRange($0) }, historyName: "Luminance Range", kind: .luminanceRange,
-            )
-            Toggle("Show Luminance Map", isOn: $model.showLuminanceMap)
-                .toggleStyle(.checkbox)
-                .controlSize(.small)
-                .font(Theme.labelFont)
-        }
+        Toggle("Show Luminance Map", isOn: $model.showLuminanceMap)
+            .toggleStyle(.checkbox)
+            .controlSize(.small)
+            .font(Theme.labelFont)
+            .frame(height: 14)
+            .automationIdentifier("masks.luminanceMap")
     }
 }
 
@@ -1018,18 +1062,17 @@ struct RangeBar: View {
     @Environment(EditorModel.self) private var model
     @State private var dragging: Int?
 
+    private static let stopSpec = FieldSpec(range: 0 ... 100)
+    private static let stopNames = [
+        "Where the range starts", "Where it's full from", "Where it stops being full", "Where it ends",
+    ]
+
     var body: some View {
-        let stops = [range.lower - range.lowerFeather, range.lower, range.upper, range.upper + range.upperFeather]
+        let stops = Self.stops(of: range)
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(title)
-                    .font(Theme.labelFont)
-                    .foregroundStyle(Theme.label)
-                Spacer()
-                Text("\(Int(range.lower.rounded())) – \(Int(range.upper.rounded()))")
-                    .font(Theme.captionFont)
-                    .foregroundStyle(Theme.secondaryLabel)
-            }
+            Text(title)
+                .font(Theme.labelFont)
+                .foregroundStyle(Theme.label)
             GeometryReader { geometry in
                 let width = geometry.size.width
                 ZStack(alignment: .topLeading) {
@@ -1057,6 +1100,14 @@ struct RangeBar: View {
                 }
             }
             .frame(height: 24)
+            HStack(spacing: 0) {
+                ForEach(0 ..< 4, id: \.self) { index in
+                    if index > 0 {
+                        Spacer(minLength: 4)
+                    }
+                    stopField(index, value: stops[index])
+                }
+            }
             if let ends {
                 HStack {
                     Text(ends.0)
@@ -1069,28 +1120,55 @@ struct RangeBar: View {
         }
     }
 
+    /// Where the range starts, is full from, stops being full, and ends.
+    static func stops(of range: LuminanceRangeMask) -> [Double] {
+        [range.lower - range.lowerFeather, range.lower, range.upper, range.upper + range.upperFeather]
+    }
+
+    /// The range with stop `index` moved to `value`, the other stops where they were.
+    static func moving(_ index: Int, to value: Double, in range: LuminanceRangeMask) -> LuminanceRangeMask {
+        var range = range
+        let value = min(max(value, 0), 100)
+        switch index {
+        case 0: range.lowerFeather = max(range.lower - value, 0)
+        case 1:
+            let start = range.lower - range.lowerFeather
+            range.lower = min(max(value, start), range.upper)
+            range.lowerFeather = range.lower - start
+        case 2:
+            let end = range.upper + range.upperFeather
+            range.upper = max(min(value, end), range.lower)
+            range.upperFeather = end - range.upper
+        default: range.upperFeather = max(value - range.upper, 0)
+        }
+        return range
+    }
+
+    /// A stop's value, scrubbed or typed.
+    private func stopField(_ index: Int, value: Double) -> some View {
+        ValueFieldControl(
+            spec: Self.stopSpec, value: value.rounded(), identifier: "masks.\(kind.rawValue).stop\(index + 1)",
+            onBegin: { model.beginEdit() },
+            onChange: { onChange(Self.moving(index, to: $0, in: range)) },
+            onEnd: { model.endEdit(.mask(kind), historyName) },
+            onCommit: { typed in
+                model.beginEdit()
+                onChange(Self.moving(index, to: typed, in: range))
+                model.endEdit(.mask(kind), historyName)
+            },
+        )
+        .frame(width: ValueFieldControl.width(for: "100"), height: Metrics.rowHeight)
+        .help(Self.stopNames[index])
+    }
+
     private func handleDrag(_ index: Int, width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { gesture in
-                var range = range
                 if dragging == nil {
                     dragging = index
                     model.beginEdit()
                 }
-                let value = min(max(gesture.location.x / max(width, 1) * 100, 0), 100)
-                switch index {
-                case 0: range.lowerFeather = max(range.lower - value, 0)
-                case 1:
-                    let start = range.lower - range.lowerFeather
-                    range.lower = min(max(value, start), range.upper)
-                    range.lowerFeather = range.lower - start
-                case 2:
-                    let end = range.upper + range.upperFeather
-                    range.upper = max(min(value, end), range.lower)
-                    range.upperFeather = end - range.upper
-                default: range.upperFeather = max(value - range.upper, 0)
-                }
-                onChange(range)
+                onChange(Self.moving(index, to: gesture.location.x / max(width, 1) * 100, in: range))
             }
             .onEnded { _ in
                 dragging = nil
@@ -1139,6 +1217,50 @@ struct ResetMaskButton: View {
     var body: some View {
         Button("Reset") { model.resetMaskAdjustments(mask.id) }
             .controlSize(.mini)
+            .automationIdentifier("masks.mask.reset")
+    }
+}
+
+/// Invert for the whole mask, and Reset, beside its name at the top of its settings
+/// (`MasksPanelNext`). The AppKit panel keeps a mask's settings through an Invert, so this
+/// reads the mask's state from the model.
+struct MaskHeaderControls: View {
+    let mask: MaskOutline
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        let inverted = model.maskOutlines.first { $0.id == mask.id }?.inverted ?? mask.inverted
+        Toggle("Invert", isOn: Binding(get: { inverted }, set: { model.setMaskInverted(mask.id, $0) }))
+            .toggleStyle(.checkbox)
+            .controlSize(.mini)
+            .font(Theme.captionFont)
+            .help("Invert the whole mask")
+            .automationIdentifier("masks.mask.invert")
+        ResetMaskButton(mask: mask)
+    }
+}
+
+/// Refine Edges and the Refine Edge Brush, under an AI component's Feather and Edge, for the
+/// component selected when they're clicked.
+struct AIComponentTools: View {
+    let mask: MaskOutline
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        if let component = model.selectedComponentOutline {
+            HStack(spacing: 6) {
+                Button("Refine Edges") { Task { await model.refineEdges(component.id, in: mask.id) } }
+                    .help("Solve the mask's edge again from the photo")
+                    .automationIdentifier("masks.refineEdges")
+                Button("Refine Edge Brush") { model.startRefiningEdges(component.id, in: mask.id) }
+                    .help("Paint over an edge to solve it again, hair by hair")
+                    .automationIdentifier("masks.refineEdgeBrush")
+            }
+            .controlSize(.small)
+            .font(Theme.labelFont)
+            .frame(height: Metrics.rowHeight)
+            .padding(.top, 2)
+        }
     }
 }
 
@@ -1178,6 +1300,8 @@ struct ComponentRow: View {
                 .frame(width: 14)
                 .foregroundStyle(Theme.secondaryLabel)
                 .help("\(component.operation.name): choose how it combines")
+                .accessibilityLabel(component.operation.name)
+                .automationIdentifier("masks.component.\(component.id.uuidString).operation")
             } else {
                 Image(systemName: component.operation.symbol)
                     .font(.system(size: 9, weight: .bold))
@@ -1204,6 +1328,7 @@ struct ComponentRow: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.secondaryLabel)
                 .help(component.kind == .brush ? "Paint into this brush" : "Sample again")
+                .automationIdentifier("masks.component.\(component.id.uuidString).edit")
             }
             Toggle("Invert", isOn: Binding(
                 get: { component.inverted },
@@ -1212,6 +1337,7 @@ struct ComponentRow: View {
             .toggleStyle(.checkbox)
             .controlSize(.mini)
             .font(Theme.captionFont)
+            .automationIdentifier("masks.component.\(component.id.uuidString).invert")
             if actionsOnScreen {
                 Menu {
                     refinements
@@ -1225,6 +1351,8 @@ struct ComponentRow: View {
                 .fixedSize()
                 .foregroundStyle(Theme.secondaryLabel)
                 .help(component.kind?.isAI == true ? "Refine Edges, Refine Edge Brush, Delete" : "Delete")
+                .accessibilityLabel("\(title(index))'s actions")
+                .automationIdentifier("masks.component.\(component.id.uuidString).menu")
             } else {
                 Button {
                     model.deleteComponent(component.id, in: mask.id)
@@ -1241,6 +1369,10 @@ struct ComponentRow: View {
         .frame(height: 26)
         .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.selection : .clear))
         .contentShape(Rectangle())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title(index))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .automationIdentifier("masks.component.\(component.id.uuidString)")
         .onTapGesture { model.selectedComponentID = component.id }
         .onHover { inside in
             guard actionsOnScreen else { return }

@@ -6,6 +6,8 @@ import RedlampDesign
 ///
 /// - `--scene <id>` opens a scene.
 /// - `--parity-mode side|difference|onion|flicker` sets how parity scenes compare.
+/// - `--masks-state none|radial|components|brush|luminance|subject` sets what the Masks panel's
+///   parity scene shows.
 /// - `--background panel|canvas|black` sets the stage surface.
 /// - `--theme <id>`, `--appearance dark|light` and `--tint 0...1` pick the theme, and
 ///   `--native-tint` gives native controls its accent.
@@ -14,7 +16,9 @@ import RedlampDesign
 /// - `--history-height <points>` sets the History scene's list height.
 /// - `--folders-root <path>` is the folder the Folders scene opens (the raw fixtures by default).
 /// - `--window <width>x<height>` sizes the window in points and moves it to a Retina screen
-///   when one is connected, so captures come out at 2x even when the main display is 1x.
+///   when one is connected, so captures come out at 2x even when the main display is 1x;
+///   with `--main-screen` it stays on the main display, for a parity capture taller than the
+///   Retina screen (`scripts/parity-diff.swift` reads captures at 1x).
 enum HarnessLaunch {
     static let arguments: [String] = {
         var arguments = CommandLine.arguments
@@ -48,7 +52,9 @@ enum HarnessLaunch {
             try? await Task.sleep(for: .milliseconds(100))
         }
         guard let window else { return }
-        let screen = NSScreen.screens.first { $0.backingScaleFactor > 1 } ?? window.screen
+        let screen = arguments.contains("--main-screen")
+            ? NSScreen.screens.first
+            : NSScreen.screens.first { $0.backingScaleFactor > 1 } ?? window.screen
         guard let area = screen?.visibleFrame else { return }
         // A scripted size isn't the user's: keep it out of the saved frame.
         window.setFrameAutosaveName("")

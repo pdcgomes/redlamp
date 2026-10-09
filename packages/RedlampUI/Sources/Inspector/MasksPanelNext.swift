@@ -1,3 +1,4 @@
+import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
@@ -21,10 +22,8 @@ import SwiftUI
                 DrawingHint()
             }
             MaskMessages()
-            if let picker = model.peoplePicker {
-                PeoplePickerView(picker: picker)
-                    .padding(.horizontal, Theme.panelPadding)
-                    .padding(.bottom, 12)
+            if model.peoplePicker != nil {
+                OpenPeoplePicker()
             } else if model.maskOutlines.isEmpty {
                 MaskPicker(mode: .new, inline: true)
                     .padding(.horizontal, Theme.panelPadding)
@@ -68,14 +67,15 @@ struct MasksHeaderNext: View {
             .controlSize(.small)
             .disabled(model.info == nil)
             .help("Make a new mask")
+            .automationIdentifier("masks.new")
             .popover(isPresented: $picking, arrowEdge: .leading) {
                 MaskPicker(mode: .new) { picking = false }
                     .environment(model)
             }
-            MaskPresetsMenu()
+            MaskPresetsMenu(compact: true)
             headerToggle(
                 model.showMaskOverlay ? "circle.lefthalf.filled" : "circle", isOn: $model.showMaskOverlay,
-                help: "Show Overlay (O)",
+                help: "Show Overlay (O)", identifier: "masks.overlay",
             )
             Button {
                 choosingOverlay.toggle()
@@ -85,13 +85,15 @@ struct MasksHeaderNext: View {
             .buttonStyle(.plain)
             .foregroundStyle(Theme.label)
             .help("Overlay mode, color and opacity")
+            .accessibilityLabel("Overlay Options")
+            .automationIdentifier("masks.overlayOptions")
             .popover(isPresented: $choosingOverlay, arrowEdge: .leading) {
                 MaskOverlayOptions()
                     .environment(model)
             }
             headerToggle(
                 model.showMaskPins ? "mappin.circle.fill" : "mappin.circle", isOn: $model.showMaskPins,
-                help: "Show Pins (H)",
+                help: "Show Pins (H)", identifier: "masks.pins",
             )
             MaskActionsMenu()
         }
@@ -99,7 +101,7 @@ struct MasksHeaderNext: View {
         .padding(.vertical, 10)
     }
 
-    private func headerToggle(_ symbol: String, isOn: Binding<Bool>, help: String) -> some View {
+    private func headerToggle(_ symbol: String, isOn: Binding<Bool>, help: String, identifier: String) -> some View {
         Button {
             isOn.wrappedValue.toggle()
         } label: {
@@ -108,6 +110,9 @@ struct MasksHeaderNext: View {
         .buttonStyle(.plain)
         .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Theme.label)
         .help(help)
+        .accessibilityLabel(help)
+        .accessibilityAddTraits(isOn.wrappedValue ? .isSelected : [])
+        .automationIdentifier(identifier)
     }
 }
 
@@ -215,6 +220,7 @@ enum MaskKindGroup: String, CaseIterable, Identifiable {
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .automationIdentifier("masks.picker.existing.\(other.id.uuidString)")
                         }
                     }
                 }
@@ -261,6 +267,7 @@ enum MaskKindGroup: String, CaseIterable, Identifiable {
         .buttonStyle(.plain)
         .disabled(!model.canCreateMask(kind) || model.aiMaskProgress != nil)
         .help(model.canCreateMask(kind) ? kind.name : "\(kind.name) isn't available for this photo")
+        .automationIdentifier("masks.picker.\(kind.rawValue)")
     }
 
     private func face(_ kind: MaskKind) -> some View {
@@ -366,6 +373,7 @@ struct ComponentOperationButtons: View {
                     Label(operation.name, systemImage: operation.symbol).font(Theme.labelFont)
                 }
                 .controlSize(.small)
+                .automationIdentifier("masks.\(operation.rawValue)")
                 .popover(isPresented: Binding(
                     get: { picking == operation }, set: {
                         if !$0 {
@@ -378,6 +386,9 @@ struct ComponentOperationButtons: View {
                 }
             }
         }
+        // Small buttons are 20.12 pt tall; a whole height puts them, and the rows under them,
+        // on the same pixels in the AppKit panel.
+        .frame(height: Metrics.rowHeight)
     }
 }
 
