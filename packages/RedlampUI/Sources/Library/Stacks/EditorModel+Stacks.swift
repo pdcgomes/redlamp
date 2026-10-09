@@ -334,6 +334,18 @@ public extension EditorModel {
 
     // MARK: - Moving from cell to cell
 
+    /// The grid's cells in its order (`GridOrder`), each as the names of the photos it stands for, its own first: a
+    /// closed stack's and a raw and its JPEG's every photo, else the photo alone. For the regression suite, which steps
+    /// through them as ← and → do.
+    @_spi(Harness) var gridCellPhotos: [[String]] {
+        let order = gridOrder
+        let stacked = order.stacks
+        return order.cells.map { cell in
+            let others = (stacked?.photos(of: cell) ?? []).filter { $0 != cell }
+            return ([cell] + others).compactMap { library.url(ofPhoto: $0)?.lastPathComponent }
+        }
+    }
+
     /// The cell `offset` (1 or -1) from the active photo's.
     private func cell(after offset: Int, in stacked: StackedList) -> Int64? {
         guard let id = (opening ?? selection).flatMap(library.photoID(of:)), let cell = stacked.cell(for: id),

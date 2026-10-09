@@ -314,20 +314,26 @@
             claims: [.feature("library.keywords"), .action(.undo), .action(.redo)]
                 + ShortcutAction.allCases.filter { $0.keywordSetNumber != nil }.map(Claim.action),
         ) { app in
-            try app.withPanels { names in
-                try app.selectFromKeyboard(3, of: names)
-                try app.wait("the panel on the three") { $0.libraryPanels.selection.ids.count == 3 }
+            try app.withPanels { _ in
+                // The grid's first three cells, a raw and its JPEG's photos together, and the cell after them.
+                let cells = try app.selectFromKeyboard(3)
+                let three = Array(cells.prefix(3).joined())
+                try app.wait("the panel on the three cells' photos") { model in
+                    model.libraryPanels.selection.ids.count == three.count
+                }
                 try app.typeInField("keywording.entry", "E2E Lisbon, E2E Trips > 2007")
                 try app.wait("the keywords on the three, shown") { model in
                     model.libraryPanels.selection.hasEverywhere(KeywordPath("E2E Trips/2007")!) == true
                 }
                 try app.waitForPanels()
-                for name in names.prefix(3) {
+                for name in three {
                     try app.expect(
                         try app.sidecarKeywords(name).contains("E2E Trips/2007"), "\(name)'s sidecar has the keyword",
                     )
                 }
-                try app.expect(try !app.sidecarKeywords(names[3]).contains("E2E Lisbon"), "the fourth photo has none")
+                try app.expect(
+                    try !app.sidecarKeywords(cells[3][0]).contains("E2E Lisbon"), "the fourth cell's photo has none",
+                )
                 // Completion from the library's keywords, by a word of the name.
                 try app.typeInField("keywording.entry", "lisb", returning: false)
                 try app.wait("Lisbon offered") { model in
@@ -340,14 +346,16 @@
                     model.libraryPanels.selection.hasEverywhere(KeywordPath("E2E Trips/2007")!) == false
                 }
                 try app.waitForPanels()
-                try app.expect(try !app.sidecarKeywords(names[0]).contains("E2E Trips/2007"), "taken off the sidecar")
+                try app.expect(try !app.sidecarKeywords(three[0]).contains("E2E Trips/2007"), "taken off the sidecar")
                 try app.press(.undo)
                 try app.waitForPanels()
-                try app.expect(try app.sidecarKeywords(names[1]).contains("E2E Trips/2007"), "⌘Z put it back")
+                try app.expect(try app.sidecarKeywords(cells[1][0]).contains("E2E Trips/2007"), "⌘Z put it back")
                 try app.expectKeyBinding(.redo)
                 try app.choose(.redo)
                 try app.waitForPanels()
-                try app.expect(try !app.sidecarKeywords(names[1]).contains("E2E Trips/2007"), "⇧⌘Z took it off again")
+                try app.expect(
+                    try !app.sidecarKeywords(cells[1][0]).contains("E2E Trips/2007"), "⇧⌘Z took it off again",
+                )
                 app.covered([.action(.undo), .action(.redo)], via: .key)
 
                 try app.choose("Wedding Photography")
@@ -372,7 +380,7 @@
                     model.libraryPanels.selection.hasEverywhere(KeywordPath("Bride")!) == true
                 }
                 try app.waitForPanels()
-                try app.expect(try app.sidecarKeywords(names[2]).contains("Bride"), "the button's keyword saved")
+                try app.expect(try app.sidecarKeywords(cells[2][0]).contains("Bride"), "the button's keyword saved")
                 try app.choose(KeywordSet.recentName)
                 try app.wait("Recent Keywords again") { $0.libraryPanels.activeSet?.name == KeywordSet.recentName }
                 app.covered(.feature("library.keywords"), via: .key)
@@ -408,7 +416,7 @@
                 try app.wait("the filter to keep the birds") { _ in
                     Views.editorWindow.flatMap { Views.find("keywordList.row.E2E Animals/E2E Birds", in: $0) } != nil
                 }
-                try app.selectFromKeyboard(2, of: names)
+                try app.selectFromKeyboard(2)
                 try app.wait("the panel on the two") { $0.libraryPanels.selection.ids.count == 2 }
                 app.step("checking")
                 try app.clickControl("keywordList.check.E2E Animals/E2E Birds")
@@ -501,14 +509,14 @@
             claims: [.feature("library.metadata"), .feature("library.collections")],
         ) { app in
             try app.withPanels { names in
-                try app.selectFromKeyboard(1, of: names)
+                try app.selectFromKeyboard(1)
                 try app.typeInField("metadata.caption", "E2E first")
                 try app
                     .wait("the caption on the photo") {
                         $0.libraryPanels.selection.fields[.caption] == .same("E2E first")
                     }
                 try app.waitForPanels()
-                try app.selectFromKeyboard(2, of: names)
+                try app.selectFromKeyboard(2)
                 try app.wait("two photos' captions, mixed") { $0.libraryPanels.selection.fields[.caption] == .mixed }
                 try app.typeInField("metadata.title", "E2E Lisbon in June")
                 try app.wait("the title on both") { model in
@@ -573,7 +581,7 @@
             }
 
             // A collection's photos selected from the keyboard: a title typed reaches both, and ⌘Z takes it back.
-            try app.withCollection(of: ["A.jpg", "B.jpg", "C.jpg"]) { scratch, _ in
+            try app.withCollection(of: ["A.jpg", "B.jpg", "C.jpg"]) { _, _ in
                 try app.main { model in
                     model.rightPanelVisible = true
                     if !model.libraryPanels.isExpanded(.metadata) {
@@ -582,7 +590,7 @@
                 }
                 // The column slides in.
                 app.pause(0.6)
-                try app.selectFromKeyboard(2, of: scratch.names)
+                try app.selectFromKeyboard(2)
                 try app.wait("the panels on the collection's two photos") { model in
                     model.libraryPanels.selection.isAvailable && model.libraryPanels.selection.ids.count == 2
                 }

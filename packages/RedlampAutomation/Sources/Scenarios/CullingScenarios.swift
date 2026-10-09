@@ -63,19 +63,42 @@
             return model.library.sidecars.store(for: url).summary(for: url)?.metadata ?? PhotoMetadata()
         }
 
-        /// Selects the first `count` photos from the keyboard: the first, then ⇧→.
-        func selectFromKeyboard(_ count: Int, of names: [String]) throws {
-            try click(.identifier("grid.\(names[0])"))
-            try wait("\(names[0]) alone") { $0.selectedPhotos.count == 1 }
+        /// The grid's cells in its order, each as the names of the photos it stands for, its own first: a closed
+        /// stack's and a raw and its JPEG's every photo (`EditorModel.gridCellPhotos`).
+        func gridCells() throws -> [[String]] {
+            try main { $0.gridCellPhotos }
+        }
+
+        /// Selects the photos of the grid's first `count` cells from the keyboard: the first, then ⇧→, which goes from
+        /// cell to cell. Returns every cell, each as the names of its photos.
+        @discardableResult
+        func selectFromKeyboard(_ count: Int) throws -> [[String]] {
+            let cells = try gridCells()
+            try expect(cells.count > count, "The grid has \(cells.count) cells")
+            try click(.identifier("grid.\(cells[0][0])"))
+            try wait("\(cells[0][0])'s cell alone") { $0.selectedPhotos.count == cells[0].count }
             for _ in 1 ..< count {
                 try press(KeyCombo(.right, shift: true))
             }
-            try wait("\(count) photos selected") { $0.selectedPhotos.count == count }
+            let photos = Set(cells.prefix(count).joined())
+            try wait("\(count) cells selected, \(photos.count) photos") { model in
+                Set(model.selectedPhotos.map(\.lastPathComponent)) == photos
+            }
+            return cells
         }
     }
 
     enum CullingScenarios {
         static let all: [Scenario] = [keys, redo, mouse, autoAdvance, filtered]
+
+        /// The rating the grid shows on each of the photos named.
+        @MainActor static func ratings(of names: [String], in model: EditorModel) -> [String: Int] {
+            var ratings: [String: Int] = [:]
+            for item in model.items where names.contains(item.url.lastPathComponent) {
+                ratings[item.url.lastPathComponent] = item.metadata.rating
+            }
+            return ratings
+        }
 
         static let keys = Scenario(
             "library.culling-keys",
@@ -84,43 +107,47 @@
             tiers: [.smoke, .full],
             claims: [.action(.undo), .action(.redo), .feature("library.ratings")],
         ) { app in
-            try app.withCulling { names in
-                try app.selectFromKeyboard(3, of: names)
-                let three = Array(names[0 ... 2])
+            try app.withCulling { _ in
+                // The grid's first three cells, a raw and its JPEG's photos together, and the cell after them.
+                let cells = try app.selectFromKeyboard(3)
+                let three = Array(cells.prefix(3).joined())
+                let next = cells[3]
                 let checks: [(ShortcutAction, @Sendable (PhotoMetadata) -> Bool)] = [
                     (.rating3, { $0.rating == 3 }), (.flagReject, { $0.flag == .reject }),
                     (.labelYellow, { $0.label == .yellow }), (.toggleMark, { $0.mark }),
                 ]
                 for (action, holds) in checks {
                     try app.press(action)
-                    try app.wait("\(action.title) on the three photos, and on no other") { model in
+                    try app.wait("\(action.title) on the three cells' photos, and on no other") { model in
                         model.items.allSatisfy { holds($0.metadata) == three.contains($0.url.lastPathComponent) }
                     }
                     try app.waitWritten()
                     for name in three {
                         try app.waitInSidecar(name, action.title, holds)
                     }
-                    try app.waitInSidecar(names[3], "nothing of \(action.title)") { !holds($0) }
+                    try app.waitInSidecar(next[0], "nothing of \(action.title)") { !holds($0) }
                     try app.press(.undo)
                     try app.wait("⌘Z to take \(action.title) back") { model in
                         !model.items.contains { holds($0.metadata) }
                     }
                     try app.waitWritten()
-                    try app.waitInSidecar(names[1], "\(action.title) taken back") { !holds($0) }
+                    try app.waitInSidecar(cells[1][0], "\(action.title) taken back") { !holds($0) }
                     // ⇧⌘Z, as the driver reaches a ⌘ key with ⇧: its menu item carrying it.
                     try app.expectKeyBinding(.redo)
                     try app.choose(.redo)
                     try app.wait("⇧⌘Z to make \(action.title) again") { model in
-                        model.items.filter { holds($0.metadata) }.count == 3
+                        model.items.filter { holds($0.metadata) }.count == three.count
                     }
                     try app.waitWritten()
-                    try app.waitInSidecar(names[2], "\(action.title) made again", holds)
+                    try app.waitInSidecar(cells[2][0], "\(action.title) made again", holds)
                 }
                 try app.press(.rating2, shift: true)
-                try app.wait("⇧2 to rate the three and move on to the next") { model in
-                    model.selection?.lastPathComponent == names[3] && model.selectedPhotos.count == 1
+                try app.wait("⇧2 to rate the three cells and move on to the next") { model in
+                    model.selection?.lastPathComponent == next[0] && model.selectedPhotos.count == next.count
                 }
-                try app.expect(try app.shown(names[0]).rating == 2 && app.shown(names[3]).rating == 0, "⇧2 rated")
+                try app.expect(
+                    try app.shown(three[0]).rating == 2 && app.shown(next[0]).rating == 0, "⇧2 rated the three",
+                )
                 app.covered(.feature("library.ratings"), via: .key)
             }
         }
@@ -131,27 +158,36 @@
                 + "the others get the change again",
             claims: [.action(.redo), .feature("library.ratings")],
         ) { app in
-            try app.withCulling { names in
-                try app.selectFromKeyboard(3, of: names)
-                let own = try app.shown(names[1]).rating
+            try app.withCulling { _ in
+                // The grid's first three cells, a raw and its JPEG's photos together; the middle cell's own photo is
+                // the
+                // one rated in Develop.
+                let cells = try app.selectFromKeyboard(3)
+                let three = Array(cells.prefix(3).joined())
+                let middle = cells[1][0]
+                let others = three.filter { $0 != middle }
+                let own = try app.shown(middle).rating
                 let keys: [ShortcutAction] = [.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]
                 let develop = own == 1 ? 2 : 1
                 try app.press(.rating4)
-                try app
-                    .wait("four stars on the three photos") { $0.items.prefix(3).allSatisfy { $0.metadata.rating == 4 }
-                    }
+                try app.wait("four stars on the three cells' photos") { model in
+                    let shown = Self.ratings(of: three, in: model)
+                    return shown.count == three.count && shown.values.allSatisfy { $0 == 4 }
+                }
                 try app.waitWritten()
                 try app.press(.undo)
-                try app.wait("⌘Z to take them back") { !$0.items.prefix(3).contains { $0.metadata.rating == 4 } }
+                try app.wait("⌘Z to take them back") { !Self.ratings(of: three, in: $0).values.contains(4) }
                 try app.waitWritten()
-                /// The middle photo rated in Develop, by its own key: not Library's to undo or redo.
+                /// The middle cell's photo rated in Develop, by its own key: not Library's to undo or redo.
                 func rateInDevelop(_ stars: Int) throws {
-                    try app.click(.identifier("grid.\(names[1])"))
-                    try app.wait("\(names[1]) alone") { $0.selectedPhotos.map(\.lastPathComponent) == [names[1]] }
+                    try app.click(.identifier("grid.\(middle)"))
+                    try app.wait("\(middle)'s cell alone") { model in
+                        Set(model.selectedPhotos.map(\.lastPathComponent)) == Set(cells[1])
+                    }
                     try app.press(.developModule)
                     try app.settle()
                     try app.press(keys[stars])
-                    try app.waitInSidecar(names[1], "Develop's \(stars) stars") { $0.rating == stars }
+                    try app.waitInSidecar(middle, "Develop's \(stars) stars") { $0.rating == stars }
                     try app.press(.gridView)
                     try app.wait("the grid to take the keyboard") { _ in
                         Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"
@@ -161,15 +197,15 @@
                 try app.expectKeyBinding(.redo)
                 try app.choose(.redo)
                 try app.wait("⇧⌘Z to give the others four stars again") { model in
-                    [names[0], names[2]].allSatisfy { name in
-                        model.items.first { $0.url.lastPathComponent == name }?.metadata.rating == 4
-                    }
+                    let shown = Self.ratings(of: others, in: model)
+                    return others.allSatisfy { shown[$0] == 4 }
                 }
                 try app.waitWritten()
-                try app.waitInSidecar(names[0], "four stars made again") { $0.rating == 4 }
-                try app.waitInSidecar(names[2], "four stars made again") { $0.rating == 4 }
-                try app.waitInSidecar(names[1], "Develop's \(develop) stars, kept") { $0.rating == develop }
-                try app.expect(try app.shown(names[1]).rating == develop, "the grid shows \(names[1])'s own rating")
+                for name in others {
+                    try app.waitInSidecar(name, "four stars made again") { $0.rating == 4 }
+                }
+                try app.waitInSidecar(middle, "Develop's \(develop) stars, kept") { $0.rating == develop }
+                try app.expect(try app.shown(middle).rating == develop, "the grid shows \(middle)'s own rating")
                 app.covered(.action(.redo), via: .menu)
                 try rateInDevelop(own)
             }
@@ -193,7 +229,7 @@
                     Views.editorWindow.flatMap { Views.find("grid.\(names[0])", in: $0) }.map { $0.height > $0.width }
                         == true
                 }
-                try app.selectFromKeyboard(2, of: names)
+                try app.selectFromKeyboard(2)
                 let size = try app.main { $0.libraryViews.thumbnailSize }
                 func click(_ name: String, _ part: LibraryGridViews.CellPart) throws {
                     try app.click(.identifier("grid.\(name)"), at: LibraryGridViews.point(of: part, size: size))
@@ -252,8 +288,9 @@
                 + "does",
             claims: [.action(.autoAdvance), .feature("library.ratings")],
         ) { app in
-            try app.withCulling { names in
-                try app.selectFromKeyboard(1, of: names)
+            try app.withCulling { _ in
+                // Each move goes to the next of the grid's cells, a raw and its JPEG one cell.
+                let names = try app.selectFromKeyboard(1).map { $0[0] }
                 try app.choose(.autoAdvance)
                 try app.wait("Auto Advance on") { $0.autoAdvance }
                 for (step, action) in [ShortcutAction.rating1, .flagReject, .labelGreen].enumerated() {
