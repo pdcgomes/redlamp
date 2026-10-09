@@ -274,6 +274,40 @@ struct LibraryUndoOrderTests {
         }
     }
 
+    @Test func `Put Backs count towards the library's one limit, and alone keep its newest steps`() async throws {
+        try await Sandbox.with { sandbox in
+            let model = try #require(sandbox.model)
+            let limit = 20
+            func putBack() async {
+                await model.makePutBack(originals: []) {
+                    var outcome = FileOutcome(
+                        batch: FileBatch(kind: .putBack, title: "Put back 1 photo", steps: []), state: .finished,
+                    )
+                    outcome.photos = 1
+                    return outcome
+                }.value
+            }
+            try await sandbox.select("A.JPG")
+            for rating in [ShortcutAction.rating1, .rating2, .rating3, .rating4, .rating5] {
+                #expect(model.perform(rating))
+            }
+            await sandbox.settled()
+            for _ in 0 ..< 18 {
+                await putBack()
+            }
+            #expect(model.putBackSteps.undo.count == 18 && model.cullingUndoCount == 2, "the three oldest ratings")
+            for _ in 0 ..< 4 {
+                await putBack()
+            }
+            #expect(model.cullingUndoCount == 0, "the last two ratings, older than every Put Back")
+            #expect(model.putBackSteps.undo.count == limit)
+            let newest = model.putBackSteps.undo.last.map(ObjectIdentifier.init)
+            await putBack()
+            #expect(model.putBackSteps.undo.count == limit, "the oldest Put Back dropped for the newest")
+            #expect(model.putBackSteps.undo.dropLast().last.map(ObjectIdentifier.init) == newest)
+        }
+    }
+
     @Test func `⌘Z pressed as a move is asked for takes it back once its batch is done`() async throws {
         try await Sandbox.with { sandbox in
             let model = try #require(sandbox.model)

@@ -9,9 +9,6 @@ import RedlampLibrary
 /// back when it's the newest of them, once its batch is done, and a change of any kind ends its Redo, as a Put
 /// Back ends theirs. One that stops, or puts nothing back, leaves Undo.
 extension EditorModel {
-    /// Put Backs Undo can take back.
-    static let putBackUndoLimit = 20
-
     var putBackSteps: PutBackSteps {
         if let steps = Self.putBackSteps.object(forKey: self) {
             return steps
@@ -33,18 +30,15 @@ extension EditorModel {
         module == .library && libraryRedoKind == .putBack
     }
 
-    /// Puts a Put Back on Undo, newest, ending every Redo, and runs `putBack`, its batch, after the Put Backs and
-    /// their Undos asked for before it; one that stops, or puts nothing back, leaves Undo. `originals` are where
-    /// its photos go back to.
+    /// Puts a Put Back on Undo, newest, ending every Redo and dropping the library's oldest step beyond its limit,
+    /// and runs `putBack`, its batch, after the Put Backs and their Undos asked for before it; one that stops, or
+    /// puts nothing back, leaves Undo. `originals` are where its photos go back to.
     func makePutBack(
         originals: [URL], _ putBack: @escaping @MainActor () async throws -> FileOutcome,
     ) -> Task<Void, Never> {
         let step = PutBackStep(photos: originals)
         step.turn = nextLibraryTurn()
         putBackSteps.undo.append(step)
-        if putBackSteps.undo.count > Self.putBackUndoLimit {
-            putBackSteps.undo.removeFirst(putBackSteps.undo.count - Self.putBackUndoLimit)
-        }
         endLibraryRedo()
         return putBackSteps.enqueue { [weak self] in
             do {
