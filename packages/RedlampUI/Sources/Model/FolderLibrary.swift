@@ -384,11 +384,19 @@ public final class FolderLibrary {
         replace(with: items, positions: Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first })
     }
 
-    /// `positions` being each item's index, as made off the main thread.
-    func replace(with items: [LibraryItem], positions: [URL: Int]) {
+    /// `positions` being each item's index, as made off the main thread; `ids` their IDs in the index, for photos
+    /// shown from the library, which take them as theirs, else IDs given here.
+    func replace(with items: [LibraryItem], positions: [URL: Int], ids: ContiguousArray<Int64>? = nil) {
         self.items = LibraryItems(items)
         self.positions = positions
-        photoIDs = ContiguousArray(newPhotoIDs(items.count))
+        if let ids, ids.count == items.count {
+            photoIDs = ids
+            if let highest = ids.max() {
+                noteIndexID(highest)
+            }
+        } else {
+            photoIDs = ContiguousArray(newPhotoIDs(items.count))
+        }
         photosMoved()
         publish(LibraryDiff(reset: true))
     }
@@ -413,6 +421,7 @@ public final class FolderLibrary {
     /// collection's photos are the library's, whose list brings it.
     func insert(_ item: LibraryItem) {
         guard fromLibrary.sourcePaths == nil, positions[item.url] == nil else { return }
+        fromLibrary.indexIDs = false
         let index = items.firstIndex { FileOrder.precedes(item.name, $0.name) } ?? items.count
         items.insert(item, at: index)
         photoIDs.insert(newPhotoIDs(1).lowerBound, at: index)

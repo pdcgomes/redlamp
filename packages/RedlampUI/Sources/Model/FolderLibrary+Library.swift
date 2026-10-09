@@ -36,6 +36,9 @@ struct FromLibrary {
     var sourcePaths: PhotoPaths?
     /// A large source's rows asked for and on screen (`FolderLibrary+Items`).
     var rows = SourceRows()
+    /// Every photo of the open folder shown from the library has its ID in the index as its ID here: as its list
+    /// first hands them over, not when photos listed here are taken over from it.
+    var indexIDs = false
 
     /// What freeing takes milliseconds of for thousands of photos, for doing off the main thread.
     var tables: some Sendable {
@@ -190,7 +193,8 @@ extension FolderLibrary {
         let opened = fromLibrary.opened
         fromLibrary.opened = nil
         if let opened {
-            replace(with: all.items, positions: all.positions)
+            fromLibrary.indexIDs = all.ids.count == all.items.count
+            replace(with: all.items, positions: all.positions, ids: all.ids)
             listedDirectories = Set(all.items.map(\.folderPath)).union(openFolder.map { [$0.path] } ?? [])
             isListing = false
             isOpenFolderUnavailable = false
@@ -322,7 +326,7 @@ extension FolderLibrary {
         if removed.isEmpty, inserting.isEmpty {
             publish(LibraryDiff(updated: IndexSet(rows: updatedRows)))
         } else {
-            apply(removed: removed, inserting: inserting, updated: updated, probing: false)
+            apply(removed: removed, inserting: inserting, updated: updated, probing: false, ids: change.ids)
         }
         listedDirectories.formUnion(inserting.map(\.folderPath))
         if settles {

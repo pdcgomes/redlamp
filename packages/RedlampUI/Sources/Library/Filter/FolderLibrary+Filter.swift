@@ -25,12 +25,22 @@ extension FolderLibrary {
         let opened = fromLibrary.opened
         fromLibrary.opened = nil
         fromLibrary.awaitingFirst = false
+        // A folder the library shows from the first takes the index's IDs; one listed here first keeps its own.
+        if opened != nil {
+            fromLibrary.indexIDs = true
+        }
         let carried = ordered.previousCount >= 0 && ordered.previousCount == items.count
+        // The index's IDs, as the list hands them over, while the photos shown have theirs.
         var ids = ContiguousArray<Int64>()
-        ids.reserveCapacity(ordered.items.count)
-        for index in ordered.items.indices {
-            let before = carried ? Int(ordered.previous[index]) : positions[ordered.items[index].url] ?? -1
-            ids.append(photoIDs.indices.contains(before) ? photoIDs[before] : newPhotoIDs(1).lowerBound)
+        if fromLibrary.indexIDs, ordered.ids.count == ordered.items.count {
+            ids = ordered.ids
+        } else {
+            fromLibrary.indexIDs = false
+            ids.reserveCapacity(ordered.items.count)
+            for index in ordered.items.indices {
+                let before = carried ? Int(ordered.previous[index]) : positions[ordered.items[index].url] ?? -1
+                ids.append(photoIDs.indices.contains(before) ? photoIDs[before] : newPhotoIDs(1).lowerBound)
+            }
         }
         let unchanged = carried && ordered.diff.isEmpty
         // Freeing tens of thousands of photos takes milliseconds: the list replaced goes off the main thread.

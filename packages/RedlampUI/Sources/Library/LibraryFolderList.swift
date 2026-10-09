@@ -20,12 +20,14 @@ import Synchronization
 final class LibraryFolderList: Sendable {
     /// How the photos changed since the last change delivered.
     struct Change: Sendable {
-        /// Every photo, in order, and each one's index: the first change.
-        var all: (items: [LibraryItem], positions: [URL: Int])?
+        /// Every photo, in order, each one's index, and their IDs in the index: the first change.
+        var all: (items: [LibraryItem], positions: [URL: Int], ids: ContiguousArray<Int64>)?
         var removed: [URL] = []
         var inserted: [LibraryItem] = []
         /// Photos still shown under the same URL whose row changed.
         var updated: [LibraryItem] = []
+        /// The index's IDs of the photos `inserted` and `updated`, by URL.
+        var ids: [URL: Int64] = [:]
         /// The content keys of the photos in `all` and `inserted` that have one, and of those in `updated` whose
         /// key changed.
         var keys: [URL: ContentKey] = [:]
@@ -37,6 +39,8 @@ final class LibraryFolderList: Sendable {
     struct Ordered: Sendable {
         var items: [LibraryItem]
         var positions: [URL: Int]
+        /// The photos' IDs in the index, in the list's order.
+        var ids: ContiguousArray<Int64>
         /// Each photo's place in the list handed over before; -1 for a photo that list didn't have.
         var previous: [Int32]
         /// How many photos the list handed over before had; -1 when there was none.
@@ -280,6 +284,7 @@ final class LibraryFolderList: Sendable {
                 }
                 moved = moved || before.map { $0 != item.url } ?? false
                 shown[id] = item.url
+                change.ids[item.url] = id
                 if items[id]?.url != item.url {
                     order = nil
                 }
@@ -335,7 +340,7 @@ final class LibraryFolderList: Sendable {
             keys = [:]
             order = nil
             touchedAll = true
-            guard let (rows, folders) = read ?? nil else { return Change(all: ([], [:])) }
+            guard let (rows, folders) = read ?? nil else { return Change(all: ([], [:], [])) }
             self.folders = folders
             shown = [:]
             var change = Change()
@@ -361,7 +366,7 @@ final class LibraryFolderList: Sendable {
             for (index, item) in listed.enumerated() where positions[item.url] == nil {
                 positions[item.url] = index
             }
-            change.all = (listed, positions)
+            change.all = (listed, positions, ContiguousArray(order ?? []))
             return change
         }
 
@@ -486,7 +491,8 @@ private extension LibraryFolderList {
                 self.filter = filter
                 isOrdered = !filter.isEmpty
                 var ordered = Ordered(
-                    items: self.items, positions: listed.positions, previous: Array(0 ..< Int32(self.items.count)),
+                    items: self.items, positions: listed.positions, ids: ContiguousArray(listed.ids),
+                    previous: Array(0 ..< Int32(self.items.count)),
                     previousCount: self.items.count, diff: LibraryDiff(), keys: mapping.urlKeys,
                     total: mapping.items.count,
                     filter: filter,
@@ -535,7 +541,8 @@ private extension LibraryFolderList {
             let diff = !first && inOrder && removed.count + inserted.count <= Self.largestDiff
                 ? LibraryDiff(removed: removed, inserted: inserted, updated: updated) : LibraryDiff(reset: true)
             var ordered = Ordered(
-                items: items, positions: positions, previous: previous, previousCount: first ? -1 : self.items.count,
+                items: items, positions: positions, ids: ContiguousArray(listedIDs), previous: previous,
+                previousCount: first ? -1 : self.items.count,
                 diff: diff, keys: mapping.urlKeys, total: mapping.items.count, filter: filter,
             )
             ordered.took = (queried, clock.now - started - queried)

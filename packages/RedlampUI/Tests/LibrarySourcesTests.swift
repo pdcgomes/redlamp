@@ -81,7 +81,7 @@ struct LibrarySourcesTests {
         #expect(sources.shown == nil && model.items.count == 2, "a folder opened ends the source")
     }
 
-    @Test func `an entry's photos have the index's IDs, found from their URLs, and photos listed after it are given IDs above them`(
+    @Test func `an entry's photos and a folder's shown from the library have the index's IDs, and photos listed from the disk IDs above them`(
     ) async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }
@@ -104,10 +104,53 @@ struct LibrarySourcesTests {
         #expect(library.index(of: sandbox.photo("Shoot/Z.JPG")) == nil)
 
         model.showFolder(sandbox.folder("Shoot"))
-        try await sandbox.eventually { model.folder != nil && model.items.count == 2 }
-        let highest = try #require(indexed.values.max())
-        #expect(library.photoIDs.allSatisfy { $0 >= highest + FolderLibrary.ownIDMargin }, "\(library.photoIDs)")
+        try await sandbox.eventually { model.folder != nil && library.isShownFromLibrary && model.items.count == 2 }
+        #expect(library.showsIndexIDs, "a folder shown from the library has the index's IDs too")
+        #expect(Array(library.photoIDs) == model.items.map(\.url).compactMap { indexed[$0] })
         #expect(library.photoID(of: sandbox.photo("Shoot/A.JPG")) == library.photoIDs.first)
+
+        let elsewhere = sandbox.base.appending(path: "Elsewhere", directoryHint: .isDirectory)
+        try sandbox.photos(["D.JPG"], under: elsewhere, from: 9)
+        model.showFolder(elsewhere)
+        try await sandbox.eventually { model.folder == elsewhere && !library.isListing && model.items.count == 1 }
+        let highest = try #require(indexed.values.max())
+        #expect(!library.showsIndexIDs, "a folder the library doesn't have is listed from the disk")
+        #expect(library.photoIDs.allSatisfy { $0 >= highest + FolderLibrary.ownIDMargin }, "\(library.photoIDs)")
+    }
+
+    @Test func `a folder shown from the library keeps the index's IDs through a filter and for photos that come`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        try sandbox.photos(["Shoot/Alpha.JPG", "Shoot/Bravo.JPG", "Shoot/Charlie.JPG"])
+        let model = try await sandbox.open()
+        let library = model.library
+        let core = try #require(sandbox.service?.core)
+        /// The index's IDs of the photos shown, in their order.
+        func indexed() async -> [Int64] {
+            let urls = model.items.map(\.url)
+            let found = await LibraryService.indexIDs(of: urls, in: core.index)
+            return urls.compactMap { found[$0] }
+        }
+        model.showFolder(sandbox.folder("Shoot"))
+        try await sandbox.eventually { library.isShownFromLibrary && !library.isListing && model.items.count == 3 }
+        #expect(library.showsIndexIDs)
+        #expect(await Array(library.photoIDs) == indexed())
+
+        let filters = try #require(model.libraryFilters)
+        filters.setFilter(LibraryFilter(text: "", sections: [.text]))
+        filters.setText("name:Bravo")
+        try await sandbox.eventually { library.isFiltered && model.items.count == 1 }
+        #expect(model.items.map(\.name) == ["Bravo.JPG"])
+        #expect(await Array(library.photoIDs) == indexed(), "the filtered list's photo has its index ID")
+        filters.setText("")
+        try await sandbox.eventually { !library.isFiltered && model.items.count == 3 }
+        #expect(await Array(library.photoIDs) == indexed())
+
+        try sandbox.photos(["Shoot/Delta.JPG"], from: 7)
+        try await sandbox.eventually(seconds: 30) { model.items.count == 4 }
+        #expect(library.showsIndexIDs && model.items.count == 4)
+        #expect(await Array(library.photoIDs) == indexed(), "a photo that came has its index ID")
     }
 
     @Test func `Library Health's checks are offered while they find something, each shown with its photos`(

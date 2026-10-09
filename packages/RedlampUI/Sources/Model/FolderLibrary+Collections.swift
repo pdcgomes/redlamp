@@ -53,9 +53,10 @@ extension FolderLibrary {
         fromLibrary.sourcePaths?.id(of: url)
     }
 
-    /// Whether the photos' IDs (`photoIDs`) are the index's: those of the entry or the collection shown.
+    /// Whether the photos' IDs (`photoIDs`) are the index's: those of the entry or the collection shown, and of a
+    /// folder shown from the library as its list hands them over (`FromLibrary.indexIDs`).
     var showsIndexIDs: Bool {
-        fromLibrary.sourcePaths != nil
+        fromLibrary.sourcePaths != nil || fromLibrary.list != nil && fromLibrary.indexIDs
     }
 
     /// Whether the opening `generation` names is still the one shown.

@@ -215,8 +215,11 @@ extension FolderLibrary {
     }
 
     /// Publishes photos removed (by their indexes now), inserted in order, and changed in place
-    /// (already in `items`). `probing` reads the badges of those with a sidecar.
-    func apply(removed: IndexSet, inserting: [LibraryItem], updated: [URL], probing: Bool = true) {
+    /// (already in `items`). `probing` reads the badges of those with a sidecar. A photo inserted takes its ID in the
+    /// index from `ids` while every photo shown has theirs, else one given here.
+    func apply(
+        removed: IndexSet, inserting: [LibraryItem], updated: [URL], probing: Bool = true, ids: [URL: Int64] = [:],
+    ) {
         if !removed.isEmpty {
             items = LibraryItems(items.enumerated().filter { !removed.contains($0.offset) }.map(\.element))
             photoIDs = ContiguousArray(photoIDs.enumerated().filter { !removed.contains($0.offset) }.map(\.element))
@@ -233,7 +236,13 @@ extension FolderLibrary {
                 }
             }
             items.insert(item, at: low)
-            photoIDs.insert(newPhotoIDs(1).lowerBound, at: low)
+            if fromLibrary.indexIDs, let id = ids[item.url] {
+                photoIDs.insert(id, at: low)
+                noteIndexID(id)
+            } else {
+                fromLibrary.indexIDs = false
+                photoIDs.insert(newPhotoIDs(1).lowerBound, at: low)
+            }
         }
         if !removed.isEmpty || !inserting.isEmpty {
             positions = Dictionary(items.enumerated().map { ($1.url, $0) }) { first, _ in first }

@@ -91,6 +91,9 @@ extension FolderLibrary {
 
     private func apply(_ moved: Moved, _ moves: LibraryMoves) {
         let replaced = (items, positions)
+        if !moves.restoring.isEmpty {
+            fromLibrary.indexIDs = false
+        }
         items = LibraryItems(moved.items)
         photoIDs = moved.photoIDs
         positions = moved.positions
