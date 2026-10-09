@@ -5,9 +5,10 @@ import Testing
 
 /// Taking lib-1m's Clients (150,000 photos) out of a copy of its index split into a root per top folder, as Folders
 /// would hold them: how long the mark takes, then the store, a list of every photo and a search to leave its photos
-/// out, the counts' links to go, and the sweep of its rows, with the longest any other write waited meanwhile.
-/// Skipped unless `REDLAMP_ROOT_REMOVAL_BENCH=1` (`TEST_RUNNER_REDLAMP_ROOT_REMOVAL_BENCH=1` through xcodebuild) and
-/// lib-1m's index is on this Mac.
+/// out, the counts' links to go, and the sweep of its rows, with the longest any other write waited meanwhile; with
+/// `REDLAMP_ROOT_REMOVAL_BENCH_RECORDS=1`, every photo has a finding, a hash and an XMP merge record for the sweep to
+/// take too. Skipped unless `REDLAMP_ROOT_REMOVAL_BENCH=1` (`TEST_RUNNER_REDLAMP_ROOT_REMOVAL_BENCH=1` through
+/// xcodebuild) and lib-1m's index is on this Mac.
 struct RootRemovalBenchTests {
     static let master = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp/indexfix/lib-1m-master/Index.sqlite")
     static let fixture = "/Volumes/SSD/redlamp-tmp/library-fixtures/lib-1m.noindex"
@@ -63,6 +64,18 @@ struct RootRemovalBenchTests {
         let index = try await LibraryIndex.open(at: url)
         defer { index.closeAndWait() }
         let tops = try await Self.split(index)
+        if ProcessInfo.processInfo.environment["REDLAMP_ROOT_REMOVAL_BENCH_RECORDS"] == "1" {
+            // Every photo with a finding, a full hash and an XMP merge record, which the sweep takes with it.
+            try await index.write { writer in
+                try writer.database.execute("""
+                INSERT INTO photo_health (photo, size, modified, damage) SELECT id, size, modified, 2 FROM photos;
+                INSERT INTO photo_hashes (photo, size, modified, content_key, sha256)
+                  SELECT id, size, modified, coalesce(content_key, x'00'), x'00' FROM photos;
+                INSERT INTO settings (key, value) SELECT 'library.xmp.merged.' || id, '{}' FROM photos;
+                """)
+            }
+            Self.report("every photo has a finding, a hash and an XMP merge record")
+        }
         let clients = Self.fixture + "/Clients"
         let kept = tops.filter { $0 != clients }
         let engine = QueryEngine(index: index)
