@@ -5,11 +5,10 @@ import RedlampLibrary
 /// Undo in the file operations' journal and made again from the check's findings for the same photos, checked again
 /// as the first was; and Keep Anyway and List Again, each taking back what the other makes.
 ///
-/// Library's other changes, culling's, the panels', the renames and moves and the Put Backs, each keep an Undo of
-/// their own. A change of Library Health's is the newest while the newest of each of them is the one it was when the
-/// change was made, and the newest taken back while the newest each of them took back is the one it was then; a
-/// change made since it was taken back ends its Redo, and one of Library Health's ends theirs. Its keys come before
-/// theirs, so the newest change is always taken back first.
+/// Each takes its turn among Library's changes (`EditorModel+LibraryUndo`): a batch once it has run, as the sheet
+/// holds every other change back until then, and Keep Anyway and List Again as they're asked for. ⌘Z takes one back
+/// when it's the newest of them, and a change of any kind ends their Redo, as one of theirs ends every other's. One
+/// that stops, or changes nothing, leaves Undo.
 extension EditorModel {
     /// Library Health's changes Undo can take back.
     static let healthUndoLimit = 20
@@ -25,61 +24,30 @@ extension EditorModel {
 
     private static let healthSteps = NSMapTable<EditorModel, HealthSteps>.weakToStrongObjects()
 
-    /// The newest change on each of Library's other Undos.
-    private var newestOtherChanges: [ObjectIdentifier?] {
-        [
-            cullingUndo.last.map(ObjectIdentifier.init), libraryPanels.undoSteps.last.map(ObjectIdentifier.init),
-            fileSteps.undo.last.map(ObjectIdentifier.init), putBackSteps.undo.last.map(ObjectIdentifier.init),
-        ]
-    }
-
-    /// The newest change on each of Library's other Redos.
-    private var newestOtherUndone: [ObjectIdentifier?] {
-        [
-            cullingRedo.last.map(ObjectIdentifier.init), libraryPanels.redoSteps.last.map(ObjectIdentifier.init),
-            fileSteps.redo.last.map(ObjectIdentifier.init), putBackSteps.redo.last.map(ObjectIdentifier.init),
-        ]
-    }
-
-    /// Every change on Library's other Undos.
-    private var otherChangesMade: [ObjectIdentifier] {
-        cullingUndo.map(ObjectIdentifier.init) + libraryPanels.undoSteps.map(ObjectIdentifier.init)
-            + fileSteps.undo.map(ObjectIdentifier.init) + putBackSteps.undo.map(ObjectIdentifier.init)
-    }
-
-    /// Library's Undo takes back Library Health's latest change: nothing was changed since it was made.
+    /// Library's Undo takes back Library Health's latest change: it's the library's newest change.
     var healthUndoIsNewest: Bool {
-        guard module == .library, let step = healthSteps.undo.last else { return false }
-        return step.newest == newestOtherChanges
+        module == .library && libraryUndoKind == .health
     }
 
-    /// Library's Redo makes again Library Health's change taken back last: nothing was taken back after it. A change
-    /// made since it was taken back ends every Redo of Library Health's.
+    /// Library's Redo makes again Library Health's change taken back last: it's the library's change taken back last.
     var healthRedoIsNewest: Bool {
-        guard module == .library, let step = healthSteps.redo.last else { return false }
-        guard otherChangesMade.allSatisfy(step.known.contains) else {
-            healthSteps.redo.removeAll()
-            return false
-        }
-        return step.newestUndone == newestOtherUndone
+        module == .library && libraryRedoKind == .health
     }
 
-    /// Puts `step`, just made, on Undo, newest, ending every Redo.
+    /// Puts `step` on Undo, newest, ending every Redo.
     func pushHealthStep(_ step: HealthStep) {
-        step.newest = newestOtherChanges
+        step.turn = nextLibraryTurn()
         healthSteps.undo.append(step)
         if healthSteps.undo.count > Self.healthUndoLimit {
             healthSteps.undo.removeFirst(healthSteps.undo.count - Self.healthUndoLimit)
         }
-        healthSteps.redo.removeAll()
-        putBackSteps.redo.removeAll()
-        if !cullingRedo.isEmpty {
-            cullingRedo.removeAll()
-        }
-        if !libraryPanels.redoSteps.isEmpty {
-            libraryPanels.redoSteps.removeAll()
-        }
-        fileSteps.redo.removeAll()
+        endLibraryRedo()
+    }
+
+    /// Takes `step`, which stopped or changed nothing, off Undo and Redo.
+    func dropHealthStep(_ step: HealthStep) {
+        healthSteps.undo.removeAll { $0 === step }
+        healthSteps.redo.removeAll { $0 === step }
     }
 
     /// ⌘Z: Library Health's latest change taken back, in the background.
@@ -88,8 +56,8 @@ extension EditorModel {
         guard healthUndoIsNewest, let core = library.service?.core, let step = healthSteps.undo.popLast() else {
             return false
         }
-        step.newestUndone = newestOtherUndone
-        step.known = Set(otherChangesMade)
+        let made = step.turn
+        step.turn = nextLibraryTurn()
         healthSteps.redo.append(step)
         activity.record(.action, "Undo \(step.title)")
         let health = healthProposals.library(core)
@@ -99,11 +67,12 @@ extension EditorModel {
                 try await take(step, back: true, core: core, health: health)
             } catch {
                 activity.record(.error, "Undo \(step.title) wasn't done: \(Self.healthFailure(error))")
-                if let place = healthSteps.redo.lastIndex(where: { $0 === step }) {
-                    healthSteps.redo.remove(at: place)
-                    if Self.mayRetryHealth(error) {
-                        healthSteps.undo.append(step)
-                    }
+                // Back on Undo in its place when it may go through later, unless a change made since ended its Redo.
+                let undone = healthSteps.redo.contains { $0 === step }
+                healthSteps.redo.removeAll { $0 === step }
+                if Self.mayRetryHealth(error), undone {
+                    step.turn = made
+                    healthSteps.undo.append(step)
                 }
             }
         }
@@ -116,7 +85,8 @@ extension EditorModel {
         guard healthRedoIsNewest, let core = library.service?.core, let step = healthSteps.redo.popLast() else {
             return false
         }
-        step.newest = newestOtherChanges
+        let undone = step.turn
+        step.turn = nextLibraryTurn()
         healthSteps.undo.append(step)
         activity.record(.action, "Redo \(step.title)")
         let health = healthProposals.library(core)
@@ -126,11 +96,12 @@ extension EditorModel {
                 try await take(step, back: false, core: core, health: health)
             } catch {
                 activity.record(.error, "Redo \(step.title) wasn't done: \(Self.healthFailure(error))")
-                if let place = healthSteps.undo.lastIndex(where: { $0 === step }) {
-                    healthSteps.undo.remove(at: place)
-                    if Self.mayRetryHealth(error) {
-                        healthSteps.redo.append(step)
-                    }
+                // Back on Redo when it may go through later and is still the newest change; off Undo either way.
+                let newest = healthSteps.undo.last === step && libraryUndoKind == .health
+                healthSteps.undo.removeAll { $0 === step }
+                if Self.mayRetryHealth(error), newest {
+                    step.turn = undone
+                    healthSteps.redo.append(step)
                 }
             }
         }
@@ -266,16 +237,14 @@ final class HealthStep {
         case listedAgain([KeptAnyway])
     }
 
-    let kind: Kind
+    /// What it changes; Keep Anyway's and List Again's entries once they're made.
+    var kind: Kind
     /// As Undo and the activity log name it: "Move 14 copies to the Trash".
-    let title: String
+    var title: String
     /// The batch that made it last, for its Undo.
     var batch: UUID?
-    /// The newest change of Library's other Undos when it was made or made again.
-    var newest: [ObjectIdentifier?] = []
-    /// When it was taken back: the newest change of Library's other Redos, and every change on their Undos.
-    var newestUndone: [ObjectIdentifier?] = []
-    var known: Set<ObjectIdentifier> = []
+    /// Its turn in Library's Undo and Redo (`EditorModel+LibraryUndo`).
+    var turn = 0
 
     init(_ kind: Kind, title: String) {
         self.kind = kind

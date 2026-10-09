@@ -108,7 +108,7 @@ struct LibraryUndoOrderTests {
             await sandbox.close()
         }
 
-        private func close() async {
+        func close() async {
             if let service {
                 for place in await service.trashedPlaces() {
                     try? FileManager.default.removeItem(atPath: place)

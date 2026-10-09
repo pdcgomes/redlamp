@@ -47,7 +47,7 @@ public extension EditorModel {
     }
 
     /// Keep Anyway: the findings of `photo`, or of the selection it's in, taken out of the check shown until the photo
-    /// changes, as one change with Undo.
+    /// changes, as one change with Undo, taking its turn now.
     @discardableResult
     func keepAnyway(_ photo: URL? = nil) -> Bool {
         guard canKeepAnyway, let findings = healthProposals.findings, let core = library.service?.core else {
@@ -55,6 +55,8 @@ public extension EditorModel {
         }
         let urls = photosActedOn(from: photo)
         let health = healthProposals.library(core)
+        let step = HealthStep(.keptAnyway([]), title: "Keep Anyway")
+        pushHealthStep(step)
         healthSteps.enqueue { [weak self] in
             guard let self else { return }
             let ids = await librarySources.indexIDs(of: urls)
@@ -70,12 +72,13 @@ public extension EditorModel {
             switch result {
             case let .success(entries) where !entries.isEmpty:
                 let groups = Set(chosen.compactMap(\.group)).count
-                let title = HealthWords.keptAnyway(findings.check.kind, photos: chosen.count, groups: groups)
-                pushHealthStep(HealthStep(.keptAnyway(entries), title: title))
-                activity.record(.action, title)
+                step.kind = .keptAnyway(entries)
+                step.title = HealthWords.keptAnyway(findings.check.kind, photos: chosen.count, groups: groups)
+                activity.record(.action, step.title)
             case .success:
-                break
+                dropHealthStep(step)
             case let .failure(error):
+                dropHealthStep(step)
                 activity.record(.error, "Keep Anyway wasn't done: \(LibraryService.describe(error))")
             }
         }
@@ -87,12 +90,14 @@ public extension EditorModel {
     }
 
     /// List Again in Library Health: what keeps `photo`, or the selection it's in, taken back from Kept Anyway, so the
-    /// checks list them again; one change with Undo.
+    /// checks list them again; one change with Undo, taking its turn now.
     @discardableResult
     func listAgain(_ photo: URL? = nil) -> Bool {
         guard canListAgain, let core = library.service?.core else { return false }
         let urls = photosActedOn(from: photo)
         let health = healthProposals.library(core)
+        let step = HealthStep(.listedAgain([]), title: "List Again")
+        pushHealthStep(step)
         healthSteps.enqueue { [weak self] in
             guard let self else { return }
             let ids = await Set(librarySources.indexIDs(of: urls))
@@ -107,12 +112,13 @@ public extension EditorModel {
             }
             switch result {
             case let .success(entries) where !entries.isEmpty:
-                let title = HealthWords.listedAgain(photos: ids.count)
-                pushHealthStep(HealthStep(.listedAgain(entries), title: title))
-                activity.record(.action, title)
+                step.kind = .listedAgain(entries)
+                step.title = HealthWords.listedAgain(photos: ids.count)
+                activity.record(.action, step.title)
             case .success:
-                break
+                dropHealthStep(step)
             case let .failure(error):
+                dropHealthStep(step)
                 activity.record(.error, "List Again wasn't done: \(LibraryService.describe(error))")
             }
         }
