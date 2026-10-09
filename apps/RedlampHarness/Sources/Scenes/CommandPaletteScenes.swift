@@ -222,6 +222,8 @@ final class PaletteSession {
         case let .libraryName(.folder, path), let .photo(path): URL(fileURLWithPath: path).lastPathComponent
         case let .libraryName(_, value): value
         case let .photosNamed(text): "Photos Named “\(text)”"
+        case let .queryTerm(term): term
+        case let .queryField(field): field
         }
     }
 
