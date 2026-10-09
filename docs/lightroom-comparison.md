@@ -63,6 +63,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | DNG camera profiles | Yes | Done | | | CAM-04, TON-09 | Dual-illuminant colour and the embedded HueSatMap; a profile's look is offered as a Base Look |
 | Custom `.dcp` camera profiles | Yes | Later | | | | Deferred on 2 October 2026 |
 | ICC input profiles | No | Planned | | P2 | TON-10 | |
+| A scene-referred rendering for reproduction work, with exposure tied to the camera's metering | No | Planned | | P3 | TON-39, CAM-28 | No tone curve or look, so a target's grey scale exports at its own L*; Lightroom needs a custom linear profile for this |
 | Calibration panel | Yes | Done | | | | Shadows Tint and the red, green and blue primaries |
 | Process versions | Yes | Done | | | P1-01 | An edit keeps rendering the way it was made; moving it to a newer process is your choice |
 | HDR editing and export | Yes | Planned | | P4 | | |
@@ -199,6 +200,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Panels that hide automatically or stay up | Yes | Done | Different | | UX-19 | The filmstrip hides automatically or stays up with the photo fitted above it (View › Filmstrip, its right-click menu, Settings); Lightroom offers Auto Hide & Show, Auto Hide and Manual for each panel |
 | Histogram you can drag to adjust | Yes | Done | | | | |
 | RGB and L*a*b* values of the pixel under the pointer | Yes | Done | Different | | UX-32 | Under the histogram; RGB in Display P3, where Lightroom uses Melissa RGB, and L*a*b* relative to D50 |
+| Readout points pinned on the photo | No | Planned | | P3 | UX-40 | As Photoshop's colour samplers, with values that stay while sliders move |
 | Panel on/off switches | Yes | Undecided | | | UX-30 | Turn a panel's settings off and on without losing them |
 | Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
 | A value on every control, and values that scrub when dragged | Yes | In progress | | P2 | UX-28, UX-29 | The grading wheels, curve points, Base Look Amount and the Masks panel's sizes and ranges get values |
@@ -224,7 +226,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | --- | --- | --- | --- | --- | --- | --- |
 | JPEG, HEIC, AVIF, PNG and TIFF | Yes | Done | | | EDT-13, EDT-15 | 8, 10 or 16 bits, in sRGB or Display P3 |
 | Size, metadata and export presets | Yes | Done | | | EDT-15 | With Export with Previous |
-| Adobe RGB, ProPhoto and custom ICC output | Yes | Planned | | P4 | EDT-26 | |
+| Adobe RGB, ProPhoto and custom ICC output | Yes | Planned | | P3 | EDT-26 | |
 | DNG, PSD and JPEG XL output | Yes | Planned | | P4 | | |
 | Watermarks | Yes | Planned | | P4 | EDT-25 | |
 | Output sharpening | Yes | Planned | | P4 | | |
