@@ -29,9 +29,6 @@ final class PanelStep {
 }
 
 public extension LibraryPanels {
-    /// Changes Undo can take back.
-    static let undoLimit = 20
-
     // MARK: - Keywording (LIB-21)
 
     /// The keywords typed in the keywording panel's field, Lightroom Classic's way (`KeywordList.entered`),
@@ -415,9 +412,6 @@ extension LibraryPanels {
         guard let model else { return }
         step.turn = model.nextLibraryTurn()
         undoSteps.append(step)
-        if undoSteps.count > Self.undoLimit {
-            undoSteps.removeFirst(undoSteps.count - Self.undoLimit)
-        }
         model.endLibraryRedo()
     }
 

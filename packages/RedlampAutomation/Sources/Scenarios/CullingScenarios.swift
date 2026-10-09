@@ -2,6 +2,7 @@
     import AppKit
     import RedlampDocument
     import RedlampEngineAPI
+    import RedlampLibrary
     @_spi(Harness) import RedlampUI
 
     extension RunningApp {
@@ -89,7 +90,67 @@
     }
 
     enum CullingScenarios {
-        static let all: [Scenario] = [keys, redo, mouse, autoAdvance, filtered]
+        static let all: [Scenario] = [keys, redo, mouse, autoAdvance, filtered, undoLimit]
+
+        static let undoLimit = Scenario(
+            "library.undo-limit",
+            "⌘Z takes back the library's last 20 changes whatever their kind, the oldest going first: of eleven ratings "
+                + "then ten keywords, twenty ⌘Z take back all but the first rating, and nothing older is left",
+            claims: [.action(.undo), .feature("library.ratings"), .feature("library.keywords")],
+        ) { app in
+            try app.withPanels { _ in
+                // A cell other than the photo Develop has open, whose changes its own saves write.
+                let open = try app.main { $0.selection?.lastPathComponent }
+                guard let cell = try app.gridCells().first(where: { !$0.contains { $0 == open } }) else {
+                    throw ScenarioFailure("The grid has no photo but Develop's")
+                }
+                let photo = cell[0]
+                try app.click(.identifier("grid.\(photo)"))
+                try app.wait("\(photo)'s cell alone") { model in
+                    Set(model.selectedPhotos.map(\.lastPathComponent)) == Set(cell)
+                }
+                let own = try app.shown(photo).rating
+                let keys: [ShortcutAction] = [.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]
+                var stars = own
+                for _ in 0 ..< 11 {
+                    stars = stars % 5 + 1
+                    try app.press(keys[stars])
+                    try app.wait("\(stars) stars on \(photo)") { [stars] model in
+                        model.items.first { $0.url.lastPathComponent == photo }?.metadata.rating == stars
+                    }
+                }
+                try app.waitWritten()
+                for number in 1 ... 10 {
+                    guard let keyword = KeywordPath("E2E Limit \(number)") else { throw ScenarioFailure("No path") }
+                    try app.typeInField("keywording.entry", keyword.text)
+                    try app.wait("\(keyword.text) on \(photo)") { model in
+                        model.libraryPanels.selection.hasEverywhere(keyword) == true
+                    }
+                }
+                try app.waitForPanels()
+                let kept = try app.main { $0.cullingUndoCount + $0.libraryPanels.undoCount }
+                try app.expect(kept == 20, "Undo keeps \(kept) of the 21 changes")
+                // A click on the photo's cell gives the grid the keyboard back from the keywording field.
+                try app.click(.identifier("grid.\(photo)"))
+                try app.wait("the grid to take the keyboard") { _ in
+                    Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"
+                }
+                for _ in 0 ..< 20 {
+                    try app.press(.undo)
+                }
+                try app.waitWritten()
+                try app.waitForPanels()
+                try app.expect(try !app.main { $0.canPerform(.undo) }, "Nothing older is left to take back")
+                try app.waitInSidecar(photo, "the first rating, which Undo let go of") { $0.rating == own % 5 + 1 }
+                try app.expect(
+                    try !app.sidecarKeywords(photo).contains { $0.hasPrefix("E2E Limit") }, "Every keyword taken back",
+                )
+                // The first rating taken back by a key, as the scenarios after this one find the photo.
+                try app.press(keys[own])
+                try app.waitWritten()
+                app.covered(.action(.undo), via: .key)
+            }
+        }
 
         /// The rating the grid shows on each of the photos named.
         @MainActor static func ratings(of names: [String], in model: EditorModel) -> [String: Int] {

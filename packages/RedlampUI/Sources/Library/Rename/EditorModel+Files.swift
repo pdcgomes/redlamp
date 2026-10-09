@@ -17,9 +17,6 @@ import Synchronization
 ///   it back once the batch is done; Redo makes it again with a batch planned anew, and a change made since its Undo
 ///   ends that, as it ends every Redo. Steps are made one at a time, in the order they're asked for.
 public extension EditorModel {
-    /// File steps Undo can take back.
-    static let fileUndoLimit = 20
-
     /// Rename Photos…: the template sheet for the photos selected, with their raw and JPEG pairs.
     @discardableResult
     func renamePhotos() -> Bool {
@@ -97,9 +94,6 @@ extension EditorModel {
     func push(_ step: LibraryFileStep) {
         step.turn = nextLibraryTurn()
         fileSteps.undo.append(step)
-        if fileSteps.undo.count > Self.fileUndoLimit {
-            fileSteps.undo.removeFirst(fileSteps.undo.count - Self.fileUndoLimit)
-        }
         endLibraryRedo()
     }
 

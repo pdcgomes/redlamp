@@ -239,6 +239,41 @@ struct LibraryUndoOrderTests {
         #expect(made(sandbox) == expected, "⌘Z took back the keyword's removal first")
     }
 
+    @Test func `the library's Undo keeps its newest steps of every kind together, the oldest going first`(
+    ) async throws {
+        try await Sandbox.with { sandbox in
+            let model = try #require(sandbox.model)
+            let limit = 20
+            let ratings: [ShortcutAction] = [.rating1, .rating2, .rating3, .rating4, .rating5]
+            // Twelve ratings on A, then twelve keywords on B: twenty-four steps, four more than Undo keeps.
+            try await sandbox.select("A.JPG")
+            for step in 0 ..< 12 {
+                #expect(model.perform(ratings[step % ratings.count]))
+            }
+            await sandbox.settled()
+            try await sandbox.select("B.JPG")
+            for step in 0 ..< 12 {
+                let keyword = try #require(KeywordPath("Limit \(step)"))
+                #expect(model.libraryPanels.add([keyword]))
+            }
+            await sandbox.settled()
+            #expect(model.cullingUndoCount + model.libraryPanels.undoSteps.count == limit)
+            #expect(model.cullingUndoCount == limit - 12, "the four oldest ratings dropped, every keyword kept")
+
+            for step in 0 ..< limit {
+                #expect(model.canPerform(.undo) && model.perform(.undo), "⌘Z \(step + 1)")
+                await sandbox.settled()
+            }
+            #expect(!model.canPerform(.undo), "nothing older left to take back")
+            let keywords = SidecarStore().load(for: sandbox.photo("B.JPG"))?.metadata?.keywords ?? []
+            #expect(!keywords.contains { $0.hasPrefix("Limit") }, "every keyword taken back")
+            #expect(
+                SidecarStore().load(for: sandbox.photo("A.JPG"))?.metadata?.rating == 4,
+                "A back to the fourth rating, the oldest kept made before it",
+            )
+        }
+    }
+
     @Test func `⌘Z pressed as a move is asked for takes it back once its batch is done`() async throws {
         try await Sandbox.with { sandbox in
             let model = try #require(sandbox.model)

@@ -22,8 +22,6 @@ import Synchronization
 ///   and photos whose sidecars this build can't write, show what their sidecars hold.
 public extension EditorModel {
     static let autoAdvanceKey = "culling.autoAdvance"
-    /// Culling changes Undo can take back.
-    static let cullingUndoLimit = 20
 
     // MARK: - Keys, menus and the palette
 
@@ -212,11 +210,6 @@ public extension EditorModel {
         show(step.after, field: change.field, rows: step.rows, photoIDs: step.photoIDs, sequence: sequence)
         step.turn = nextLibraryTurn()
         cullingUndo.append(step)
-        if cullingUndo.count > Self.cullingUndoLimit {
-            let freed = DroppedSteps(Array(cullingUndo.prefix(cullingUndo.count - Self.cullingUndoLimit)))
-            cullingUndo.removeFirst(cullingUndo.count - Self.cullingUndoLimit)
-            release(freed)
-        }
         endLibraryRedo()
         var labels: Set<String> = []
         for values in step.after {
@@ -233,6 +226,13 @@ public extension EditorModel {
         guard !cullingRedo.isEmpty else { return }
         let freed = DroppedSteps(cullingRedo)
         cullingRedo = []
+        release(freed)
+    }
+
+    /// Lets go of the `count` oldest culling changes on Undo, as Library's one limit asks (`EditorModel+LibraryUndo`).
+    internal func dropOldestCulling(_ count: Int) {
+        let freed = DroppedSteps(Array(cullingUndo.prefix(count)))
+        cullingUndo.removeFirst(min(count, cullingUndo.count))
         release(freed)
     }
 
