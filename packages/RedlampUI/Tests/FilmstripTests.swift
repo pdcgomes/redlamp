@@ -218,6 +218,27 @@ struct FilmstripTests {
         #expect(strip.scrollView.contentView.bounds.origin.x == 0)
     }
 
+    /// The place a strip was scrolled to is kept for the photo open then: once ← or → have moved on
+    /// without the strip, a strip made again opens at the photo open now.
+    @Test func `a strip made again opens at the photo opened since, not where it was scrolled`() async throws {
+        defer { cleanUp() }
+        let (model, _, window) = try await showStrip(count: 1000)
+        defer { window.contentView = nil }
+        model.filmstripPlace = model.items[500].url
+        #expect(model.filmstripPlace == model.items[500].url, "kept while the same photo is open")
+        window.contentView = nil
+        model.select(model.items[900].url)
+        try await eventually { model.selection == model.items[900].url }
+        #expect(model.filmstripPlace == nil)
+        let again = FilmstripStripView(model: model)
+        window.contentView = again
+        again.layoutSubtreeIfNeeded()
+        let frame = try #require(again.collectionView.layoutAttributesForItem(at: IndexPath(item: 900, section: 0)))
+            .frame
+        try await eventually { again.scrollView.contentView.bounds.contains(frame) }
+        #expect(again.scrollView.contentView.bounds.contains(frame), "at \(again.scrollView.contentView.bounds)")
+    }
+
     /// The strip follows the selection a turn after it changes; cells drawn in between, while the
     /// strip scrolls or reloads, mustn't keep a highlight it never followed.
     @Test func `a photo selected only briefly isn't left highlighted`() async throws {

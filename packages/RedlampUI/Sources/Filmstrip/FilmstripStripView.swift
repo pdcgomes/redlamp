@@ -391,7 +391,8 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         }
         model.editRenders.show(first ..< last + 1, in: .filmstrip)
         let middle = CGPoint(x: scrollView.contentView.bounds.midX, y: collectionView.bounds.midY)
-        if let item = collectionView.indexPathForItem(at: middle)?.item, let row = row(ofItem: item) {
+        // Until it has gone back to its place, the strip is where its layout left it, not where it was scrolled.
+        if !needsPlace, let item = collectionView.indexPathForItem(at: middle)?.item, let row = row(ofItem: item) {
             model.filmstripPlace = model.items[row].url
         }
     }

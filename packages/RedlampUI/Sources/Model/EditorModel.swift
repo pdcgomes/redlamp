@@ -618,8 +618,14 @@ public final class EditorModel {
     public var rightPanelVisible = true
     public var filmstripVisible = true
     /// The photo in the middle of the filmstrip as it was last scrolled, where a filmstrip shown again (in
-    /// either module) goes back to.
-    @ObservationIgnored var filmstripPlace: URL?
+    /// either module) goes back to while the photo open then is still open: one made again after ← or →
+    /// moved on without it (F6, Lights Out, presenting) opens at the photo open now.
+    var filmstripPlace: URL? {
+        get { keptFilmstripPlace.flatMap { $0.selection == selection ? $0.photo : nil } }
+        set { keptFilmstripPlace = newValue.map { (photo: $0, selection: selection) } }
+    }
+
+    @ObservationIgnored private var keptFilmstripPlace: (photo: URL, selection: URL?)?
 
     // MARK: Modules (EditorModel+Modules)
 
