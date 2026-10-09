@@ -132,8 +132,7 @@ struct CullingTests {
         }
 
         func cleanUp() {
-            service?.close()
-            try? FileManager.default.removeItem(at: base)
+            LibrarySandbox.remove(base, closing: [service])
         }
 
         static func writeJPEG(_ url: URL, shade: Int) throws {

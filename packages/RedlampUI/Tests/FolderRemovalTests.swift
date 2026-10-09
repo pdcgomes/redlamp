@@ -195,7 +195,7 @@ struct FolderRemovalTests {
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
         library.attach(service)
-        defer { service.close() }
+        sandbox.closes(service)
         try await sandbox.eventually {
             model.librarySources.isCounted && model.libraryPanels.keywords != nil
         }
@@ -231,7 +231,7 @@ struct FolderRemovalTests {
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
         library.attach(service)
-        defer { service.close() }
+        sandbox.closes(service)
         try #require(service.state == .opening)
         try library.remove(#require(library.root(containing: trip)))
         try await sandbox.eventually { service.isReady }
@@ -274,6 +274,7 @@ struct FolderRemovalTests {
         let fresh = FolderLibrary()
         fresh.add([sandbox.root])
         let unsaved = try await launch(fresh)
+        sandbox.closes(unsaved)
         try await Task.sleep(for: .milliseconds(500))
         let core = try #require(unsaved.core)
         await core.roots.swept()
@@ -285,7 +286,7 @@ struct FolderRemovalTests {
         let saved = FolderLibrary(defaults: defaults)
         #expect(saved.roots.map(\.url) == [sandbox.root])
         let service = try await launch(saved)
-        defer { service.close() }
+        sandbox.closes(service)
         let opened = try #require(service.core)
         var roots: Set<String> = []
         try await SourcesSandbox.eventually {
@@ -320,7 +321,7 @@ struct FolderRemovalTests {
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
         library.attach(service)
-        defer { service.close() }
+        sandbox.closes(service)
         try await sandbox.eventually { service.isReady }
         #expect(try await Self.ids("", service).count == 1, "none of Trip's photos as the library opens")
         let core = try #require(service.core)

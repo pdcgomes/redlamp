@@ -31,16 +31,23 @@ struct LibraryStacksTests {
         Photo(path: "S04.JPG", time: 2400),
     ]
 
+    /// The library a test opens, closed with its index before its folder goes.
+    @MainActor
+    private final class Opened {
+        var service: LibraryService?
+    }
+
     private let base = FileManager.default.temporaryDirectory
         .appending(path: "library-stacks-\(UUID().uuidString)", directoryHint: .isDirectory).standardizedFileURL
     private let suite = "library-stacks-tests-\(UUID().uuidString)"
+    private let opened = Opened()
 
     private var root: URL {
         base.appending(path: "Photos", directoryHint: .isDirectory)
     }
 
     private func cleanUp() {
-        try? FileManager.default.removeItem(at: base)
+        LibrarySandbox.remove(base, closing: [opened.service])
         UserDefaults().removePersistentDomain(forName: suite)
     }
 
@@ -94,6 +101,7 @@ struct LibraryStacksTests {
         ) { url, size in
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
+        opened.service = service
         library.attach(service)
         let deadline = ContinuousClock.now + .seconds(30)
         while await !service.canShow(root, includingSubfolders: true), ContinuousClock.now < deadline {

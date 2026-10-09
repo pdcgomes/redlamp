@@ -13,7 +13,9 @@ import Testing
 final class DragSandbox {
     let base = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
         .appending(path: "drags-\(UUID().uuidString)", directoryHint: .isDirectory)
-    let defaults = UserDefaults(suiteName: "drags-\(UUID().uuidString)")
+    /// Folders' choices, in a suite of their own that goes with the sandbox.
+    let suite = "drags-\(UUID().uuidString)"
+    private(set) lazy var defaults = UserDefaults(suiteName: suite)
     private(set) var library: FolderLibrary!
     private(set) var service: LibraryService!
     private(set) var model: EditorModel!
@@ -111,8 +113,8 @@ final class DragSandbox {
 
     func close() {
         modules?.window.contentView = nil
-        service?.close()
-        try? FileManager.default.removeItem(at: base)
+        LibrarySandbox.remove(base, closing: [service])
+        UserDefaults().removePersistentDomain(forName: suite)
     }
 
     /// Waits for the panels' changes asked for to be made, then counts the library again until `condition` holds:
