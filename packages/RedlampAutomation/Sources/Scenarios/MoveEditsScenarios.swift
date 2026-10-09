@@ -137,10 +137,22 @@
             var surveyed: [Double] = []
             var read: [Double] = []
             var checked: [Double] = []
+            var menus: [String] = []
+            let mainThread = try app.main { _ in mach_thread_self() }
+            let profiling = ProcessInfo.processInfo.environment["REDLAMP_MENU_PROFILE"] != nil
             for (name, goingTo) in [("there", "Redlamp on this Mac"), ("back", "Beside the photos")] {
+                let mark = try app.menuMark()
+                let profile = profiling ? StackPerformanceScenarios.StackCallProfile(thread: mainThread) : nil
                 try app.rightClickRow(row, choosing: ShortcutAction.moveEditsAndMetadata.title)
                 try app.waitForSheet("Move Edits and Metadata", timeout: 10)
                 try app.wait("the sheet's numbers") { $0.moveEditsSheet?.shownAfter != nil }
+                let toNumbers = try app.menuRebuilds(since: mark)
+                for marker in ["makeMainMenu", "MoveEdits"] {
+                    profile?.write(
+                        to: app.runDirectory.appending(path: "move-edits-profile-sheet-\(name)-\(marker).txt"),
+                        inside: marker,
+                    )
+                }
                 let opened = Date()
                 let sheet = try app.main { $0.moveEditsSheet }
                 shown.append(Self.milliseconds(sheet?.shownAfter))
@@ -152,6 +164,11 @@
                 )
                 try app.wait("the root looked through", timeout: 120) { $0.moveEditsSheet?.canMove == true }
                 checked.append(Date().timeIntervalSince(opened) * 1000)
+                try menus.append(
+                    "menu bar, the sheet \(name) to its numbers: \(MenuPerformanceScenarios.describe(toNumbers)); "
+                        +
+                        "to the root looked through: \(MenuPerformanceScenarios.describe(app.menuRebuilds(since: mark)))",
+                )
                 let phase = try app.watchingMainThread(name) {
                     try app.clickInSheet("moveEdits.move")
                     try app.waitForNoSheet("Move Edits and Metadata", timeout: 900)
@@ -188,7 +205,7 @@
                     checked.map { String(format: "%.0f", $0) }.joined(separator: " and "),
                     "\(ProcessInfo.processInfo.loadAverage)",
                 ),
-            ]
+            ] + menus
             try? (lines.joined(separator: "\n") + "\n").write(
                 to: app.runDirectory.appending(path: "move-edits-performance.txt"), atomically: true, encoding: .utf8,
             )

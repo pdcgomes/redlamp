@@ -1,4 +1,4 @@
-import RedlampUI
+@_spi(Harness) import RedlampUI
 import SwiftUI
 
 /// The menu bar, built from `ShortcutAction` so menus, keys and the ⌘/ sheet always agree.
@@ -15,6 +15,14 @@ struct AppCommands: Commands {
     @Environment(\.openURL) private var openURL
 
     var body: some Commands {
+        #if DEBUG || REDLAMP_PROFILING
+            let started = MenuBarProbe.shared.rebuilding()
+            defer { MenuBarProbe.shared.built(since: started) }
+        #endif
+        return menus
+    }
+
+    @CommandsBuilder private var menus: some Commands {
         CommandGroup(after: .appInfo) {
             if let updates {
                 Button("Check for Updates…") { updates.check() }

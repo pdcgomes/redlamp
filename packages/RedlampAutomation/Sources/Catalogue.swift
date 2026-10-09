@@ -30,6 +30,7 @@
             + StackPerformanceScenarios.all
             + GroupPerformanceScenarios.all
             + HealthPerformanceScenarios.all
+            + MenuPerformanceScenarios.all
             + SmokeScenarios.last
 
         /// What the app offers, from its own catalogues: every action, parameter, panel, left

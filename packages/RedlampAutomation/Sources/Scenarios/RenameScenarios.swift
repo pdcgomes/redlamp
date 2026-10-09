@@ -516,19 +516,22 @@
     }
 
     extension RunningApp {
-        /// Runs `body` with the main thread watched: its run loop's turns, and how long `body` took.
+        /// Runs `body` with the main thread watched: its run loop's turns, and how long `body` took. The menu bar's
+        /// rebuilds meanwhile go in the run's `menu-bar.txt`.
         func watchingMainThread(
-            _: String = "", _ body: () throws -> Void,
+            _ name: String = "", _ body: () throws -> Void,
         ) throws -> (summary: MainThreadMonitor.Summary?, seconds: Double) {
             let monitor = try MainThread.run { () -> MainThreadMonitorBox in
                 let monitor = MainThreadMonitor()
                 monitor.start()
                 return MainThreadMonitorBox(monitor)
             }
+            let menus = try menuMark()
             let started = Date()
             defer { try? MainThread.run { monitor.monitor.stop() } }
             try body()
             let seconds = Date().timeIntervalSince(started)
+            noteMenus(name, since: menus)
             let summary = try MainThread.run { () -> MainThreadMonitor.Summary? in
                 monitor.monitor.stop()
                 return monitor.monitor.summary(seconds: seconds)
