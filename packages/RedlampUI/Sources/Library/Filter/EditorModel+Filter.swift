@@ -23,8 +23,13 @@ public extension EditorModel {
     /// or the one that took its place.
     func keepActivePhotoShown() {
         guard let selection, library.index(of: selection) == nil, !items.isEmpty else { return }
-        let kept = photoSelection.active.flatMap(library.url(ofPhoto:))
-        select(kept ?? items[min(selectionIndex ?? 0, items.count - 1)].url, keepingSelection: kept != nil)
+        guard let active = photoSelection.active, library.photoList.contains(active) else {
+            return selectRow(min(selectionIndex ?? 0, items.count - 1))
+        }
+        library.whenRead([active]) { [weak self] in
+            guard let self, let kept = library.url(ofPhoto: active) else { return }
+            select(kept, keepingSelection: true)
+        }
     }
 
     /// The source shown, in the bar: the open folder, or the Library panel's entry or the collection shown.

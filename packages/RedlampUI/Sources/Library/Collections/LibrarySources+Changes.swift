@@ -35,11 +35,11 @@ public extension LibrarySources {
             changes.append(.collections(.target(path)))
         }
         let title = "New \(kind == .set ? "collection set" : "collection") “\(path.displayName)”"
-        guard adding, kind == .collection, !model.selectedPhotos.isEmpty else { return make(changes, title: title) }
-        let photos = model.selectedPhotos
+        guard adding, kind == .collection, model.selectedCount > 0 else { return make(changes, title: title) }
+        let photos = selectedPhotosNow()
         Task { [weak self] in
             guard let self else { return }
-            let ids = await indexIDs(of: photos)
+            let ids = await photos()
             make(ids.isEmpty ? changes : changes + [.collections(.add(ids, to: path))], title: title, onSelection: true)
         }
         return true
@@ -133,14 +133,26 @@ public extension LibrarySources {
         return !model.library.showsRecentlyTrashed
     }
 
+    /// The index's IDs of the photos selected now, found when they're asked for: a source's are their own IDs,
+    /// whose rows needn't be read.
+    private func selectedPhotosNow() -> @MainActor () async -> [Int64] {
+        guard let model else { return { [] } }
+        if model.library.showsIndexIDs {
+            let ids = model.selectedIDs
+            return { ids }
+        }
+        let urls = model.selectedPhotos
+        return { [weak self] in await self?.indexIDs(of: urls) ?? [] }
+    }
+
     /// Puts the selection's photos in the collection at `path`.
     @discardableResult
     func add(to path: CollectionPath) -> Bool {
-        guard canAdd, let model, collections[path].map({ $0.kind == .collection }) ?? true else { return false }
-        let photos = model.selectedPhotos
+        guard canAdd, collections[path].map({ $0.kind == .collection }) ?? true else { return false }
+        let photos = selectedPhotosNow()
         Task { [weak self] in
             guard let self else { return }
-            let ids = await indexIDs(of: photos)
+            let ids = await photos()
             guard !ids.isEmpty else { return }
             make(
                 [.collections(.add(ids, to: path))], title: "Add \(Self.count(ids.count)) to “\(path.displayName)”",
@@ -172,11 +184,11 @@ public extension LibrarySources {
     /// Takes the selection's photos out of the collection shown.
     @discardableResult
     func removeFromShown() -> Bool {
-        guard let model, let path = collectionShown else { return false }
-        let photos = model.selectedPhotos
+        guard let path = collectionShown else { return false }
+        let photos = selectedPhotosNow()
         Task { [weak self] in
             guard let self else { return }
-            let ids = await indexIDs(of: photos)
+            let ids = await photos()
             guard !ids.isEmpty else { return }
             make(
                 [.collections(.remove(ids, from: path))],

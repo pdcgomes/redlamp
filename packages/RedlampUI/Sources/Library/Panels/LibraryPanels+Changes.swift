@@ -379,6 +379,13 @@ extension LibraryPanels {
         photos: (urls: [URL], ids: [Int64])? = nil,
     ) -> Bool {
         guard let model, model.library.service?.isReady == true else { return false }
+        // A large source's photos selected whose rows aren't read are read first: the step waits for their saves.
+        if photos == nil, onSelection, !model.hasReadSelection {
+            model.withSelectedPhotos { [weak self] _ in
+                self?.make(changes, title: title, overlay: overlay, onSelection: onSelection)
+            }
+            return true
+        }
         let step = PanelStep(
             title: title, changes: changes, photos: photos?.urls ?? (onSelection ? model.selectedPhotos : []),
             ids: photos?.ids ?? (onSelection ? selection.ids : []),

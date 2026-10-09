@@ -21,7 +21,7 @@ struct CopySettingsSheet: View {
             Text(chooser.purpose == .sync ? "Synchronize Settings" : "Copy Settings")
                 .font(.headline)
             if chooser.purpose == .sync {
-                Text("From this photo onto the \(model.otherSelectedPhotos.count) other selected photos.")
+                Text("From this photo onto the \(model.selectedCount - 1) other selected photos.")
                     .foregroundStyle(.secondary)
             } else if let source = chooser.sourceURL, source != model.selection {
                 Text("From \(source.lastPathComponent).")

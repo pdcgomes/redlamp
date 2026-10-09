@@ -21,7 +21,7 @@ enum FilmstripMenu {
                 add([LibraryGridMenu.stacking(for: photo, model: model)], to: menu)
             }
         }
-        if model.selectedPhotos.contains(photo) {
+        if photo == model.selection || model.library.photoID(of: photo).map(model.photoSelection.contains) == true {
             let groups: [[ShortcutAction]] = [
                 [.copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious],
                 [.syncSettings, .syncSettingsAgain, .undoSync, .toggleAutoSync],

@@ -9,6 +9,13 @@ public extension EditorModel {
         selectedPhotos.filter { $0 != selection }
     }
 
+    /// Calls `body` with the selection's photos other than the open one, once their rows are read: a large source's
+    /// are read first (`withSelectedPhotos`).
+    internal func withOtherSelectedPhotos(_ body: @escaping @MainActor ([URL]) -> Void) {
+        let open = selection
+        withSelectedPhotos { photos in body(photos.filter { $0 != open }) }
+    }
+
     var canSync: Bool {
         isMultiSelecting && info != nil && settingsSync.progress == nil
     }
@@ -29,6 +36,7 @@ public extension EditorModel {
     func updateAIMasksInSelection() async {
         if isMultiSelecting, settingsSync.progress == nil {
             saveNow()
+            await readSelection()
             settingsSync.run(.updateAIMasks, on: otherSelectedPhotos, title: "Update AI Masks", done: written)
         }
         await updateAIMasks()
@@ -49,20 +57,28 @@ public extension EditorModel {
         guard settingsSync.isAutoSyncing, isMultiSelecting, info != nil,
               history.indices.contains(historyIndex) else { return }
         let step = history[historyIndex]
-        settingsSync.autoSync(recipe, step: SettingsSync.RunStep(
+        let (current, run) = (recipe, SettingsSync.RunStep(
             session: historySessionID, id: step.id, title: step.title,
             carried: SettingsSelection.changes(from: previous, to: recipe),
-        ), on: otherSelectedPhotos, done: written)
+        ))
+        withOtherSelectedPhotos { [weak self] others in
+            guard let self else { return }
+            settingsSync.autoSync(current, step: run, on: others, done: written)
+        }
     }
 
     /// With Auto Sync on, Undo, Redo and history clicks take the rest of the selection with them:
     /// each photo gets back its edit at that step.
     internal func followHistory(back: Bool) {
         guard settingsSync.isAutoSyncing, isMultiSelecting, info != nil else { return }
-        settingsSync.follow(
-            recipe, undone: Set(history[(historyIndex + 1)...].map(\.id)), session: historySessionID,
-            on: otherSelectedPhotos, title: back ? "Undo Auto Sync" : "Redo Auto Sync", done: written,
-        )
+        let (current, undone, session) = (recipe, Set(history[(historyIndex + 1)...].map(\.id)), historySessionID)
+        withOtherSelectedPhotos { [weak self] others in
+            guard let self else { return }
+            settingsSync.follow(
+                current, undone: undone, session: session, on: others,
+                title: back ? "Undo Auto Sync" : "Redo Auto Sync", done: written,
+            )
+        }
     }
 
     /// `selection` of `source` onto the rest of the selection. `step`, the open photo's step that
@@ -83,7 +99,10 @@ public extension EditorModel {
                 ),
             )
         }
-        settingsSync.run(.paste(source, selection), on: otherSelectedPhotos, title: title, step: runStep, done: written)
+        withOtherSelectedPhotos { [weak self] others in
+            guard let self else { return }
+            settingsSync.run(.paste(source, selection), on: others, title: title, step: runStep, done: written)
+        }
     }
 
     internal func written(_ url: URL, _ recipe: EditRecipe) {

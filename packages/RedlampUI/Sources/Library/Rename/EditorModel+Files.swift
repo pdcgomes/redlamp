@@ -35,11 +35,16 @@ extension EditorModel {
     /// What Rename Photos shows for the photos selected, in their order, read once it starts.
     func renameSheet(presets: NamingPresetStore? = nil) -> RenameModel? {
         guard canRenamePhotos, let service = library.service, let core = service.core else { return nil }
-        let urls = selectedPhotos
+        // A source's photos are found by their own IDs, which are the index's, without reading their rows.
+        let shownIDs = library.showsIndexIDs ? selectedIDs : nil
+        let urls = shownIDs == nil ? selectedPhotos : []
         return RenameModel(
-            photos: urls.count, presets: presets ?? NamingPresetStore.shared(for: service.paths),
+            photos: shownIDs?.count ?? urls.count, presets: presets ?? NamingPresetStore.shared(for: service.paths),
             sidecars: library.sidecars,
         ) {
+            if let shownIDs {
+                return try await RenameJob.read(shownIDs, core: core)
+            }
             let ids = await LibraryService.indexIDs(of: urls, in: core.index)
             return try await RenameJob.read(urls.compactMap { ids[$0] }, core: core)
         }
@@ -242,7 +247,9 @@ extension EditorModel {
                 else { return nil }
                 return (move.id, url)
             }.first
-            if sentinel == nil, let url = items.first(where: { library.contentKey(of: $0.url) != nil })?.url,
+            if sentinel == nil,
+               let url = items.indices.lazy.compactMap(items.row)
+               .first(where: { library.contentKey(of: $0.url) != nil })?.url,
                let id = await LibraryService.indexIDs(of: [url], in: core.index)[url] {
                 sentinel = (id, url)
             }
@@ -278,7 +285,7 @@ extension EditorModel {
         let destination = selection.flatMap { active in shown.first { $0.from == active } }
         // The photo after the active one that stays, else the nearest before it.
         var next: URL?
-        if destination?.to == nil, let row = selectionIndex, items.indices.contains(row) {
+        if let destination, destination.to == nil, let row = selectionIndex, items.indices.contains(row) {
             let leaving = Set(shown.filter { $0.to == nil }.map(\.from))
             next = items[(row + 1)...].first { !leaving.contains($0.url) }?.url
                 ?? items[..<row].last { !leaving.contains($0.url) }?.url

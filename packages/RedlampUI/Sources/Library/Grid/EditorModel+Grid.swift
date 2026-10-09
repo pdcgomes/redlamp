@@ -55,13 +55,13 @@ public extension EditorModel {
 
     /// ⌘R: the selected photos in Finder, or `url` alone when it isn't among them.
     func showInFinder(_ url: URL? = nil) {
-        let shown: [URL] = if let url, library.photoID(of: url).map(photoSelection.contains) != true {
-            [url]
-        } else {
-            selectedPhotos
+        if let url, library.photoID(of: url).map(photoSelection.contains) != true {
+            return libraryViews.revealInFinder([url])
         }
-        guard !shown.isEmpty else { return }
-        libraryViews.revealInFinder(shown)
+        withSelectedPhotos { [weak self] shown in
+            guard let self, !shown.isEmpty else { return }
+            libraryViews.revealInFinder(shown)
+        }
     }
 
     /// Makes `url` the active photo, keeping the selection when it's in it.

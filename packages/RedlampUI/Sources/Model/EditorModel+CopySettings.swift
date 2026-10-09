@@ -110,7 +110,9 @@ public extension EditorModel {
     /// alone, in the background, leaving the open photo as it is.
     func pasteSettings(onto photo: URL) {
         guard !isModalDialogOpen else { return }
-        guard !selectedPhotos.contains(photo) else { return pasteSettings() }
+        guard photo != selection, library.photoID(of: photo).map(photoSelection.contains) != true else {
+            return pasteSettings()
+        }
         guard let clipboard else { return }
         settingsSync.run(
             .paste(clipboard.source, clipboard.selection),

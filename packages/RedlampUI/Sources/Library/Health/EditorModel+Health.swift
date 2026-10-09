@@ -31,7 +31,8 @@ public extension EditorModel {
         else { return false }
         let requested = ContinuousClock.now
         let apart = Set(findings.findings.lazy.filter { $0.apart != nil }.map(\.photo))
-        let selected = apart.isEmpty ? [] : selectedPhotos.compactMap(librarySources.indexID(ofShown:))
+        let selected = apart.isEmpty ? []
+            : library.showsIndexIDs ? selectedIDs : selectedPhotos.compactMap(librarySources.indexID(ofShown:))
         let sheet = HealthSheetModel(
             findings: findings, selectedApart: selected.filter(apart.contains),
             health: healthProposals.library(core), requested: requested,
@@ -53,13 +54,13 @@ public extension EditorModel {
         guard canKeepAnyway, let findings = healthProposals.findings, let core = library.service?.core else {
             return false
         }
-        let urls = photosActedOn(from: photo)
+        let photos = indexIDsActedOn(from: photo)
         let health = healthProposals.library(core)
         let step = HealthStep(.keptAnyway([]), title: "Keep Anyway")
         pushHealthStep(step)
         healthSteps.enqueue { [weak self] in
             guard let self else { return }
-            let ids = await librarySources.indexIDs(of: urls)
+            let ids = await photos()
             let wanted = Set(ids)
             let chosen = findings.findings.filter { wanted.contains($0.photo) }
             let result = await core.change { () -> Result<[KeptAnyway], any Error> in
@@ -94,13 +95,13 @@ public extension EditorModel {
     @discardableResult
     func listAgain(_ photo: URL? = nil) -> Bool {
         guard canListAgain, let core = library.service?.core else { return false }
-        let urls = photosActedOn(from: photo)
+        let photos = indexIDsActedOn(from: photo)
         let health = healthProposals.library(core)
         let step = HealthStep(.listedAgain([]), title: "List Again")
         pushHealthStep(step)
         healthSteps.enqueue { [weak self] in
             guard let self else { return }
-            let ids = await Set(librarySources.indexIDs(of: urls))
+            let ids = await Set(photos())
             let result = await core.change { () -> Result<[KeptAnyway], any Error> in
                 do {
                     let kept = try await health.keptAnyway().filter { !ids.isDisjoint(with: $0.photos) }.map(\.kept)
@@ -177,6 +178,20 @@ extension EditorModel {
             return [photo]
         }
         return selectedPhotos
+    }
+
+    /// The index's IDs of the photos an action from `photo`'s menu reaches (`photosActedOn`), taken now and found when
+    /// they're asked for: a source's are their own IDs, whose rows needn't be read.
+    private func indexIDsActedOn(from photo: URL?) -> @MainActor () async -> [Int64] {
+        guard library.showsIndexIDs else {
+            let urls = photosActedOn(from: photo)
+            return { [weak self] in await self?.librarySources.indexIDs(of: urls) ?? [] }
+        }
+        if let photo, photo != selection, let id = library.photoID(of: photo), !photoSelection.contains(id) {
+            return { [id] }
+        }
+        let ids = selectedIDs
+        return { ids }
     }
 
     /// Returns once the saves asked for any of `photos` before the call are on disk, so what goes to the Trash goes as

@@ -427,6 +427,7 @@ public extension EditorModel {
         guard isMultiSelecting, let open = selection, info != nil, !isFindingDust, settingsSync.progress == nil else {
             return
         }
+        await readSelection()
         let targets = [open] + otherSelectedPhotos
         saveNow()
         isFindingDust = true

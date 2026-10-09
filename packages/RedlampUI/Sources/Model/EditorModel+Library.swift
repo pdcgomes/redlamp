@@ -109,7 +109,20 @@ public extension EditorModel {
         if let index = library.index(of: selection) {
             selectionIndex = index
         } else if let last = selectionIndex, !diff.removed.isEmpty, !items.isEmpty {
-            select(items[min(last, items.count - 1)].url)
+            selectRow(min(last, items.count - 1))
+        }
+    }
+
+    /// Selects row `row`'s photo: at once, or, for a large source's row not read yet, once it's read.
+    internal func selectRow(_ row: Int, keepingSelection: Bool = false) {
+        guard items.indices.contains(row) else { return }
+        if let item = items.row(row) {
+            return select(item.url, keepingSelection: keepingSelection)
+        }
+        let id = library.photoIDs[row]
+        library.whenRead([id]) { [weak self] in
+            guard let self, let url = library.url(ofPhoto: id) else { return }
+            select(url, keepingSelection: keepingSelection)
         }
     }
 
@@ -125,7 +138,7 @@ public extension EditorModel {
         guard let from = opening ?? selection, let index = library.index(of: from) else { return }
         let next = index + offset
         guard items.indices.contains(next) else { return }
-        select(items[next].url)
+        selectRow(next)
     }
 
     /// The photo being opened, then its neighbours in the grid's order (`GridOrder`), where ← and → go, the
@@ -138,6 +151,7 @@ public extension EditorModel {
         let step = backward ? -1 : 1
         let ahead = order.cell(step, from: id)
         let neighbours = [ahead, order.cell(-step, from: id), ahead.flatMap { order.cell(step, from: $0) }]
+        library.askForRows(ofPhotos: neighbours.compactMap(\.self))
         return [url] + neighbours.compactMap { $0.flatMap(library.url(ofPhoto:)) }
     }
 }

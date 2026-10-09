@@ -281,7 +281,7 @@ public extension FeedbackContext {
             selectedMask: mask.map { "“\($0.name)”: \(ActivityRecorder.describe($0))" },
             focusedSlider: model.focusedParameter?.displayName,
             folderPhotos: model.folder == nil ? nil : model.library.count,
-            selectedPhotos: model.selectedPhotos.count,
+            selectedPhotos: model.selectedCount,
             hidden: hidden,
         )
     }

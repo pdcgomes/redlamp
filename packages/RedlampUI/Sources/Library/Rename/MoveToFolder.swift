@@ -16,7 +16,7 @@ public extension EditorModel {
             Task { await move(to: folder) }
             return true
         }
-        let count = selectedPhotos.count
+        let count = selectedCount
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -66,9 +66,7 @@ extension EditorModel {
         guard MoveFolderPanel.isInLibrary(folder, roots: library.roots.map(\.url)) else {
             return "\(folder.lastPathComponent) isn't in the library's folders"
         }
-        let urls = selectedPhotos
-        let found = await LibraryService.indexIDs(of: urls, in: core.index)
-        let ids = urls.compactMap { found[$0] }
+        let ids = await selectedIndexIDs()
         guard !ids.isEmpty else { return "The library hasn't read these photos yet" }
         let destination = LibraryService.path(folder)
         let indexed = await (try? core.index.read { reader in

@@ -198,7 +198,7 @@ struct MaskActionsMenu: View {
             Button("Update AI Masks") { Task { await model.updateAIMasks() } }
                 .disabled(model.aiMaskCount == 0 || model.aiMaskProgress != nil)
             if model.isMultiSelecting {
-                Button("Update AI Masks on \(model.selectedPhotos.count) Photos") {
+                Button("Update AI Masks on \(model.selectedCount) Photos") {
                     Task { await model.updateAIMasksInSelection() }
                 }
                 .disabled(model.aiMaskProgress != nil || model.settingsSync.progress != nil)
@@ -233,7 +233,7 @@ struct MaskPresetsMenu: View {
     var body: some View {
         let presets = model.maskPresets
         let builtIn = Set(MaskPreset.builtIn.map(\.id))
-        let photos = model.isMultiSelecting ? model.selectedPhotos.count : nil
+        let photos = model.isMultiSelecting ? model.selectedCount : nil
         Menu {
             if let photos {
                 Section("Apply to \(photos) Selected Photos") {

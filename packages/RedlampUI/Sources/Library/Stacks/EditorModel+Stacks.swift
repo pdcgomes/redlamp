@@ -25,6 +25,7 @@ public extension EditorModel {
     @discardableResult
     func stackSelectedPhotos() -> Bool {
         guard canStackSelection else { return false }
+        guard hasRead(selectedOwnIDs, then: { [weak self] in self?.stackSelectedPhotos() }) else { return true }
         let photos = selectedForStacks
         let top = selection.flatMap(library.photoID(of:)).flatMap(gridStacks.indexID(of:))
         return makeStackChange(
@@ -37,6 +38,7 @@ public extension EditorModel {
     @discardableResult
     func unstackSelectedPhotos() -> Bool {
         guard canUnstackSelection else { return false }
+        guard hasRead(selectedOwnIDs, then: { [weak self] in self?.unstackSelectedPhotos() }) else { return true }
         let photos = selectedForStacks
         return makeStackChange(
             .unstack(photos.ids), title: "Unstack \(LibraryPanels.count(photos.ids.count))", photos: photos,
@@ -50,6 +52,9 @@ public extension EditorModel {
               let id = gridStacks.indexID(of: own), let stacks = libraryViews.stacks?.list?.stacks,
               let stack = stacks.stack(containing: own)
         else { return false }
+        guard hasRead(stacks.allPhotos(of: stack), then: { [weak self] in self?.moveToTopOfStack() }) else {
+            return true
+        }
         let photos = stackPhotos(stacks.allPhotos(of: stack))
         return makeStackChange(.top(id), title: "Move \(url.lastPathComponent) to the Top of Its Stack", photos: photos)
     }
@@ -376,6 +381,16 @@ public extension EditorModel {
     /// those the index has.
     private var selectedForStacks: (urls: [URL], ids: [Int64]) {
         stackPhotos(selectedOwnIDs)
+    }
+
+    /// Whether the rows of `photos`, by their IDs here, and of the others of their pairs, are read: always, unless
+    /// they're a large source's, when they're read and `then` is called.
+    private func hasRead(_ photos: [Int64], then: (@MainActor () -> Void)? = nil) -> Bool {
+        let stacks = libraryViews.stacks?.list?.stacks ?? Stacks()
+        let members = photos.flatMap { stacks.pair(containing: $0)?.photos ?? [$0] }
+        guard !library.hasRead(members) else { return true }
+        library.whenRead(members) { then?() }
+        return false
     }
 
     /// `photos`, by their IDs here, with the others of their pairs, as their URLs and their IDs in the index.

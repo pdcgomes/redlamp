@@ -103,6 +103,10 @@ public final class EditRenders {
     /// The rows of the rest of the source before these need no reading, and no rendering.
     private var readCursor = 0
     private var renderCursor = 0
+    /// A large source's photos with an edit, by their rows in order, which the rest of the source is looked at in:
+    /// nil until they're found, and again once photos come or go (`findEdited`).
+    private var editedRows: [Int]?
+    private var findingEdited = false
     var current: (url: URL, task: Task<Void, Never>)?
     var engine: (any EditingEngine)?
     var engineBytes = 0
@@ -280,6 +284,7 @@ public final class EditRenders {
     private func changed(_ diff: LibraryDiff) {
         if diff.reset || !diff.removed.isEmpty || !diff.inserted.isEmpty {
             (readCursor, renderCursor) = (0, 0)
+            editedRows = nil
             if diff.reset {
                 onScreen = [:]
                 for url in known.keys where library.index(of: url) == nil {
@@ -297,8 +302,7 @@ public final class EditRenders {
             ? known.keys.compactMap { library.index(of: $0) }.filter(diff.updated.contains).sorted()
             : Array(diff.updated)
         for row in rows where items.indices.contains(row) {
-            let item = items[row]
-            guard let entry = known[item.url] else { continue }
+            guard let item = items.row(row), let entry = known[item.url] else { continue }
             if !item.hasEdits {
                 set(item.url, nil)
                 drop(entry.digest, of: entry.key, unlessShownBy: item.url)
@@ -400,9 +404,11 @@ extension EditRenders {
     }
 
     /// The rows of the rest of the source from `cursor`, `scanLimit` at most, `visit`ed in order until it
-    /// returns false. The cursor moves past those `isDone` says need nothing.
+    /// returns false. The cursor moves past those `isDone` says need nothing. Of a large source's, those of its
+    /// photos with an edit alone (`scanLarge`).
     private func scan(from cursor: inout Int, isDone: (LibraryItem) -> Bool, _ visit: (Int) -> Bool) {
         let items = library.items
+        guard !items.readsOnRequest else { return scanLarge(from: &cursor, isDone: isDone, visit) }
         var row = cursor
         let end = min(items.count, cursor + Self.scanLimit)
         while row < end {
@@ -418,6 +424,63 @@ extension EditRenders {
         }
     }
 
+    /// `scan` over a large source's photos with an edit, as the engine finds them: those whose rows aren't read are
+    /// asked for, a batch at a time, and looked at once they're in.
+    private func scanLarge(from cursor: inout Int, isDone: (LibraryItem) -> Bool, _ visit: (Int) -> Bool) {
+        guard let edited = editedRows else { return findEdited() }
+        let items = library.items
+        var (index, high) = (0, edited.count)
+        while index < high {
+            let middle = (index + high) / 2
+            if edited[middle] < cursor {
+                index = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        let end = min(edited.count, index + Self.scanLimit)
+        var asking: [Int] = []
+        while index < end {
+            let row = edited[index]
+            guard items.indices.contains(row), let item = items.row(row) else {
+                asking.append(row)
+                guard asking.count < Self.readBatch * 4 else { break }
+                index += 1
+                continue
+            }
+            if asking.isEmpty, isDone(item) {
+                cursor = row + 1
+            } else if !visit(row) {
+                break
+            }
+            index += 1
+        }
+        library.askForRows(at: asking)
+        if index == end, end < edited.count, asking.isEmpty {
+            schedulePump()
+        }
+    }
+
+    /// Finds the large source's photos with an edit, off the main thread, for `scanLarge`.
+    private func findEdited() {
+        guard !findingEdited, let engine = library.service?.core?.engine, let source = library.shownSourcePhotos,
+              let query = try? LibraryQuery(parsing: "edited:yes")
+        else { return }
+        findingEdited = true
+        let revision = library.revision
+        Task { [weak self] in
+            let found = try? await engine.list(source, matching: query)
+            guard let self else { return }
+            findingEdited = false
+            guard library.revision == revision, library.items.readsOnRequest else {
+                return library.items.readsOnRequest ? findEdited() : ()
+            }
+            let list = library.photoList
+            editedRows = found.map { $0.ids.compactMap(list.index(of:)).sorted() } ?? []
+            schedulePump()
+        }
+    }
+
     /// Starts reading the edits of the next photos that need it, a batch to a job: those on screen and
     /// near it, then the rest of the source's, `readAhead` at most ahead of the renders.
     private func readEdits(_ focus: [Int]) {
@@ -426,8 +489,8 @@ extension EditRenders {
             var batch: [ReadPhoto] = []
             var urgent = false
             let add = { (row: Int) in
-                let item = items[row]
-                guard self.need(item) == .read, !batch.contains(where: { $0.item.url == item.url }),
+                guard let item = items.row(row), self.need(item) == .read,
+                      !batch.contains(where: { $0.item.url == item.url }),
                       let (thumbnails, key) = self.library.storeThumbnail(for: item)
                 else { return }
                 batch.append(ReadPhoto(item: item, key: key, store: thumbnails.store))
@@ -527,8 +590,7 @@ extension EditRenders {
         let items = library.items
         var found: NextRender?
         let take = { (row: Int) -> Bool in
-            let item = items[row]
-            guard self.need(item) == .render, !self.isOpenInDevelop(item.url),
+            guard let item = items.row(row), self.need(item) == .render, !self.isOpenInDevelop(item.url),
                   let digest = self.known[item.url]?.digest,
                   let (thumbnails, key) = self.library.storeThumbnail(for: item)
             else { return false }

@@ -21,7 +21,7 @@ enum CollectionSheets {
         var include: NSButton?
         var target: NSButton?
         if kind == .collection {
-            let photos = model.selectedPhotos.count
+            let photos = model.selectedCount
             let includes = NSButton(
                 checkboxWithTitle: photos > 1 ? "Include the \(photos) selected photos" : "Include the selected photo",
                 target: nil, action: nil,
@@ -78,7 +78,7 @@ enum CollectionSheets {
         if let target = sources.target, let place = choices.firstIndex(of: target) {
             choices.insert(choices.remove(at: place), at: 0)
         }
-        let photos = model.selectedPhotos.count
+        let photos = model.selectedCount
         let sheet = PanelSheet(title: "Add \(LibrarySources.count(photos)) to a Collection", model: model)
         let popUp = NSPopUpButton()
         popUp.addItems(withTitles: choices.map(\.displayName))

@@ -48,6 +48,7 @@ public extension EditorModel {
         let selection = isMultiSelecting
         if selection {
             saveNow()
+            await readSelection()
             settingsSync.run(
                 .applyMaskPreset(preset), on: otherSelectedPhotos, title: "Apply \(preset.name)", done: written,
             )
