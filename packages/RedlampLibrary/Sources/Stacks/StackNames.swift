@@ -7,10 +7,11 @@ public struct StackNames: Sendable {
 
     public init() {}
 
-    /// Every photo's name in `reader`'s index.
+    /// Every photo's name in `reader`'s index, but those of roots marked removed.
     public init(_ reader: some IndexQueries) throws {
         var names = StackNames()
-        try reader.database.cached("SELECT id, name FROM photos ORDER BY id").forEachRow { row in
+        let photos = try reader.database.cached("SELECT id, name FROM photos WHERE \(reader.inLibrary()) ORDER BY id")
+        try photos.forEachRow { row in
             names[row.int64(at: 0)] = row.string(at: 1) ?? ""
         }
         self = names

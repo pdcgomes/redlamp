@@ -236,6 +236,27 @@ struct RootRemovalTests {
         #expect(try await checker.findings(.extensions, store: nil).photos == [home])
     }
 
+    @Test func `until its rows are swept, a root taken out has no names or choices for stacks to be found from`(
+    ) async throws {
+        let (sandbox, _) = try await Self.library()
+        defer { sandbox.remove() }
+        let trip = try await sandbox.ids(["Trip/IMG_0001.JPG", "Trip/Day 2/IMG_0002.JPG"])
+        let home = try await sandbox.id("Home/IMG_0003.JPG")
+        // Trip's first and Home's photo stacked by hand.
+        let choices = StackChoices([trip[0]: PhotoStack(id: UUID(), top: true), home: PhotoStack(id: UUID())])
+        try await sandbox.index.write { try choices.save([trip[0], home], in: $0) }
+        let read = { try await sandbox.index.read { reader in try (StackNames(reader), StackChoices(reader)) } }
+        let before = try await read()
+        #expect((trip + [home]).map { before.0[$0] } == ["IMG_0001.JPG", "IMG_0002.JPG", "IMG_0003.JPG"])
+        #expect(before.1.choices.keys.sorted() == [trip[0], home].sorted())
+
+        let (tripPath, homePath) = (LibraryIndexer.path(sandbox.url("Trip")), LibraryIndexer.path(sandbox.url("Home")))
+        try #require(try await sandbox.index.write { try $0.markRemoved(tripPath, keeping: [homePath]) } != nil)
+        let after = try await read()
+        #expect((trip + [home]).map { after.0[$0] } == ["", "", "IMG_0003.JPG"])
+        #expect(after.1.choices.keys.sorted() == [home])
+    }
+
     @Test func `a root taken out never shows in a store built or mapped before its sweep is over`() async throws {
         let (sandbox, indexer) = try await Self.library()
         defer { sandbox.remove() }

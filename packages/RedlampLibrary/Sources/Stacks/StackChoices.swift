@@ -101,15 +101,16 @@ public struct StackChoices: Sendable, Hashable {
 }
 
 public extension StackChoices {
-    /// The choices `reader`'s index keeps.
+    /// The choices `reader`'s index keeps, but those of the photos of roots marked removed.
     init(_ reader: some IndexQueries) throws {
         var choices: [Int64: Choice] = [:]
-        try reader.database.cached("SELECT id, stack, stack_top FROM photos WHERE stack IS NOT NULL OR stack_top != 0")
-            .forEachRow { row in
-                if let choice = PhotoRecord.storedStack(id: row.string(at: 1), top: row.bool(at: 2)) {
-                    choices[row.int64(at: 0)] = choice
-                }
+        try reader.database.cached("""
+        SELECT id, stack, stack_top FROM photos WHERE (stack IS NOT NULL OR stack_top != 0) AND \(reader.inLibrary())
+        """).forEachRow { row in
+            if let choice = PhotoRecord.storedStack(id: row.string(at: 1), top: row.bool(at: 2)) {
+                choices[row.int64(at: 0)] = choice
             }
+        }
         self.init(choices)
     }
 
