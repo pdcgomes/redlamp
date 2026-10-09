@@ -82,6 +82,37 @@ struct LibraryDragTests {
         #expect(sandbox.files() == ["A.JPG", "B.JPG", "Picked"] && sandbox.files(in: "Picked").isEmpty)
     }
 
+    @Test func `⌘Z and ⇧⌘Z while a drop's move runs wait for it, then take it back and make it again`(
+    ) async throws {
+        let sandbox = DragSandbox()
+        defer { sandbox.close() }
+        try await sandbox.open(photos: ["A.JPG", "B.JPG"], folders: ["Picked"])
+        let model = try #require(sandbox.model)
+        let held = Gate()
+        held.hold()
+        model.fileSteps.enqueue { await held.pass() }
+        try sandbox.click("A.JPG")
+        try sandbox.press("A.JPG")
+        try sandbox.drag(
+            from: sandbox.cell("A.JPG"),
+            to: sandbox.middle(of: "folders." + sandbox.folder("Picked").path),
+        )
+        try await sandbox.eventually { model.fileUndoCount == 1 }
+        try #require(model.moveProgress.title != nil && model.fileSteps.undo.last?.batch == nil, "the move runs")
+        #expect(!model.canPerform(.flagPick) && !model.perform(.flagPick), "other actions stay off")
+
+        #expect(model.canPerform(.undo) && model.perform(.undo))
+        #expect(model.canPerform(.redo) && model.perform(.redo))
+        #expect(model.canPerform(.undo) && model.perform(.undo))
+        #expect(sandbox.files(in: "Picked").isEmpty, "nothing has moved yet")
+        held.release()
+        await model.filesMade()
+        #expect(model.moveProgress.title == nil && !model.isModalDialogOpen)
+        #expect(sandbox.files() == ["A.JPG", "B.JPG", "Picked"] && sandbox.files(in: "Picked").isEmpty)
+        #expect(sandbox.shownNames() == ["A.JPG", "B.JPG"])
+        #expect(model.fileUndoCount == 0 && model.fileRedoCount == 1, "the move, taken back, made again, taken back")
+    }
+
     @Test func `a photo that isn't selected is dragged alone, and a click on a selected photo selects it alone`(
     ) async throws {
         let sandbox = DragSandbox()

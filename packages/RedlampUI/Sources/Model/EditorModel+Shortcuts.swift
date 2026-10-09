@@ -34,8 +34,14 @@ public extension EditorModel {
             : FeedbackPrefill(featureID: "raw.wont-open", message: errorMessage)
     }
 
+    /// Whether a sheet, or a drop's move, keeps `action` from running. While a drop's move runs, Undo and Redo go
+    /// through: they take their turn behind its batch, so ⌘Z takes the move back once it's made.
+    func isHeldByDialog(_ action: ShortcutAction) -> Bool {
+        isModalDialogOpen && !(moveProgress.title != nil && (action == .undo || action == .redo))
+    }
+
     private func runShortcut(_ action: ShortcutAction, shifted: Bool) -> Bool {
-        guard !isModalDialogOpen else { return false }
+        guard !isHeldByDialog(action) else { return false }
         guard action.isAvailable else { return false }
         guard module == .develop || !action.isDevelopOnly else { return false }
         guard module == .library || !action.isLibraryOnly else { return false }
@@ -201,7 +207,7 @@ public extension EditorModel {
     /// Whether `perform` would do something now. The command palette dims what it can't run,
     /// and the menus disable it.
     func canPerform(_ action: ShortcutAction) -> Bool {
-        guard !isModalDialogOpen else { return false }
+        guard !isHeldByDialog(action) else { return false }
         guard action.isAvailable else {
             return action == .cropTool
         }
