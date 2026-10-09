@@ -31,6 +31,14 @@ struct LibraryStacksTests {
         Photo(path: "S04.JPG", time: 2400),
     ]
 
+    /// The library's photos open in an editor, with its grid and filmstrip shown in a window.
+    struct Shown {
+        let model: EditorModel
+        let grid: LibraryGridView
+        let filmstrip: FilmstripStripView
+        let window: NSWindow
+    }
+
     /// The library a test opens, closed with its index before its folder goes.
     @MainActor
     private final class Opened {
@@ -87,8 +95,7 @@ struct LibraryStacksTests {
     /// The folder indexed, open in an editor from the library, with its grid and filmstrip shown in a window, which
     /// the test keeps until it ends, once its stacks are found. `others` go in its subfolder Other, which it's shown
     /// without.
-    private func open(others: [Photo] = []) async throws
-        -> (EditorModel, LibraryGridView, FilmstripStripView, NSWindow) {
+    private func open(others: [Photo] = []) async throws -> Shown {
         for photo in Self.photos + others.map({ Photo(path: "Other/" + $0.path, time: $0.time, type: $0.type) }) {
             try write(photo)
         }
@@ -129,7 +136,7 @@ struct LibraryStacksTests {
         try await eventually { model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true }
         try #require(model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true, "the burst and the pair found")
         try await Task.sleep(for: .milliseconds(50))
-        return (model, grid, strip, window)
+        return Shown(model: model, grid: grid, filmstrip: strip, window: window)
     }
 
     private func eventually(_ condition: () -> Bool) async throws {
@@ -165,8 +172,9 @@ struct LibraryStacksTests {
     @Test func `each stack is one cell with its count in the grid and the filmstrip, opened and closed in place`(
     ) async throws {
         defer { cleanUp() }
-        let (model, grid, filmstrip, window) = try await open()
-        defer { window.contentView = nil }
+        let shown = try await open()
+        let (model, grid, filmstrip) = (shown.model, shown.grid, shown.filmstrip)
+        defer { shown.window.contentView = nil }
         let burst = ["B01.JPG", "B02.JPG", "B03.JPG"]
         #expect(cells(grid, model) == ["B01.JPG", "P01.JPG", "S01.JPG", "S02.JPG", "S03.JPG", "S04.JPG"])
         #expect(strip(filmstrip) == 6, "the filmstrip shows the stacks closed too")
@@ -193,8 +201,9 @@ struct LibraryStacksTests {
 
     @Test func `a closed stack's cell selects all its photos, for clicks, culling and the keys`() async throws {
         defer { cleanUp() }
-        let (model, grid, _, window) = try await open()
-        defer { window.contentView = nil }
+        let shown = try await open()
+        let (model, grid) = (shown.model, shown.grid)
+        defer { shown.window.contentView = nil }
         let burst: Set = ["B01.JPG", "B02.JPG", "B03.JPG"]
         try model.clickInGrid(url(model, "B01.JPG"))
         #expect(selected(model) == burst && model.selection?.lastPathComponent == "B01.JPG")
@@ -231,8 +240,9 @@ struct LibraryStacksTests {
 
     @Test func `grouped, each stack is closed in its group, and opens there as the filmstrip's does`() async throws {
         defer { cleanUp() }
-        let (model, grid, filmstrip, window) = try await open()
-        defer { window.contentView = nil }
+        let shown = try await open()
+        let (model, grid, filmstrip) = (shown.model, shown.grid, shown.filmstrip)
+        defer { shown.window.contentView = nil }
         model.setGroupKey(.moment)
         try await eventually { model.gridGroups.list?.groups.key == .moment }
         let grouped = try #require(model.gridGroups.list)
@@ -249,10 +259,12 @@ struct LibraryStacksTests {
         model.setGroupKey(.ungrouped)
     }
 
-    @Test func `⇧ and Auto Advance move from cell to cell as the grid shows them, grouped or not`() async throws {
+    @Test func `culling with ⇧, or with Auto Advance on, moves from cell to cell as the grid shows them, grouped or not`(
+    ) async throws {
         defer { cleanUp() }
-        let (model, _, filmstrip, window) = try await open()
-        defer { window.contentView = nil }
+        let shown = try await open()
+        let (model, filmstrip) = (shown.model, shown.filmstrip)
+        defer { shown.window.contentView = nil }
         let burst: Set = ["B01.JPG", "B02.JPG", "B03.JPG"]
         try model.clickInGrid(url(model, "B01.JPG"))
         #expect(model.perform(.rating3, shifted: true))
@@ -278,14 +290,18 @@ struct LibraryStacksTests {
         model.gridStacks.closeAll()
         model.setGroupKey(.ungrouped)
     }
+}
 
+@MainActor
+extension LibraryStacksTests {
     // MARK: - Changes
 
     @Test func `a filter's change in a list without stacks is no restack, and the filmstrip doesn't reload`(
     ) async throws {
         defer { cleanUp() }
-        let (model, _, filmstrip, window) = try await open()
-        defer { window.contentView = nil }
+        let shown = try await open()
+        let (model, filmstrip) = (shown.model, shown.filmstrip)
+        defer { shown.window.contentView = nil }
         let filters = try #require(model.libraryFilters)
         var restacks = 0
         let observation = model.gridStacks.observe { change in
@@ -326,11 +342,12 @@ struct LibraryStacksTests {
 
     @Test func `each source keeps which of its stacks are open, as it keeps its Group By`() async throws {
         defer { cleanUp() }
-        let (model, grid, filmstrip, window) = try await open(others: [
+        let shown = try await open(others: [
             Photo(path: "O01.JPG", time: 3000), Photo(path: "O01.HEIC", time: 3000, type: .heic),
             Photo(path: "O02.JPG", time: 3600),
         ])
-        defer { window.contentView = nil }
+        let (model, grid, filmstrip) = (shown.model, shown.grid, shown.filmstrip)
+        defer { shown.window.contentView = nil }
         let other = root.appending(path: "Other", directoryHint: .isDirectory)
         /// Shows `folder`, and waits until its stacks are found as many as it has, `open` of them open.
         func show(_ folder: URL, count: Int, open: Int, closed: Int) async throws {
@@ -375,8 +392,9 @@ struct LibraryStacksTests {
     @Test func `the stacks are found again when Undo or Redo takes back or makes a stack's change, not another kind's`(
     ) async throws {
         defer { cleanUp() }
-        let (model, _, _, window) = try await open()
-        defer { window.contentView = nil }
+        let shown = try await open()
+        let model = shown.model
+        defer { shown.window.contentView = nil }
         let (first, second) = try (id(model, "S01.JPG"), id(model, "S02.JPG"))
         func top() -> Int64? {
             model.gridStacks.list?.stacks.stack(containing: first)?.top
@@ -454,8 +472,9 @@ struct LibraryStacksTests {
 
     @Test func `stacking, unstacking and a stack's top are changes Undo takes back, the grid following`() async throws {
         defer { cleanUp() }
-        let (model, grid, _, window) = try await open()
-        defer { window.contentView = nil }
+        let shown = try await open()
+        let (model, grid) = (shown.model, shown.grid)
+        defer { shown.window.contentView = nil }
         let (first, second) = try (id(model, "S01.JPG"), id(model, "S02.JPG"))
         func top() -> Int64? {
             model.gridStacks.list?.stacks.stack(containing: first)?.top
@@ -499,8 +518,9 @@ struct LibraryStacksTests {
     @Test func `a source shown by the index's IDs finds its stacks by them, and stacks, tops and unstacks by them`(
     ) async throws {
         defer { cleanUp() }
-        let (model, grid, _, window) = try await open()
-        defer { window.contentView = nil }
+        let shown = try await open()
+        let (model, grid) = (shown.model, shown.grid)
+        defer { shown.window.contentView = nil }
         _ = model.librarySources.show(.allPhotographs)
         try await eventually {
             model.library.showsIndexIDs && !model.librarySources.isListing && model.items.count == Self.photos.count

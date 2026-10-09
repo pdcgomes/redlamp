@@ -16,148 +16,6 @@ import UniformTypeIdentifiers
 /// sidecars hold.
 @MainActor
 struct CullingTests {
-    /// Six small JPEGs in a folder the library has indexed, shown from it in Library: the second with a
-    /// sidecar holding an edit and two stars.
-    @MainActor
-    final class IndexedFolder {
-        let base = FileManager.default.temporaryDirectory
-            .appending(path: "culling-\(UUID().uuidString)", directoryHint: .isDirectory).standardizedFileURL
-        let library = FolderLibrary()
-        private(set) var service: LibraryService!
-        private(set) var model: EditorModel!
-        private(set) var photos: [URL] = []
-
-        var root: URL {
-            base.appending(path: "Photos", directoryHint: .isDirectory)
-        }
-
-        var paths: LibraryPaths {
-            LibraryPaths(root: base.appending(path: "Library", directoryHint: .isDirectory))
-        }
-
-        /// With `sidecars`, the photos after the second it gives metadata get a sidecar holding it and an edit.
-        func open(count: Int = 6, sidecars: (Int) -> PhotoMetadata? = { _ in nil }) async throws {
-            for number in 0 ..< count {
-                let url = root.appending(path: String(format: "IMG_%04d.JPG", number), directoryHint: .notDirectory)
-                try Self.writeJPEG(url, shade: number)
-                photos.append(url)
-            }
-            var edited = EditRecipe()
-            edited[.exposure] = 0.5
-            try SidecarStore().save(Sidecar(recipe: edited, metadata: PhotoMetadata(rating: 2)), for: photos[1])
-            for number in 2 ..< max(count, 2) {
-                if let metadata = sidecars(number) {
-                    try SidecarStore().save(Sidecar(recipe: edited, metadata: metadata), for: photos[number])
-                }
-            }
-            library.add([root])
-            service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
-                StoreThumbnailMaker.imageIO(url, nil, size)
-            }
-            library.attach(service)
-            let deadline = ContinuousClock.now + .seconds(max(30, Double(count) / 25))
-            while await !service.canShow(root, includingSubfolders: false), ContinuousClock.now < deadline {
-                try await Task.sleep(for: .milliseconds(10))
-            }
-            model = EditorModel(engine: StubEngine(), library: library)
-            model.open([root])
-            try await eventually {
-                self.library.isShownFromLibrary && self.model.items.count >= count && self.model.info != nil
-            }
-            try #require(library.isShownFromLibrary && model.info?.url == photos[0], "the first photo open in Develop")
-            model.showModule(.library)
-        }
-
-        /// Until every culling change asked for is made, Develop's save of its photo included.
-        func written() async {
-            while let tail = model.cullingTail {
-                await tail.value
-                if model.cullingTail == tail {
-                    break
-                }
-            }
-            await model.saves.flush()
-        }
-
-        func sidecar(_ number: Int) -> PhotoMetadata? {
-            SidecarStore().load(for: photos[number])?.metadata
-        }
-
-        func hasSidecar(_ number: Int) -> Bool {
-            FileManager.default.fileExists(atPath: SidecarStore().url(for: photos[number]).path)
-        }
-
-        func shown(_ number: Int) -> PhotoMetadata {
-            model.library.item(for: photos[number])?.metadata ?? PhotoMetadata()
-        }
-
-        func batches() async throws -> Int {
-            try await service.metadata?.entries().count ?? 0
-        }
-
-        /// Each photo's sidecar as `--library-perf` compares them (whether it has an edit, and its metadata),
-        /// or none, and its row's culling fields, whether it has an edit and whether the index has a date for
-        /// its sidecar.
-        func state() async throws -> [String] {
-            let photos = photos
-            let sidecars = await Task.detached {
-                photos.map { url in SidecarStore().summary(for: url).map { "\($0.hasEdits) \($0.metadata)" } ?? "none" }
-            }.value
-            let paths = photos.map(LibraryService.path)
-            let rows = try await #require(service.core).index.read { reader in
-                try paths.map { path in
-                    try reader.photo(path: path).map { row in
-                        "\(row.rating) \(String(describing: row.flag)) \(String(describing: row.label)) "
-                            + "\(String(describing: row.customLabel)) \(row.marked) \(row.edited) \(row.sidecarModified != nil)"
-                    } ?? "no row"
-                }
-            }
-            return photos.indices.map { "\(photos[$0].lastPathComponent): sidecar \(sidecars[$0]); row \(rows[$0])" }
-        }
-
-        /// Reads the folder again, as change tracking does when its files change, its photos' lists hearing of
-        /// what it finds.
-        func indexAgain() async throws {
-            let core = try #require(service.core)
-            for await event in core.indexer.update([FolderChange(root, recursive: true)]) {
-                core.live.receive(.indexer(event))
-            }
-        }
-
-        func eventually(_ condition: () -> Bool) async throws {
-            let deadline = ContinuousClock.now + .seconds(30)
-            while !condition(), ContinuousClock.now < deadline {
-                try await Task.sleep(for: .milliseconds(5))
-            }
-        }
-
-        func cleanUp() {
-            LibrarySandbox.remove(base, closing: [service])
-        }
-
-        static func writeJPEG(_ url: URL, shade: Int) throws {
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
-            )
-            let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
-            let context = try #require(CGContext(
-                data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0, space: space,
-                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
-            ))
-            context.setFillColor(
-                red: CGFloat(shade % 7) / 7, green: CGFloat(shade % 5) / 5, blue: CGFloat(shade % 3) / 3, alpha: 1,
-            )
-            context.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
-            let data = NSMutableData()
-            let destination = try #require(CGImageDestinationCreateWithData(
-                data, UTType.jpeg.identifier as CFString, 1, nil,
-            ))
-            try CGImageDestinationAddImage(destination, #require(context.makeImage()), nil)
-            #expect(CGImageDestinationFinalize(destination))
-            try (data as Data).write(to: url)
-        }
-    }
-
     // MARK: - Batches on a selection
 
     @Test func `each culling action on a selection is one batch, shown at once, with Undo and Redo`() async throws {
@@ -208,7 +66,7 @@ struct CullingTests {
         #expect(all.map(folder.shown).map(\.rating) == [0, 2, 0, 0, 0, 0])
     }
 
-    @Test func `Undo puts thousands of photos back as they were, and reports the one whose sidecar it can't read`(
+    @Test func `undoing puts thousands of photos back as they were, and reports the one whose sidecar it can't read`(
     ) async throws {
         let folder = IndexedFolder()
         defer { folder.cleanUp() }
@@ -337,7 +195,7 @@ struct CullingTests {
         #expect((0 ..< 3).map { folder.shown($0).rating } == [0, 1, 4])
     }
 
-    @Test func `Redo takes back the Undo, so a photo changed since keeps its change`() async throws {
+    @Test func `redoing takes back the Undo, so a photo changed since keeps its change`() async throws {
         let folder = IndexedFolder()
         defer { folder.cleanUp() }
         try await folder.open(count: 4)
@@ -406,7 +264,10 @@ struct CullingTests {
         #expect(afterLast.allSatisfy { $0 == [1, 1, 1, 1, 1, 1] }, "no list showed an older rating after: \(seen)")
         #expect((0 ..< 6).allSatisfy { folder.sidecar($0)?.rating == 1 })
     }
+}
 
+@MainActor
+extension CullingTests {
     @Test func `a photo is found in the index whichever of Unicode's forms its name and folder are in`(
     ) async throws {
         let folder = IndexedFolder()
@@ -462,7 +323,7 @@ struct CullingTests {
         #expect(rating == 4, "its row has what its sidecar holds")
     }
 
-    @Test func `Undo through a photo's own save puts back what its sidecar held, not what the grid showed`(
+    @Test func `undoing through a photo's own save puts back what its sidecar held, not what the grid showed`(
     ) async throws {
         let fixture = ModuleFixture()
         defer { fixture.cleanUp() }
@@ -514,7 +375,7 @@ struct CullingTests {
 
     // MARK: - Moving on
 
-    @Test func `⇧ and Auto Advance make the photo after the photos culled active`() async throws {
+    @Test func `culling with ⇧, or with Auto Advance on, makes the photo after the photos culled active`() async throws {
         let fixture = ModuleFixture()
         defer { fixture.cleanUp() }
         try await fixture.open(count: 10)
@@ -695,5 +556,150 @@ struct CullingTests {
         again.setText("second look")
         try again.activate(#require(again.rows.first))
         #expect(model.items[0].metadata.customLabel == "Second Look", "the palette's row sets it")
+    }
+}
+
+@MainActor
+extension CullingTests {
+    /// Six small JPEGs in a folder the library has indexed, shown from it in Library: the second with a
+    /// sidecar holding an edit and two stars.
+    @MainActor
+    final class IndexedFolder {
+        let base = FileManager.default.temporaryDirectory
+            .appending(path: "culling-\(UUID().uuidString)", directoryHint: .isDirectory).standardizedFileURL
+        let library = FolderLibrary()
+        private(set) var service: LibraryService!
+        private(set) var model: EditorModel!
+        private(set) var photos: [URL] = []
+
+        var root: URL {
+            base.appending(path: "Photos", directoryHint: .isDirectory)
+        }
+
+        var paths: LibraryPaths {
+            LibraryPaths(root: base.appending(path: "Library", directoryHint: .isDirectory))
+        }
+
+        /// With `sidecars`, the photos after the second it gives metadata get a sidecar holding it and an edit.
+        func open(count: Int = 6, sidecars: (Int) -> PhotoMetadata? = { _ in nil }) async throws {
+            for number in 0 ..< count {
+                let url = root.appending(path: String(format: "IMG_%04d.JPG", number), directoryHint: .notDirectory)
+                try Self.writeJPEG(url, shade: number)
+                photos.append(url)
+            }
+            var edited = EditRecipe()
+            edited[.exposure] = 0.5
+            try SidecarStore().save(Sidecar(recipe: edited, metadata: PhotoMetadata(rating: 2)), for: photos[1])
+            for number in 2 ..< max(count, 2) {
+                if let metadata = sidecars(number) {
+                    try SidecarStore().save(Sidecar(recipe: edited, metadata: metadata), for: photos[number])
+                }
+            }
+            library.add([root])
+            service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
+                StoreThumbnailMaker.imageIO(url, nil, size)
+            }
+            library.attach(service)
+            let deadline = ContinuousClock.now + .seconds(max(30, Double(count) / 25))
+            while await !service.canShow(root, includingSubfolders: false), ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            model = EditorModel(engine: StubEngine(), library: library)
+            model.open([root])
+            try await eventually {
+                self.library.isShownFromLibrary && self.model.items.count >= count && self.model.info != nil
+            }
+            try #require(library.isShownFromLibrary && model.info?.url == photos[0], "the first photo open in Develop")
+            model.showModule(.library)
+        }
+
+        /// Until every culling change asked for is made, Develop's save of its photo included.
+        func written() async {
+            while let tail = model.cullingTail {
+                await tail.value
+                if model.cullingTail == tail {
+                    break
+                }
+            }
+            await model.saves.flush()
+        }
+
+        func sidecar(_ number: Int) -> PhotoMetadata? {
+            SidecarStore().load(for: photos[number])?.metadata
+        }
+
+        func hasSidecar(_ number: Int) -> Bool {
+            FileManager.default.fileExists(atPath: SidecarStore().url(for: photos[number]).path)
+        }
+
+        func shown(_ number: Int) -> PhotoMetadata {
+            model.library.item(for: photos[number])?.metadata ?? PhotoMetadata()
+        }
+
+        func batches() async throws -> Int {
+            try await service.metadata?.entries().count ?? 0
+        }
+
+        /// Each photo's sidecar as `--library-perf` compares them (whether it has an edit, and its metadata),
+        /// or none, and its row's culling fields, whether it has an edit and whether the index has a date for
+        /// its sidecar.
+        func state() async throws -> [String] {
+            let photos = photos
+            let sidecars = await Task.detached {
+                photos.map { url in SidecarStore().summary(for: url).map { "\($0.hasEdits) \($0.metadata)" } ?? "none" }
+            }.value
+            let paths = photos.map(LibraryService.path)
+            let rows = try await #require(service.core).index.read { reader in
+                try paths.map { path in
+                    try reader.photo(path: path).map { row in
+                        "\(row.rating) \(String(describing: row.flag)) \(String(describing: row.label)) "
+                            + "\(String(describing: row.customLabel)) \(row.marked) \(row.edited) \(row.sidecarModified != nil)"
+                    } ?? "no row"
+                }
+            }
+            return photos.indices.map { "\(photos[$0].lastPathComponent): sidecar \(sidecars[$0]); row \(rows[$0])" }
+        }
+
+        /// Reads the folder again, as change tracking does when its files change, its photos' lists hearing of
+        /// what it finds.
+        func indexAgain() async throws {
+            let core = try #require(service.core)
+            for await event in core.indexer.update([FolderChange(root, recursive: true)]) {
+                core.live.receive(.indexer(event))
+            }
+        }
+
+        func eventually(_ condition: () -> Bool) async throws {
+            let deadline = ContinuousClock.now + .seconds(30)
+            while !condition(), ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+        }
+
+        func cleanUp() {
+            LibrarySandbox.remove(base, closing: [service])
+        }
+
+        static func writeJPEG(_ url: URL, shade: Int) throws {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
+            )
+            let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+            let context = try #require(CGContext(
+                data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+            ))
+            context.setFillColor(
+                red: CGFloat(shade % 7) / 7, green: CGFloat(shade % 5) / 5, blue: CGFloat(shade % 3) / 3, alpha: 1,
+            )
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
+            let data = NSMutableData()
+            let destination = try #require(CGImageDestinationCreateWithData(
+                data, UTType.jpeg.identifier as CFString, 1, nil,
+            ))
+            try CGImageDestinationAddImage(destination, #require(context.makeImage()), nil)
+            #expect(CGImageDestinationFinalize(destination))
+            try (data as Data).write(to: url)
+        }
     }
 }

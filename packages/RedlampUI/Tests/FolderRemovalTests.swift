@@ -114,7 +114,7 @@ struct FolderRemovalTests {
         return (model, window, item)
     }
 
-    @Test func `Remove from Folders, chosen in a root's menu as a click does, takes the folder out`() async throws {
+    @Test func `choosing Remove from Folders in a root's menu, as a click does, takes the folder out`() async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }
         let (model, window, item) = try await Self.removeFromFolders(in: sandbox)
@@ -126,7 +126,7 @@ struct FolderRemovalTests {
     }
 
     @Test(.measuresSpeed)
-    func `Remove from Folders, chosen in a root's menu as a click does, holds the main thread for no time`(
+    func `choosing Remove from Folders in a root's menu, as a click does, holds the main thread for no time`(
     ) async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }

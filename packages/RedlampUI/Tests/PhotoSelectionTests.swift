@@ -300,7 +300,10 @@ struct PhotoSelectionTests {
         photos.reads.release()
         try await opened(b, in: model)
     }
+}
 
+@MainActor
+extension PhotoSelectionTests {
     @Test func `while the next photo is read, Previous and Next are its neighbours'`() async throws {
         let photos = try await openDecoded()
         defer { photos.cleanup() }
