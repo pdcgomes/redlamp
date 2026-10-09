@@ -14,12 +14,40 @@ final class HealthSheetModel {
         case failed(String)
     }
 
+    /// What the sheet says of the batch, worked out once for each plan: tens of thousands of findings take
+    /// milliseconds to count, and the sheet is drawn again with each step of the batch's progress.
+    struct Words: Sendable, Equatable {
+        var count: Int
+        var heading: String
+        var countLine: String
+        var leftOut: String
+
+        /// The words for `findings`' batch, planned as `plan`, or until it is, with `chosen` among them.
+        nonisolated init(_ findings: HealthFindings, plan: HealthPlan?, chosen: Set<Int64>) {
+            let acted = plan?.findings ?? findings.findings.filter { $0.isProposed || chosen.contains($0.photo) }
+            let kinds = Set(acted.compactMap { finding -> PhotoRecord.Kind? in
+                guard case let .pairHalf(kind, _) = finding.reason else { return nil }
+                return kind
+            })
+            count = acted.count
+            heading = HealthWords.question(findings.check, count: count, kinds: kinds)
+            countLine = plan.map { plan in
+                HealthWords.count(
+                    findings.check, count: plan.photos.count, groups: Set(plan.findings.compactMap(\.group)).count,
+                    bytes: plan.bytes,
+                )
+            } ?? ""
+            leftOut = HealthWords.leftOut(findings, choosing: chosen)
+        }
+    }
+
     let findings: HealthFindings
     /// The photos selected that the check lists apart, which the batch takes only when `includesSelected` is ticked.
     let selectedApart: [Int64]
     private(set) var includesSelected = false
     private(set) var phase = Phase.planning
     private(set) var plan: HealthPlan?
+    private(set) var words: Words
     var onChange: (() -> Void)?
     private var planning: Task<Void, Never>?
     private let health: LibraryHealth
@@ -35,6 +63,7 @@ final class HealthSheetModel {
         self.selectedApart = selectedApart
         self.health = health
         self.requested = requested
+        words = Words(findings, plan: nil, chosen: [])
     }
 
     var check: HealthCheck {
@@ -54,17 +83,19 @@ final class HealthSheetModel {
         onChange?()
         let (health, findings, chosen) = (health, findings, chosen)
         planning = Task { [weak self] in
-            let result = await Task.detached(priority: .userInitiated) { () -> Result<HealthPlan, any Error> in
+            let result = await Task.detached(priority: .userInitiated) { () -> Result<(HealthPlan, Words), any Error> in
                 do {
-                    return try await .success(health.plan(findings, choosing: chosen))
+                    let plan = try await health.plan(findings, choosing: chosen)
+                    return .success((plan, Words(findings, plan: plan, chosen: chosen)))
                 } catch {
                     return .failure(error)
                 }
             }.value
             guard let self, !Task.isCancelled else { return }
             switch result {
-            case let .success(made):
+            case let .success((made, words)):
                 plan = made
+                self.words = words
                 phase = .ready
             case let .failure(error):
                 phase = .failed(HealthWords.failure(error))
@@ -94,17 +125,15 @@ final class HealthSheetModel {
 
     /// The photos the batch acts on, as planned; until then, the proposals and the photos chosen.
     var count: Int {
-        plan?.photos.count ?? findings.proposed.count + chosen.count
+        words.count
     }
 
     var heading: String {
-        HealthWords.question(check, count: count, kinds: kinds)
+        words.heading
     }
 
     var countLine: String {
-        guard let plan else { return "" }
-        let groups = Set(plan.findings.compactMap(\.group)).count
-        return HealthWords.count(check, count: plan.photos.count, groups: groups, bytes: plan.bytes)
+        words.countLine
     }
 
     var what: String {
@@ -116,7 +145,7 @@ final class HealthSheetModel {
     }
 
     var leftOut: String {
-        HealthWords.leftOut(findings, choosing: chosen)
+        words.leftOut
     }
 
     var choice: String {
@@ -155,15 +184,6 @@ final class HealthSheetModel {
             return plan?.batch.steps.isEmpty == false
         }
         return false
-    }
-
-    /// The kinds of the pairs' halves the batch moves, for the words.
-    private var kinds: Set<PhotoRecord.Kind> {
-        let acted = plan?.findings ?? findings.findings.filter { $0.isProposed || chosen.contains($0.photo) }
-        return Set(acted.compactMap { finding in
-            guard case let .pairHalf(kind, _) = finding.reason else { return nil }
-            return kind
-        })
     }
 }
 

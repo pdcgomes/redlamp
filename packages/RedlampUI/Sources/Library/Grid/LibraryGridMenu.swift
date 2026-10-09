@@ -173,8 +173,9 @@ enum LibraryGridMenu {
             items.append(found)
         }
         let check = HealthProposals.check(offer.check, pairs: model.librarySources.pairRule)
-        let title = offer.proposed > 0
-            ? HealthWords.menuTitle(check, count: offer.proposed, kinds: model.healthProposals.proposedKinds)
+        let proposed = model.healthProposals.tally?.proposed ?? 0
+        let title = proposed > 0
+            ? HealthWords.menuTitle(check, count: proposed, kinds: model.healthProposals.proposedKinds)
             : ShortcutAction.acceptHealthProposals.title
         let accept = item(title, key: nil, enabled: model.canAcceptHealthProposals) { model.acceptHealthProposals() }
         accept.setAccessibilityIdentifier("library.menu.\(ShortcutAction.acceptHealthProposals.rawValue)")

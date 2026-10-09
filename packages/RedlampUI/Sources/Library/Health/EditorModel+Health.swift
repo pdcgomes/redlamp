@@ -42,10 +42,8 @@ public extension EditorModel {
     /// Whether Accept Health Proposals… has a batch to confirm: the check shown proposes something, or lists apart
     /// something the user may choose.
     internal var canAcceptHealthProposals: Bool {
-        guard !isModalDialogOpen, shownHealthCheck != nil, library.service?.isReady == true,
-              let offer = healthProposals.offer
-        else { return false }
-        return offer.proposed > 0 || offer.apart > 0
+        !isModalDialogOpen && shownHealthCheck != nil && library.service?.isReady == true
+            && healthProposals.offer?.canAccept == true
     }
 
     /// Keep Anyway: the findings of `photo`, or of the selection it's in, taken out of the check shown until the photo
@@ -85,7 +83,7 @@ public extension EditorModel {
     }
 
     internal var canKeepAnyway: Bool {
-        !isModalDialogOpen && shownHealthCheck != nil && selection != nil && healthProposals.offer?.found ?? 0 > 0
+        !isModalDialogOpen && shownHealthCheck != nil && selection != nil && healthProposals.offer?.hasFindings == true
     }
 
     /// List Again in Library Health: what keeps `photo`, or the selection it's in, taken back from Kept Anyway, so the

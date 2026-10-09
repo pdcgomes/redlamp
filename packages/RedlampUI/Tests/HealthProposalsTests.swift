@@ -146,7 +146,8 @@ struct HealthProposalsTests {
         try await sandbox.eventually { !sources.isListing && proposals.marked == 2 && !proposals.isReading }
         let marks = model.items.compactMap { proposals.mark(for: $0.url) }
         #expect(Set(marks.map(\.word)) == ["Keep", "To Trash"])
-        #expect(proposals.offer == HealthProposals.Offer(check: .duplicates, proposed: 1, apart: 0, found: 2))
+        #expect(proposals.offer == HealthProposals.Offer(check: .duplicates, canAccept: true, hasFindings: true))
+        #expect(proposals.tally == HealthProposals.Tally(proposed: 1, apart: 0, found: 2))
         #expect(model.canPerform(.acceptHealthProposals) && !model.canPerform(.listAgain))
 
         #expect(sources.show(.allPhotographs))

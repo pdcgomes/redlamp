@@ -65,6 +65,15 @@
                     to: app.runDirectory.appending(path: "health-performance.txt"), atomically: true, encoding: .utf8,
                 )
             }
+            // With REDLAMP_DRAG_PROFILE set, the main thread's stacks sampled through each phase.
+            let mainThread = try app.main { _ in mach_thread_self() }
+            func watched(
+                _ name: String, _ body: () throws -> Void,
+            ) throws -> (summary: MainThreadMonitor.Summary?, seconds: Double) {
+                let profile = DragPhaseProfile.isOn ? DragPhaseProfile(thread: mainThread) : nil
+                defer { profile?.write(to: app.runDirectory.appending(path: "health-profile-\(name).txt")) }
+                return try app.watchingMainThread(name, body)
+            }
 
             app.recorder.write("note", ["step": "writing \(total) photos"])
             try makePhotos(in: base, groups: groups)
@@ -139,7 +148,7 @@
                     model.setThumbnailSize(size)
                 }
                 app.pause(1)
-                let phase = try app.watchingMainThread(name) {
+                let phase = try watched(name) {
                     for step in 0 ... 240 {
                         let fraction = Double(step <= 120 ? step : 240 - step) / 120
                         try app.main { _ in
@@ -164,7 +173,7 @@
             }
 
             // The sheet for the 10,000 proposals, timed to its plan.
-            let sheet = try app.watchingMainThread("sheet") {
+            let sheet = try watched("sheet") {
                 try app.main { model in
                     model.select(model.items[0].url)
                     _ = model.perform(.acceptHealthProposals)
@@ -188,7 +197,7 @@
             )
 
             // The batch, then its Undo.
-            let batch = try app.watchingMainThread("batch") {
+            let batch = try watched("batch") {
                 try app.clickInSheet("health.accept")
                 try app.waitForNoSheet("the sheet", timeout: 3600)
             }
@@ -199,7 +208,7 @@
             try app.wait("the list without the copies moved", timeout: 300) { model in
                 !model.librarySources.isListing && model.items.count <= total - groups
             }
-            let undo = try app.watchingMainThread("undo") {
+            let undo = try watched("undo") {
                 try app.wait("the batch on Library's Undo", timeout: 30) { $0.healthUndoCount > 0 }
                 try app.press(.undo)
                 try app.run("the Undo", timeout: 3600) { await $0.healthChangesMade() }

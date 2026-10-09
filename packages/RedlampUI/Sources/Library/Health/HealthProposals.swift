@@ -4,14 +4,23 @@ import RedlampLibrary
 
 /// The proposals of the Library Health check the grid shows (LIB-40): the check's findings as the library has them,
 /// read again off the main thread each time the check's list changes, and each photo's mark, which the grid's cells
-/// draw and their tooltips and VoiceOver say. Only a check's list has them. The menus follow what's offered, which
-/// changes as a batch or Keep Anyway changes the check, not each mark.
+/// draw and their tooltips and VoiceOver say. Only a check's list has them. The menus follow only what's offered,
+/// which a batch or Keep Anyway changes once, not the counts, which change with each part of a batch's photos: SwiftUI
+/// asks every item of the menu bar again whenever something its menus read changes.
 @MainActor
 @Observable
 public final class HealthProposals {
-    /// What the menus follow: the check shown, and what its batch would act on.
+    /// What the menus follow: the check shown, and whether its batch has anything to act on.
     public struct Offer: Equatable, Sendable {
         public var check: HealthCheck.Kind
+        /// Its batch acts on something proposed, or on photos listed apart once they're chosen.
+        public var canAccept: Bool
+        /// Its list has photos.
+        public var hasFindings: Bool
+    }
+
+    /// The check's findings counted.
+    public struct Tally: Equatable, Sendable {
         /// The findings its batch acts on as proposed.
         public var proposed: Int
         /// The findings listed apart, which the batch leaves out unless they're chosen.
@@ -22,6 +31,8 @@ public final class HealthProposals {
 
     /// The check shown and what it offers; nil while the grid shows anything else, and until its findings are read.
     public private(set) var offer: Offer?
+    /// The check's findings counted, as last read.
+    @ObservationIgnored public private(set) var tally: Tally?
     /// The check's findings as last read.
     @ObservationIgnored private(set) var findings: HealthFindings?
     /// Each photo's mark, by the index's ID.
@@ -145,18 +156,21 @@ public final class HealthProposals {
             library(core), Self.check(kind, pairs: model.librarySources.pairRule), shown, ContinuousClock.now,
         )
         Task { [weak self] in
-            let read = await Task.detached(priority: .userInitiated) { () -> (HealthFindings, [Int64: HealthMark])? in
+            let read = await Task.detached(priority: .userInitiated) { () -> Read? in
                 guard let found = try? await health.findings(check) else { return nil }
                 var marks = [Int64: HealthMark](minimumCapacity: found.findings.count)
+                var tally = Tally(proposed: 0, apart: 0, found: found.findings.count)
                 for finding in found.findings {
                     marks[finding.photo] = HealthMark(finding)
+                    tally.proposed += finding.isProposed ? 1 : 0
+                    tally.apart += finding.apart == nil ? 0 : 1
                 }
-                return (found, marks)
+                return Read(findings: found, marks: marks, tally: tally)
             }.value
             guard let self else { return }
             reading = false
-            if shown == source, let (found, marks) = read {
-                apply(found, marks)
+            if shown == source, let read {
+                apply(read)
                 readsTook = readsTook.suffix(99) + [.now - started]
             }
             if readAgain {
@@ -166,15 +180,24 @@ public final class HealthProposals {
         }
     }
 
-    private func apply(_ found: HealthFindings, _ marks: [Int64: HealthMark]) {
-        let replaced = self.marks
-        findings = found
-        self.marks = marks
-        // Tens of thousands of marks take milliseconds to free.
+    /// A check's findings as read, with each photo's mark and their count.
+    private struct Read: Sendable {
+        var findings: HealthFindings
+        var marks: [Int64: HealthMark]
+        var tally: Tally
+    }
+
+    private func apply(_ read: Read) {
+        let replaced = (findings, marks)
+        findings = read.findings
+        marks = read.marks
+        tally = read.tally
+        // Tens of thousands of findings and marks take milliseconds to free.
         Task.detached(priority: .utility) { withExtendedLifetime(replaced) {} }
+        let tally = read.tally
         let offer = Offer(
-            check: found.check.kind, proposed: found.proposed.count, apart: found.findings.count { $0.apart != nil },
-            found: found.findings.count,
+            check: read.findings.check.kind, canAccept: tally.proposed > 0 || tally.apart > 0,
+            hasFindings: tally.found > 0,
         )
         if offer != self.offer {
             self.offer = offer
@@ -188,6 +211,7 @@ public final class HealthProposals {
         shown = nil
         readAgain = false
         findings = nil
+        tally = nil
         if offer != nil {
             offer = nil
         }
