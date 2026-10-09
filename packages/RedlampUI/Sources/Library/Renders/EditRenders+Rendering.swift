@@ -12,7 +12,7 @@ extension EditRenders {
         if engineBytes > Self.engineBudget {
             releaseEngine()
         }
-        guard isRunning, makeEngine != nil else { return }
+        guard isRunning, isWindowOpen, makeEngine != nil else { return }
         guard let next = nextRender(focus) else {
             releaseEngineWhenIdle()
             return
@@ -119,8 +119,8 @@ extension EditRenders {
 
     /// Waits until a render's next step may run: no export runs and no dialog is open; Develop isn't
     /// shown, or it has asked for no frame for `developQuiet` and isn't opening a photo; no thumbnail on
-    /// screen waits; the Mac isn't hot or saving power; and renders aren't paused. False when the render
-    /// is to stop instead: it was cancelled, or its photo opened in Develop.
+    /// screen waits; the Mac isn't hot or saving power; and renders aren't paused, nor the window closed.
+    /// False when the render is to stop instead: it was cancelled, or its photo opened in Develop.
     private func mayGoOn(rendering url: URL) async -> Bool {
         let started = ContinuousClock.now
         var waited = false
@@ -131,7 +131,7 @@ extension EditRenders {
             }
         }
         while !Task.isCancelled, !isOpenInDevelop(url) {
-            if isRunning, isDevelopQuiet, scheduler.load().waiting[.onScreen, default: 0] == 0,
+            if isRunning, isWindowOpen, isDevelopQuiet, scheduler.load().waiting[.onScreen, default: 0] == 0,
                WorkScheduler.isRelaxed() {
                 return true
             }

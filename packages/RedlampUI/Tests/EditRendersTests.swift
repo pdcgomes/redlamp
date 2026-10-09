@@ -496,7 +496,7 @@ struct EditRendersTests {
         #expect(fixture.renders.statistics.rendered == 1 && fixture.renders.statistics.waits == 1)
     }
 
-    @Test func `Develop's renders never wait behind the queue's, which waits for Develop to be quiet between its steps`(
+    @Test func `the renders Develop asks for never wait behind the queue's, which waits for Develop to be quiet between its steps`(
     ) async throws {
         let fixture = EditRenderFixture()
         defer { fixture.cleanUp() }
@@ -543,5 +543,51 @@ struct EditRendersTests {
         let next = try #require(fixture.engine.openedAt.withLock { $0.last })
         #expect(next - asked >= EditRenders.developQuiet)
         #expect(!fixture.engine.opened.withLock { $0 }.contains(fixture.photo("IMG_1.JPG")))
+    }
+}
+
+@MainActor
+extension EditRendersTests {
+    @Test func `closing the window lets the renders' engine and the thumbnails off screen go, and renders wait for it`(
+    ) async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        try fixture.photos(["IMG_1.JPG", "IMG_2.JPG", "IMG_3.JPG"])
+        try fixture.edit("IMG_2.JPG", exposure: 1)
+        try fixture.edit("IMG_3.JPG", exposure: 0.5)
+        try await fixture.open()
+        let model = try #require(fixture.model)
+        let renders = fixture.renders
+        try await fixture.eventually { renders.statistics.rendered == 2 }
+        #expect(renders.engine != nil, "kept for the next render")
+        let thumbnails = GridThumbnails(
+            scheduler: fixture.library.scheduler, packs: model.thumbnailLoader.packs,
+            store: { [weak library = fixture.library] in library?.storeThumbnail(for: $0) }, renders: renders,
+            decode: model.thumbnailLoader.decode,
+        )
+        for name in ["IMG_1.JPG", "IMG_3.JPG"] {
+            try await fixture.eventually {
+                guard let item = fixture.item(name) else { return false }
+                if thumbnails.cached(item, edge: 256) == nil {
+                    thumbnails.request(item, edge: 256) { _ in }
+                }
+                return thumbnails.cached(item, edge: 256) != nil
+            }
+        }
+        let (shown, hidden) = try (#require(fixture.item("IMG_1.JPG")), #require(fixture.item("IMG_3.JPG")))
+        try #require(thumbnails.cached(shown, edge: 256) != nil && thumbnails.cached(hidden, edge: 256) != nil)
+        thumbnails.protected = [shown.url]
+
+        model.windowClosed()
+        try await fixture.eventually { !renders.isWindowOpen }
+        #expect(renders.engine == nil)
+        #expect(thumbnails.cached(shown, edge: 256) != nil && thumbnails.cached(hidden, edge: 256) == nil)
+        try fixture.edit("IMG_3.JPG", exposure: -1, telling: true)
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(renders.statistics.rendered == 2 && renders.engine == nil, "nothing renders while it's closed")
+
+        model.windowReopened()
+        try await fixture.eventually { renders.statistics.rendered == 3 }
+        #expect(renders.statistics.rendered == 3)
     }
 }

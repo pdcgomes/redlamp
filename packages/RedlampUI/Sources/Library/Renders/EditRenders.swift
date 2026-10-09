@@ -87,6 +87,9 @@ public final class EditRenders {
         }
     }
 
+    /// False while the editor window is closed: renders wait, without an engine, until it's back.
+    private(set) var isWindowOpen = true
+
     /// The editor, for what Develop is doing and its Base Looks.
     weak var editor: EditorModel?
     let library: FolderLibrary
@@ -108,6 +111,7 @@ public final class EditRenders {
     var developActive: ContinuousClock.Instant?
     var stepRunning = false
     private var observers: [UUID: @MainActor ([URL]) -> Void] = [:]
+    private var windowClosing: [UUID: @MainActor () -> Void] = [:]
     private var observation: LibraryObservation?
     private var pumping = false
 
@@ -167,6 +171,31 @@ public final class EditRenders {
         let id = UUID()
         observers[id] = handler
         return LibraryObservation { [weak self] in self?.observers.removeValue(forKey: id) }
+    }
+
+    /// Calls `handler` when the editor window closes, for what keeps thumbnails beside the renders to let
+    /// go of them.
+    func observeWindowClosing(_ handler: @escaping @MainActor () -> Void) -> LibraryObservation {
+        let id = UUID()
+        windowClosing[id] = handler
+        return LibraryObservation { [weak self] in self?.windowClosing.removeValue(forKey: id) }
+    }
+
+    /// The editor window closed: the render running stops, the engine lets go of its photos, renders wait
+    /// until the window is back, and what keeps thumbnails beside them lets them go.
+    func windowClosed() {
+        isWindowOpen = false
+        letEngineGo()
+        for handler in windowClosing.values {
+            handler()
+        }
+    }
+
+    /// The editor window is back: renders go on.
+    func windowReopened() {
+        guard !isWindowOpen else { return }
+        isWindowOpen = true
+        schedulePump()
     }
 
     func notify(_ urls: [URL]) {
@@ -310,7 +339,9 @@ public final class EditRenders {
     func claims(of key: ContentKey, except url: URL) -> Set<EditDigest> {
         Set(known.compactMap { $0.key != url && $0.value.key == key ? $0.value.digest : nil })
     }
+}
 
+extension EditRenders {
     // MARK: - Choosing what's next
 
     /// Chooses what to read and render next on a later turn of the main thread, after `delay`, once
@@ -482,18 +513,26 @@ public final class EditRenders {
         schedulePump()
     }
 
+    /// A photo to render: its edit's digest, and the store its tiers go to under its content key.
+    struct NextRender {
+        let item: LibraryItem
+        let key: ContentKey
+        let store: PhotoStore
+        let digest: EditDigest
+    }
+
     /// The next photo to render: the first of `focus` that needs it, else of the rest of the source,
     /// leaving the one open in Develop until it's left.
-    func nextRender(_ focus: [Int]) -> (item: LibraryItem, key: ContentKey, store: PhotoStore, digest: EditDigest)? {
+    func nextRender(_ focus: [Int]) -> NextRender? {
         let items = library.items
-        var found: (item: LibraryItem, key: ContentKey, store: PhotoStore, digest: EditDigest)?
+        var found: NextRender?
         let take = { (row: Int) -> Bool in
             let item = items[row]
             guard self.need(item) == .render, !self.isOpenInDevelop(item.url),
                   let digest = self.known[item.url]?.digest,
                   let (thumbnails, key) = self.library.storeThumbnail(for: item)
             else { return false }
-            found = (item, key, thumbnails.store, digest)
+            found = NextRender(item: item, key: key, store: thumbnails.store, digest: digest)
             return true
         }
         if focus.contains(where: take) {

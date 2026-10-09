@@ -60,6 +60,7 @@ final class GridThumbnails {
     private var nextID: UInt64 = 0
     /// Bumped when the cache is emptied: decodes started before then are dropped.
     private var generation = 0
+    private var windowClosing: LibraryObservation?
 
     init(
         scheduler: WorkScheduler, packs: ThumbnailPacks, budget: Int = 64 << 20,
@@ -72,6 +73,7 @@ final class GridThumbnails {
         self.store = store
         self.renders = renders
         self.decode = decode
+        windowClosing = renders?.observeWindowClosing { [weak self] in self?.trim(to: 0) }
     }
 
     var memoryUsed: Int {

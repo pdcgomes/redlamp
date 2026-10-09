@@ -1460,7 +1460,8 @@ public final class EditorModel {
     @ObservationIgnored private var windowChange: Task<Void, Never>?
 
     /// The editor window closed: once the photo opening has opened, its edit is saved, and the
-    /// engine and the canvas let go of every photo.
+    /// engine and the canvas let go of every photo, the library's renders their engine and the
+    /// thumbnails off screen, and its query engine what it keeps to answer again quickly.
     public func windowClosed() {
         windowIsOpen = false
         let previous = windowChange
@@ -1474,6 +1475,8 @@ public final class EditorModel {
             latestFrame = nil
             showFrame(nil)
             await engine.releaseResources()
+            editRenders.windowClosed()
+            library.service?.trimMemory()
             released = true
             // A frame rendered before the engine let go.
             latestFrame = nil
@@ -1484,6 +1487,7 @@ public final class EditorModel {
     /// The editor window is back: the photo it showed is decoded and rendered again.
     public func windowReopened() {
         windowIsOpen = true
+        editRenders.windowReopened()
         let previous = windowChange
         windowChange = Task { [weak self] in
             await previous?.value

@@ -129,7 +129,9 @@ public final class LibraryService {
     public var isReady: Bool {
         state == .ready
     }
+}
 
+extension LibraryService {
     /// The store's thumbnails, once the library is open.
     public var thumbnails: StoreThumbnails? {
         core?.thumbnails
@@ -243,6 +245,12 @@ public final class LibraryService {
         } else {
             defaults?.set(waiting.map { NSNumber(value: $0) }, forKey: Self.xmpWaitingKey)
         }
+    }
+
+    /// Lets go of what the query engine keeps only to answer again quickly, as memory pressure does: when
+    /// the editor window closes.
+    func trimMemory() {
+        core?.engine.trim()
     }
 
     /// Lets go of what the query engine keeps only to answer again quickly when the Mac runs short of
@@ -488,7 +496,9 @@ public final class LibraryService {
         }
         notify()
     }
+}
 
+extension LibraryService {
     /// Calls `handler` when more folders may be shown from the library, until the returned token is
     /// released.
     func observe(_ handler: @escaping @MainActor () -> Void) -> LibraryObservation {
