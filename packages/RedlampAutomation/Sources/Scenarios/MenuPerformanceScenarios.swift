@@ -72,6 +72,7 @@
             })
             try lines.append(timedRebuilds("develop", app))
             try lines.append(timedChecks("develop", app))
+            try lines.append(timedKeys("develop", app))
 
             guard FileManager.default.fileExists(atPath: fixture.path) else {
                 throw ScenarioSkip("\(fixture.path) isn't on this Mac")
@@ -214,6 +215,25 @@
                 format: "%@, every action's check, 30 times: median %.3f ms, max %.3f ms", label,
                 times[times.count / 2],
                 times.last ?? 0,
+            )
+        }
+
+        /// ⌘1 and ⌘2 (the Basic and Tone Curve panels) 20 times each, as the keyboard sends them: what bringing each
+        /// key's item up to date before AppKit looks for it took.
+        static func timedKeys(_ label: String, _ app: RunningApp) throws -> String {
+            let mark = try app.main { _ in MenuBarProbe.shared.keys.count }
+            for _ in 0 ..< 20 {
+                for action in [ShortcutAction.panelBasic, .panelToneCurve] {
+                    guard let combo = action.combos.first else { continue }
+                    try app.press(combo)
+                    app.pause(0.05)
+                }
+            }
+            let times = try app.main { _ in Array(MenuBarProbe.shared.keys.dropFirst(mark)) }.sorted()
+            guard let last = times.last else { return "\(label), ⌘1 and ⌘2: no key's item brought up to date" }
+            return String(
+                format: "%@, ⌘1 and ⌘2 40 times, each key's item brought up to date: median %.3f ms, max %.3f ms",
+                label, times[times.count / 2], last,
             )
         }
 
