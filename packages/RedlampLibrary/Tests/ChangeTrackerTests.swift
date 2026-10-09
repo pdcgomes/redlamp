@@ -365,13 +365,13 @@ struct ChangeTrackerTests {
         #expect(ChangeTracker.PendingWork.later(history(9), history(3)) == history(9))
         #expect(ChangeTracker.PendingWork.later(nil, history(3)) == history(3))
     }
+}
 
+extension ChangeTrackerTests {
     // MARK: - Network volumes
 
-    @Test func `a network volume's folders on screen are polled often, the rest with backoff, and not in the background`(
-    ) async throws {
-        let sandbox = try await IndexerSandbox.make(.init(photos: 120, seed: 45, shapes: []))
-        defer { sandbox.remove() }
+    /// A tracker polling a simulated network volume of 120 photos, with its first folder on screen.
+    static func pollingTracker(of sandbox: IndexerSandbox) -> ChangeTracker {
         let indexer = LibraryIndexer(
             index: sandbox.index, fileSystem: SimulatedFileSystem(profile: .nas, seed: 4), configuration: .testing(),
         )
@@ -383,20 +383,24 @@ struct ChangeTrackerTests {
             ),
             source: ScriptedEvents(),
         )
-        let shown = sandbox.fixture.folders[0].path
-        tracker.show([sandbox.root.appending(path: shown)])
+        tracker.show([sandbox.root.appending(path: sandbox.fixture.folders[0].path)])
+        return tracker
+    }
+
+    @Test func `a network volume's folders are polled, a photo added on screen is found, and none in the background`(
+    ) async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 120, seed: 45, shapes: []))
+        defer { sandbox.remove() }
+        let tracker = Self.pollingTracker(of: sandbox)
         let events = TrackerEvents(tracker.start([sandbox.root]))
         defer { tracker.stop() }
         let initial = await events.summary(after: Self.reconciled(.network))
         #expect(initial?.photosInserted == 120)
         #expect(await events.wait { $0.count(of: Self.isPoll(shown: false)) >= 4 })
-        let full = events.times(of: Self.isPoll(shown: false))
-        let gaps = zip(full.dropFirst(), full).map { $0 - $1 }
-        #expect(gaps[1] > gaps[0] + .milliseconds(200) && gaps[2] > .milliseconds(700), "\(gaps)")
         #expect(events.all.count(of: Self.isPoll(shown: true)) >= 5)
 
         // A photo added to the folder on screen is found by the next poll of it.
-        try Self.add("Added.JPG", to: shown, in: sandbox)
+        try Self.add("Added.JPG", to: sandbox.fixture.folders[0].path, in: sandbox)
         let started = events.all.count
         #expect(await events.wait(timeout: .seconds(10)) { all in
             all.dropFirst(started).contains {
@@ -408,15 +412,38 @@ struct ChangeTrackerTests {
             }
         })
 
+        // A poll under way as the app goes to the background finishes; none starts after it.
         tracker.setActive(false)
-        try await Task.sleep(for: .milliseconds(300))
+        try await Task.sleep(for: .seconds(1))
         let paused = events.all.count(of: Self.isPoll(shown: true)) + events.all.count(of: Self.isPoll(shown: false))
         try await Task.sleep(for: .seconds(1))
         let later = events.all.count(of: Self.isPoll(shown: true)) + events.all.count(of: Self.isPoll(shown: false))
         #expect(later == paused)
         tracker.setActive(true)
+        #expect(await events.wait { $0.count(of: Self.isPoll(shown: true)) > paused })
+    }
+
+    @Test(.measuresSpeed)
+    func `a network volume's folders off screen are polled with backoff, and those on screen at once when active`(
+    ) async throws {
+        let sandbox = try await IndexerSandbox.make(.init(photos: 120, seed: 45, shapes: []))
+        defer { sandbox.remove() }
+        let tracker = Self.pollingTracker(of: sandbox)
+        let events = TrackerEvents(tracker.start([sandbox.root]))
+        defer { tracker.stop() }
+        _ = await events.summary(after: Self.reconciled(.network))
+        #expect(await events.wait { $0.count(of: Self.isPoll(shown: false)) >= 4 })
+        let full = events.times(of: Self.isPoll(shown: false))
+        try #require(full.count >= 4)
+        let gaps = zip(full.dropFirst(), full).map { $0 - $1 }
+        #expect(gaps[1] > gaps[0] + .milliseconds(200) && gaps[2] > .milliseconds(700), "\(gaps)")
+
+        tracker.setActive(false)
+        try await Task.sleep(for: .seconds(1))
+        let paused = events.all.count(of: Self.isPoll(shown: true))
+        tracker.setActive(true)
         let resumed = ContinuousClock.now
-        #expect(await events.wait(timeout: .seconds(5)) { $0.count(of: Self.isPoll(shown: true)) > paused })
+        #expect(await events.wait { $0.count(of: Self.isPoll(shown: true)) > paused })
         #expect(ContinuousClock.now - resumed < .seconds(1))
     }
 
@@ -466,7 +493,8 @@ struct ChangeTrackerTests {
     ) async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 300, seed: 46, shapes: []))
         defer { sandbox.remove() }
-        let gone = VolumeProfile.nas.disconnecting(.init(.afterOperations(150), failure: .timeout(.seconds(5))))
+        // The volume's own timeouts, of 30 s, stay well beyond the 10 s a pass may take, so one that waits fails.
+        let gone = VolumeProfile.nas.disconnecting(.init(.afterOperations(150), failure: .timeout(.seconds(30))))
         let volume = SwitchingFileSystem(SimulatedFileSystem(profile: gone, seed: 1))
         let volumes = VolumeIORegistry(fileSystem: volume, configuration: .init(
             timeout: .milliseconds(300), probeIntervals: .milliseconds(100) ... .milliseconds(400),
@@ -480,7 +508,7 @@ struct ChangeTrackerTests {
         let events = TrackerEvents(tracker.start([sandbox.root]))
         defer { tracker.stop() }
         let first = await events.summary(after: Self.reconciled(.network))
-        #expect(ContinuousClock.now - started < .seconds(4))
+        #expect(ContinuousClock.now - started < .seconds(10))
         let key = try #require(first?.offlineVolumes.first)
         #expect(events.all.contains(.indexer(.volumeOffline(key))))
         let (offline, written) = try await sandbox.index

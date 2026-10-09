@@ -150,7 +150,8 @@ struct KeywordListPanelTests {
         #expect(panel.rows == ["Family"] && panel.host.laidOut == 2)
     }
 
-    @Test func `a keyword that appears in a list of thousands, or leaves it, is shown within a frame`() async {
+    @Test(.measuresSpeed)
+    func `a keyword that appears in a list of thousands, or leaves it, is shown within a frame`() async {
         let base = (0 ..< 3000).map { String(format: "Keyword %04d", $0) } + ["Places/Portugal/Lisbon"]
         let panel = Panel(base)
         #expect(panel.outline.numberOfRows == 3001)
@@ -165,7 +166,8 @@ struct KeywordListPanelTests {
         #expect(times[times.count / 2] < .milliseconds(8), "\(times)")
     }
 
-    @Test func `a keyword that appears among the rows on screen, or leaves them, is shown within a frame`() async {
+    @Test(.measuresSpeed)
+    func `a keyword that appears among the rows on screen, or leaves them, is shown within a frame`() async {
         let base = (0 ..< 40).map { String(format: "Keyword %02d", $0) }
         let panel = Panel(base)
         #expect(panel.outline.numberOfRows == 40)

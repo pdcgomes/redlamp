@@ -161,7 +161,8 @@ struct FileSystemSimulationTests {
         #expect(spinning.isLocal == local.isLocal && !spinning.isInternal)
     }
 
-    @Test func `waits are real sleeps, overlapping up to the volume's limit`() throws {
+    @Test(.measuresSpeed)
+    func `waits are real sleeps, overlapping up to the volume's limit`() throws {
         let folder = try TemporaryFolder()
         try folder.write("IMG_0001.JPG", bytes: 10)
         let file = folder.url.appending(path: "IMG_0001.JPG")

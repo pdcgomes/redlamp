@@ -81,7 +81,8 @@ struct SaveQueueTests {
         #expect(folder.saved != nil, "saved while the edits went on")
     }
 
-    @Test func `edits that never pause are saved within the maximum wait`() async throws {
+    @Test(.measuresSpeed)
+    func `edits that never pause are saved within the maximum wait`() async throws {
         let folder = try Folder()
         defer { folder.remove() }
         let model = EditorModel(engine: StubEngine())

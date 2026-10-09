@@ -6,11 +6,10 @@ import Testing
 /// (which xcodebuild hands to the tests from `TEST_RUNNER_REDLAMP_STACKS_BENCH=1`), at
 /// `REDLAMP_STACKS_BENCH_PHOTOS` photos (1,000,000 by default).
 struct StackBenchTests {
-    @Test func `the stacks scenario finds the generator's stacks within budget, and its diffs put every cell in place`(
-    ) async throws {
+    @Test func `the stacks scenario finds the generator's stacks, and its diffs put every cell in place`() async throws {
         let results = try await StackScenario(photos: 20000).measure(seed: 3)
         let report = BenchReport(fixture: "synthetic photos", profile: "ssd", photos: 20000, results: results)
-        #expect(report.failed.isEmpty, "\(report.failed)")
+        #expect(report.failed.allSatisfy { $0.budget?.kind != .exactly }, "\(report.failed)")
         #expect(results.count { $0.budget?.kind == .exactly } == 5)
         for id in [
             "library-stacks-find", "library-stacks-closed", "library-stacks-open-all", "library-stacks-close-all",
@@ -21,6 +20,13 @@ struct StackBenchTests {
         for kind in Stack.Kind.allCases {
             #expect(try #require(results.first { $0.id == "library-stacks-\(kind.rawValue)" }).value > 0, "\(kind)")
         }
+    }
+
+    @Test(.measuresSpeed)
+    func `the stacks scenario keeps within its time budgets`() async throws {
+        let results = try await StackScenario(photos: 20000).measure(seed: 3)
+        let report = BenchReport(fixture: "synthetic photos", profile: "ssd", photos: 20000, results: results)
+        #expect(report.failed.isEmpty, "\(report.failed)")
     }
 
     @Test func `the synthetic library pairs a fifth of its shots, in folders from one camera`() {

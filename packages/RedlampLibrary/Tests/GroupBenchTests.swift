@@ -6,10 +6,10 @@ import Testing
 /// (which xcodebuild hands to the tests from `TEST_RUNNER_REDLAMP_GROUPS_BENCH=1`), at
 /// `REDLAMP_GROUPS_BENCH_PHOTOS` photos (1,000,000 by default).
 struct GroupBenchTests {
-    @Test func `the groups scenario finds the generator's moments, days and stacks within budget`() async throws {
+    @Test func `the groups scenario finds the generator's moments, days and stacks`() async throws {
         let results = try await GroupScenario(photos: 30000).measure(seed: 5)
         let report = BenchReport(fixture: "synthetic photos", profile: "ssd", photos: 30000, results: results)
-        #expect(report.failed.isEmpty, "\(report.failed)")
+        #expect(report.failed.allSatisfy { $0.budget?.kind != .exactly }, "\(report.failed)")
         #expect(results.count { $0.budget?.kind == .exactly } == 11)
         for id in ["list", "close-all", "open-all", "close-one", "open-one", "update"] {
             #expect(results.contains { $0.id == "library-groups-\(id)" && $0.budget != nil }, "\(id)")
@@ -22,6 +22,13 @@ struct GroupBenchTests {
         }
         let tightest = try #require(results.first { $0.id == "library-groups-tightest" }).value
         #expect(try tightest > (#require(results.first { $0.id == "library-groups-loosest" }).value))
+    }
+
+    @Test(.measuresSpeed)
+    func `the groups scenario keeps within its time budgets`() async throws {
+        let results = try await GroupScenario(photos: 30000).measure(seed: 5)
+        let report = BenchReport(fixture: "synthetic photos", profile: "ssd", photos: 30000, results: results)
+        #expect(report.failed.isEmpty, "\(report.failed)")
     }
 
     @Test func `the synthetic sessions are as the scenario says`() {

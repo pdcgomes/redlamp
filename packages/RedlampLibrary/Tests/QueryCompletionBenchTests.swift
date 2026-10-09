@@ -127,7 +127,7 @@ struct QueryCompletionBenchTests {
         }
     }
 
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_COMPLETION_BENCH"] == "1"))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_COMPLETION_BENCH"] == "1"), .measuresSpeed)
     func `completion over 100,000 names, a keystroke at a time`() {
         let count = ProcessInfo.processInfo.environment["REDLAMP_COMPLETION_BENCH_NAMES"].flatMap { Int($0) } ?? 100_000
         let clock = ContinuousClock()
