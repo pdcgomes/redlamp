@@ -262,10 +262,15 @@ public extension FeedbackArea {
                 ),
                 FeedbackFeature(
                     "library-panel",
-                    "Library Panel and Library Health",
+                    "Library Panel",
+                    ["all photographs", "previous import", "marked", "rejected", "quick collection", "summary"],
+                ),
+                FeedbackFeature(
+                    "health",
+                    "Library Health",
                     [
-                        "all photographs", "previous import", "marked", "rejected", "quick collection",
-                        "library health", "duplicates", "damaged", "wrong extension", "unreadable", "summary",
+                        "library health", "duplicates", "copies", "raw and jpeg pairs", "damaged", "corrupt",
+                        "wrong extension", "unreadable", "proposal", "keep anyway", "kept anyway", "clean up",
                     ],
                 ),
                 FeedbackFeature(

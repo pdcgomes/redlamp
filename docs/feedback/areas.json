@@ -391,7 +391,11 @@
         },
         {
           "id" : "library.library-panel",
-          "title" : "Library Panel and Library Health"
+          "title" : "Library Panel"
+        },
+        {
+          "id" : "library.health",
+          "title" : "Library Health"
         },
         {
           "id" : "library.folders",

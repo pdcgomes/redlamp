@@ -18,6 +18,7 @@
             + RecipeScenarios.all + StackScenarios.all + RawScenarios.all + FeedbackScenarios.all
             + ImportScenarios.all
             + LibraryPanelScenarios.all
+            + HealthScenarios.all
             + CollectionScenarios.all
             + PanelScenarios.all
             + RenameScenarios.all
