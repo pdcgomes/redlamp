@@ -212,11 +212,15 @@ struct LibraryDragTests {
             #expect(sandbox.shownNames() == ["A.JPG", "B.JPG"])
             #expect(SidecarStore().load(for: pickedFolder.appending(path: "A.JPG"))?.metadata?.rating == 3)
             #expect(model.fileUndoTitles == ["Copy 1 Photo to Picked"])
+            let menu = MenuBarState(model: model)
+            #expect(!menu.isEnabled(.redo))
 
             #expect(model.perform(.undo))
             await model.filesMade()
             #expect(sandbox.files(in: "Picked").isEmpty, "Undo moved the copy to the Trash")
             #expect(await !sandbox.service.trashedPlaces().isEmpty)
+            try await sandbox.eventually { menu.isEnabled(.redo) }
+            #expect(menu.isEnabled(.redo), "the menu bar's Redo follows the copy's Undo, though nothing shown changed")
             #expect(model.perform(.redo))
             await model.filesMade()
             #expect(sandbox.files(in: "Picked") == ["A.JPG", "A.JPG.redlamp"], "Redo copied it again")

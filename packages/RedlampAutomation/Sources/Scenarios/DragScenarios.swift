@@ -286,7 +286,7 @@
         func show(_ app: RunningApp) throws {
             let service = try app.main { $0.library.service }
             guard let service else { throw ScenarioSkip("the library is off") }
-            let (folder, picked, count) = (folder, picked, names.count)
+            let (folder, picked, count, first) = (folder, picked, names.count, names.first ?? "")
             try app.main { model in
                 model.open([folder, picked])
                 model.showLibrary(.grid)
@@ -308,7 +308,7 @@
             }
             try app.wait("the grid's cells and Picked in Folders", timeout: 20) { _ in
                 guard let window = Views.editorWindow else { return false }
-                return Views.find("grid.A.jpg", in: window) != nil
+                return Views.find("grid." + first, in: window) != nil
                     && Views.find("folders." + picked.path, in: window) != nil
             }
         }

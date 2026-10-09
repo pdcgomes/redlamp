@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Observation
 import RedlampLibrary
 import Synchronization
 
@@ -400,13 +401,15 @@ extension EditorModel {
     }
 }
 
-/// The renames and moves Library's Undo and Redo take back and make again, made one at a time in the order
-/// they're asked for.
+/// The renames, moves and copies Library's Undo and Redo take back and make again, made one at a time in the order
+/// they're asked for. Observed, so the menu bar's Undo and Redo follow them when nothing shown changes, as with a
+/// copy's.
 @MainActor
+@Observable
 final class LibraryFileSteps {
     var undo: [LibraryFileStep] = []
     var redo: [LibraryFileStep] = []
-    private var tail: Task<Void, Never>?
+    @ObservationIgnored private var tail: Task<Void, Never>?
 
     /// Runs `body` once the steps asked for before it are made.
     func enqueue(_ body: @escaping @MainActor () async -> Void) {
