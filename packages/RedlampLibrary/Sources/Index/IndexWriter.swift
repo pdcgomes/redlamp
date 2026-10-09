@@ -559,4 +559,35 @@ extension LibraryIndex.Writer {
             try insert.run()
         }
     }
+
+    /// Runs `body`, which deletes rows from the text index and writes none, and writes the deletions out without
+    /// merging
+    /// any of the index's segments: FTS5's automerge takes each row deleted from a contentless table for a page
+    /// written, and the 1,000 photos of a sweep's batch had it merge about 3,000 pages before the commit, 1.3 s at a
+    /// million photos. The rows deleted stay in their segments, marked, until a merge (`mergeText`). Changing the
+    /// setting writes out what's pending first, so it's off before the deletions.
+    func withoutMergingText<T>(_ body: () throws -> T) throws -> T {
+        let setting = try database.cached("SELECT v FROM photo_text_config WHERE k = 'automerge'")
+        let automerge = try setting.first { $0.int(at: 0) } ?? 4
+        let set = try database.cached("INSERT INTO photo_text (photo_text, rank) VALUES ('automerge', ?)")
+        try set.bind(0, at: 1)
+        try set.run()
+        let result = try body()
+        try database.cached("INSERT INTO photo_text (photo_text) VALUES ('flush')").run()
+        try set.bind(automerge, at: 1)
+        try set.run()
+        return result
+    }
+
+    /// Merges up to about `pages` pages of the text index's segments, as FTS5 merges them after writes: whether there
+    /// was anything to merge. A merge stops only between terms, so the trigrams most names share, in a million photos'
+    /// segments, take a step of their own of up to a few hundred pages.
+    func mergeText(pages: Int) throws -> Bool {
+        let before = database.totalChanges
+        let merge = try database.cached("INSERT INTO photo_text (photo_text, rank) VALUES ('merge', ?)")
+        try merge.bind(pages, at: 1)
+        try merge.run()
+        // The command counts as one change; what it merges, as more.
+        return database.totalChanges - before > 1
+    }
 }

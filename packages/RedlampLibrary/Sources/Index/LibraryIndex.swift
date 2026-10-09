@@ -9,11 +9,14 @@ import Synchronization
 ///
 /// One connection writes, on a serial queue of its own, each `write` in one transaction. A few
 /// read-only connections read, each on its own serial queue, so a read never waits for a write
-/// (WAL). Nothing here runs SQLite on the caller's thread, so the main thread never waits on it.
+/// (WAL), and one more checkpoints the write-ahead log, so a write doesn't wait for that either
+/// (`IndexCheckpoints`). Nothing here runs SQLite on the caller's thread, so the main thread never
+/// waits on it.
 public final class LibraryIndex: Sendable {
     public let url: URL
     private let writer: Connection
     private let readers: [Connection]
+    private let checkpoints: IndexCheckpoints
     /// Reads waiting or running on each reader, so the next goes to the least busy.
     private let readerLoad: Mutex<[Int]>
     /// What this process's transactions changed, by the generation each made (LIB-44).
@@ -32,7 +35,9 @@ public final class LibraryIndex: Sendable {
     }
 
     /// Opens the index, blocking: only ever off the main thread.
-    init(url: URL, readers: Int, migrations: [Migration]) throws {
+    init(
+        url: URL, readers: Int, migrations: [Migration], logLimits: IndexCheckpoints.Limits = .init(),
+    ) throws {
         dispatchPrecondition(condition: .notOnQueue(.main))
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let database = try SQLiteDatabase(path: url.path)
@@ -48,6 +53,9 @@ public final class LibraryIndex: Sendable {
             guard let context, let table else { return }
             Unmanaged<IndexJournal>.fromOpaque(context).takeUnretainedValue().record(table: table, row: row)
         }, Unmanaged.passUnretained(journal).toOpaque())
+        let checkpoints = try IndexCheckpoints(path: url.path, limits: logLimits)
+        checkpoints.follow(database)
+        self.checkpoints = checkpoints
         self.url = url
         writer = Connection(database, label: "writer")
         self.readers = try (0 ..< max(readers, 1)).map { _ in
@@ -87,7 +95,8 @@ public final class LibraryIndex: Sendable {
     /// commits (`IndexIDMarks`).
     @discardableResult
     public func write<T: Sendable>(_ body: @escaping @Sendable (Writer) throws -> T) async throws -> T {
-        let result = try await writer.run { [journal, marks] database -> (T, Bool) in
+        let result = try await writer.run { [journal, marks, checkpoints] database -> (T, Bool) in
+            checkpoints.copyIfFull()
             var staged: IndexGeneration?
             do {
                 let result = try database.transaction(.immediate) {
@@ -122,6 +131,18 @@ public final class LibraryIndex: Sendable {
         try await onReader { database in
             try database.transaction { try body(Reader(database: database)) }
         }
+    }
+
+    /// Returns once the write-ahead log has been copied into the database whole, when it has grown long, so the next
+    /// write starts it again (`IndexCheckpoints.settle`): for a writer that writes without pausing, between its
+    /// writes, which other writes go on around.
+    func settle() async {
+        await checkpoints.settle()
+    }
+
+    /// The pages in the write-ahead log after the last write.
+    var logPages: Int {
+        checkpoints.pages
     }
 
     /// How many reads can run at once.
@@ -176,13 +197,14 @@ public final class LibraryIndex: Sendable {
         return try await readers[slot].run(cancellable: true, body)
     }
 
-    /// Closes the connections once the work queued on them is done: the readers first, then the
-    /// writer, which folds the write-ahead log into the database as it closes. Reads and writes
-    /// called afterwards throw `LibraryIndexError.closed`.
+    /// Closes the connections once the work queued on them is done: the readers and the
+    /// checkpoints first, then the writer, which folds the write-ahead log into the database as it
+    /// closes. Reads and writes called afterwards throw `LibraryIndexError.closed`.
     public func close() async {
         for reader in readers {
             await reader.close()
         }
+        await checkpoints.close()
         await writer.close()
     }
 
@@ -192,6 +214,7 @@ public final class LibraryIndex: Sendable {
         for reader in readers {
             reader.closeAndWait()
         }
+        checkpoints.closeAndWait()
         writer.closeAndWait()
     }
 
