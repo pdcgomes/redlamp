@@ -69,6 +69,20 @@ struct IndexCheckpointTests {
         zip(pages, pages.dropFirst()).map { $1 - $0 }.max() ?? 0
     }
 
+    @Test func `a writer that settles between its writes waits while the checkpoints fall behind`() async throws {
+        let (index, folder) = try await Self.open(.init(threshold: 100_000, pacing: 150, settling: 100_000))
+        defer {
+            index.closeAndWait()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        var behind: [Int] = []
+        for _ in 0 ..< 12 {
+            _ = try await Self.write(transactions: 1, to: index, settling: true)
+            behind.append(index.logPages - index.logPagesCopied)
+        }
+        #expect(behind.allSatisfy { $0 < 150 }, "\(behind)")
+    }
+
     @Test func `a writer that never pauses has its log copied and started again once it's long`() async throws {
         let (index, folder) = try await Self.open(.init(threshold: 100_000, settling: 100_000, limit: 300))
         defer {

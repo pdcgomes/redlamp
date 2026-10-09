@@ -145,6 +145,11 @@ public final class LibraryIndex: Sendable {
         checkpoints.pages
     }
 
+    /// Of `logPages`, those checkpointed into the database.
+    var logPagesCopied: Int {
+        checkpoints.copied
+    }
+
     /// How many reads can run at once.
     var readerCount: Int {
         readers.count

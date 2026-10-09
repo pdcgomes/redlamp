@@ -10,14 +10,18 @@ import Synchronization
 /// them into the database as each 1,000 come, without waiting for the writer or the readers, keeping those flushes.
 ///
 /// The log starts again from its beginning at the first write after a checkpoint has copied all of it. A writer that
-/// never pauses leaves no time for one to: the root sweep lets one finish now and then (`settle`), and once the log
-/// holds `limit` pages a write waits for one before it starts, as every write did each 1,000 pages before.
+/// never pauses leaves no time for one to, and outruns the checkpoints, whose flushes then hold up a commit that comes
+/// meanwhile for as long as they take: the root sweep waits between its writes while the checkpoints are `pacing`
+/// pages behind, and for the log to be copied whole once it holds `settling` (`settle`); once the log holds `limit`
+/// pages a write waits for a checkpoint before it starts, as every write did each 1,000 pages before.
 final class IndexCheckpoints: @unchecked Sendable {
     /// When checkpoints run and are waited for, in the log's pages.
     struct Limits: Sendable, Hashable {
         /// Pages written to the log since it was last checkpointed that ask for a checkpoint: SQLite's own.
         var threshold = 1000
-        /// Pages in the log from which `settle` waits for a checkpoint: 32 MB.
+        /// Pages not yet copied from which `settle` waits for the checkpoints: 8 MB.
+        var pacing = 2048
+        /// Pages in the log from which `settle` waits for the log to be copied whole: 32 MB.
         var settling = 8192
         /// Pages in the log from which a write waits for a checkpoint: 128 MB.
         var limit = 32768
@@ -32,13 +36,14 @@ final class IndexCheckpoints: @unchecked Sendable {
         /// A checkpoint is asked for or running.
         var running = false
         var closed = false
-        /// `settle`s waiting for the log to be copied whole.
-        var waiting: [CheckedContinuation<Void, Never>] = []
+        /// `settle`s waiting, each for the log's pages as it asked to be copied, or for the whole log (nil).
+        var waiting: [(pages: Int?, continuation: CheckedContinuation<Void, Never>)] = []
     }
 
     /// Used only on `queue`.
     private var database: SQLiteDatabase?
-    private let queue = DispatchQueue(label: "app.redlamp.library.index.checkpoints", qos: .utility)
+    /// At the writer's priority: a checkpoint is how its log starts again.
+    private let queue = DispatchQueue(label: "app.redlamp.library.index.checkpoints", qos: .userInitiated)
     private let state = Mutex(State())
 
     /// Opens a connection to the database at `path`, which the writer has opened in WAL mode.
@@ -64,6 +69,11 @@ final class IndexCheckpoints: @unchecked Sendable {
         state.withLock { $0.pages }
     }
 
+    /// Of `pages`, those a checkpoint has copied.
+    var copied: Int {
+        state.withLock { min($0.copied, $0.pages) }
+    }
+
     /// On the writer's queue, after a commit: the log holds `pages` pages.
     private func committed(pages: Int) {
         let start = state.withLock { state -> Bool in
@@ -81,13 +91,17 @@ final class IndexCheckpoints: @unchecked Sendable {
         }
     }
 
-    /// Returns once a checkpoint has copied the whole log, when it holds `settling` pages or more, so the next write
-    /// starts it again: between the writes of a writer that would otherwise never pause.
+    /// Returns once the checkpoints have copied the log as it is now, when they're `pacing` pages behind, or once they
+    /// have copied it whole, when it holds `settling` pages, so the next write starts it again: between the writes of a
+    /// writer that would otherwise never pause.
     func settle() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let start = state.withLock { state -> Bool? in
-                guard !state.closed, state.pages >= limits.settling, state.copied < state.pages else { return nil }
-                state.waiting.append(continuation)
+                let behind = state.pages - state.copied
+                guard !state.closed, behind > 0, behind >= limits.pacing || state.pages >= limits.settling else {
+                    return nil
+                }
+                state.waiting.append((state.pages >= limits.settling ? nil : state.pages, continuation))
                 guard !state.running else { return false }
                 state.running = true
                 return true
@@ -107,8 +121,8 @@ final class IndexCheckpoints: @unchecked Sendable {
         queue.sync { _ = checkpoint() }
     }
 
-    /// Checkpoints until the pages that asked for it are copied, and the log whole while `settle`s wait; a reader
-    /// holding an older page back is waited for a little, then left to the next checkpoint.
+    /// Checkpoints until the pages that asked for one are copied, and those `settle`s wait for; a reader holding an
+    /// older page back is waited for a little, then left to the next checkpoint.
     private func run() {
         var stalled = 0
         while true {
@@ -116,12 +130,13 @@ final class IndexCheckpoints: @unchecked Sendable {
             let succeeded = checkpoint()
             let (again, settled) = state.withLock { state -> (Bool, [CheckedContinuation<Void, Never>]) in
                 stalled = state.copied > before ? 0 : stalled + 1
-                let whole = state.copied >= state.pages
-                let settled = whole || !succeeded || stalled > 20 ? state.waiting : []
-                if !settled.isEmpty {
-                    state.waiting = []
-                }
-                let again = succeeded && !state.closed && stalled <= 20
+                let giveUp = !succeeded || stalled > 20
+                // A log that started again is copied as far as anyone waited for.
+                let (copied, pages) = (state.copied, state.pages)
+                let done = state.waiting.map { giveUp || copied >= ($0.pages ?? pages) || pages < ($0.pages ?? 0) }
+                let settled = zip(state.waiting, done).filter(\.1).map(\.0.continuation)
+                state.waiting = zip(state.waiting, done).filter { !$0.1 }.map(\.0)
+                let again = !giveUp && !state.closed
                     && (state.pages - state.copied >= limits.threshold || !state.waiting.isEmpty)
                 state.running = again
                 return (again, settled)
@@ -170,7 +185,7 @@ final class IndexCheckpoints: @unchecked Sendable {
         let waiting = state.withLock { state in
             state.closed = true
             defer { state.waiting = [] }
-            return state.waiting
+            return state.waiting.map(\.continuation)
         }
         for continuation in waiting {
             continuation.resume()
