@@ -209,51 +209,54 @@ final class LibrarySourceList: Sendable {
             inStep = false
             let named = diff.reset ? []
                 : diff.inserted.map { list[$0] } + diff.updated.map { list[$0] } + diff.moved.map { list[$0.to] }
+            // With none of the source's photos kept yet, every photo is read, and is new, and none leaves.
+            let fresh = items.isEmpty
             let reading: [Int64]
             var leaving: [Int64] = []
             if stepped {
                 reading = named + unread
                 leaving = diff.removed.map { self.ids[$0] }
+            } else if fresh {
+                reading = ids
             } else {
                 let changed = Set(named)
                 reading = ids.filter { items[$0] == nil || changed.contains($0) }
             }
-            let known = folders
-            let read = try await index.read { reader -> ([PhotoRecord], [Int64: String]) in
-                var rows: [PhotoRecord] = []
-                rows.reserveCapacity(reading.count)
-                var folders: [Int64: String] = [:]
-                for id in reading {
-                    guard let row = try reader.photo(id: id) else { continue }
-                    rows.append(row)
-                    if known[row.folder] == nil, folders[row.folder] == nil {
-                        folders[row.folder] = try reader.folder(id: row.folder)?.path
-                    }
-                }
-                return (rows, folders)
+            let read = try await Self.read(reading, folders: folders, index: index)
+            folders.merge(read.folders) { _, new in new }
+            if fresh {
+                items.reserveCapacity(read.photos.count)
+                keys.reserveCapacity(read.photos.count)
+                indexIDs.reserveCapacity(read.photos.count)
             }
-            folders.merge(read.1) { _, new in new }
-            for row in read.0 {
-                guard let folder = folders[row.folder] else { continue }
-                let url = URL(fileURLWithPath: (folder == "/" ? "" : folder) + "/" + row.name, isDirectory: false)
-                if let old = items[row.id]?.url, old != url {
+            for photo in read.photos {
+                let url = photo.item.url
+                if fresh {
+                    items[photo.id] = photo.item
+                    // Photos not handed over before differ from none handed over.
+                    if handed != nil {
+                        touched.insert(photo.id)
+                    }
+                    keys[url] = photo.key
+                    indexIDs[url] = photo.id
+                    continue
+                }
+                if let old = items[photo.id]?.url, old != url {
                     forget(old)
                 }
-                let item = LibraryFolderList.Mapping.item(row, url: url)
-                if items[row.id] != item {
-                    items[row.id] = item
-                    touched.insert(row.id)
+                if items[photo.id] != photo.item {
+                    items[photo.id] = photo.item
+                    touched.insert(photo.id)
                 }
                 // Written only when they differ: the main thread holds the last change's, which a write copies.
-                let key = row.contentKey.flatMap(ContentKey.init(data:))
-                if keys[url] != key {
-                    keys[url] = key
+                if keys[url] != photo.key {
+                    keys[url] = photo.key
                 }
-                if indexIDs[url] != row.id {
-                    indexIDs[url] = row.id
+                if indexIDs[url] != photo.id {
+                    indexIDs[url] = photo.id
                 }
             }
-            if !stepped {
+            if !stepped, !fresh {
                 let kept = Set(ids)
                 leaving = items.keys.filter { !kept.contains($0) }
             }
@@ -262,7 +265,7 @@ final class LibrarySourceList: Sendable {
                 forget(item.url)
                 touched.insert(id)
             }
-            unread = reading.filter { items[$0] == nil }
+            unread = read.photos.count == reading.count ? [] : reading.filter { items[$0] == nil }
             self.ids = ids
             hasList = true
             inStep = true
@@ -271,6 +274,118 @@ final class LibrarySourceList: Sendable {
         private mutating func forget(_ url: URL) {
             keys.removeValue(forKey: url)
             indexIDs.removeValue(forKey: url)
+        }
+
+        /// A photo of the source as the grid shows it, at its folder, and its content key.
+        struct Read: Sendable {
+            var id: Int64
+            var item: LibraryItem
+            var key: ContentKey?
+        }
+
+        /// The columns of a photo's row the grid shows, those `LibraryFolderList.Mapping.item` takes, with its folder,
+        /// name and content key, in the order `read(_:folder:)` reads them.
+        static let shown = """
+        id, folder, name, size, modified, sidecar_modified, edited, rating, flag, label, custom_label, marked, \
+        other_fields, content_key
+        """
+
+        /// Photos are read in one pass over their IDs' range from this many, while the range holds at most `spread`
+        /// times as many photos as are read.
+        static let passFrom = 1024
+        static let spread: Int64 = 16
+
+        /// Photos `ids` as the grid shows them, from their rows, with the paths of the folders read for them, those
+        /// `known` lacks at least. Many photos close together in ID are read in one pass over their range, in ID order,
+        /// a part on each of the index's readers, after every folder's path: a row read by its ID costs a lookup each,
+        /// 16 s in all for a million photos.
+        static func read(
+            _ ids: [Int64], folders known: [Int64: String], index: LibraryIndex,
+        ) async throws -> (photos: [Read], folders: [Int64: String]) {
+            guard ids.count >= passFrom, let low = ids.min(), let high = ids.max(),
+                  high - low < Int64(ids.count) * spread
+            else {
+                return try await index.read { reader in
+                    let statement = try reader.database.cached("SELECT \(shown) FROM photos WHERE id = ?")
+                    var photos: [Read] = []
+                    photos.reserveCapacity(ids.count)
+                    var folders: [Int64: String] = [:]
+                    for id in ids {
+                        try statement.bind(id, at: 1)
+                        try statement.forEachRow { row in
+                            let folder = row.int64(at: 1)
+                            if known[folder] == nil, folders[folder] == nil {
+                                folders[folder] = try reader.folder(id: folder)?.path
+                            }
+                            if let path = known[folder] ?? folders[folder] {
+                                photos.append(Self.read(row, folder: path))
+                            }
+                        }
+                    }
+                    return (photos, folders)
+                }
+            }
+            let folders = try await index.read { reader in
+                var paths: [Int64: String] = [:]
+                try reader.database.cached("SELECT id, path FROM folders").forEachRow { row in
+                    paths[row.int64(at: 0)] = row.string(at: 1)
+                }
+                return paths
+            }
+            var wanted = [UInt64](repeating: 0, count: Int((high - low) >> 6) + 1)
+            for id in ids {
+                wanted[Int(id - low) >> 6] |= 1 << UInt64((id - low) & 63)
+            }
+            let (chosen, parts) = (wanted, Int64(4))
+            let size = (high - low) / parts + 1
+            let photos = try await withThrowingTaskGroup(of: [Read].self) { group in
+                for part in 0 ..< parts {
+                    let (start, end) = (low + part * size, min(high, low + (part + 1) * size - 1))
+                    guard start <= end else { continue }
+                    group.addTask {
+                        try await index.read { reader in
+                            let statement = try reader.database.cached("""
+                            SELECT \(shown) FROM photos WHERE id BETWEEN ? AND ?
+                            """)
+                            try statement.bind(start, at: 1)
+                            try statement.bind(end, at: 2)
+                            var found: [Read] = []
+                            try statement.forEachRow { row in
+                                let bit = row.int64(at: 0) - low
+                                guard chosen[Int(bit >> 6)] & 1 << UInt64(bit & 63) != 0,
+                                      let path = folders[row.int64(at: 1)]
+                                else { return }
+                                found.append(Self.read(row, folder: path))
+                            }
+                            return found
+                        }
+                    }
+                }
+                var photos: [Read] = []
+                photos.reserveCapacity(ids.count)
+                for try await part in group {
+                    photos += part
+                }
+                return photos
+            }
+            return (photos, folders)
+        }
+
+        /// The photo of `row`, read with `shown`'s columns, as the grid shows it in the folder at `folder`.
+        private static func read(_ row: SQLiteStatement, folder: String) -> Read {
+            let photo = PhotoRecord(
+                id: row.int64(at: 0), folder: row.int64(at: 1), name: row.string(at: 2) ?? "", size: row.int64(at: 3),
+                modified: Date(timeIntervalSince1970: row.double(at: 4)), contentKey: row.data(at: 13),
+                rating: row.int(at: 7), flag: PhotoRecord.flag(code: row.int(at: 8)),
+                label: PhotoRecord.label(code: row.int(at: 9)), marked: row.bool(at: 11), edited: row.bool(at: 6),
+                sidecarModified: row.optionalDouble(at: 5).map(Date.init(timeIntervalSince1970:)),
+                customLabel: row.string(at: 10), otherFields: PhotoRecord.fields(code: row.int(at: 12)),
+            )
+            let url = URL(fileURLWithPath: (folder == "/" ? "" : folder) + "/" + photo.name, isDirectory: false)
+            return Read(
+                id: photo.id, item: LibraryFolderList.Mapping.item(photo, url: url),
+                key: photo.contentKey.flatMap(ContentKey.init(data:)),
+            )
         }
 
         /// The change handing over the photos `ids` names, in its order, against those handed over before.
@@ -314,10 +429,14 @@ final class LibrarySourceList: Sendable {
                 listed.append(id)
                 places[id] = Int32(index)
             }
-            let removed = IndexSet(integersIn: 0 ..< before.ids.count).subtracting(carried)
-            let inserted = IndexSet(change.previous.indices.filter { change.previous[$0] < 0 })
-            change.diff = !first && inOrder && removed.count + inserted.count <= LibrarySourceList.largestDiff
-                ? LibraryDiff(removed: removed, inserted: inserted, updated: updated) : LibraryDiff(reset: true)
+            change.diff = LibraryDiff(reset: true)
+            if !first, inOrder {
+                let removed = IndexSet(integersIn: 0 ..< before.ids.count).subtracting(carried)
+                let inserted = IndexSet(change.previous.indices.filter { change.previous[$0] < 0 })
+                if removed.count + inserted.count <= LibrarySourceList.largestDiff {
+                    change.diff = LibraryDiff(removed: removed, inserted: inserted, updated: updated)
+                }
+            }
             handed = (listed, places)
             touched = []
             return change

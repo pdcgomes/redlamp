@@ -81,4 +81,54 @@ struct LibrarySourceListTests {
         #expect(try await left == Self.afresh(core, sandbox))
         #expect(handed.changes > changes)
     }
+
+    @Test func `photos read in one pass over their rows are those read a row at a time`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "source-list-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let index = try await LibraryIndex.open(at: folder.appending(path: "Index.sqlite"), readers: 2)
+        // Two folders' photos, the grid's every field set on some, more than are read a row at a time.
+        let ids = try await index.write { writer -> [Int64] in
+            let volume = try writer.upsertVolume(VolumeRecord(uuid: "TEST", name: "Test", kind: .ssd))
+            let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
+            let folders = try ["/Volumes/Test/Photos", "/Volumes/Test/Photos/Day 2"].map { path in
+                try writer.upsertFolder(FolderRecord(root: root, path: path))
+            }
+            let flags: [PhotoFlag?] = [nil, .pick, .reject]
+            let photos = (0 ..< LibrarySourceList.Mapping.passFrom + 500).map { number -> PhotoRecord in
+                var photo = PhotoRecord(folder: folders[number % 2], name: String(format: "IMG_%04d.JPG", number))
+                photo.size = Int64(1000 + number)
+                photo.modified = Date(timeIntervalSince1970: 1_700_000_000 + Double(number))
+                photo.contentKey = number % 3 == 0 ? nil : Data(repeating: UInt8(number % 251), count: 16)
+                photo.rating = number % 6
+                photo.flag = flags[number % 3]
+                photo.label = number % 4 == 0 ? .red : nil
+                photo.marked = number % 5 == 0
+                photo.edited = number % 7 == 0
+                photo.sidecarModified = number % 2 == 0 ? Date(timeIntervalSince1970: 1_700_100_000) : nil
+                photo.customLabel = number % 9 == 0 ? "Hero" : nil
+                photo.otherFields = number % 8 == 0 ? [.rating, .label] : []
+                return photo
+            }
+            return try writer.upsertPhotos(photos)
+        }
+        let (items, keys) = try await index.read { reader -> ([LibraryItem], [ContentKey?]) in
+            var (items, keys) = ([LibraryItem](), [ContentKey?]())
+            for id in ids {
+                let row = try #require(try reader.photo(id: id))
+                let folder = try #require(try reader.folder(id: row.folder)?.path)
+                let url = URL(fileURLWithPath: folder + "/" + row.name, isDirectory: false)
+                items.append(LibraryFolderList.Mapping.item(row, url: url))
+                keys.append(row.contentKey.flatMap(ContentKey.init(data:)))
+            }
+            return (items, keys)
+        }
+        let pass: [LibrarySourceList.Mapping.Read] = try await LibrarySourceList.Mapping
+            .read(ids, folders: [:], index: index).photos.sorted { $0.id < $1.id }
+        let few: [LibrarySourceList.Mapping.Read] = try await LibrarySourceList.Mapping
+            .read(Array(ids.prefix(10)), folders: [:], index: index).photos
+        await index.close()
+        #expect(pass.map(\.item) == items)
+        #expect(pass.map(\.key) == keys)
+        #expect(few.map(\.item) == Array(items.prefix(10)))
+    }
 }
