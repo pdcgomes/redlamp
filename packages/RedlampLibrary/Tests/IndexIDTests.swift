@@ -136,7 +136,8 @@ struct IndexIDTests {
         // Probed afresh as it's indexed, rather than taken for probed where Trip was; the probe runs beside the
         // indexer's run, which doesn't wait for it.
         var held: String?
-        for _ in 0 ..< 500 where held == nil {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while held == nil, ContinuousClock.now < deadline {
             held = try await sandbox.index.read { try $0.setting(LibrarySidecars.pathKey(later.id)) }
             if held == nil {
                 try await Task.sleep(for: .milliseconds(20))

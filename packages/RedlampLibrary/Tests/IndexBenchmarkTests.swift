@@ -40,30 +40,8 @@ struct IndexBenchmarkTests {
         let index = try await LibraryIndex.open(at: directory.appending(path: "Index.sqlite"))
         defer { index.closeAndWait() }
 
-        let folderCount = Self.photoCount / Self.perFolder
-        let (folders, folderPaths, cameras, lenses) = try await index.write { writer in
-            let volume = try writer.upsertVolume(VolumeRecord(uuid: "BENCH", kind: .ssd))
-            let root = try writer.upsertRoot(RootRecord(volume: volume, path: Self.root))
-            var years: [Int: Int64] = [:]
-            var folders: [Int64] = []
-            var paths: [String] = []
-            for number in 0 ..< folderCount {
-                let year = 2005 + number * 20 / folderCount
-                if years[year] == nil {
-                    years[year] = try writer.upsertFolder(FolderRecord(root: root, path: "\(Self.root)/\(year)"))
-                }
-                let path = String(
-                    format: "%@/%ld/%ld-%02ld-%02ld Job %04ld", Self.root, year, year, 1 + number % 12, 1 + number % 28,
-                    number,
-                )
-                try folders.append(writer.upsertFolder(FolderRecord(root: root, parent: years[year], path: path)))
-                paths.append(path)
-            }
-            return try (
-                folders, paths, SyntheticIndexPhotos.cameras.map { try writer.cameraID(for: $0) },
-                SyntheticIndexPhotos.lenses.map { try writer.lensID(for: $0) },
-            )
-        }
+        let made = try await Self.makeFolders(in: index)
+        let (folders, folderPaths, cameras, lenses) = (made.folders, made.paths, made.cameras, made.lenses)
 
         var synthetic = SyntheticIndexPhotos(seed: 2026, cameraIDs: cameras, lensIDs: lenses)
         var writing = Duration.zero
@@ -209,6 +187,39 @@ struct IndexBenchmarkTests {
 }
 
 private extension IndexBenchmarkTests {
+    /// The bench's folders, by year and job, with their paths, and the synthetic photos' cameras and lenses.
+    struct BenchFolders: Sendable {
+        let folders: [Int64], paths: [String], cameras: [Int64], lenses: [Int64]
+    }
+
+    static func makeFolders(in index: LibraryIndex) async throws -> BenchFolders {
+        let folderCount = photoCount / perFolder
+        return try await index.write { writer in
+            let volume = try writer.upsertVolume(VolumeRecord(uuid: "BENCH", kind: .ssd))
+            let root = try writer.upsertRoot(RootRecord(volume: volume, path: Self.root))
+            var years: [Int: Int64] = [:]
+            var folders: [Int64] = []
+            var paths: [String] = []
+            for number in 0 ..< folderCount {
+                let year = 2005 + number * 20 / folderCount
+                if years[year] == nil {
+                    years[year] = try writer.upsertFolder(FolderRecord(root: root, path: "\(Self.root)/\(year)"))
+                }
+                let path = String(
+                    format: "%@/%ld/%ld-%02ld-%02ld Job %04ld", Self.root, year, year, 1 + number % 12, 1 + number % 28,
+                    number,
+                )
+                try folders.append(writer.upsertFolder(FolderRecord(root: root, parent: years[year], path: path)))
+                paths.append(path)
+            }
+            return try BenchFolders(
+                folders: folders, paths: paths,
+                cameras: SyntheticIndexPhotos.cameras.map { try writer.cameraID(for: $0) },
+                lenses: SyntheticIndexPhotos.lenses.map { try writer.lensID(for: $0) },
+            )
+        }
+    }
+
     static func time<T>(_ body: () async throws -> T) async rethrows -> (T, Duration) {
         let start = ContinuousClock.now
         let result = try await body()

@@ -15,15 +15,23 @@ struct IndexTextMigrationTests {
 
     /// Photos whose text isn't all ASCII, each with text that finds it only once accents and width
     /// don't count.
+    private struct AccentedPhoto: Sendable {
+        let name: String, title: String?, caption: String?, keyword: String?
+
+        init(_ name: String, _ title: String?, _ caption: String?, _ keyword: String?) {
+            (self.name, self.title, self.caption, self.keyword) = (name, title, caption, keyword)
+        }
+    }
+
     private static let accented: [(
-        photo: (name: String, title: String?, caption: String?, keyword: String?),
+        photo: AccentedPhoto,
         found: [String],
     )] = [
-        (("SP-0001.JPG", nil, "Avenida Paulista, São Paulo", nil), ["sao paulo", "SÃO"]),
-        (("ZH-0001.JPG", "Zu\u{308}richsee", nil, "Orte/Zürich"), ["zurich", "ZÜRICHSEE", "orte/zu"]),
-        (("Café-0001.JPG", nil, nil, nil), ["cafe", "CAFÉ-0", "afe-00"]),
-        (("IMG_0001.JPG", "ＦＵＬＬ ＷＩＤＴＨ", "ｶﾀｶﾅの夜", "ＴＯＫＹＯ"), ["full width", "ｆｕｌｌ", "tokyo", "カタカナ"]),
-        (("Ακρόπολη.JPG", nil, "Hội An at dusk", nil), ["ακροπολη", "hoi an", "HỘI"]),
+        (AccentedPhoto("SP-0001.JPG", nil, "Avenida Paulista, São Paulo", nil), ["sao paulo", "SÃO"]),
+        (AccentedPhoto("ZH-0001.JPG", "Zu\u{308}richsee", nil, "Orte/Zürich"), ["zurich", "ZÜRICHSEE", "orte/zu"]),
+        (AccentedPhoto("Café-0001.JPG", nil, nil, nil), ["cafe", "CAFÉ-0", "afe-00"]),
+        (AccentedPhoto("IMG_0001.JPG", "ＦＵＬＬ ＷＩＤＴＨ", "ｶﾀｶﾅの夜", "ＴＯＫＹＯ"), ["full width", "ｆｕｌｌ", "tokyo", "カタカナ"]),
+        (AccentedPhoto("Ακρόπολη.JPG", nil, "Hội An at dusk", nil), ["ακροπολη", "hoi an", "HỘI"]),
     ]
 
     /// An index at version 6: synthetic photos, a third with a keyword, and the accented ones, their

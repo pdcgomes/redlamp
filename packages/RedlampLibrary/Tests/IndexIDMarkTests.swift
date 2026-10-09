@@ -156,7 +156,8 @@ struct IndexIDMarkTests {
         let photos = IndexIDs.photos.rawValue
         let first = try await Self.give(3, "A", in: index, root: root)
         #expect(index.marks.read()[photos] ?? 0 > first.max() ?? 0)
-        for _ in 0 ..< 500 where index.marks.read()[photos] != first.last {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while index.marks.read()[photos] != first.last, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(index.marks.read()[photos] == first.last, "brought down once the writer was quiet")

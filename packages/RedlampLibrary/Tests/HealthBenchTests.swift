@@ -35,9 +35,11 @@ struct HealthBenchTests {
     /// The pairs check on `photos` synthetic photos followed through `changes` changes of one photo
     /// each, every other one a rating and the rest a JPEG renamed away from its raw: how long the
     /// slowest request after a change took, and the slowest update of the pairs followed.
-    static func followed(
-        photos: Int, changes: Int,
-    ) async throws -> (request: Duration, update: Duration, first: Duration, findings: Int) {
+    struct Followed {
+        let request: Duration, update: Duration, first: Duration, findings: Int
+    }
+
+    static func followed(photos: Int, changes: Int) async throws -> Followed {
         let sandbox = try await HealthSandbox.make([:])
         defer { sandbox.remove() }
         let checker = HealthChecker(index: sandbox.index, paths: sandbox.paths)
@@ -76,7 +78,7 @@ struct HealthBenchTests {
                 request = max(request, clock.now - started)
             }
         }
-        return (request, update, first, findings)
+        return Followed(request: request, update: update, first: first, findings: findings)
     }
 
     @Test func `the pairs check proposes one half of each of the synthetic library's pairs`() async {
@@ -85,7 +87,7 @@ struct HealthBenchTests {
         #expect(findings[.keepRaw] == pairs && findings[.keepJPEG] == pairs)
     }
 
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_HEALTH_BENCH"] == "1"))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_HEALTH_BENCH"] == "1"), .measuresSpeed)
     func `the pairs check at full size, within LIB-39's budget`() async {
         let photos = ProcessInfo.processInfo.environment["REDLAMP_HEALTH_BENCH_PHOTOS"].flatMap { Int($0) }
             ?? 1_000_000
@@ -95,15 +97,16 @@ struct HealthBenchTests {
     }
 
     @Test func `the pairs check after a change of one photo judges only its pair`() async throws {
-        let (_, _, _, findings) = try await Self.followed(photos: 20000, changes: 10)
+        let findings = try await Self.followed(photos: 20000, changes: 10).findings
         #expect(findings > 2000)
     }
 
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_HEALTH_BENCH"] == "1"))
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["REDLAMP_HEALTH_BENCH"] == "1"), .measuresSpeed)
     func `the pairs check after a change of one photo at full size, within a frame`() async throws {
         let photos = ProcessInfo.processInfo.environment["REDLAMP_HEALTH_BENCH_PHOTOS"].flatMap { Int($0) }
             ?? 1_000_000
-        let (request, update, first, findings) = try await Self.followed(photos: photos, changes: 20)
+        let followed = try await Self.followed(photos: photos, changes: 20)
+        let (request, update, first, findings) = (followed.request, followed.update, followed.first, followed.findings)
         print(
             "HEALTH-BENCH followed pairs of \(photos) photos: \(findings) findings, first \(first),"
                 + " slowest request \(request), slowest update \(update)",

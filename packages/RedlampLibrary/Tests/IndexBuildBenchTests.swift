@@ -71,18 +71,23 @@ struct IndexBuildBenchTests {
         let ways: [(name: String, stepped: Bool, idBlocks: [IndexIDs: Int64]?)] = [
             ("before", false, [:]), ("ids reserved", false, nil), ("as built", true, nil),
         ]
-        var arms: [(arm: TextMergeBenchTests.Arm, folders: [Int64], photos: SyntheticIndexPhotos, stepped: Bool)] = []
+        struct Built {
+            let arm: TextMergeBenchTests.Arm, folders: [Int64]
+            var photos: SyntheticIndexPhotos
+            let stepped: Bool
+        }
+        var arms: [Built] = []
         for way in ways {
             let folder = work.appending(path: way.name, directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let made = try await Self.make(
                 at: folder.appending(path: "Index.sqlite"), stepped: way.stepped, idBlocks: way.idBlocks,
             )
-            try arms.append((
-                TextMergeBenchTests.Arm(name: way.name, index: made.index),
-                made.folders,
-                made.photos,
-                way.stepped,
+            try arms.append(Built(
+                arm: TextMergeBenchTests.Arm(name: way.name, index: made.index),
+                folders: made.folders,
+                photos: made.photos,
+                stepped: way.stepped,
             ))
         }
         defer {

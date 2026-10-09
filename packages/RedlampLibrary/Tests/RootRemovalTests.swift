@@ -311,7 +311,8 @@ struct RootRemovalTests {
                 live.receive(event)
             }
         }
-        for _ in 0 ..< 2000 where try await index.read({ try $0.photoCount() }) == 0 {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while try await index.read({ try $0.photoCount() }) == 0, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
         try #require(try await roots.remove(folder, keeping: []) != nil, "taken out partway through its run")

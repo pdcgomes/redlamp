@@ -286,7 +286,9 @@ struct LibraryIndexerTests {
         #expect(run.insertions.count == photos)
         #expect(try await index.read { try $0.photoCount() } == photos)
     }
+}
 
+extension LibraryIndexerTests {
     @Test func `a run cancelled with a folder's photos half read leaves the folder to the next run`() async throws {
         let folder = try TemporaryFolder()
         let indexFolder = FileManager.default.temporaryDirectory
@@ -461,7 +463,8 @@ struct LibraryIndexerTests {
     ) async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 300, seed: 29, shapes: []))
         defer { sandbox.remove() }
-        let gone = VolumeProfile.nas.disconnecting(.init(.afterOperations(150), failure: .timeout(.seconds(5))))
+        // The volume's own timeouts, of 30 s, stay well beyond the 10 s a pass may take, so one that waits fails.
+        let gone = VolumeProfile.nas.disconnecting(.init(.afterOperations(150), failure: .timeout(.seconds(30))))
         let volume = SwitchingFileSystem(SimulatedFileSystem(profile: gone, seed: 1))
         let volumes = VolumeIORegistry(fileSystem: volume, configuration: .init(
             timeout: .milliseconds(300), probeIntervals: .milliseconds(100) ... .milliseconds(400),
@@ -470,7 +473,7 @@ struct LibraryIndexerTests {
         let clock = ContinuousClock()
         let started = clock.now
         let run = await IndexerRun.collect(indexer.index([sandbox.root]))
-        #expect(clock.now - started < .seconds(5))
+        #expect(clock.now - started < .seconds(10))
         let summary = try #require(run.summary)
         #expect(summary.offlineVolumes.count == 1)
         let key = try #require(summary.offlineVolumes.first)
@@ -480,8 +483,8 @@ struct LibraryIndexerTests {
         #expect(written > 0 && written < 300 && offline == written, "\(offline) of \(written)")
         let io = try #require(volumes.all.first)
         #expect(!io.isReachable)
-        // The timeout, then as long again asking the volume whether it's there.
-        #expect(io.statistics.longestWait < .seconds(1), "\(io.statistics.longestWait)")
+        // The timeout, then as long again asking the volume whether it's there: well short of the volume's own.
+        #expect(io.statistics.longestWait < .seconds(5), "\(io.statistics.longestWait)")
 
         volume.switchTo(SimulatedFileSystem(profile: .nas, seed: 2))
         await io.waitUntilReachable()

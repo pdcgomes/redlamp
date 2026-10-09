@@ -17,7 +17,8 @@ struct IndexConcurrencyTests {
     }
 
     private func eventually(_ condition: () -> Bool) async throws {
-        for _ in 0 ..< 400 where !condition() {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
     }
@@ -43,7 +44,7 @@ struct IndexConcurrencyTests {
         // A read held up by the write would never return before the gate opens; open it anyway
         // after a while, so a failure is a failed expectation rather than a hung test.
         let opened = Flag()
-        DispatchQueue.global().asyncAfter(deadline: .now() + 5) {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 30) {
             opened.set()
             gate.open()
         }

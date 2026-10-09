@@ -69,6 +69,15 @@ struct IndexCheckpointTests {
         zip(pages, pages.dropFirst()).map { $1 - $0 }.max() ?? 0
     }
 
+    /// Waits until the checkpoints have copied what the writes so far asked them to, the log holding fewer than a
+    /// threshold of pages they haven't, or until `deadline`.
+    static func caughtUp(_ index: LibraryIndex, by deadline: ContinuousClock.Instant) async throws {
+        while index.logPages - index.logPagesCopied >= index.checkpointLimits.threshold,
+              ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
     @Test func `a writer that settles between its writes waits while the checkpoints fall behind`() async throws {
         let (index, folder) = try await Self.open(.init(threshold: 100_000, pacing: 150, settling: 100_000))
         defer {
@@ -105,12 +114,13 @@ struct IndexCheckpointTests {
         }
         #expect(index.checkpointLimits.threshold == 256)
         // The log starts again only once a checkpoint has copied it whole.
+        let deadline = ContinuousClock.now + .seconds(30)
         var (largest, restarted) = (0, false)
         while !restarted, largest < 1000 {
             let pages = try await Self.write(transactions: 1, to: index)[0]
             restarted = pages < largest
             largest = max(largest, pages)
-            try await Task.sleep(for: .milliseconds(20))
+            try await Self.caughtUp(index, by: deadline)
         }
         #expect(restarted, "the log reached \(largest) pages before a checkpoint copied it")
     }
@@ -122,10 +132,12 @@ struct IndexCheckpointTests {
             try? FileManager.default.removeItem(at: folder)
         }
         let written = try await Self.write(transactions: 10, to: index)
-        // Once a checkpoint has copied the log whole, the next write starts it again.
+        // Once a checkpoint has copied the log whole, the next write starts it again. Each write here adds a page or
+        // so, rewriting the first's rows, so a checkpoint is due only every few dozen.
+        let deadline = ContinuousClock.now + .seconds(30)
         var restarted = false
-        for _ in 0 ..< 200 where !restarted {
-            try await Task.sleep(for: .milliseconds(10))
+        while !restarted, ContinuousClock.now < deadline {
+            try await Self.caughtUp(index, by: deadline)
             restarted = try await Self.write(transactions: 1, to: index)[0] <= Self.longestWrite([0] + written)
         }
         #expect(restarted)

@@ -117,7 +117,10 @@ struct RootRemovalBenchTests {
         // started again at the write had its header synced in its commit.
         let waits = Mutex<[Duration]>([])
         let returns = Mutex<[Duration]>([])
-        let slow = Mutex<[(wait: Duration, back: Duration, asked: (Int, Int), began: (Int, Int), after: Int)]>([])
+        struct SlowWrite {
+            let wait: Duration, back: Duration, asked: (Int, Int), began: (Int, Int), after: Int
+        }
+        let slow = Mutex<[SlowWrite]>([])
         let sweeping = Mutex(true)
         let writing = Task.detached {
             while sweeping.withLock({ $0 }) {
@@ -133,7 +136,13 @@ struct RootRemovalBenchTests {
                 returns.withLock { $0.append(returned) }
                 if wait > .milliseconds(33.3) || returned > .milliseconds(33.3) {
                     let found = (began?.1 ?? -1, began?.2 ?? -1)
-                    slow.withLock { $0.append((wait, returned, log, found, index.logPages)) }
+                    slow.withLock { $0.append(SlowWrite(
+                        wait: wait,
+                        back: returned,
+                        asked: log,
+                        began: found,
+                        after: index.logPages,
+                    )) }
                 }
                 try? await Task.sleep(for: .milliseconds(20))
             }

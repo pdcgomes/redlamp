@@ -5,7 +5,8 @@ import Testing
 /// Keep Anyway (LIB-40): findings taken away in `Definitions/Health.json`, by what the photos show,
 /// until they're taken back from the Kept Anyway list.
 struct HealthKeepAnywayTests {
-    @Test func `Keep Anyway survives an index rebuild, and a third copy reopens a duplicate group`() async throws {
+    @Test func `choosing Keep Anyway survives an index rebuild, and a third copy reopens a duplicate group`(
+    ) async throws {
         let copy = HealthImages.data(.jpeg, seed: 4)
         let sandbox = try await HealthSandbox.make([
             "A/IMG_1.jpg": copy, "B/IMG_1.jpg": copy, "Cards/Empty.jpg": Data(),
@@ -58,7 +59,7 @@ struct HealthKeepAnywayTests {
         #expect(written["fromANewerBuild"] != nil)
     }
 
-    @Test func `Keep Anyway returns only the entries it added, which Undo takes back and Redo keeps again`(
+    @Test func `choosing Keep Anyway returns only the entries it added, which Undo takes back and Redo keeps again`(
     ) async throws {
         let copy = HealthImages.data(.jpeg, seed: 7)
         let sandbox = try await HealthSandbox.make([
