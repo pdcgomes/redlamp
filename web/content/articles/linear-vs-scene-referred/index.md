@@ -2,7 +2,6 @@
 title: Linear vs scene-referred
 summary: Two words that often get used as if they meant the same thing, explained with figures you can try and Redlamp's own tone curve.
 date: 2026-10-09
-draft: true
 ---
 
 Redlamp is a free, open-source raw photo editor for the Mac that works like Lightroom. Some feedback I got recently pointed out two things: Redlamp has no scene-referred mode, and in its exports, the L* of a grey scale's patches isn't linear against the chart's own values. Exports of metered shots of a target also came out slightly dark.
