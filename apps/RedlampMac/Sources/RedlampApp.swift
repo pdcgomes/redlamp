@@ -15,6 +15,7 @@ import SwiftUI
 struct RedlampApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var model: EditorModel
+    @State private var menuBar: MenuBarState
     @State private var theme: ThemeSettings
     @State private var exports: ExportPresetStore
     @AppStorage(WhatsNewStore.opensKey) private var showsWhatsNew = true
@@ -72,6 +73,7 @@ struct RedlampApp: App {
         let theme = ThemeSettings()
         let exports = ExportPresetStore()
         _model = State(initialValue: model)
+        _menuBar = State(initialValue: MenuBarState(model: model))
         _theme = State(initialValue: theme)
         _exports = State(initialValue: exports)
 
@@ -125,6 +127,7 @@ struct RedlampApp: App {
         .commands {
             AppCommands(
                 model: model,
+                menu: menuBar,
                 updates: appDelegate.updates,
                 onWelcome: { appDelegate.showWelcome() },
                 onWhatsNew: { appDelegate.showRecentNews() },

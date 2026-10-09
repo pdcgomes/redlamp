@@ -4,7 +4,8 @@
 
     /// The menu bar's rebuilds, for the regression suite's measurements: how many times SwiftUI asked for the menus'
     /// body, and each one's time from the body's start to the end of the main run loop's turn it was in, which holds
-    /// what SwiftUI did with the items after it. Changing `tick` rebuilds the menus, to time a rebuild by itself.
+    /// what SwiftUI did with the items after it; and each time `MenuBarState` ran the menus' checks again. Changing
+    /// `tick` rebuilds the menus, to time a rebuild by itself.
     @_spi(Harness) @MainActor @Observable public final class MenuBarProbe {
         public static let shared = MenuBarProbe()
 
@@ -13,6 +14,8 @@
         /// Milliseconds, one per turn holding a rebuild: to the turn's end, and of the bodies alone.
         @ObservationIgnored public private(set) var turns: [Double] = []
         @ObservationIgnored public private(set) var bodies: [Double] = []
+        /// Milliseconds, one per run of the menus' checks.
+        @ObservationIgnored public private(set) var refreshes: [Double] = []
         @ObservationIgnored private var started: CFAbsoluteTime?
         @ObservationIgnored private var observer: CFRunLoopObserver?
 
@@ -39,6 +42,10 @@
 
         public func built(since start: CFAbsoluteTime) {
             bodies.append((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        }
+
+        func refreshed(since start: CFAbsoluteTime) {
+            refreshes.append((CFAbsoluteTimeGetCurrent() - start) * 1000)
         }
 
         /// Starts or ends a dialog on `model` as a sheet does, holding the editor's actions, without the sheet.
