@@ -246,7 +246,8 @@ extension SmartRules.Rule {
 }
 
 public extension SmartRules {
-    /// A field's name, as the editor's pop-up shows it.
+    // swiftlint:disable cyclomatic_complexity
+    /// A field's name, as the editor's pop-up shows it: a case for each field, so a new one can't go without a name.
     static func title(of field: LibraryQuery.Field) -> String {
         switch field {
         case .rating: "Rating"
@@ -285,6 +286,8 @@ public extension SmartRules {
         case .trait: "Trait"
         }
     }
+
+    // swiftlint:enable cyclomatic_complexity
 
     /// The fields a row offers, free text first.
     static let fields: [Field] = [.text] + LibraryQuery.Field.allCases.map(Field.filter)
