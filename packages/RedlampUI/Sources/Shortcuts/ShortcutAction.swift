@@ -122,7 +122,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case keywordSet1, keywordSet2, keywordSet3, keywordSet4, keywordSet5, keywordSet6, keywordSet7, keywordSet8
     case keywordSet9
     case importKeywords, exportKeywords, editCaptureTime
-    case renamePhotos, moveToFolder, keywordPainter
+    case renamePhotos, moveToFolder, keywordPainter, moveEditsAndMetadata
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -185,7 +185,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .toggleStack, .stackPhotos, .unstackPhotos, .moveToStackTop, .openAllStacks, .closeAllStacks,
              .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9, .importKeywords, .exportKeywords, .editCaptureTime, .renamePhotos,
-             .moveToFolder, .keywordPainter:
+             .moveToFolder, .keywordPainter, .moveEditsAndMetadata:
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
@@ -288,6 +288,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .renamePhotos: "Rename Photos…"
         case .moveToFolder: "Move to Folder…"
         case .keywordPainter: "Keyword Painter"
+        case .moveEditsAndMetadata: "Move Edits and Metadata…"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -442,7 +443,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .moveToStackTop: [.char("s", shift: true)]
         case .openAllStacks, .closeAllStacks: []
         case .renamePhotos: [KeyCombo(.function(2))]
-        case .moveToFolder: []
+        case .moveToFolder, .moveEditsAndMetadata: []
         // Lightroom Classic's Enable Painting.
         case .keywordPainter: [.char("k", option: true, command: true)]
         case .beforeAfter: [.char("\\")]

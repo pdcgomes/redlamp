@@ -81,6 +81,7 @@ public extension EditorModel {
             stackSuggestions = found.filter { !dismissedStacks.contains($0) }
         }
         library.onRemoved = { [weak self] in self?.libraryLostFolder() }
+        library.followUnfinishedSidecarMove { [weak self] in self?.finishSidecarMove($0) }
     }
 
     /// A folder left the library, from Folders or as the library opened: what counts from the index counts again,

@@ -81,8 +81,8 @@ extension SidebarCellView {
         "\(count.formatted()) photo\(count == 1 ? "" : "s")"
     }
 
-    /// Show in Finder, Show Summary… (beside `anchor`, its row), Show Photos in Subfolders, Remove from Folders,
-    /// Locate….
+    /// Show in Finder, Show Summary… (beside `anchor`, its row), Show Photos in Subfolders, and for a root, Move Edits
+    /// and Metadata… with the library open, Remove from Folders, and Locate… when it's missing.
     static func folderMenu(_ row: FolderRow, model: EditorModel, anchor: NSView) -> NSMenu {
         let menu = NSMenu()
         if !row.isMissing {
@@ -109,6 +109,10 @@ extension SidebarCellView {
             menu.addItem(.separator())
             if row.isMissing {
                 menu.addItem(NSMenuItem(title: "Locate…") { FolderActions.locate(row.root, model: model) })
+            } else if model.library.service?.isReady == true {
+                menu.addItem(NSMenuItem(title: ShortcutAction.moveEditsAndMetadata.title) {
+                    FolderActions.moveEdits(row.root, model: model)
+                })
             }
             menu.addItem(NSMenuItem(title: "Remove from Folders") { FolderActions.remove(row.root, model: model) })
         }
@@ -137,6 +141,13 @@ enum FolderActions {
     /// Like Folders' other changes, it isn't on Undo.
     static func remove(_ root: WorkingFolder, model: EditorModel) {
         model.library.remove(root)
+    }
+
+    /// Move Edits and Metadata…: its sheet for the root, as the Library menu's is for the root of the folder open.
+    static func moveEdits(_ root: WorkingFolder, model: EditorModel) {
+        if model.moveEditsAndMetadata(of: root) {
+            model.activity.record(.action, ShortcutAction.moveEditsAndMetadata.title)
+        }
     }
 
     static func locate(_ root: WorkingFolder, model: EditorModel) {

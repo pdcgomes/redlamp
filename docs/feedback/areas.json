@@ -442,6 +442,10 @@
           "title" : "Rename and Move"
         },
         {
+          "id" : "library.sidecars",
+          "title" : "Where Edits and Metadata Are Kept"
+        },
+        {
           "id" : "library.other",
           "title" : "Something else in Library"
         }

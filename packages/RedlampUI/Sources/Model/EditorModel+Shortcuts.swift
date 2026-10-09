@@ -187,6 +187,7 @@ public extension EditorModel {
             guard onSendFeedback != nil else { return false }
             sendFeedback()
         case .importPhotos: ImportActions.open(model: self)
+        case .moveEditsAndMetadata: return moveEditsAndMetadata()
         case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
         case .testCamera:
             guard let onTestCamera else { return false }
@@ -247,6 +248,7 @@ public extension EditorModel {
             return true
         case .testCamera: return onTestCamera != nil
         case .sendFeedback: return onSendFeedback != nil
+        case .moveEditsAndMetadata: return rootMovingEdits != nil
         case .cropTool, .healTool, .rotateLeft, .rotateRight: return photo
         case .cropAspectLock: return activeTool == .crop
         case .mergeFocusStack: return stackWorkspace == nil && !stackSuggestions.isEmpty

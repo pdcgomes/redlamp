@@ -153,6 +153,10 @@ public final class FolderLibrary {
     @ObservationIgnored var onStacks: (@MainActor ([StackSuggestion]) -> Void)?
     /// Called once a folder has left the library, from Folders or as the library opened (`LibraryService.removed`).
     @ObservationIgnored var onRemoved: (@MainActor () -> Void)?
+    /// Finishes a move of a root's edits and metadata a quit interrupted, once the library is open
+    /// (`followUnfinishedSidecarMove`).
+    @ObservationIgnored var unfinishedSidecarMove: (@MainActor (SidecarMoveRecord) -> Void)?
+    @ObservationIgnored var lookedForSidecarMove = false
     /// What stacks are found from: the engine's reader, which in the Mac app reads in the decode
     /// service. Until it is set, no stacks are found.
     @ObservationIgnored var files: any FileInspecting = UnreadableFiles()

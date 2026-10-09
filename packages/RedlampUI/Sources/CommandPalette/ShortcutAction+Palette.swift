@@ -79,6 +79,10 @@ extension ShortcutAction {
         ],
         .moveToFolder: ["move", "folder", "organise", "organize", "file", "relocate", "library"],
         .keywordPainter: ["painter", "paint", "spray", "brush", "keywords", "tag", "keyword set", "library"],
+        .moveEditsAndMetadata: [
+            "sidecar", "sidecars", "redlamp file", "edits", "metadata", "on this mac", "beside the photos", "read-only",
+            "where edits are kept", "folder", "library",
+        ],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -236,6 +240,7 @@ extension ShortcutAction {
         case .renamePhotos: "character.cursor.ibeam"
         case .moveToFolder: "folder.badge.plus"
         case .keywordPainter: "paintbrush.pointed"
+        case .moveEditsAndMetadata: "arrow.left.arrow.right"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

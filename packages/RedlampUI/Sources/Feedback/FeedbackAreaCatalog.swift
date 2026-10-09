@@ -338,6 +338,15 @@ public extension FeedbackArea {
                         "move to folder", "move photos",
                     ],
                 ),
+                FeedbackFeature(
+                    "sidecars",
+                    "Where Edits and Metadata Are Kept",
+                    [
+                        "move edits and metadata", "sidecar", "sidecars", ".redlamp", "on this mac",
+                        "beside the photos",
+                        "read-only", "locked card", "network share",
+                    ],
+                ),
             ],
         ),
         FeedbackArea(

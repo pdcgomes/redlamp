@@ -52,6 +52,9 @@ struct AppCommands: Commands {
         CommandMenu("Library") {
             mouseItem(.renamePhotos)
             toggle(.keywordPainter, isOn: model.keywordPainter.isOn)
+            Divider()
+            // For the folder added to Folders that holds the folder open (LIB-11).
+            item(.moveEditsAndMetadata)
         }
 
         CommandMenu("Photo") {

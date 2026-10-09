@@ -136,6 +136,11 @@
                     action: action,
                     unavailable: "needs Library's grid with the library open: checked by library.keyword-painter",
                 )
+            case .moveEditsAndMetadata:
+                ActionCheck(
+                    action: action,
+                    unavailable: "moves a folder's sidecars: checked on a scratch folder by library.move-edits",
+                )
             case .toggleStack, .stackPhotos, .unstackPhotos, .moveToStackTop, .openAllStacks, .closeAllStacks:
                 ActionCheck(
                     action: action,
