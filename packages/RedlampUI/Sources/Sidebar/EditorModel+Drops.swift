@@ -8,23 +8,72 @@ struct PhotoDrop {
     var perform: @MainActor () -> Void
 }
 
-/// A drop's move under way (LIB-26), shown in the grid's toolbar rather than in a sheet: a sheet dims the window
-/// as it comes and goes by drawing the window into a bitmap, a tenth of a second and more on the main thread with
-/// thousands of thumbnails on screen. Actions stay off meanwhile, as they do under a sheet.
+/// A batch under way in Library (LIB-26), shown in the grid's toolbar rather than in a sheet: a drop's move or copy,
+/// with actions off meanwhile as they are under a sheet, and an Undo or Redo of a rename, move or copy, which leave
+/// them on. A sheet dims the window as it comes and goes by drawing the window into a bitmap, a tenth of a second and
+/// more on the main thread with thousands of thumbnails on screen. Its Stop stops the batch after the photo in hand.
 @MainActor
 @Observable
 public final class LibraryMoveProgress {
     /// What's being done ("Moving to Picked"), while it is.
     public internal(set) var title: String?
     public internal(set) var progress: FileProgress?
+    /// Its Stop was pressed, and the batch is finishing the photo in hand.
+    public internal(set) var isStopping = false
+    /// What stops the batch shown.
+    private(set) var stop: FileStop?
+    /// What `begin` gave for what's shown.
+    private var shown: UUID?
+
+    /// Shows `title` for a batch `stop` stops, until `end` is given what this returns.
+    func begin(_ title: String, stop: FileStop?) -> UUID {
+        let token = UUID()
+        shown = token
+        self.title = title
+        progress = nil
+        self.stop = stop
+        isStopping = false
+        return token
+    }
+
+    /// Shows `progress` for what `token` began, while it's shown.
+    func show(_ progress: FileProgress, for token: UUID) {
+        if shown == token {
+            self.progress = progress
+        }
+    }
+
+    /// Takes away what `token` began, unless something else was shown since; whether it did.
+    @discardableResult
+    func end(_ token: UUID) -> Bool {
+        guard shown == token else { return false }
+        shown = nil
+        title = nil
+        progress = nil
+        stop = nil
+        isStopping = false
+        return true
+    }
+
+    /// Stop, as its button presses it.
+    @_spi(Harness) public func pressStop() {
+        guard let stop, !isStopping else { return }
+        isStopping = true
+        stop.stop()
+    }
+
+    @_spi(Harness) public var canStop: Bool {
+        stop != nil && !isStopping
+    }
 }
 
 /// Photos dragged from the grid onto the left panel (LIB-23, LIB-26). Onto a folder of Folders they move there as
-/// Move to Folder moves them: one journaled batch, its progress in the grid's toolbar, each photo with its pair,
-/// sidecars and other apps' `.xmp`, and Library's ⌘Z and ⇧⌘Z take it back and make it again. The library's
-/// batches don't copy photos, so with ⌥ held the drop says so and moves nothing. A drop that can't happen is
-/// refused as the drag passes over: onto the folder every photo is in already, a missing folder, one outside the
-/// library's folders, or of photos the library doesn't have or that are in the Trash.
+/// Move to Folder moves them: one journaled batch, its progress and Stop in the grid's toolbar, each photo with its
+/// pair, sidecars and other apps' `.xmp`, and Library's ⌘Z and ⇧⌘Z take it back and make it again. With ⌥ held they're
+/// copied there, as Copy to Folder copies them, the pointer showing the copy badge, onto the folder they're in too; a
+/// copy's Undo moves the copies to the Trash. A drop that can't happen is refused as the drag passes over: a move
+/// onto the folder every photo is in already, a missing folder, one outside the library's folders, or of photos the
+/// library doesn't have or that are in the Trash.
 extension EditorModel {
     /// What dropping `photos` on `folder`, a row of Folders, does, given the operations the drag offers; nil refuses
     /// it.
@@ -34,40 +83,43 @@ extension EditorModel {
         guard !isModalDialogOpen, photos.fromLibrary, !isMissing, library.service?.isReady == true,
               MoveFolderPanel.isInLibrary(folder, roots: library.roots.map(\.url))
         else { return nil }
+        if !operations.contains(.move), operations.contains(.copy) {
+            return PhotoDrop(operation: .copy) { [weak self] in
+                Task { await self?.drop(photos, onFolder: folder, copying: true) }
+            }
+        }
         if let folders = photos.listed?.folders, folders == [LibraryService.path(folder)] {
             return nil
-        }
-        if !operations.contains(.move), operations.contains(.copy) {
-            return PhotoDrop(operation: .copy) { [weak self] in self?.sayPhotosAreNotCopied(to: folder) }
         }
         guard let operation = [NSDragOperation.move, .generic].first(where: { operations.contains($0) }) else {
             return nil
         }
         return PhotoDrop(operation: operation) { [weak self] in
-            Task { await self?.drop(photos, onFolder: folder) }
+            Task { await self?.drop(photos, onFolder: folder, copying: false) }
         }
     }
 
-    /// Moves the photos dropped on `folder` there, the batch's progress in the grid's toolbar, and says in an alert
-    /// why it didn't happen. Actions come back in the move's own turn, as its batch ends, so ⌘Z is there the moment
-    /// the move is done, before anything asked for after it.
-    func drop(_ photos: DraggedPhotos, onFolder folder: URL) async {
+    /// Moves or copies the photos dropped on `folder` there, the batch's progress and Stop in the grid's toolbar,
+    /// and says in an alert why it didn't happen. Actions come back in the batch's own turn, as it ends, so ⌘Z is
+    /// there the moment it's done, before anything asked for after it.
+    func drop(_ photos: DraggedPhotos, onFolder folder: URL, copying: Bool) async {
         let urls = await photos.urls()
+        let stop = FileStop()
         let shown = moveProgress
-        shown.title = "Moving to \(folder.lastPathComponent)"
-        shown.progress = nil
+        let token = shown.begin("\(copying ? "Copying" : "Moving") to \(folder.lastPathComponent)", stop: stop)
         isModalDialogOpen = true
         let done: @MainActor () -> Void = { [weak self] in
-            guard shown.title != nil else { return }
-            shown.title = nil
-            shown.progress = nil
-            self?.isModalDialogOpen = false
+            if shown.end(token) {
+                self?.isModalDialogOpen = false
+            }
         }
-        let error = await movePhotos(urls, to: folder, progress: { shown.progress = $0 }, done: done)
+        let error = await place(
+            urls, in: folder, copying: copying, progress: { shown.show($0, for: token) }, done: done, stop: stop,
+        )
         done()
         guard let error, let window = EditorWindowController.frontWindow else { return }
         let alert = NSAlert()
-        alert.messageText = "The photos weren't moved to \(folder.lastPathComponent)"
+        alert.messageText = "The photos weren't \(copying ? "copied" : "moved") to \(folder.lastPathComponent)"
         alert.informativeText = error
         alert.beginSheetModal(for: window, completionHandler: nil)
     }
@@ -78,7 +130,38 @@ extension EditorModel {
     @discardableResult
     func movePhotos(
         _ urls: [URL], to folder: URL, progress: (@MainActor @Sendable (FileProgress) -> Void)? = nil,
-        done: (@MainActor () -> Void)? = nil,
+        done: (@MainActor () -> Void)? = nil, stop: FileStop? = nil,
+    ) async -> String? {
+        await place(urls, in: folder, copying: false, progress: progress, done: done, stop: stop)
+    }
+
+    /// Copies the photos at `urls`, with their pairs, into `folder` as one batch with Undo, as `movePhotos` moves
+    /// them: Copy to Folder's batch.
+    @discardableResult
+    func copyPhotos(
+        _ urls: [URL], to folder: URL, progress: (@MainActor @Sendable (FileProgress) -> Void)? = nil,
+        done: (@MainActor () -> Void)? = nil, stop: FileStop? = nil,
+    ) async -> String? {
+        await place(urls, in: folder, copying: true, progress: progress, done: done, stop: stop)
+    }
+
+    private func place(
+        _ urls: [URL], in folder: URL, copying: Bool, progress: (@MainActor @Sendable (FileProgress) -> Void)?,
+        done: (@MainActor () -> Void)?, stop: FileStop?,
+    ) async -> String? {
+        guard let core = library.service?.core else { return "The library isn't open" }
+        let found = await LibraryService.indexIDs(of: urls, in: core.index)
+        return await place(
+            urls.compactMap { found[$0] }, in: folder, copying: copying, progress: progress, done: done, stop: stop,
+        )
+    }
+
+    /// Moves or copies photos `ids`, with their pairs, into `folder` as one batch with Undo, `progress` hearing of its
+    /// steps until `stop` stops it, and `done` called in its turn once the batch has run. Why it didn't happen, or nil
+    /// once it has.
+    func place(
+        _ ids: [Int64], in folder: URL, copying: Bool, progress: (@MainActor @Sendable (FileProgress) -> Void)?,
+        done: (@MainActor () -> Void)?, stop: FileStop?,
     ) async -> String? {
         guard let service = library.service, let core = service.core, service.isReady else {
             return "The library isn't open"
@@ -86,8 +169,6 @@ extension EditorModel {
         guard MoveFolderPanel.isInLibrary(folder, roots: library.roots.map(\.url)) else {
             return "\(folder.lastPathComponent) isn't in the library's folders"
         }
-        let found = await LibraryService.indexIDs(of: urls, in: core.index)
-        let ids = urls.compactMap { found[$0] }
         guard !ids.isEmpty else { return "The library hasn't read these photos yet" }
         let destination = LibraryService.path(folder)
         let indexed = await (try? core.index.read { reader in
@@ -97,45 +178,33 @@ extension EditorModel {
         let all = await (try? core.files.withPairs(ids)) ?? ids
         let before = await service.paths(of: all)
         let photos = all.compactMap { id -> (id: Int64, from: String, to: String)? in
-            guard let path = before[id], (path as NSString).deletingLastPathComponent != target else { return nil }
+            guard let path = before[id] else { return nil }
+            guard !copying else { return (id, path, path) }
+            guard (path as NSString).deletingLastPathComponent != target else { return nil }
             let name = (path as NSString).lastPathComponent.precomposedStringWithCanonicalMapping
             return (id, path, target + "/" + name)
         }
         guard !photos.isEmpty else { return nil }
-        let count = Set(photos.map(\.id)).count
-        let step = LibraryFileStep(
-            kind: .move(ids, folder),
-            title: "Move \(count) Photo\(count == 1 ? "" : "s") to \(folder.lastPathComponent)", photos: photos,
-        )
+        let step = LibraryFileStep(kind: copying ? .copy(ids, folder) : .move(ids, folder), photos: photos)
         let relay = FileProgressRelay { progress?($0) }
+        let report: @Sendable (FileProgress) -> Void = { relay.send($0) }
         push(step)
         let run = await fileSteps.make { [self] in
-            let run = await perform(step, undoing: false) { await service.move(ids, to: folder) { relay.send($0) } }
+            let run = await perform(step, undoing: false) {
+                if copying {
+                    await service.copy(ids, to: folder, progress: report, stop: stop)
+                } else {
+                    await service.move(ids, to: folder, progress: report, stop: stop)
+                }
+            }
             done?()
             return run
         }
-        if let error = run.error {
-            activity.record(.error, "\(step.title) wasn't done: \(error)")
-        } else {
-            activity.record(.action, step.title)
-        }
+        record(run, of: step)
         return run.error
     }
 
-    /// ⌥ held as photos were dropped on `folder`: the library's batches move photos but don't copy them.
-    func sayPhotosAreNotCopied(to folder: URL) {
-        activity.record(.error, Self.notCopied)
-        guard let window = EditorWindowController.frontWindow, window.attachedSheet == nil else { return }
-        let alert = NSAlert()
-        alert.messageText = Self.notCopied
-        alert.informativeText = "Redlamp moves photos into a folder of the library, and Undo moves them back, but it "
-            + "doesn't copy them yet. Drag them without ⌥ to move them to \(folder.lastPathComponent)."
-        alert.beginSheetModal(for: window, completionHandler: nil)
-    }
-
-    @_spi(Harness) public static let notCopied = "Photos can't be copied to a folder yet"
-
-    /// A drop's move under way, for the grid's toolbar.
+    /// A batch under way, for the grid's toolbar.
     @_spi(Harness) public var moveProgress: LibraryMoveProgress {
         if let progress = Self.moveProgresses.object(forKey: self) {
             return progress

@@ -238,6 +238,38 @@ struct LibraryUndoOrderTests {
         #expect(made(sandbox) == expected, "⌘Z took back the keyword's removal first")
     }
 
+    @Test func `a copy takes its turn: ⌘Z takes back a rating made after it, then moves the copy to the Trash, and ⇧⌘Z makes both again in turn`(
+    ) async throws {
+        try await Sandbox.with { sandbox in
+            let model = try #require(sandbox.model)
+            let copy = sandbox.photo("A.JPG", in: sandbox.picked)
+            let b = sandbox.photo("B.JPG")
+            let rated = { SidecarStore().load(for: b)?.metadata?.rating == 3 }
+            try await sandbox.select("A.JPG")
+            #expect(await model.copySelection(to: sandbox.picked) == nil)
+            await sandbox.settled()
+            #expect(FileManager.default.fileExists(atPath: copy.path))
+            #expect(FileManager.default.fileExists(atPath: sandbox.photo("A.JPG").path), "the original stays")
+            model.select(b)
+            #expect(model.perform(.rating3))
+            await sandbox.settled()
+            #expect(rated())
+
+            #expect(model.perform(.undo))
+            await sandbox.settled()
+            #expect(!rated() && FileManager.default.fileExists(atPath: copy.path), "⌘Z took back the rating first")
+            #expect(model.perform(.undo))
+            await sandbox.settled()
+            #expect(!FileManager.default.fileExists(atPath: copy.path), "then the copy, to the Trash")
+            #expect(model.perform(.redo))
+            await sandbox.settled()
+            #expect(FileManager.default.fileExists(atPath: copy.path) && !rated(), "⇧⌘Z copied it again first")
+            #expect(model.perform(.redo))
+            await sandbox.settled()
+            #expect(rated(), "then gave the stars back")
+        }
+    }
+
     @Test func `the library's Undo keeps its newest steps of every kind together, the oldest going first`(
     ) async throws {
         try await Sandbox.with { sandbox in

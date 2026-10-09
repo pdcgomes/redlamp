@@ -126,10 +126,10 @@
                  .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
                  .openAllGroups, .closeAllGroups, .unpickedMoments, .previousGroup, .nextGroup:
                 groups(action)
-            case .renamePhotos, .moveToFolder:
+            case .renamePhotos, .moveToFolder, .copyToFolder:
                 ActionCheck(
                     action: action,
-                    unavailable: "renames and moves files: checked on copies by library.rename-photos",
+                    unavailable: "renames, moves and copies files: checked on copies by library.rename-photos",
                 )
             case .keywordPainter:
                 ActionCheck(

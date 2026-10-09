@@ -11,7 +11,7 @@
     /// which the scenarios add to Folders and take out again: F2 and the menus, the sheet's template typed with a
     /// token put in from its menu, the preview, Rename, Move to Folder, and ⌘Z and ⇧⌘Z.
     enum RenameScenarios {
-        static let all: [Scenario] = [renamePhotos, moveToFolder, undoOrder, performance]
+        static let all: [Scenario] = [renamePhotos, moveToFolder, copyToFolder, stopBatch, undoOrder, performance]
 
         static let renamePhotos = Scenario(
             "library.rename-photos",
@@ -101,6 +101,120 @@
             try app.wait("⌘Z to bring them back, selected", timeout: 30) { model in
                 scratch.photos() == scratch.names.sorted() && scratch.photos(in: scratch.picked).isEmpty
                     && Set(model.selectedPhotos.map(\.lastPathComponent)) == Set(moving)
+            }
+        }
+
+        static let copyToFolder = Scenario(
+            "library.copy-to-folder",
+            "Copy to Folder… in a photo's menu copies the photos selected, with their sidecars, into a folder of the "
+                + "library, the originals staying; a copy whose name is held there is numbered, and ⌘Z moves the copies "
+                + "to the Trash",
+            claims: [.action(.copyToFolder)],
+        ) { app in
+            let scratch = try DragScratch()
+            defer { scratch.remove(app) }
+            try scratch.show(app)
+            let (a, b) = (scratch.photo("A.jpg"), scratch.photo("B.jpg"))
+            try app.main { model in
+                EditorModel.moveToFolderAnswer = scratch.picked
+                model.select(a)
+                model.click(b, toggling: true)
+            }
+            try app.wait("A and B selected") { Set($0.selectedPhotos) == [a, b] }
+            try app.rightClick(.identifier("grid.A.jpg"), choosing: ShortcutAction.copyToFolder.title)
+            try app.wait("A, its sidecar and B copied to Picked", timeout: 60) { model in
+                scratch.files(in: scratch.picked) == ["A.jpg", "A.jpg.redlamp", "B.jpg"] && !model.isModalDialogOpen
+            }
+            try app.expect(
+                scratch.files(in: scratch.folder) == ["A.jpg", "A.jpg.redlamp", "B.jpg", "C.jpg", "D.jpg"],
+                "the originals moved",
+            )
+            try app.wait("the grid as it was") { $0.items.count == scratch.names.count }
+            app.covered(.action(.copyToFolder), via: .mouse)
+
+            try app.main { $0.select(a) }
+            try app.wait("A alone") { $0.selectedPhotos == [a] }
+            try app.runFromPalette(.copyToFolder)
+            try app.wait("a copy of A beside the first, numbered", timeout: 60) { _ in
+                scratch.files(in: scratch.picked).contains("A 2.jpg")
+                    && scratch.files(in: scratch.picked).contains("A 2.jpg.redlamp")
+            }
+            try app.run("the copies made", timeout: 60) { await $0.filesMade() }
+            try app.press(.undo)
+            try app.run("the Undo", timeout: 60) { await $0.filesMade() }
+            try app.wait("⌘Z to move the numbered copy to the Trash", timeout: 30) { _ in
+                scratch.files(in: scratch.picked) == ["A.jpg", "A.jpg.redlamp", "B.jpg"]
+            }
+            try app.press(.undo)
+            try app.run("the Undo", timeout: 60) { await $0.filesMade() }
+            try app.wait("⌘Z to move the first copies to the Trash", timeout: 30) { _ in
+                scratch.files(in: scratch.picked).isEmpty
+            }
+        }
+
+        static let stopBatch = Scenario(
+            "library.stop-batch",
+            "Stop beside a batch's progress stops it after the photo in hand: a rename stopped from its sheet leaves "
+                + "the photos it renamed renamed, each with its sidecar, as one step ⌘Z takes back; Stop in the "
+                + "toolbar while ⌘Z runs leaves each photo with one name, and ⌘Z takes back the rest",
+            claims: [.feature("library.rename")],
+        ) { app in
+            let names = (1 ... 12).map { String(format: "S%02d.jpg", $0) }
+            let scratch = try DragScratch(names: names)
+            defer { scratch.remove(app) }
+            try scratch.show(app)
+            func renamed() -> [String] {
+                scratch.files(in: scratch.folder).filter { $0.hasPrefix("Stopped-") && !$0.hasSuffix(".redlamp") }
+            }
+            // Each step waits, so Stop comes while the batch runs.
+            try app.main { _ in LibraryService.pausePerStep = .milliseconds(400) }
+
+            try app.choose(.selectAllPhotos)
+            try app.wait("every photo selected") { $0.selectedPhotos.count == names.count }
+            try app.pressF2()
+            try app.waitForSheet("Rename Photos")
+            try app.wait("the photos read and named", timeout: 30) { $0.renameSheetNames != nil }
+            try app.selectSheetField()
+            try app.typeInAttachedSheet("Stopped-")
+            try app.chooseToken("{sequence:4:folder}")
+            try app.wait("the preview to follow the template") { model in
+                model.renameSheetNames?.allSatisfy { $0.hasPrefix("Stopped-") } == true
+            }
+            try app.clickInSheet("rename.rename")
+            try app.wait("the rename under way", timeout: 60) { _ in renamed().count >= 3 }
+            try app.clickInSheet("rename.stop")
+            try app.waitForNoSheet("Rename Photos", timeout: 60)
+            try app.run("the rename stopped", timeout: 60) { await $0.filesMade() }
+            let done = renamed()
+            try app.expect(done.count >= 3 && done.count < names.count, "Stop left \(done.count) photos renamed")
+            try app.expect(
+                scratch.files(in: scratch.folder).filter { !$0.hasSuffix(".redlamp") }.count == names.count,
+                "a photo was lost or doubled",
+            )
+            try app.expect(
+                try app.main { $0.fileUndoTitles } == ["Rename \(done.count) Photos"],
+                "Stop left one step for what was done",
+            )
+            app.covered(.feature("library.rename"), via: .mouse)
+
+            try app.press(.undo)
+            try app.wait("⌘Z under way, its progress in the toolbar", timeout: 30) { model in
+                (model.moveProgress.progress?.done ?? 0) >= 2 && model.moveProgress.canStop
+            }
+            try app.click(.identifier("library.toolbar.stop"))
+            try app.run("the Undo stopped", timeout: 60) { await $0.filesMade() }
+            let left = renamed()
+            try app.expect(!left.isEmpty && left.count < done.count, "Stop left \(left.count) of \(done.count) renamed")
+            try app.expect(
+                scratch.files(in: scratch.folder).filter { !$0.hasSuffix(".redlamp") }.count == names.count,
+                "a photo was lost or doubled",
+            )
+            try app.expect(try app.main { $0.fileUndoCount == 1 && $0.fileRedoCount == 0 }, "the step left Undo")
+            try app.main { _ in LibraryService.pausePerStep = .zero }
+            try app.press(.undo)
+            try app.run("the Undo", timeout: 60) { await $0.filesMade() }
+            try app.wait("⌘Z to put the other names back", timeout: 30) { _ in
+                renamed().isEmpty && scratch.files(in: scratch.folder) == (names + [names[0] + ".redlamp"]).sorted()
             }
         }
 

@@ -8,7 +8,8 @@ import RedlampLibrary
 /// the module picker does, rather than tracking the mouse as AppKit's controls do. In the grid, Group By
 /// (LIB-41) and, grouped by moment, the Tighter–Looser slider and the moments without a pick are AppKit's
 /// own controls until the library's polish phase (LIB-45), as are the painter's field (LIB-21), shown while
-/// it's out, and the progress of photos dropped on a folder, shown while they move (LIB-26).
+/// it's out, and the progress of a batch with its Stop (LIB-26): photos dropped on a folder, moving or copying,
+/// and the Undo or Redo of a rename, move or copy.
 final class LibraryToolbarView: NSView, NSTextFieldDelegate {
     static let height: CGFloat = 30
 
@@ -24,9 +25,10 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
     private let painterButton = ToolbarButton(symbol: "paintbrush.pointed", identifier: "library.toolbar.painter")
     /// The keywords the painter paints; empty, the active keyword set's.
     private let paints = NSTextField()
-    /// A drop's move under way (`LibraryMoveProgress`), and whether the toolbar was last laid out with it.
+    /// A batch under way (`LibraryMoveProgress`), its Stop, and whether the toolbar was last laid out with them.
     private let moving = NSTextField(labelWithString: "")
     private let movingBar = NSProgressIndicator()
+    private let movingStop = ToolbarButton(symbol: "xmark.circle.fill", identifier: "library.toolbar.stop")
     private var showsMoving = false
     private let groupBy = NSPopUpButton(frame: .zero, pullsDown: false)
     private let looseness = NSSlider(
@@ -92,7 +94,22 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         movingBar.minValue = 0
         movingBar.maxValue = 1
         movingBar.setAccessibilityIdentifier("library.toolbar.movingProgress")
-        for view in [grid, loupe, fit, actual, develop, finder, size, painterButton, paints, moving, movingBar]
+        movingStop.toolTip = "Stop after the photo in hand"
+        movingStop.onPress = { model.moveProgress.pressStop() }
+        for view in [
+            grid,
+            loupe,
+            fit,
+            actual,
+            develop,
+            finder,
+            size,
+            painterButton,
+            paints,
+            moving,
+            movingBar,
+            movingStop,
+        ]
             + GridCellStyle.allCases.compactMap({ styles[$0] }) as [NSView] {
             addSubview(view)
         }
@@ -256,9 +273,11 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         let isMoving = shown.title != nil
         Self.set(moving, hidden: !isMoving)
         Self.set(movingBar, hidden: !isMoving)
+        Self.set(movingStop, hidden: !isMoving || shown.stop == nil)
+        movingStop.isEnabled = shown.canStop
         if let title = shown.title {
             let progress = shown.progress
-            let text = progress
+            let text = shown.isStopping ? "\(title): stopping after the photo in hand…" : progress
                 .map { "\(title): \(RenameModel.count($0.done)) of \(RenameModel.count($0.total)) steps" }
                 ?? "\(title)…"
             if moving.stringValue != text {
@@ -347,6 +366,9 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
             x += 14
             place(moving, width: 240)
             place(movingBar, width: 120)
+            if !movingStop.isHidden {
+                place(movingStop, width: 22)
+            }
         }
         let right = bounds.width - 12
         finder.frame = CGRect(x: right - 28, y: (bounds.height - 22) / 2, width: 28, height: 22)

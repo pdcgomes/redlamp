@@ -16,8 +16,8 @@
         static let toFolder = Scenario(
             "library.drag-to-folder",
             "Photos dragged from the grid onto a folder of Folders move there as one batch, with their sidecars, and "
-                + "⌘Z brings them back; onto the folder they're in the drop is refused, and with ⌥ held it says photos "
-                + "aren't copied",
+                + "⌘Z brings them back; onto the folder they're in the drop is refused; with ⌥ held they're copied "
+                + "there, ⌘Z moving the copies to the Trash and ⇧⌘Z copying them again",
             claims: [.feature("library.folders")],
         ) { app in
             let scratch = try DragScratch()
@@ -55,14 +55,28 @@
             try app.expect(scratch.files(in: scratch.folder) == before, "A drop onto B's own folder moved something")
             try app.expect(try app.main { $0.fileUndoCount } == undone, "A drop onto B's own folder made a batch")
 
-            // With ⌥ held: photos aren't copied, and the drop says so.
-            let mark = try app.mark()
+            // With ⌥ held: copied, B staying where it is.
+            let copies = try app.main { $0.fileUndoCount }
             try app.dragGridPhoto("B.jpg", onto: "folders." + scratch.picked.path, modifiers: .option)
-            try app.wait("the drop to say photos aren't copied") { _ in
-                (try? app.activity(since: mark).contains { $0.text == EditorModel.notCopied }) == true
+            try app.wait("B copied to Picked, the copy done", timeout: 60) { model in
+                scratch.files(in: scratch.picked) == ["B.jpg"] && model.fileUndoCount == copies + 1
+                    && !model.isModalDialogOpen
             }
-            try app.dismissDropAlert()
-            try app.expect(scratch.files(in: scratch.picked).isEmpty, "⌥ moved B to Picked")
+            try app.expect(scratch.files(in: scratch.folder).contains("B.jpg"), "⌥ moved B rather than copying it")
+            try app.wait("the grid with B still in it") { $0.items.map(\.name).contains("B.jpg") }
+            try app.press(.undo)
+            try app.run("the Undo", timeout: 60) { await $0.filesMade() }
+            try app.wait("⌘Z to move the copy to the Trash", timeout: 30) { _ in
+                scratch.files(in: scratch.picked).isEmpty
+            }
+            try app.choose(.redo)
+            try app.run("the Redo", timeout: 60) { await $0.filesMade() }
+            try app.wait("⇧⌘Z to copy it again", timeout: 30) { _ in scratch.files(in: scratch.picked) == ["B.jpg"] }
+            try app.press(.undo)
+            try app.run("the Undo", timeout: 60) { await $0.filesMade() }
+            try app.wait("⌘Z to take the copy away again", timeout: 30) { _ in
+                scratch.files(in: scratch.picked).isEmpty
+            }
         }
 
         static let toCollection = Scenario(
@@ -231,17 +245,17 @@
         }
     }
 
-    /// Small JPEGs of the run's own on the external disk's scratch folder, A to D, A with a sidecar, and an empty
-    /// folder
-    /// beside them, Picked, each added to Folders as a folder of its own so both rows are on screen; taken out of
-    /// Folders and removed afterwards.
+    /// Small JPEGs of the run's own on the external disk's scratch folder, A to D (or `names`), the first with a
+    /// sidecar, and an empty folder beside them, Picked, each added to Folders as a folder of its own so both rows are
+    /// on screen; taken out of Folders and removed afterwards, with what the library's batches put in the Trash.
     struct DragScratch: Sendable {
         let base: URL
         let folder: URL
         let picked: URL
-        let names = ["A.jpg", "B.jpg", "C.jpg", "D.jpg"]
+        let names: [String]
 
-        init() throws {
+        init(names: [String] = ["A.jpg", "B.jpg", "C.jpg", "D.jpg"]) throws {
+            self.names = names
             base = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
                 .appending(path: "e2e-drags-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
             folder = base.appending(path: "Photos", directoryHint: .isDirectory)
@@ -252,9 +266,11 @@
             for (number, name) in names.enumerated() {
                 try SourcesScratch.jpeg(number: number).write(to: photo(name))
             }
-            try SidecarStore(locator: .besidePhotos).save(
-                Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(rating: 2)), for: photo("A.jpg"),
-            )
+            if let first = names.first {
+                try SidecarStore(locator: .besidePhotos).save(
+                    Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(rating: 2)), for: photo(first),
+                )
+            }
         }
 
         func photo(_ name: String) -> URL {
@@ -299,7 +315,15 @@
 
         func remove(_ app: RunningApp) {
             let (folder, picked) = (folder, picked)
+            try? app.run("emptying what the batches put in the Trash", timeout: 60) { model in
+                await model.filesMade()
+                for place in await model.library.service?.trashedPlaces() ?? [] {
+                    try? FileManager.default.removeItem(atPath: place)
+                }
+            }
             try? app.main { model in
+                EditorModel.moveToFolderAnswer = nil
+                LibraryService.pausePerStep = .zero
                 for url in [folder, picked] {
                     if let root = model.library.root(containing: url) {
                         model.library.remove(root)
@@ -364,18 +388,6 @@
                 else { throw ScenarioFailure("Timed out after \(timeout) s waiting for \(what)") }
                 pause(0.1)
             }
-        }
-
-        /// Closes the alert a drop put up, as its OK button's Return does.
-        func dismissDropAlert() throws {
-            try waitForSheet("the drop's alert")
-            if try !pressInSheet(KeyCombo(.character("\r"))) {
-                try main { _ in
-                    guard let window = Views.editorWindow, let sheet = window.attachedSheet else { return }
-                    window.endSheet(sheet)
-                }
-            }
-            try waitForNoSheet("the drop's alert")
         }
     }
 #endif

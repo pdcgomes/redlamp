@@ -3,8 +3,9 @@ import Foundation
 import RedlampLibrary
 import Synchronization
 
-/// Renaming and moving photos in Library (LIB-25, LIB-26), each one of the library's journaled batches with
-/// Undo and Redo on Library's ⌘Z and ⇧⌘Z, in turn with the library's other changes (`EditorModel+LibraryUndo`).
+/// Renaming, moving and copying photos in Library (LIB-25, LIB-26), each one of the library's journaled batches with
+/// Undo and Redo on Library's ⌘Z and ⇧⌘Z, in turn with the library's other changes (`EditorModel+LibraryUndo`); a
+/// copy's Undo moves its copies to the Trash, and its Redo copies again.
 ///
 /// - **Shown at once:** the photos go where the batch puts them in the grid and the filmstrip before it runs
 ///   (`LibraryMoves`), each keeping its ID, so the selection follows; the active photo, leaving Develop's
@@ -52,12 +53,13 @@ extension EditorModel {
 
     // MARK: - Keys, menus and the palette
 
-    /// Rename Photos, Move to Folder, and Library's Undo and Redo when a file step is the library's newest change, or
-    /// the one taken back last; nil for every other action.
+    /// Rename Photos, Move to Folder, Copy to Folder, and Library's Undo and Redo when a file step is the library's
+    /// newest change, or the one taken back last; nil for every other action.
     func performFileShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
         case .renamePhotos: renamePhotos()
         case .moveToFolder: moveToFolder()
+        case .copyToFolder: copyToFolder()
         case .undo where module == .library && fileUndoIsNewest: undoFiles()
         case .redo where module == .library && fileRedoIsNewest: redoFiles()
         default: nil
@@ -66,7 +68,7 @@ extension EditorModel {
 
     func canPerformFileShortcut(_ action: ShortcutAction) -> Bool? {
         switch action {
-        case .renamePhotos, .moveToFolder: canRenamePhotos
+        case .renamePhotos, .moveToFolder, .copyToFolder: canRenamePhotos
         case .undo where module == .library && fileUndoIsNewest: true
         case .redo where module == .library && fileRedoIsNewest: true
         default: nil
@@ -105,8 +107,9 @@ extension EditorModel {
     // MARK: - Renaming
 
     /// Renames the photos `sheet` names, as one batch: shown at once, then made in the background, after the
-    /// file steps asked for before it, with its progress in the sheet. Returns why it didn't happen, or nil.
-    func rename(_ sheet: RenameModel) async -> String? {
+    /// file steps asked for before it, with its progress in the sheet, until it's done or `stop` stops it.
+    /// Returns why it didn't happen, or nil.
+    func rename(_ sheet: RenameModel, stop: FileStop? = nil) async -> String? {
         guard let service = library.service, service.isReady else { return "The library isn't open" }
         guard let (renames, batch) = await sheet.renames() else { return "The template has an error" }
         guard !renames.isEmpty else { return nil }
@@ -117,28 +120,42 @@ extension EditorModel {
                 to: (rename.path as NSString).deletingLastPathComponent + "/" + rename.name,
             )
         }
-        let count = Set(renames.map(\.id)).count
-        let step = LibraryFileStep(
-            kind: .rename(renames), title: "Rename \(count) Photo\(count == 1 ? "" : "s")", photos: photos,
-        )
+        let step = LibraryFileStep(kind: .rename(renames), photos: photos)
         let relay = FileProgressRelay { progress in
             sheet.setPhase(.renaming(done: progress.done, total: progress.total))
         }
         push(step)
         let run = await fileSteps.make { [self] in
-            await perform(step, undoing: false) { await service.rename(renames) { relay.send($0) } }
+            await perform(step, undoing: false) {
+                await service.rename(renames, progress: { relay.send($0) }, stop: stop)
+            }
         }
         if run.batch != nil {
             sheet.renamed(batch)
+        }
+        record(run, of: step)
+        return run.error
+    }
+
+    /// Says in the activity log what `run` made of `step`, asked for now.
+    func record(_ run: LibraryService.FileRun, of step: LibraryFileStep) {
+        if let error = run.error {
+            activity.record(.error, "\(step.title) wasn't done: \(error)")
+        } else if run.stopped {
+            activity.record(
+                .action,
+                run.batch == nil ? "\(step.title) stopped before it began" : "\(step.title), stopped",
+            )
+        } else if run.batch != nil {
             activity.record(.action, step.title)
         }
-        return run.error
     }
 
     // MARK: - Undo and Redo
 
     /// Takes back the latest file step: shown, then its batch's Undo in the background, once the steps asked for
-    /// before it are made, its own batch among them.
+    /// before it are made, its own batch among them, its progress and Stop in the toolbar. Stopped partway, the step
+    /// goes back on Undo, for ⌘Z to take back the rest.
     @discardableResult
     func undoFiles() -> Bool {
         guard module == .library, let service = library.service, let step = fileSteps.undo.popLast() else {
@@ -156,11 +173,20 @@ extension EditorModel {
                 fileSteps.redo.removeAll { $0 === step }
                 return
             }
-            let run = await perform(step, undoing: true) { await service.undoFiles(batch, photos: ids) }
-            guard let error = run.error else { return }
-            activity.record(.error, "Undo \(step.title) wasn't done: \(error)")
-            // Nothing was taken back: back on Undo in its place, unless a change made since ended its Redo.
-            if run.batch == nil, let place = fileSteps.redo.lastIndex(where: { $0 === step }) {
+            let run = await showingProgress("Undo " + step.title) { relay, stop in
+                await self.perform(step, undoing: true) {
+                    await service.undoFiles(batch, photos: ids, progress: { relay.send($0) }, stop: stop)
+                }
+            }
+            if let error = run.error {
+                activity.record(.error, "Undo \(step.title) wasn't done: \(error)")
+            } else if run.stopped {
+                activity.record(.action, "Undo \(step.title), stopped")
+            }
+            // Nothing, or not everything, was taken back: back on Undo in its place, unless a change made since
+            // ended its Redo.
+            if run.batch == nil && run.error != nil || run.stopped,
+               let place = fileSteps.redo.lastIndex(where: { $0 === step }) {
                 fileSteps.redo.remove(at: place)
                 step.turn = made
                 fileSteps.undo.append(step)
@@ -169,7 +195,8 @@ extension EditorModel {
         return true
     }
 
-    /// Makes the file step Undo took back last again, with a batch planned anew.
+    /// Makes the file step Undo took back last again, with a batch planned anew, its progress and Stop in the
+    /// toolbar; stopped partway, the step is what its batch did.
     @discardableResult
     func redoFiles() -> Bool {
         guard module == .library, let service = library.service, let step = fileSteps.redo.popLast() else {
@@ -181,19 +208,27 @@ extension EditorModel {
         activity.record(.action, "Redo \(step.title)")
         fileSteps.enqueue { [weak self] in
             guard let self else { return }
-            let run = await perform(step, undoing: false) {
-                switch step.kind {
-                case let .rename(renames): await service.rename(renames)
-                case let .move(ids, folder): await service.move(ids, to: folder)
+            let run = await showingProgress("Redo " + step.title) { relay, stop in
+                await self.perform(step, undoing: false) {
+                    let progress: @Sendable (FileProgress) -> Void = { relay.send($0) }
+                    return switch step.kind {
+                    case let .rename(renames): await service.rename(renames, progress: progress, stop: stop)
+                    case let .move(ids, folder): await service.move(ids, to: folder, progress: progress, stop: stop)
+                    case let .copy(ids, folder): await service.copy(ids, to: folder, progress: progress, stop: stop)
+                    }
                 }
             }
             if let batch = run.batch {
                 step.batch = batch
             }
-            guard let error = run.error else { return }
-            activity.record(.error, "Redo \(step.title) wasn't done: \(error)")
+            if let error = run.error {
+                activity.record(.error, "Redo \(step.title) wasn't done: \(error)")
+            } else if run.stopped {
+                activity.record(.action, "Redo \(step.title), stopped")
+            }
             // Nothing was made again: back on Redo while it's still the newest change, off Undo either way.
-            if run.batch == nil, let place = fileSteps.undo.lastIndex(where: { $0 === step }) {
+            if run.batch == nil, run.error != nil || run.stopped,
+               let place = fileSteps.undo.lastIndex(where: { $0 === step }) {
                 let newest = place == fileSteps.undo.count - 1 && libraryUndoKind == .files
                 fileSteps.undo.remove(at: place)
                 if newest {
@@ -208,20 +243,30 @@ extension EditorModel {
     // MARK: - Making a step
 
     /// Shows `step` (or its Undo) at once, waits for its photos' saves, runs `batch`, then shows each photo
-    /// where the index has it. A new step, on Undo since it was asked for (`push`), leaves it when its batch
-    /// made nothing.
+    /// where the index has it; a copy's photos stay, its copies reaching the lists as the index gets them. A batch
+    /// that was stopped leaves the step what it did. A new step, on Undo since it was asked for (`push`), leaves it
+    /// when its batch made nothing.
     func perform(
         _ step: LibraryFileStep, undoing: Bool, batch: @escaping () async -> LibraryService.FileRun,
     ) async -> LibraryService.FileRun {
         let isNew = step.batch == nil && !undoing
-        let moves = step.photos.map { photo in
+        let moves = step.isCopy ? [] : step.photos.map { photo in
             undoing ? (id: photo.id, from: photo.to, to: photo.from) : photo
         }
-        let saving = await show(moves, of: step, undoing: undoing)
+        let saving: [URL]
+        if step.isCopy {
+            await cullingTail?.value
+            saving = step.photos.map { URL(fileURLWithPath: $0.from) }
+        } else {
+            saving = await show(moves, of: step, undoing: undoing)
+        }
         await waitForSaves(of: saving)
         let run = await batch()
         await follow(moves, of: step, paths: run.paths)
         libraryPanels.photosMoved()
+        if !undoing, run.stopped, run.batch != nil, let done = run.outcome?.photoIDs {
+            step.keep(Set(done))
+        }
         if isNew {
             if let made = run.batch {
                 step.batch = made
@@ -334,6 +379,18 @@ extension EditorModel {
         await library.show(LibraryMoves(moves: corrections, restoring: restoring, keys: keys))
     }
 
+    /// Runs `body` with its batch's progress and Stop in the grid's toolbar, as a drop's move shows them, for Undo
+    /// and Redo, which leave actions on.
+    func showingProgress(
+        _ title: String, _ body: (FileProgressRelay, FileStop) async -> LibraryService.FileRun,
+    ) async -> LibraryService.FileRun {
+        let stop = FileStop()
+        let shown = moveProgress
+        let token = shown.begin(title, stop: stop)
+        defer { shown.end(token) }
+        return await body(FileProgressRelay { shown.show($0, for: token) }, stop)
+    }
+
     /// Returns once the saves asked for any of `photos` before the call are on disk.
     private func waitForSaves(of photos: [URL]) async {
         let saves = saves
@@ -378,20 +435,21 @@ final class LibraryFileSteps {
     }
 }
 
-/// One of Library's renames or moves, as Undo takes it back and Redo makes it again.
+/// One of Library's renames, moves or copies, as Undo takes it back and Redo makes it again. A step whose batch
+/// was stopped is what the batch did: its photos, and its title saying how many.
 @MainActor
 final class LibraryFileStep {
     enum Kind {
         case rename([PhotoRename])
         /// The photos asked for, by index ID, and the folder they go to.
         case move([Int64], URL)
+        /// The photos asked for, by index ID, and the folder their copies go to.
+        case copy([Int64], URL)
     }
 
-    let kind: Kind
-    /// As Undo and the activity log name it: "Rename 12 Photos".
-    let title: String
-    /// Each photo, by index ID, and its path before and after the step.
-    let photos: [(id: Int64, from: String, to: String)]
+    private(set) var kind: Kind
+    /// Each photo, by index ID, and its path before and after the step; a copy's photos stay where they are.
+    private(set) var photos: [(id: Int64, from: String, to: String)]
     /// The batch that made it last, for its Undo.
     var batch: UUID?
     /// The photos as the folders shown listed them before it, and their content keys, by index ID: a move's Undo
@@ -404,10 +462,37 @@ final class LibraryFileStep {
     /// Its turn in Library's Undo and Redo (`EditorModel+LibraryUndo`).
     var turn = 0
 
-    init(kind: Kind, title: String, photos: [(id: Int64, from: String, to: String)]) {
+    init(kind: Kind, photos: [(id: Int64, from: String, to: String)]) {
         self.kind = kind
-        self.title = title
         self.photos = photos
+    }
+
+    /// As Undo and the activity log name it: "Rename 12 Photos", "Copy 3 Photos to Picked".
+    var title: String {
+        let count = Set(photos.map(\.id)).count
+        let photos = "\(count) Photo\(count == 1 ? "" : "s")"
+        return switch kind {
+        case .rename: "Rename \(photos)"
+        case let .move(_, folder): "Move \(photos) to \(folder.lastPathComponent)"
+        case let .copy(_, folder): "Copy \(photos) to \(folder.lastPathComponent)"
+        }
+    }
+
+    var isCopy: Bool {
+        if case .copy = kind {
+            return true
+        }
+        return false
+    }
+
+    /// The step as a batch that stopped partway left it: the photos `done`, with their pairs.
+    func keep(_ done: Set<Int64>) {
+        photos = photos.filter { done.contains($0.id) }
+        switch kind {
+        case let .rename(renames): kind = .rename(renames.filter { done.contains($0.id) })
+        case let .move(ids, folder): kind = .move(ids.filter(done.contains), folder)
+        case let .copy(ids, folder): kind = .copy(ids.filter(done.contains), folder)
+        }
     }
 }
 

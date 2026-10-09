@@ -27,6 +27,9 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
     private let status = NSTextField(labelWithString: "")
     private let cancel = NSButton(title: "Cancel", target: nil, action: nil)
     private let rename = NSButton(title: "Rename", target: nil, action: nil)
+    /// In Cancel's place while the photos are renamed: stops the batch after the photo in hand.
+    private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
+    private var renaming: FileStop?
     private var isRenaming = false
 
     static let size = CGSize(width: 680, height: 620)
@@ -144,7 +147,11 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         rename.action = #selector(renameClicked)
         rename.keyEquivalent = "\r"
         rename.setAccessibilityIdentifier("rename.rename")
-        let buttons = NSStackView(views: [NSView(), cancel, rename])
+        stopButton.target = self
+        stopButton.action = #selector(stopClicked)
+        stopButton.isHidden = true
+        stopButton.setAccessibilityIdentifier("rename.stop")
+        let buttons = NSStackView(views: [NSView(), stopButton, cancel, rename])
         buttons.orientation = .horizontal
         buttons.spacing = 8
 
@@ -197,8 +204,8 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
             }
             progress.isHidden = false
             progress.doubleValue = total > 0 ? Double(done) / Double(total) : 0
-            status.stringValue = total > 0 ? "Renaming: \(RenameModel.count(done)) of \(RenameModel.count(total)) steps"
-                : "Renaming…"
+            status.stringValue = renaming?.isStopped == true ? "Stopping after the photo in hand…"
+                : total > 0 ? "Renaming: \(RenameModel.count(done)) of \(RenameModel.count(total)) steps" : "Renaming…"
         }
         update()
     }
@@ -212,6 +219,11 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         let ready = model.phase == .ready && !isRenaming
         rename.isEnabled = ready && model.error == nil && model.isCurrent && model.renamed > 0
         cancel.isEnabled = !isRenaming
+        cancel.isHidden = isRenaming
+        cancel.keyEquivalent = isRenaming ? "" : "\u{1b}"
+        stopButton.isHidden = !isRenaming
+        stopButton.isEnabled = renaming?.isStopped == false
+        stopButton.keyEquivalent = isRenaming ? "\u{1b}" : ""
         template.isEditable = !isRenaming
         start.isEditable = !isRenaming
         extensions.isEnabled = !isRenaming
@@ -269,14 +281,24 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         close()
     }
 
+    @objc private func stopClicked() {
+        guard isRenaming, let renaming, !renaming.isStopped else { return }
+        renaming.stop()
+        status.stringValue = "Stopping after the photo in hand…"
+        update()
+    }
+
     @objc private func renameClicked() {
         guard rename.isEnabled, let editor else { return }
+        let stop = FileStop()
+        renaming = stop
         isRenaming = true
         status.stringValue = "Renaming…"
         status.textColor = .secondaryLabelColor
         update()
         Task {
-            let error = await editor.rename(model)
+            let error = await editor.rename(model, stop: stop)
+            renaming = nil
             isRenaming = false
             guard let error else { return close() }
             progress.isHidden = true
@@ -356,7 +378,13 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         fileSteps.redo.count
     }
 
-    /// The folder Move to Folder… moves to without its Open panel, which the regression suite can't drive.
+    /// The titles of the file steps on Library's Undo, oldest first: "Copy 3 Photos to Picked".
+    var fileUndoTitles: [String] {
+        fileSteps.undo.map(\.title)
+    }
+
+    /// The folder Move to Folder… and Copy to Folder… choose without their Open panel, which the regression suite
+    /// can't drive.
     static var moveToFolderAnswer: URL? {
         get { MoveFolderPanel.answer }
         set { MoveFolderPanel.answer = newValue }

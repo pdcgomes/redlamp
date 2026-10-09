@@ -183,22 +183,134 @@ struct LibraryDragTests {
         #expect(model.fileUndoCount == 0)
     }
 
-    @Test func `with ⌥ held a drop onto a folder says photos aren't copied, and moves nothing`() async throws {
+    @Test func `with ⌥ held photos dropped onto a folder are copied there, Undo moving the copies to the Trash and Redo copying again`(
+    ) async throws {
         let sandbox = DragSandbox()
         defer { sandbox.close() }
         try await sandbox.open(photos: ["A.JPG", "B.JPG"], folders: ["Picked"])
+        try await sandbox.emptyingTrash {
+            let model = try #require(sandbox.model)
+            try SidecarStore().save(
+                Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(rating: 3)), for: sandbox.photo("A.JPG"),
+            )
+            let list = try #require(sandbox.first(FolderOutlineView.self))
+            let pickedFolder = sandbox.folder("Picked")
+            let dragged = DraggedPhotos(photo: sandbox.photo("A.JPG"), fromLibrary: true)
+            #expect(
+                model.photoDrop(dragged, onFolder: pickedFolder, isMissing: false, operations: [.copy])?
+                    .operation == .copy,
+                "the pointer shows the copy badge",
+            )
+            try sandbox.press("A.JPG")
+            let picked = try sandbox.middle(of: "folders." + pickedFolder.path)
+            try sandbox.drag(from: sandbox.cell("A.JPG"), to: picked, modifiers: .option, release: false)
+            #expect(list.photoDropRow != nil, "the folder is outlined as for a move")
+            try sandbox.release(at: picked, modifiers: .option)
+            try await sandbox.filesMade(count: 1)
+            #expect(sandbox.files(in: "Picked") == ["A.JPG", "A.JPG.redlamp"])
+            #expect(sandbox.files() == ["A.JPG", "A.JPG.redlamp", "B.JPG", "Picked"], "the originals stay")
+            #expect(sandbox.shownNames() == ["A.JPG", "B.JPG"])
+            #expect(SidecarStore().load(for: pickedFolder.appending(path: "A.JPG"))?.metadata?.rating == 3)
+            #expect(model.fileUndoTitles == ["Copy 1 Photo to Picked"])
+
+            #expect(model.perform(.undo))
+            await model.filesMade()
+            #expect(sandbox.files(in: "Picked").isEmpty, "Undo moved the copy to the Trash")
+            #expect(await !sandbox.service.trashedPlaces().isEmpty)
+            #expect(model.perform(.redo))
+            await model.filesMade()
+            #expect(sandbox.files(in: "Picked") == ["A.JPG", "A.JPG.redlamp"], "Redo copied it again")
+            #expect(model.perform(.undo))
+            await model.filesMade()
+            #expect(sandbox.files(in: "Picked").isEmpty)
+
+            // Onto the folder it's in: a copy beside it, numbered.
+            try sandbox.press("B.JPG")
+            let own = try sandbox.middle(of: "folders." + sandbox.root.path)
+            try sandbox.drag(from: sandbox.cell("B.JPG"), to: own, modifiers: .option, release: false)
+            #expect(list.photoDropRow != nil, "the folder a photo is in takes its copy")
+            try sandbox.release(at: own, modifiers: .option)
+            try await sandbox.filesMade(count: 2)
+            #expect(sandbox.files().contains("B 2.JPG"))
+            try await sandbox.eventually { sandbox.shownNames().contains("B 2.JPG") }
+            #expect(sandbox.shownNames().contains("B 2.JPG"), "the copy reaches the grid")
+            #expect(model.perform(.undo))
+            await model.filesMade()
+            #expect(!sandbox.files().contains("B 2.JPG"))
+        }
+    }
+
+    // MARK: - Stop (LIB-26)
+
+    @Test func `Stop in the toolbar stops a drop's move after the photo in hand, leaving one step that Undo takes back`(
+    ) async throws {
+        let sandbox = DragSandbox()
+        defer {
+            LibraryService.pausePerStep = .zero
+            sandbox.close()
+        }
+        let names = (1 ... 6).map { "P\($0).JPG" }
+        try await sandbox.open(photos: names, folders: ["Picked"])
         let model = try #require(sandbox.model)
-        let list = try #require(sandbox.first(FolderOutlineView.self))
-        try sandbox.press("A.JPG")
-        let picked = try sandbox.middle(of: "folders." + sandbox.folder("Picked").path)
-        try sandbox.drag(from: sandbox.cell("A.JPG"), to: picked, modifiers: .option, release: false)
-        #expect(list.photoDropRow != nil)
-        try sandbox.release(at: picked, modifiers: .option)
-        try await sandbox.eventually { model.activity.events.contains { $0.text == EditorModel.notCopied } }
-        #expect(model.activity.events.contains { $0.text == EditorModel.notCopied }, "the drop says so")
+        model.selectAllPhotos()
+        LibraryService.pausePerStep = .milliseconds(300)
+        try sandbox.press("P1.JPG")
+        try sandbox.drag(
+            from: sandbox.cell("P1.JPG"),
+            to: sandbox.middle(of: "folders." + sandbox.folder("Picked").path),
+        )
+        try await sandbox.eventually { (model.moveProgress.progress?.done ?? 0) >= 2 }
+        sandbox.layOut()
+        try sandbox.pressStop()
+        #expect(model.moveProgress.isStopping)
         await model.filesMade()
-        #expect(sandbox.files(in: "Picked").isEmpty && sandbox.shownNames() == ["A.JPG", "B.JPG"])
-        #expect(model.fileUndoCount == 0)
+        let moved = sandbox.files(in: "Picked")
+        #expect(moved.count >= 2 && moved.count < names.count, "\(moved)")
+        #expect(Set(sandbox.files()).union(moved) == Set(names + ["Picked"]), "each photo in one place")
+        #expect(model.moveProgress.title == nil && !model.isModalDialogOpen)
+        #expect(model.fileUndoTitles == ["Move \(moved.count) Photos to Picked"], "one step, for what was done")
+        LibraryService.pausePerStep = .zero
+
+        #expect(model.perform(.undo))
+        await model.filesMade()
+        #expect(sandbox.files(in: "Picked").isEmpty && sandbox.files() == names.sorted() + ["Picked"])
+        #expect(model.perform(.redo))
+        await model.filesMade()
+        #expect(sandbox.files(in: "Picked") == moved, "Redo moves again what was moved")
+    }
+
+    @Test func `Stop while Undo runs leaves each photo in one place, and ⌘Z takes back the rest`() async throws {
+        let sandbox = DragSandbox()
+        defer {
+            LibraryService.pausePerStep = .zero
+            sandbox.close()
+        }
+        let names = (1 ... 6).map { "P\($0).JPG" }
+        try await sandbox.open(photos: names, folders: ["Picked"])
+        let model = try #require(sandbox.model)
+        model.selectAllPhotos()
+        let urls = names.map(sandbox.photo)
+        #expect(await model.movePhotos(urls, to: sandbox.folder("Picked")) == nil)
+        #expect(sandbox.files(in: "Picked") == names.sorted())
+
+        LibraryService.pausePerStep = .milliseconds(300)
+        #expect(model.perform(.undo))
+        try await sandbox.eventually { (model.moveProgress.progress?.done ?? 0) >= 2 }
+        #expect(model.moveProgress.title?.hasPrefix("Undo Move 6 Photos") == true && !model.isModalDialogOpen)
+        sandbox.layOut()
+        try sandbox.pressStop()
+        await model.filesMade()
+        let back = Set(sandbox.files()).subtracting(["Picked"])
+        let left = Set(sandbox.files(in: "Picked"))
+        #expect(back.count >= 2 && !left.isEmpty, "\(back) \(left)")
+        #expect(back.union(left) == Set(names) && back.isDisjoint(with: left), "each photo in one place")
+        #expect(model.fileUndoCount == 1 && model.fileRedoCount == 0, "the step back on Undo")
+        LibraryService.pausePerStep = .zero
+
+        #expect(model.perform(.undo))
+        await model.filesMade()
+        #expect(sandbox.files(in: "Picked").isEmpty && sandbox.files() == names.sorted() + ["Picked"])
+        #expect(model.fileUndoCount == 0 && model.fileRedoCount == 1)
     }
 
     // MARK: - Onto a collection (LIB-23)

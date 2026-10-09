@@ -25,7 +25,7 @@ enum FilmstripMenu {
             let groups: [[ShortcutAction]] = [
                 [.copySettings, .copySettingsAgain, .pasteSettings, .pastePrevious],
                 [.syncSettings, .syncSettingsAgain, .undoSync, .toggleAutoSync],
-                [.renamePhotos, .moveToFolder],
+                [.renamePhotos, .moveToFolder, .copyToFolder],
             ]
             for group in groups {
                 let actions = group.filter { action in

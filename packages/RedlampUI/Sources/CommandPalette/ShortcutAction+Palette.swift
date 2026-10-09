@@ -78,6 +78,7 @@ extension ShortcutAction {
             "rename", "file name", "filename", "template", "naming", "batch rename", "sequence", "f2", "library",
         ],
         .moveToFolder: ["move", "folder", "organise", "organize", "file", "relocate", "library"],
+        .copyToFolder: ["copy", "duplicate", "folder", "file", "library"],
         .keywordPainter: ["painter", "paint", "spray", "brush", "keywords", "tag", "keyword set", "library"],
         .moveEditsAndMetadata: [
             "sidecar", "sidecars", "redlamp file", "edits", "metadata", "on this mac", "beside the photos", "read-only",
@@ -245,6 +246,7 @@ extension ShortcutAction {
         case .editCaptureTime: "clock.arrow.2.circlepath"
         case .renamePhotos: "character.cursor.ibeam"
         case .moveToFolder: "folder.badge.plus"
+        case .copyToFolder: "plus.square.on.square"
         case .keywordPainter: "paintbrush.pointed"
         case .moveEditsAndMetadata: "arrow.left.arrow.right"
         case .acceptHealthProposals: "checkmark.rectangle.stack"

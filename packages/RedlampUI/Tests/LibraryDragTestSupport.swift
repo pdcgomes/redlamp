@@ -274,4 +274,29 @@ final class DragSandbox {
         try await eventually { self.model.fileUndoCount + self.model.fileRedoCount >= count }
         await model.filesMade()
     }
+
+    /// Clicks the grid's toolbar's Stop, beside a batch's progress.
+    func pressStop() throws {
+        let stop = try #require(view("library.toolbar.stop"), "the toolbar shows Stop")
+        let frame = stop.convert(stop.bounds, to: nil)
+        try stop.mouseDown(with: mouse(.leftMouseDown, at: CGPoint(x: frame.midX, y: frame.midY)))
+    }
+
+    /// Runs `body`, then removes what the library's batches left in the Trash, the real one, whatever `body` did.
+    func emptyingTrash(_ body: () async throws -> Void) async throws {
+        do {
+            try await body()
+        } catch {
+            await emptyTrash()
+            throw error
+        }
+        await emptyTrash()
+    }
+
+    private func emptyTrash() async {
+        await model.filesMade()
+        for place in await service.trashedPlaces() {
+            try? FileManager.default.removeItem(atPath: place)
+        }
+    }
 }

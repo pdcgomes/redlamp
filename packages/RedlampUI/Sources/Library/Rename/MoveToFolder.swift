@@ -1,19 +1,31 @@
 import AppKit
 import RedlampLibrary
 
-/// Photo › Move to Folder… (LIB-26): a folder of the library chosen in an Open panel on the editor window, then the
-/// photos selected moved there as one batch, each with its raw or JPEG pair, its sidecars and other apps' `.xmp`;
-/// across volumes each file is copied and checked by size and SHA-256 before its original goes. The photos leave
-/// the folders shown at once, the photo after them becoming active; the batch's progress shows in a sheet, and
-/// Library's Undo puts them back, selected as they were.
+/// Photo › Move to Folder… and Copy to Folder… (LIB-26): a folder of the library chosen in an Open panel on the editor
+/// window, then the photos selected moved or copied there as one batch, each with its raw or JPEG pair, its sidecars
+/// and other apps' `.xmp`; across volumes each file is copied and checked by size and SHA-256 before its original
+/// goes. Moved, the photos leave the folders shown at once, the photo after them becoming active; copied, each copy
+/// is a photo of its own, numbered where its name is held. The batch's progress shows in a sheet with Stop, and
+/// Library's Undo puts the photos back, selected as they were, or moves the copies to the Trash.
 public extension EditorModel {
     @discardableResult
     func moveToFolder() -> Bool {
+        chooseFolder(copying: false)
+    }
+
+    @discardableResult
+    func copyToFolder() -> Bool {
+        chooseFolder(copying: true)
+    }
+}
+
+extension EditorModel {
+    private func chooseFolder(copying: Bool) -> Bool {
         guard canRenamePhotos, let window = EditorWindowController.frontWindow, window.attachedSheet == nil else {
             return false
         }
         if let folder = MoveFolderPanel.answer {
-            Task { await move(to: folder) }
+            Task { await place(in: folder, copying: copying) }
             return true
         }
         let count = selectedCount
@@ -22,8 +34,9 @@ public extension EditorModel {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Move"
-        panel.message = "Choose a folder in the library to move \(count == 1 ? "the photo" : "\(count) photos") to."
+        panel.prompt = copying ? "Copy" : "Move"
+        panel.message = "Choose a folder in the library to \(copying ? "copy" : "move") "
+            + "\(count == 1 ? "the photo" : "\(count) photos") to."
         panel.directoryURL = folder
         let delegate = MoveFolderPanel(roots: library.roots.map(\.url))
         panel.delegate = delegate
@@ -33,23 +46,23 @@ public extension EditorModel {
                 withExtendedLifetime(delegate) {}
                 isModalDialogOpen = false
                 guard response == .OK, let url = panel.url else { return }
-                Task { await move(to: url) }
+                Task { await place(in: url, copying: copying) }
             }
         }
         return true
     }
-}
 
-extension EditorModel {
-    /// Moves the photos selected into `folder` with the batch's progress in a sheet, and says in an alert why it
-    /// didn't happen.
-    private func move(to folder: URL) async {
-        let sheet = FileProgressSheet.present("Moving to \(folder.lastPathComponent)", editor: self)
-        let error = await moveSelection(to: folder) { sheet?.show($0) }
+    /// Moves or copies the photos selected into `folder` with the batch's progress and Stop in a sheet, and says in
+    /// an alert why it didn't happen.
+    private func place(in folder: URL, copying: Bool) async {
+        let stop = FileStop()
+        let doing = copying ? "Copying" : "Moving"
+        let sheet = FileProgressSheet.present("\(doing) to \(folder.lastPathComponent)", editor: self, stop: stop)
+        let error = await placeSelection(in: folder, copying: copying, progress: { sheet?.show($0) }, stop: stop)
         sheet?.close()
         guard let error, let window = EditorWindowController.frontWindow else { return }
         let alert = NSAlert()
-        alert.messageText = "The photos weren't moved to \(folder.lastPathComponent)"
+        alert.messageText = "The photos weren't \(copying ? "copied" : "moved") to \(folder.lastPathComponent)"
         alert.informativeText = error
         alert.beginSheetModal(for: window, completionHandler: nil)
     }
@@ -58,49 +71,31 @@ extension EditorModel {
     /// why it didn't happen, or nil once it has.
     @discardableResult
     func moveSelection(
-        to folder: URL, progress: (@MainActor @Sendable (FileProgress) -> Void)? = nil,
+        to folder: URL, progress: (@MainActor @Sendable (FileProgress) -> Void)? = nil, stop: FileStop? = nil,
     ) async -> String? {
-        guard let service = library.service, let core = service.core, service.isReady else {
-            return "The library isn't open"
-        }
-        guard MoveFolderPanel.isInLibrary(folder, roots: library.roots.map(\.url)) else {
-            return "\(folder.lastPathComponent) isn't in the library's folders"
-        }
-        let ids = await selectedIndexIDs()
-        guard !ids.isEmpty else { return "The library hasn't read these photos yet" }
-        let destination = LibraryService.path(folder)
-        let indexed = await (try? core.index.read { reader in
-            try LibraryService.folder(at: destination, in: reader)?.path
-        }) ?? nil
-        let target = indexed ?? destination
-        let all = await (try? core.files.withPairs(ids)) ?? ids
-        let before = await service.paths(of: all)
-        let photos = all.compactMap { id -> (id: Int64, from: String, to: String)? in
-            guard let path = before[id], (path as NSString).deletingLastPathComponent != target else { return nil }
-            let name = (path as NSString).lastPathComponent.precomposedStringWithCanonicalMapping
-            return (id, path, target + "/" + name)
-        }
-        guard !photos.isEmpty else { return nil }
-        let count = Set(photos.map(\.id)).count
-        let step = LibraryFileStep(
-            kind: .move(ids, folder),
-            title: "Move \(count) Photo\(count == 1 ? "" : "s") to \(folder.lastPathComponent)", photos: photos,
+        await placeSelection(in: folder, copying: false, progress: progress, stop: stop)
+    }
+
+    /// Copies the photos selected, with their pairs, into `folder`, as one batch, as `moveSelection` moves them.
+    @discardableResult
+    func copySelection(
+        to folder: URL, progress: (@MainActor @Sendable (FileProgress) -> Void)? = nil, stop: FileStop? = nil,
+    ) async -> String? {
+        await placeSelection(in: folder, copying: true, progress: progress, stop: stop)
+    }
+
+    private func placeSelection(
+        in folder: URL, copying: Bool, progress: (@MainActor @Sendable (FileProgress) -> Void)?, stop: FileStop?,
+    ) async -> String? {
+        guard library.service?.isReady == true else { return "The library isn't open" }
+        return await place(
+            selectedIndexIDs(), in: folder, copying: copying, progress: progress, done: nil, stop: stop,
         )
-        let relay = FileProgressRelay { progress?($0) }
-        push(step)
-        let run = await fileSteps.make { [self] in
-            await perform(step, undoing: false) { await service.move(ids, to: folder) { relay.send($0) } }
-        }
-        if let error = run.error {
-            activity.record(.error, "\(step.title) wasn't done: \(error)")
-        } else {
-            activity.record(.action, step.title)
-        }
-        return run.error
     }
 }
 
-/// What the Open panel lets Move to Folder choose: any folder to go through, and one in the library to move to.
+/// What the Open panel lets Move to Folder and Copy to Folder choose: any folder to go through, and one in the
+/// library to put the photos in.
 @MainActor
 final class MoveFolderPanel: NSObject, NSOpenSavePanelDelegate {
     /// The folder the regression suite chooses, as the panel, which it can't drive, would.
@@ -128,39 +123,54 @@ final class MoveFolderPanel: NSObject, NSOpenSavePanelDelegate {
     }
 }
 
-/// A batch's progress, in a sheet on the editor window while it runs.
+/// A batch's progress, in a sheet on the editor window while it runs, with Stop.
 @MainActor
 final class FileProgressSheet {
     private let window: NSWindow
     private let label: NSTextField
     private let bar = NSProgressIndicator()
+    private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
+    private let stop: FileStop?
+    private let doing: String
     private weak var editor: EditorModel?
 
-    private init(_ title: String, editor: EditorModel) {
+    private init(_ title: String, editor: EditorModel, stop: FileStop?) {
         self.editor = editor
+        self.stop = stop
+        doing = title.hasPrefix("Copying") ? "Copying" : "Moving"
         label = NSTextField(labelWithString: title + "…")
         bar.isIndeterminate = false
         bar.minValue = 0
         bar.maxValue = 1
         bar.setAccessibilityIdentifier("files.progress")
-        let stack = NSStackView(views: [label, bar])
+        stopButton.bezelStyle = .push
+        stopButton.keyEquivalent = "\u{1b}"
+        stopButton.isHidden = stop == nil
+        stopButton.setAccessibilityIdentifier("files.stop")
+        let buttons = NSStackView(views: [NSView(), stopButton])
+        buttons.orientation = .horizontal
+        let stack = NSStackView(views: [label, bar, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
         bar.translatesAutoresizingMaskIntoConstraints = false
         bar.widthAnchor.constraint(equalToConstant: 360).isActive = true
+        buttons.translatesAutoresizingMaskIntoConstraints = false
+        buttons.widthAnchor.constraint(equalToConstant: 360).isActive = true
         window = NSWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 400, height: 90), styleMask: [.titled], backing: .buffered,
+            contentRect: CGRect(x: 0, y: 0, width: 400, height: 120), styleMask: [.titled], backing: .buffered,
             defer: false,
         )
         window.title = title
         window.contentView = stack
+        stopButton.target = self
+        stopButton.action = #selector(stopClicked)
     }
 
     /// Shows the sheet, unless another is up.
-    static func present(_ title: String, editor: EditorModel) -> FileProgressSheet? {
+    static func present(_ title: String, editor: EditorModel, stop: FileStop? = nil) -> FileProgressSheet? {
         guard let parent = EditorWindowController.frontWindow, parent.attachedSheet == nil else { return nil }
-        let sheet = FileProgressSheet(title, editor: editor)
+        let sheet = FileProgressSheet(title, editor: editor, stop: stop)
         editor.isModalDialogOpen = true
         parent.beginSheet(sheet.window)
         return sheet
@@ -168,8 +178,15 @@ final class FileProgressSheet {
 
     func show(_ progress: FileProgress) {
         bar.doubleValue = progress.total > 0 ? Double(progress.done) / Double(progress.total) : 0
-        let doing = progress.isRollingBack ? "Putting back" : "Moving"
+        let doing = progress.isRollingBack ? "Putting back" : stop?.isStopped == true ? "Stopping" : doing
         label.stringValue = "\(doing): \(RenameModel.count(progress.done)) of \(RenameModel.count(progress.total)) steps"
+    }
+
+    @objc private func stopClicked() {
+        guard let stop, !stop.isStopped else { return }
+        stop.stop()
+        stopButton.isEnabled = false
+        label.stringValue = "Stopping after the photo in hand…"
     }
 
     func close() {
