@@ -19,6 +19,10 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
     private let empty = PanelControls.label("No keywords yet", secondary: true)
     /// Each keyword's node, kept by path so the outline keeps its rows open across reloads.
     private var nodes: [KeywordPath: KeywordNode] = [:]
+    /// The keywords the outline was given inside each keyword it asked about (nil: the top), in order: a change of
+    /// the list reaches the outline as the rows it puts in and takes out of them, so a painter's stroke or its Undo
+    /// costs the rows it changes, not a reload of thousands.
+    private var given: [KeywordPath?: [KeywordPath]] = [:]
     /// The keywords shown under the filter, and their order.
     private var visible: Set<KeywordPath>?
     private var shownList: [KeywordPath: Int]?
@@ -101,13 +105,25 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
 
     // MARK: - Showing
 
+    /// Shows `list`: the keywords that came or went put in or taken out where they go, the others' counts in place;
+    /// the column is laid out again only when the panel's height changes, as its line saying there are none comes or
+    /// goes, since laying out every panel of the column takes a tenth of a second.
     private func showList(_ list: KeywordList?) {
         let counts = list.map { $0.keywords.mapValues(\.count) }
+        let wasEmpty = empty.isHidden
         empty.isHidden = list.map { !$0.keywords.isEmpty } ?? false
         empty.stringValue = list == nil ? "Reading the keyword list…" : "No keywords yet"
+        if empty.isHidden != wasEmpty {
+            rowsChanged()
+        }
         guard counts != shownList else { return }
+        let shown = shownList
         shownList = counts
-        applyFilter()
+        guard let list, let counts, let shown, visible == nil else { return applyFilter() }
+        if shown.count != counts.count || shown.keys.contains(where: { counts[$0] == nil }) {
+            follow(list)
+        }
+        refreshRows()
     }
 
     private func applyFilter() {
@@ -125,17 +141,66 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
             visible = shown
         }
         nodes = nodes.filter { list[$0.key] != nil }
+        given = [:]
         outline.reloadData()
         if visible != nil {
             outline.expandItem(nil, expandChildren: true)
         }
-        rowsChanged()
+    }
+
+    /// The keywords that came into `list` or left it, put in or taken out of the rows the outline shows: at the top
+    /// and inside each keyword shown open. A keyword shown closed only shows again whether it holds any; the outline
+    /// asks for what's inside one as it opens.
+    private func follow(_ list: KeywordList) {
+        nodes = nodes.filter { list[$0.key] != nil }
+        var closed: [KeywordNode] = []
+        outline.beginUpdates()
+        for (parent, before) in given {
+            if let parent, list[parent] == nil {
+                given[parent] = nil
+                continue
+            }
+            let after = children(in: list, of: parent)
+            guard after != before else { continue }
+            given[parent] = after
+            let item = parent.map(node)
+            if let item, outline.row(forItem: item) < 0 || !outline.isItemExpanded(item) {
+                if outline.row(forItem: item) >= 0 {
+                    closed.append(item)
+                }
+                continue
+            }
+            var removed = IndexSet()
+            var inserted = IndexSet()
+            for change in after.difference(from: before) {
+                switch change {
+                case let .remove(offset, _, _): removed.insert(offset)
+                case let .insert(offset, _, _): inserted.insert(offset)
+                }
+            }
+            outline.removeItems(at: removed, inParent: item, withAnimation: [])
+            outline.insertItems(at: inserted, inParent: item, withAnimation: [])
+        }
+        outline.endUpdates()
+        for item in closed {
+            outline.reloadItem(item)
+        }
+    }
+
+    /// The rows the outline has made show their keywords as the list has them now.
+    private func refreshRows() {
+        guard let list = panels.keywordList else { return }
+        let selection = panels.selection
+        outline.enumerateAvailableRowViews { rowView, row in
+            guard let node = outline.item(atRow: row) as? KeywordNode, let keyword = list[node.path] else { return }
+            (rowView.view(atColumn: 0) as? KeywordRowView)?.show(keyword, selection: selection)
+        }
     }
 
     private func refreshChecks() {
-        for row in 0 ..< outline.numberOfRows {
-            (outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? KeywordRowView)?
-                .showCheck(panels.selection)
+        let selection = panels.selection
+        outline.enumerateAvailableRowViews { rowView, _ in
+            (rowView.view(atColumn: 0) as? KeywordRowView)?.showCheck(selection)
         }
     }
 
@@ -148,11 +213,23 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         return node
     }
 
-    private func children(of item: Any?) -> [KeywordList.Keyword] {
-        guard let list = panels.keywordList else { return [] }
-        let children = list.children(of: (item as? KeywordNode)?.path)
+    /// The keywords the outline has inside `item`, worked out once a list: it asks again for each row.
+    private func children(of item: Any?) -> [KeywordPath] {
+        let parent = (item as? KeywordNode)?.path
+        if let known = given[parent] {
+            return known
+        }
+        let found = children(in: panels.keywordList, of: parent)
+        given[parent] = found
+        return found
+    }
+
+    /// The keywords directly inside `parent` in `list`, or at its top, that the filter shows.
+    private func children(in list: KeywordList?, of parent: KeywordPath?) -> [KeywordPath] {
+        guard let list else { return [] }
+        let children = parent.map { list[$0]?.children ?? [] } ?? list.roots
         guard let visible else { return children }
-        return children.filter { visible.contains($0.path) }
+        return children.filter(visible.contains)
     }
 
     // MARK: - Data source and delegate
@@ -162,7 +239,7 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
     }
 
     func outlineView(_: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
-        node(children(of: item)[index].path)
+        node(children(of: item)[index])
     }
 
     func outlineView(_: NSOutlineView, isItemExpandable item: Any) -> Bool {
