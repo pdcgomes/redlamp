@@ -1,5 +1,4 @@
 import Foundation
-import RedlampDocument
 import RedlampLibrary
 
 extension LibraryFolderList {
@@ -47,25 +46,18 @@ extension LibraryFolderList {
         }
     }
 
-    /// The order Folders lists a large folder's photos in: each folder's together, a folder's before its subfolders'
-    /// (`Mapping.foldersPrecede`), and by name in Finder's order as Folders has it (`FileOrder`), from each photo's
-    /// folder and name as the index has them. LibraryLive lists them by the query engine's Finder order, which puts
-    /// punctuation before digits where `FileOrder` puts digits first: DSC_5513 before DSC05507. Each folder's photos
-    /// come in runs already in order, which a stable sort merges.
+    /// The order Folders lists a large folder's photos in, from LibraryLive's list of them by name, in Folders' order
+    /// (`FinderOrder` is `FileOrder`): with subfolders, each photo goes with its folder's, a folder's before its
+    /// subfolders' (`Mapping.foldersPrecede`), as the index keeps each photo's folder.
     struct FolderOrder: Sendable {
         let path: String
         let includesSubfolders: Bool
         /// The place of the folder and of each folder below it in Folders' order, by its ID.
         private var ranks: [Int64: Int] = [:]
-        /// Each photo's folder and name, by the photo's ID.
-        private var photos: [Int64: Photo] = [:]
+        /// Each photo's folder, by the photo's ID.
+        private var folders: [Int64: Int64] = [:]
 
-        private struct Photo: Sendable {
-            var folder: Int64
-            var name: String
-        }
-
-        /// Changes of more photos than this read every photo's folder and name again, rather than theirs alone.
+        /// Changes of more photos than this read every photo's folder again, rather than theirs alone.
         static let largestRead = 20000
 
         init(path: String, includesSubfolders: Bool) {
@@ -80,7 +72,8 @@ extension LibraryFolderList {
             let (list, diff) = (update.list, update.diff)
             let changed = diff.reset ? nil
                 : diff.inserted.map { list[$0] } + diff.updated.map { list[$0] } + diff.moved.map { list[$0.to] }
-            if let changed, !photos.isEmpty, changed.count <= Self.largestRead {
+            guard includesSubfolders else { return (list, changed) }
+            if let changed, !folders.isEmpty, changed.count <= Self.largestRead {
                 try await read(changed, index: index)
             } else {
                 try await readAll(index: index)
@@ -88,63 +81,62 @@ extension LibraryFolderList {
             return (PhotoList(source: list.source, sort: list.sort, ids: walked(list.ids)), changed)
         }
 
-        /// `ids`, in LibraryLive's order, each folder's together in Folders' order, and sorted by name as Folders sorts
-        /// them, those `FileOrder` takes as the same keeping LibraryLive's order.
+        /// `ids`, in LibraryLive's order, each taken to its folder's place, keeping that order within each folder.
         private func walked(_ ids: ContiguousArray<Int64>) -> ContiguousArray<Int64> {
-            var folders = [[(id: Int64, name: String)]](repeating: [], count: ranks.count + 1)
-            for id in ids {
-                let photo = photos[id]
-                folders[photo.flatMap { ranks[$0.folder] } ?? ranks.count].append((id, photo?.name ?? ""))
+            let unknown = ranks.count
+            var starts = [Int](repeating: 0, count: unknown + 2)
+            var places = [Int](repeating: unknown, count: ids.count)
+            for (index, id) in ids.enumerated() {
+                let rank = folders[id].flatMap { ranks[$0] } ?? unknown
+                places[index] = rank
+                starts[rank + 1] += 1
             }
-            var walked = ContiguousArray<Int64>()
-            walked.reserveCapacity(ids.count)
-            for var folder in folders {
-                folder.sort { FileOrder.precedes($0.name, $1.name) }
-                walked.append(contentsOf: folder.lazy.map(\.id))
+            for rank in 1 ..< starts.count {
+                starts[rank] += starts[rank - 1]
+            }
+            var walked = ContiguousArray<Int64>(repeating: 0, count: ids.count)
+            for (index, id) in ids.enumerated() {
+                walked[starts[places[index]]] = id
+                starts[places[index]] += 1
             }
             return walked
         }
 
-        /// Reads the folders and names of the photos `ids`, and every folder's place again when one is new.
+        /// Reads the folders of the photos `ids`, and every folder's place again when one is new.
         private mutating func read(_ ids: [Int64], index: LibraryIndex) async throws {
             guard !ids.isEmpty else { return }
             let found = try await index.read { reader in
-                let statement = try reader.database.cached("SELECT folder, name FROM photos WHERE id = ?")
-                var found: [Int64: Photo] = [:]
+                let statement = try reader.database.cached("SELECT folder FROM photos WHERE id = ?")
+                var found: [(photo: Int64, folder: Int64)] = []
                 for id in ids {
                     try statement.bind(id, at: 1)
-                    try statement
-                        .forEachRow { found[id] = Photo(folder: $0.int64(at: 0), name: $0.string(at: 1) ?? "") }
+                    try statement.forEachRow { found.append((id, $0.int64(at: 0))) }
                 }
                 return found
             }
-            photos.merge(found) { _, read in read }
-            if found.values.contains(where: { ranks[$0.folder] == nil }) {
+            for (photo, folder) in found {
+                folders[photo] = folder
+            }
+            if found.contains(where: { ranks[$0.folder] == nil }) {
                 let path = path
                 ranks = try await Self.ranks(of: index.read { try Self.folders(below: path, in: $0) })
             }
         }
 
-        /// Reads every photo's folder and name, and every folder's place.
+        /// Reads every photo's folder, and every folder's place.
         private mutating func readAll(index: LibraryIndex) async throws {
-            let (path, includesSubfolders) = (path, includesSubfolders)
-            let read = try await index.read { reader -> (folders: [Int64: String], photos: [Int64: Photo]) in
-                var tree = try Self.folders(below: path, in: reader)
-                if !includesSubfolders {
-                    tree = tree.filter { $0.value == path }
-                }
-                let statement = try reader.database.cached("SELECT id, name FROM photos WHERE folder = ?")
-                var photos: [Int64: Photo] = [:]
+            let path = path
+            let read = try await index.read { reader -> (folders: [Int64: String], photos: [Int64: Int64]) in
+                let tree = try Self.folders(below: path, in: reader)
+                let statement = try reader.database.cached("SELECT id FROM photos WHERE folder = ?")
+                var photos: [Int64: Int64] = [:]
                 for folder in tree.keys {
                     try statement.bind(folder, at: 1)
-                    try statement.forEachRow { photos[$0.int64(at: 0)] = Photo(
-                        folder: folder,
-                        name: $0.string(at: 1) ?? "",
-                    ) }
+                    try statement.forEachRow { photos[$0.int64(at: 0)] = folder }
                 }
                 return (tree, photos)
             }
-            photos = read.photos
+            folders = read.photos
             ranks = Self.ranks(of: read.folders)
         }
 
