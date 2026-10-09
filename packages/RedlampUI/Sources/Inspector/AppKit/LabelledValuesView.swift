@@ -20,6 +20,9 @@ extension ValueFieldView {
 /// equally (`H 210   S 35`), after an optional title in the panels' label column. With a
 /// hint, the row shows that instead of its fields.
 final class LabelledValuesView: LayerDrawnView {
+    /// Between a value and the next column's label.
+    static let columnGap = Metrics.rowSpacing
+
     let fields: [ValueFieldView]
     private let labels: [String]
     private let title: String?
@@ -53,10 +56,13 @@ final class LabelledValuesView: LayerDrawnView {
         NSSize(width: NSView.noIntrinsicMetric, height: Metrics.rowHeight)
     }
 
-    private var columns: [CGRect] {
+    var columns: [CGRect] {
         let start = title == nil ? 0 : Metrics.labelWidth + Metrics.rowSpacing
-        let width = max(bounds.width - start, 0) / CGFloat(max(fields.count, 1))
-        return fields.indices.map { CGRect(x: start + CGFloat($0) * width, y: 0, width: width, height: bounds.height) }
+        let count = CGFloat(max(fields.count, 1))
+        let width = max(bounds.width - start - Self.columnGap * (count - 1), 0) / count
+        return fields.indices.map {
+            CGRect(x: start + CGFloat($0) * (width + Self.columnGap), y: 0, width: width, height: bounds.height)
+        }
     }
 
     override func drawContent(in _: CGRect) {
