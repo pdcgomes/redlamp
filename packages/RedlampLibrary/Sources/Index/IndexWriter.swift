@@ -330,7 +330,8 @@ public extension LibraryIndex.Writer {
         return id
     }
 
-    /// The ID of the keyword at `path` (`Places/Portugal/Lisbon`), added with any parent it lacks.
+    /// The ID of the keyword at `path` (`Places/Portugal/Lisbon`), added with any parent it lacks, each with an ID no
+    /// keyword had (`IndexIDs`).
     func keywordID(forPath path: String) throws -> Int64 {
         var id: Int64?
         var prefix = ""
@@ -481,10 +482,13 @@ extension LibraryIndex.Writer {
         if let existing = try select.first({ $0.int64(at: 0) }) {
             id = existing
         } else {
-            let insert = try database.cached("INSERT INTO keywords (parent, name, path) VALUES (?, ?, ?) RETURNING id")
+            let insert = try database.cached("""
+            INSERT INTO keywords (parent, name, path, id) VALUES (?, ?, ?, ?) RETURNING id
+            """)
             try insert.bind(parent, at: 1)
             try insert.bind(name, at: 2)
             try insert.bind(path, at: 3)
+            try insert.bind(newID(of: .keywords), at: 4)
             id = try returnedID(insert)
         }
         keywordIDs[path] = id

@@ -65,7 +65,7 @@ struct IndexIDTests {
         let run = await IndexerRun.collect(indexer.index([sandbox.url("Later")]))
         #expect(run.failures.isEmpty, "\(run.failures)")
         let after = try await Self.ids(sandbox.index)
-        for table in IndexIDs.allCases {
+        for table in [IndexIDs.photos, .folders, .roots] {
             let added = after[table, default: []].subtracting(kept[table, default: []])
             let removed = before[table, default: []].subtracting(kept[table, default: []])
             #expect(!added.isEmpty && !removed.isEmpty, "\(table)")
@@ -133,8 +133,15 @@ struct IndexIDTests {
         _ = await IndexerRun.collect(indexer.index([sandbox.url("Later")]))
         let later = try await Self.root("Later", in: sandbox)
         #expect(later.id > trip.id)
-        // Probed afresh as it's indexed, rather than taken for probed where Trip was.
-        let held = try await sandbox.index.read { try $0.setting(LibrarySidecars.pathKey(later.id)) }
+        // Probed afresh as it's indexed, rather than taken for probed where Trip was; the probe runs beside the
+        // indexer's run, which doesn't wait for it.
+        var held: String?
+        for _ in 0 ..< 500 where held == nil {
+            held = try await sandbox.index.read { try $0.setting(LibrarySidecars.pathKey(later.id)) }
+            if held == nil {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+        }
         #expect(held?.hasSuffix("/Later") == true, "\(held ?? "none")")
     }
 
@@ -159,6 +166,62 @@ struct IndexIDTests {
         }
         #expect(added == [last + 10])
         #expect(try await sandbox.index.read { try $0.setting(IndexIDs.photos.key) } == String(last + 10))
+    }
+
+    @Test func `a collection or keyword made after the rows with the largest IDs left the index gets a larger ID`(
+    ) async throws {
+        let sandbox = try await KeywordSandbox.make()
+        defer { sandbox.remove() }
+        try sandbox.photo("IMG_0001.JPG")
+        try await sandbox.indexAll()
+        let photo = try await sandbox.id("IMG_0001.JPG")
+        // Put on the photo and taken off again, their rows removed as batches remove rows nothing holds.
+        let (collection, keyword) = try await sandbox.index.write { writer in
+            try writer.setCollections(["Clients/Acme"], forPhoto: photo)
+            try writer.setKeywords(["Places/Lisbon"], forPhoto: photo)
+            let made = try (writer.collectionID(for: kw("Clients/Acme")), writer.keywordID(forPath: "Places/Lisbon"))
+            try writer.setCollections([], forPhoto: photo)
+            try writer.removeUnusedCollections(within: [kw("Clients/Acme")])
+            try writer.setKeywords([], forPhoto: photo)
+            try writer.removeUnusedKeywords(within: [kw("Places/Lisbon")])
+            return made
+        }
+        let (newCollection, newKeyword) = try await sandbox.index.write { writer in
+            try (writer.collectionID(for: kw("Portfolio")), writer.keywordID(forPath: "Birds"))
+        }
+        #expect(newCollection > collection)
+        #expect(newKeyword > keyword)
+    }
+
+    @Test func `a photo put back after its collection left the index isn't put in one made since`() async throws {
+        let sandbox = try await KeywordSandbox.make()
+        defer { sandbox.remove() }
+        for path in ["IMG_0001.JPG", "IMG_0002.JPG"] {
+            try sandbox.photo(path)
+        }
+        try await sandbox.indexAll()
+        let (trashed, other) = try await (sandbox.id("IMG_0001.JPG"), sandbox.id("IMG_0002.JPG"))
+        let folder = LibraryIndexer.path(sandbox.root)
+        // In Selects alone, then taken out of the index as a move to the Trash takes it, its row as the journal
+        // keeps it; Selects goes with its last photo.
+        let removed = try await sandbox.index.write { writer -> RemovedPhoto in
+            try writer.setCollections(["Selects"], forPhoto: trashed)
+            let row = try #require(try writer.photo(id: trashed))
+            let removed = try RemovedPhoto(
+                photo: IndexedPhoto(row), folder: folder, collections: writer.collectionPlaces(ofPhoto: trashed),
+            )
+            try writer.deletePhotos([trashed])
+            try writer.removeUnusedCollections(within: [kw("Selects")])
+            return removed
+        }
+        // A collection made meanwhile, which SQLite would give Selects' ID.
+        try await sandbox.index.write { writer in try writer.setCollections(["Portfolio"], forPhoto: other) }
+        let collections = try await sandbox.index.write { writer in
+            let folderID = try #require(try writer.folder(path: folder)).id
+            let id = try writer.restorePhoto(removed, inFolder: folderID, name: removed.photo.name)
+            return try writer.collections(ofPhoto: id)
+        }
+        #expect(collections.isEmpty, "\(collections.map(\.text))")
     }
 
     @Test func `a photo put back under an ID the index hasn't given keeps any new photo from it`() async throws {

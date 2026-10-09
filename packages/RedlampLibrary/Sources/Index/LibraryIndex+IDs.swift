@@ -1,16 +1,18 @@
 import Foundation
 
-/// The tables whose IDs are never given twice (LIB-05): a photo, folder or root never gets the ID of one the index
-/// had before, as SQLite would give it once the row with the largest ID is gone. Photo IDs outlive their rows in
-/// culling's, the panels' and rename's Undo, the metadata, keyword and file journals, lists, their diffs and
-/// selections, the column store and its snapshot, and the health rows, hashes and XMP merge records kept for a
-/// photo; folder IDs in the file journal's moves and Put Back; root IDs in the settings kept for a root. Each table's
-/// last ID given is kept in the settings, in the transaction that gives it.
+/// The tables whose IDs are never given twice (LIB-05): a photo, folder, root, collection or keyword never gets the
+/// ID of one the index had before, as SQLite would give it once the row with the largest ID is gone. Photo IDs
+/// outlive their rows in culling's, the panels' and rename's Undo, the metadata, keyword and file journals, lists,
+/// their diffs and selections, the column store and its snapshot, and the health rows, hashes and XMP merge records
+/// kept for a photo; folder IDs in the file journal's moves and Put Back; root IDs in the settings kept for a root;
+/// collection IDs in the file journal's places of a photo put back, and collection and keyword IDs in the query
+/// engine's names, plans and postings until they're read again after a change. Each table's last ID given is kept in
+/// the settings, in the transaction that gives it.
 ///
 /// Not AUTOINCREMENT: an upsert that only updates a row spends an ID there, so each pass reading a million photos
 /// again would spend a million.
 enum IndexIDs: String, Sendable, CaseIterable {
-    case photos, folders, roots
+    case photos, folders, roots, collections, keywords
 
     /// The setting keeping the last ID the table gave.
     var key: String {
@@ -35,6 +37,10 @@ enum IndexIDs: String, Sendable, CaseIterable {
                 Self.largest(in: LibraryIndex.Writer.removingKey(0)), Self.largest(in: LibrarySidecars.probedKey(0)),
                 Self.largest(in: LibrarySidecars.pathKey(0)),
             ]
+        case .collections:
+            ["SELECT max(id) FROM collections", "SELECT max(collection) FROM collection_photos"]
+        case .keywords:
+            ["SELECT max(id) FROM keywords", "SELECT max(keyword) FROM photo_keywords"]
         }
         return "SELECT max(" + sources.map { "coalesce((\($0)), 0)" }.joined(separator: ", ") + ")"
     }

@@ -139,8 +139,8 @@ public extension LibraryIndex.Writer {
         }
     }
 
-    /// The row at `path`, added as `kind` under `parent` when there's none; an existing set photos are put
-    /// in becomes a collection.
+    /// The row at `path`, added as `kind` under `parent` when there's none, with an ID no collection had
+    /// (`IndexIDs`); an existing set photos are put in becomes a collection.
     private func collectionRow(_ path: CollectionPath, parent: Int64?, kind: CollectionKind) throws -> Int64 {
         let select = try database.cached("SELECT id, kind FROM collections WHERE path = ?")
         try select.bind(path.text, at: 1)
@@ -155,12 +155,13 @@ public extension LibraryIndex.Writer {
             return id
         }
         let insert = try database.cached("""
-        INSERT INTO collections (parent, name, kind, path) VALUES (?, ?, ?, ?) RETURNING id
+        INSERT INTO collections (parent, name, kind, path, id) VALUES (?, ?, ?, ?, ?) RETURNING id
         """)
         try insert.bind(parent, at: 1)
         try insert.bind(path.name, at: 2)
         try insert.bind(kind.rawValue, at: 3)
         try insert.bind(path.text, at: 4)
+        try insert.bind(newID(of: .collections), at: 5)
         return try returnedID(insert)
     }
 }
