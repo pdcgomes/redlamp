@@ -19,6 +19,10 @@ room sync
 
 The token lets the script find this chat, so the room's Open its chat button works. Rename the chat as your prompt asks.
 
+### A reopened report
+
+If your prompt says the report was reopened, an earlier agent's fix shipped and didn't fix it for the reporter (or they asked for more). Start there: their latest comment, the earlier fix's commits (`git show`), the earlier round in `room status`, and the first agent's chat in `~/.cursor/projects/Users-pedrogomes-src-darkroom/agent-transcripts/<its chat ID>`. Say why the first fix wasn't enough before you change anything, and in the reply. Reproduce it this time even if it looked obvious before: the earlier test passed and the bug stayed.
+
 ## 2. Read the report
 
 - The issue: `gh issue view <n> --repo pdcgomes/redlamp --comments`. A report from the app starts with a hidden `redlamp-feedback v1` line: the area, the kind and the Redlamp version it came from.

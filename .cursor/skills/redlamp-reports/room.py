@@ -118,6 +118,15 @@ def write_note(note):
     os.replace(handle.name, path)
 
 
+# A round is one try at a report: its triage, its agent and what came of it. A reopened report starts another.
+ROUND_KEYS = ("triage", "agent", "stage", "waiting", "why", "reproduced", "branch", "worktree", "reply", "out")
+
+
+def round_of(note):
+    return {"triage": note.get("triage"), "agent": note.get("agent"), "stage": note.get("stage"),
+            "reproduced": note.get("reproduced"), "reply": note.get("reply"), "out": note.get("out")}
+
+
 def all_notes():
     if not NOTES.is_dir():
         return {}
@@ -180,6 +189,24 @@ def excerpt(text, length=240):
     text = re.sub(r"https://github\.com/user-attachments/assets/\S+", "[video or image]", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text if len(text) <= length else text[: length - 1].rstrip() + "…"
+
+
+def stamp(iso):
+    """Seconds since the epoch, for comparing GitHub's UTC times with the notes' local ones."""
+    try:
+        return dt.datetime.fromisoformat((iso or "").replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def last_reopened(number):
+    """When the issue was last reopened, and by whom, or None."""
+    events = gh_json("api", f"repos/{REPO}/issues/{number}/events?per_page=100")
+    reopened = [e for e in events or [] if e.get("event") == "reopened"]
+    if not reopened:
+        return None
+    last = reopened[-1]
+    return {"at": last["created_at"], "by": (last.get("actor") or {}).get("login")}
 
 
 def issues(known):
@@ -417,6 +444,21 @@ def build(offline):
         comments = [{"by": c["author"]["login"], "you": c["author"]["login"] == OWNER, "at": c["createdAt"],
                      "text": excerpt(c["body"]), "url": c.get("url")} for c in issue.get("comments", [])]
         fix = [c for c in on_main.get(number, []) if c["sha"] not in planning]
+        reopened = None
+        if issue["state"] == "OPEN" and (fix or note.get("reply") or note.get("out") or note.get("stage") in ("replied", "closed")):
+            reopened = last_reopened(number)
+        rounds = list(note.get("rounds", []))
+        note_round = note
+        if reopened:
+            # What was recorded before the reopen is an earlier round; only newer work counts now.
+            earlier = [c for c in fix if stamp(c["at"]) < stamp(reopened["at"])]
+            fix = [c for c in fix if stamp(c["at"]) >= stamp(reopened["at"])]
+            agent = note.get("agent")
+            if not agent or stamp(agent.get("started")) < stamp(reopened["at"]):
+                if agent or note.get("reply"):
+                    rounds.append({**round_of(note), "commits": [c["short"] for c in earlier],
+                                   "release": next((holding.get(c["sha"]) for c in earlier if holding.get(c["sha"])), None)})
+                note_round = {k: v for k, v in note.items() if k not in ROUND_KEYS}
         fix_info = None
         if fix:
             held = [holding.get(c["sha"]) for c in fix]
@@ -428,14 +470,14 @@ def build(offline):
                 state, version = "released", tag.removeprefix("v")
             else:
                 state, version = "expected", expected_release(fix, rel)
-            promised = (note.get("reply") or {}).get("release")
+            promised = (note_round.get("reply") or {}).get("release")
             missed = bool(promised and state != "released" and f"v{promised}" in all_tags)
             fix_info = {"commits": [{k: c[k] for k in ("short", "at", "subject")} for c in fix], "insideApp": app,
                         "state": "missed" if missed else state, "version": version, "promised": promised}
-        triage = note.get("triage") or None
-        if triage is None and mark:
-            triage = {"decision": mark.get("decision"), "at": mark.get("at"), "reason": mark.get("reason"), "applied": None}
-        elif triage is not None and mark and mark.get("at", "") > (triage.get("at") or ""):
+        triage = note_round.get("triage") or None
+        if mark and reopened and stamp(mark.get("at")) < stamp(reopened["at"]):
+            mark = None
+        if mark and (triage is None or stamp(mark.get("at")) > stamp(triage.get("at"))):
             triage = {"decision": mark.get("decision"), "at": mark.get("at"), "reason": mark.get("reason"), "applied": None}
         replied_after_fix = bool(fix) and any(c["you"] and c["at"] >= fix[0]["at"] for c in comments)
         report = {
@@ -458,22 +500,24 @@ def build(offline):
             "diagnostics": parsed["diagnostics"],
             "comments": comments,
             "triage": triage,
-            "read": note.get("read"),
+            "read": None if reopened and stamp((note.get("read") or {}).get("at")) < stamp(reopened["at"]) else note.get("read"),
             "proposal": note.get("proposal"),
-            "agent": note.get("agent"),
-            "stage": note.get("stage"),
-            "waiting": note.get("waiting"),
-            "why": note.get("why"),
-            "reproduced": note.get("reproduced"),
+            "agent": note_round.get("agent"),
+            "stage": note_round.get("stage"),
+            "waiting": note_round.get("waiting"),
+            "why": note_round.get("why"),
+            "reproduced": note_round.get("reproduced"),
             "branches": on_branches.get(number, []),
             "fix": fix_info,
-            "reply": note.get("reply") or ({"url": None, "at": None, "release": None, "fromComments": True} if replied_after_fix else None),
-            "out": note.get("out"),
+            "reply": note_round.get("reply") or ({"url": None, "at": None, "release": None, "fromComments": True} if replied_after_fix else None),
+            "out": note_round.get("out"),
+            "reopened": reopened,
+            "rounds": rounds,
             "tracked": note.get("tracked") or (TRACKER_ID.match(issue["title"])[0] if TRACKER_ID.match(issue["title"]) else None),
             "notes": note.get("notes", [])[-12:],
             "thumb": None,
         }
-        waiting_for_triage = report["state"] == "open" and not triage and not note.get("agent")
+        waiting_for_triage = report["state"] == "open" and not triage and not note_round.get("agent")
         if waiting_for_triage and parsed["screenshots"]:
             report["thumb"] = thumbnail(number, parsed["screenshots"][0], offline)
         reports.append(report)
@@ -481,6 +525,8 @@ def build(offline):
         if issue.get("closedAt") and issue["state"] == "CLOSED":
             reason = (issue.get("stateReason") or "").lower().replace("_", " ") or "closed"
             events.append({"at": issue["closedAt"], "text": f"#{number} closed ({reason})."})
+        if reopened:
+            events.append({"at": reopened["at"], "text": f"#{number} reopened{' by ' + ('you' if reopened['by'] == OWNER else reopened['by']) if reopened['by'] else ''}."})
         for entry in note.get("notes", []):
             events.append({"at": entry["at"], "text": f"#{number}: {entry['text']}"})
     for entry in room_log():
@@ -541,6 +587,10 @@ def describe(report):
     bits.append(report["title"][:80])
     lines = [" ".join(bits)]
     detail = []
+    if report["reopened"]:
+        earlier = report["rounds"][-1] if report["rounds"] else {}
+        detail.append(f"reopened {report['reopened']['at'][:16]} by {report['reopened']['by']}"
+                      + (f", after {', '.join(earlier.get('commits') or [])} ({earlier.get('release') or '?'})" if earlier else ""))
     if report["triage"]:
         t = report["triage"]
         detail.append(f"triage: {t['decision']}{'' if t.get('applied') else ' (not applied yet)'}")
@@ -613,6 +663,12 @@ def chat_for(token):
 def claim(args):
     note = read_note(args.number)
     chat = chat_for(args.token) if args.token else None
+    if note.get("agent") and (note.get("reply") or note.get("stage") in ("replied", "closed")):
+        commits = [c["short"] for c in commits_on_main().get(args.number, [])]
+        note.setdefault("rounds", []).append({**round_of(note), "commits": commits, "release": (note.get("reply") or {}).get("release")})
+        for key in ROUND_KEYS:
+            note.pop(key, None)
+        note.setdefault("notes", []).append({"at": now(), "text": "Reopened: the earlier round is kept in the room's history."})
     note["agent"] = {"chat": chat, "title": args.title, "started": now(), "token": args.token}
     note["stage"] = "reading"
     note["waiting"] = None

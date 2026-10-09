@@ -45,6 +45,18 @@ interface Commit {
   subject: string;
 }
 
+/** An earlier try at a report that was reopened: its triage, its agent and what came of it. */
+interface Round {
+  triage: Triage | null;
+  agent: { chat: string | null; title?: string | null; started: string; token?: string | null } | null;
+  stage: string | null;
+  reproduced: "yes" | "not needed" | "couldn't" | null;
+  reply: { url: string | null; at: string | null; release: string | null; fromComments?: boolean } | null;
+  out: { url: string; at: string } | null;
+  commits: string[];
+  release: string | null;
+}
+
 interface Report {
   number: number;
   title: string;
@@ -79,6 +91,9 @@ interface Report {
   fix: { commits: Commit[]; insideApp: boolean; state: "expected" | "released" | "live" | "missed"; version: string | null; promised: string | null } | null;
   reply: { url: string | null; at: string | null; release: string | null; fromComments?: boolean } | null;
   out: { url: string; at: string } | null;
+  /** The last time the issue was reopened after a fix; the work before it is in `rounds`. */
+  reopened: { at: string; by: string | null } | null;
+  rounds: Round[];
   tracked: string | null;
   notes: { at: string; text: string }[];
   thumb: string | null;
@@ -193,9 +208,15 @@ function Status({ tone, label }: { tone: Tone; label: string }) {
 
 // ---------------------------------------------------------------- what each report's state is
 
+function time(iso: string | null | undefined): number {
+  const value = Date.parse(iso ?? "");
+  return Number.isNaN(value) ? 0 : value;
+}
+
 function decisionOf(report: Report, marks: Marks): Triage | null {
   const mark = marks[String(report.number)];
-  if (mark && (!report.triage || mark.at > report.triage.at)) return { ...mark, applied: null };
+  const current = mark && (!report.reopened || time(mark.at) > time(report.reopened.at));
+  if (mark && current && (!report.triage || time(mark.at) > time(report.triage.at))) return { ...mark, applied: null };
   return report.triage;
 }
 
@@ -239,10 +260,21 @@ function releaseText(fix: NonNullable<Report["fix"]>): string {
 
 // ---------------------------------------------------------------- prompts for the chats the buttons open
 
+function reopenedText(report: Report): string {
+  const earlier = report.rounds[report.rounds.length - 1];
+  if (!report.reopened || !earlier) return "";
+  return (
+    `It was reopened on ${when(report.reopened.at)} after the earlier fix (${earlier.commits.join(", ") || "no commits recorded"}` +
+    `${earlier.release ? `, released in ${earlier.release.replace(/^v/, "")}` : ""}) didn't fix it for the reporter; read their latest comment and the earlier round ` +
+    `(room.py status, and the first agent's chat ${earlier.agent?.chat ?? "(not recorded)"} in the agent transcripts), and find out why that fix wasn't enough before changing anything. `
+  );
+}
+
 function fixPrompt(report: Report, token: string): string {
   const short = report.title.replace(/^\[[^\]]*\]\s*/, "").slice(0, 60);
   return (
     `Fix bug #${report.number} from the reports room: "${report.title}" (${report.url}). ` +
+    reopenedText(report) +
     `Follow ${BRIEF} from start to finish: claim it with room.py using the token ${token}, read the report and its diagnostics, ` +
     `reproduce it if it isn't obvious, fix it in a worktree of your own, push the fix to main through the push gate, ` +
     `then comment on #${report.number} with the cause, the fix and the release it's expected in, and close it. ` +
@@ -323,6 +355,41 @@ function Facts({ report, now }: { report: Report; now: number }) {
   );
 }
 
+/** For a reopened report: when, and what the earlier round did, with its agent's chat. */
+function EarlierRound({ report, now }: { report: Report; now: number }) {
+  const theme = useHostTheme();
+  const dispatch = useCanvasAction();
+  const earlier = report.rounds[report.rounds.length - 1];
+  if (!report.reopened) return null;
+  const by = report.reopened.by === DATA.owner ? "you" : report.reopened.by;
+  return (
+    <div style={{ borderLeft: `2px solid ${theme.category.yellow}`, paddingLeft: 10 }}>
+      <Stack gap={4}>
+        <Text size="small" weight="semibold">{`Reopened${by ? ` by ${by}` : ""}, ${ago(report.reopened.at, now)}`}</Text>
+        {earlier ? (
+          <Text size="small" tone="secondary">
+            {`The earlier round: fixed in ${earlier.commits.join(", ") || "commits not recorded"}${earlier.release ? `, released in ${earlier.release.replace(/^v/, "")}` : ""}. `}
+            {earlier.reply?.url ? <Link href={earlier.reply.url}>Its reply</Link> : null}
+            {earlier.out?.url ? (
+              <>
+                {", "}
+                <Link href={earlier.out.url}>told it's out</Link>
+              </>
+            ) : null}
+          </Text>
+        ) : null}
+        {earlier?.agent?.chat ? (
+          <div>
+            <Button variant="ghost" onClick={() => dispatch({ type: "openAgent", agentId: earlier.agent?.chat ?? "" })}>
+              Open the first agent's chat
+            </Button>
+          </div>
+        ) : null}
+      </Stack>
+    </div>
+  );
+}
+
 function Title({ report }: { report: Report }) {
   return (
     <Text weight="semibold">
@@ -392,6 +459,7 @@ function TriageCard(props: {
           ) : null}
         </Stack>
         <Words report={report} />
+        <EarlierRound report={report} now={now} />
         {report.read ? (
           <div style={{ background: theme.fill.tertiary, borderRadius: 6, padding: "8px 10px" }}>
             <Stack gap={2}>
@@ -417,7 +485,7 @@ function TriageCard(props: {
         <Row gap={6} wrap>
           {kind === "bug" || kind === "unsorted" ? (
             <Button variant="primary" onClick={fix}>
-              Fix it
+              {report.reopened ? "Fix it again" : "Fix it"}
             </Button>
           ) : null}
           {kind === "idea" || kind === "unsorted" ? (

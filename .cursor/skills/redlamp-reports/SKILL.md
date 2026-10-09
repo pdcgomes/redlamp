@@ -42,6 +42,10 @@ The owner decides on the Triage tab. Each card shows the report's own sections (
 
 A Fix it that no agent has claimed shows under "Fix it, no agent has picked it up yet", with Start its agent again.
 
+## Reopened reports
+
+When a report is reopened after its fix (the reporter says it isn't fixed, or asks for more), it goes back to Triage. Its card says who reopened it and when, and shows the earlier round: the commits, the release they shipped in, its reply, and **Open the first agent's chat**. Clicks, reads and fixes from before the reopen no longer count; `room.py` finds the reopen in the issue's events and keeps the earlier round in the report's history (`rounds`). **Fix it again** opens a new agent chat whose prompt names the earlier fix and the first agent's chat, and asks it to find out why that fix wasn't enough before changing anything. When the agent claims the report, the earlier round is filed under `rounds` in its note.
+
 ## Applying decisions
 
 Take each recorded decision in turn, then record it with `room.py note <n> --triage <decision> --applied "<what you did>"` (and `--tracked <ID>` where it became one), so the board stops showing it as waiting.
