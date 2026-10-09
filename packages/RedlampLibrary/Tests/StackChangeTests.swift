@@ -113,6 +113,15 @@ struct StackChangeTests {
         #expect(stored("Day 1/A.JPG") == stored("Day 1/A.NEF"))
         #expect(sandbox.sidecar("Day 2/B.NEF")?.metadata?.rating == 3)
 
+        // Dragged onto the last photo from above it, the top goes after it; ⌘Z puts it back.
+        let lastShown = try #require(shown.first?.last)
+        let lastShownID = try ids[#require(paths.firstIndex { $0.hasSuffix("/" + lastShown) })]
+        let placed = try await metadata.run(metadata.plan(.place([lastID], at: lastShownID), in: stacks()))
+        #expect(placed.title == "Move a photo in its stack" && placed.written == 5)
+        #expect(try await order().first == Array((shown.first ?? []).dropFirst()) + [last])
+        try await metadata.undo()
+        #expect(try await order() == shown)
+
         // An index built afresh from the sidecars finds the stack in the same order.
         let rebuilt = try await LibraryIndex.open(at: sandbox.library.url.appending(path: "Rebuilt.sqlite"), readers: 2)
         defer { rebuilt.closeAndWait() }

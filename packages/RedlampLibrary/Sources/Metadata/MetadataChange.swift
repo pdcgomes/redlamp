@@ -173,10 +173,8 @@ public extension LibraryMetadata {
             changed = choices.move(id, by: offset, among: shown, in: stacks)
             title = "Move a photo \(offset < 0 ? "up" : "down") its stack"
         case let .place(ids, target):
-            (title, changed) = (
-                "Move \(Self.count(ids.count)) in their stack",
-                choices.place(ids, at: target, in: stacks),
-            )
+            changed = choices.place(ids, at: target, in: stacks)
+            title = "Move \(Self.count(ids.count)) in \(ids.count == 1 ? "its stack" : "their stack")"
         case let .top(id):
             (title, changed) = ("Show a photo for its stack", choices.setTop(id, in: stacks))
         case let .reset(ids):
