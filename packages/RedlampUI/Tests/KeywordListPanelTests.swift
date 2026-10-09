@@ -164,4 +164,30 @@ struct KeywordListPanelTests {
         times.sort()
         #expect(times[times.count / 2] < .milliseconds(8), "\(times)")
     }
+
+    @Test func `a keyword that appears among the rows on screen, or leaves them, is shown within a frame`() async {
+        let base = (0 ..< 40).map { String(format: "Keyword %02d", $0) }
+        let panel = Panel(base)
+        #expect(panel.outline.numberOfRows == 40)
+        var times: [Duration] = []
+        for round in 0 ..< 5 {
+            let painted = "Aardvark \(round)"
+            await times.append(panel.change(to: base + [painted], rows: 41))
+            #expect(panel.rows.first == painted)
+            await times.append(panel.change(to: base, rows: 40))
+        }
+        times.sort()
+        #expect(times[times.count / 2] < .milliseconds(8), "\(times)")
+    }
+
+    @Test func `a panel's height is worked out again only once it says its rows changed`() {
+        let panel = PanelStackView()
+        let rows = (0 ..< 3).map { PanelControls.label("Row \($0)") }
+        rows.forEach(panel.addFullWidth)
+        let height = panel.height(forWidth: 280)
+        rows[2].isHidden = true
+        #expect(panel.height(forWidth: 280) == height, "kept while another panel's change lays the column out")
+        panel.rowsChanged()
+        #expect(panel.height(forWidth: 280) < height)
+    }
 }

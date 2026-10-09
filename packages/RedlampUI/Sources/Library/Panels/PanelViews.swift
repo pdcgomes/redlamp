@@ -2,10 +2,13 @@ import AppKit
 import RedlampDesign
 
 /// A Library panel's rows as AppKit lays them out (LIB-21, LIB-22): a vertical stack, as tall as its rows at
-/// the column's width. Rows hold one line each, so their heights don't depend on the width.
+/// the column's width. Rows hold one line each, so their heights don't depend on the width. The height is worked
+/// out again only after `rowsChanged`: the column asks every panel for its height whenever one changes, and
+/// working out the Metadata panel's takes milliseconds.
 class PanelStackView: NSView, HeightProviding {
     let stack = NSStackView()
     private let width: NSLayoutConstraint
+    private var measured: (width: CGFloat, height: CGFloat)?
 
     init(spacing: CGFloat = 6) {
         width = stack.widthAnchor.constraint(equalToConstant: 280)
@@ -32,10 +35,15 @@ class PanelStackView: NSView, HeightProviding {
     }
 
     func height(forWidth width: CGFloat) -> CGFloat {
+        if let measured, measured.width == width {
+            return measured.height
+        }
         if self.width.constant != width {
             self.width.constant = width
         }
-        return ceil(stack.fittingSize.height)
+        let height = ceil(stack.fittingSize.height)
+        measured = (width, height)
+        return height
     }
 
     override var intrinsicContentSize: NSSize {
@@ -55,8 +63,9 @@ class PanelStackView: NSView, HeightProviding {
         view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
-    /// The rows changed: the column lays the panel out again.
+    /// The rows changed, or the height of one did: the column lays the panel out again.
     func rowsChanged() {
+        measured = nil
         invalidateColumnLayout()
     }
 }
