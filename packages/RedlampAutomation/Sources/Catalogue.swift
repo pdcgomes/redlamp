@@ -24,6 +24,7 @@
             + RenameScenarios.all
             + MoveEditsScenarios.all
             + DragScenarios.all
+            + MenuBarScenarios.all
             + SoakScenarios.all + PerformanceScenarios.all + PanelPerformanceScenarios.all
             + LibrarySourcesPerformanceScenarios.all
             + DragPerformanceScenarios.all

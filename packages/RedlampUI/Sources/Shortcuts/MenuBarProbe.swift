@@ -16,6 +16,8 @@
         @ObservationIgnored public private(set) var bodies: [Double] = []
         /// Milliseconds, one per run of the menus' checks.
         @ObservationIgnored public private(set) var refreshes: [Double] = []
+        /// Milliseconds, one per ⌘ key whose item was brought up to date before AppKit looked for it.
+        @ObservationIgnored public private(set) var keys: [Double] = []
         @ObservationIgnored private var started: CFAbsoluteTime?
         @ObservationIgnored private var observer: CFRunLoopObserver?
 
@@ -46,6 +48,10 @@
 
         func refreshed(since start: CFAbsoluteTime) {
             refreshes.append((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        }
+
+        func readiedKey(since start: CFAbsoluteTime) {
+            keys.append((CFAbsoluteTimeGetCurrent() - start) * 1000)
         }
 
         /// Starts or ends a dialog on `model` as a sheet does, holding the editor's actions, without the sheet.

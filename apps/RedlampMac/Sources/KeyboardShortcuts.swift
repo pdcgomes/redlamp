@@ -4,7 +4,8 @@ import AppKit
 /// Routes Develop shortcuts from the keyboard to the registry (`ShortcutAction`).
 ///
 /// ⌘ combos belong to the menu bar (see `AppCommands`), which gives them menu items and
-/// native key equivalents. Everything else (single keys, Shift-keys, Tab, F-keys) is handled
+/// native key equivalents; the item a ⌘ key reaches is brought up to date first (`MenuBarKeys`).
+/// Everything else (single keys, Shift-keys, Tab, F-keys) is handled
 /// here, because menu key equivalents without ⌘ would fire while typing in a value field.
 /// The monitor steps aside whenever text is being edited.
 @MainActor
@@ -17,7 +18,10 @@ final class KeyboardShortcuts {
     func install(model: EditorModel) {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            Self.handle(event, model: model) ? nil : event
+            if MenuBarKeys.prepare(for: event, model: model) {
+                return nil
+            }
+            return Self.handle(event, model: model) ? nil : event
         }
         // Space held in a tool pans the photo; letting it go without a click or drag toggles the zoom.
         spaceMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyUp, .leftMouseDown]) { event in
