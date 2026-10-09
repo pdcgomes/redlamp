@@ -16,14 +16,16 @@ enum PanelMetrics {
     static let filmstripHeight: CGFloat = 110
 
     /// The stage the photo is fitted to (`CanvasController.stageInsets`): clear of the toolbar, of
-    /// both panels' nominal widths, and of the filmstrip while the photo makes room for it
-    /// (`EditorModel.makesRoomForFilmstrip`), with the gap the panels keep. Presenting gives the
-    /// photo the whole window.
-    static func stageInsets(toolbarHeight: CGFloat, presenting: Bool, filmstrip: Bool) -> StageInsets {
+    /// each side panel's nominal width while it shows, and of the filmstrip while the photo makes
+    /// room for it (`EditorModel.makesRoomForFilmstrip`), with the gap the panels keep. Presenting
+    /// gives the photo the whole window.
+    static func stageInsets(
+        toolbarHeight: CGFloat, presenting: Bool, leftPanel: Bool, rightPanel: Bool, filmstrip: Bool,
+    ) -> StageInsets {
         guard !presenting else { return .zero }
         return StageInsets(
-            leading: inset + sidebarNominal + inset,
-            trailing: inspectorNominal + inset,
+            leading: inset + (leftPanel ? sidebarNominal + inset : 0),
+            trailing: (rightPanel ? inspectorNominal : 0) + inset,
             top: toolbarHeight,
             bottom: inset + (filmstrip ? filmstripHeight + inset : 0),
         )
@@ -32,11 +34,12 @@ enum PanelMetrics {
 
 /// The canvas layer of the editor window (see `EditorWindowController`): the photo spans the
 /// whole window, under the toolbar and both panels, which float over it. The photo is
-/// fitted to a fixed stage that keeps clear of the panels' nominal widths whether they are
-/// showing or not, so showing, hiding or resizing a panel never moves it. The filmstrip
-/// floats too, unless Hide Automatically is off: then it stays up and the photo is fitted
-/// above it, and hiding it gives the photo that room back, as hiding the toolbar does. Only
-/// presenting (full screen with every panel hidden) gives it the whole window.
+/// fitted to a stage that keeps clear of each showing panel's nominal width, so resizing a
+/// panel never moves it, and hiding one (Tab, F7, F8) gives the photo its room, as in
+/// Lightroom. The filmstrip floats too, unless Hide Automatically is off: then it stays up
+/// and the photo is fitted above it, and hiding it gives the photo that room back, as hiding
+/// the toolbar does. Only presenting (full screen with every panel hidden) gives it the whole
+/// window.
 struct EditorContentView: View {
     @Bindable var model: EditorModel
     @Bindable var theme: ThemeSettings
@@ -69,6 +72,8 @@ struct EditorContentView: View {
             .onAppear(perform: updateStage)
             .onChange(of: toolbarHeight) { _, _ in updateStage() }
             .onChange(of: model.isPresenting) { _, _ in updateStage() }
+            .onChange(of: model.leftPanelVisible) { _, _ in updateStage() }
+            .onChange(of: model.rightPanelVisible) { _, _ in updateStage() }
             .onChange(of: model.makesRoomForFilmstrip) { _, _ in updateStage() }
             .environment(model)
             .environment(theme)
@@ -78,7 +83,8 @@ struct EditorContentView: View {
 
     private func updateStage() {
         model.canvas.stageInsets = PanelMetrics.stageInsets(
-            toolbarHeight: toolbarHeight, presenting: model.isPresenting, filmstrip: model.makesRoomForFilmstrip,
+            toolbarHeight: toolbarHeight, presenting: model.isPresenting, leftPanel: model.leftPanelVisible,
+            rightPanel: model.rightPanelVisible, filmstrip: model.makesRoomForFilmstrip,
         )
     }
 }

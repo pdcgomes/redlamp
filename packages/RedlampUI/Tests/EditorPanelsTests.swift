@@ -1,4 +1,8 @@
 import AppKit
+import Foundation
+import RedlampCanvas
+import RedlampEngineAPI
+import SwiftUI
 import Testing
 @testable import RedlampUI
 
@@ -54,6 +58,74 @@ struct EditorPanelsTests {
             )
         }
         #expect(model.leftPanelVisible && model.rightPanelVisible)
+    }
+
+    /// #358: Tab hides the side panels for a bigger view of the photo, as in Lightroom. At Fit the photo
+    /// grows into the room they leave and is rendered again at its new size; F7 and F8 give one side's.
+    @Test func `hiding the side panels gives the photo their room, rendered again at its new size`() async throws {
+        _ = NSApplication.shared
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let engine = StubEngine()
+        engine.pixelSize = PixelSize(width: 6000, height: 4000)
+        let model = EditorModel(engine: engine)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1400, height: 640), styleMask: [.titled],
+            backing: .buffered, defer: false,
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(
+            rootView: EditorContentView(model: model, theme: ThemeSettings(), onOpen: {}),
+        )
+        defer { window.contentView = nil }
+        model.select(folder.appending(path: "IMG_0001.ARW"))
+        let canvas = model.canvas
+        func eventually(_ condition: () -> Bool) async throws {
+            for _ in 0 ..< 400 where !condition() {
+                window.contentView?.layoutSubtreeIfNeeded()
+                try await Task.sleep(for: .milliseconds(5))
+            }
+        }
+        /// At Fit, rendered at the size the stage needs.
+        func rendered() -> Bool {
+            engine.lastRender?.targetSize == canvas.renderTarget.size
+        }
+
+        try await eventually {
+            canvas.imageSize == engine.pixelSize && canvas.viewSize.width > 0 && canvas.stageInsets.leading > 0
+                && rendered()
+        }
+        let shown = canvas.stageInsets
+        let fit = canvas.imageRect(in: canvas.viewSize)
+        let size = canvas.renderTarget.size
+        #expect(shown.leading == PanelMetrics.inset + PanelMetrics.sidebarNominal + PanelMetrics.inset)
+        #expect(shown.trailing == PanelMetrics.inspectorNominal + PanelMetrics.inset)
+
+        #expect(model.perform(.toggleSidePanels))
+        try await eventually { canvas.stageInsets != shown && rendered() }
+        #expect(!model.leftPanelVisible && !model.rightPanelVisible)
+        #expect(canvas.stageInsets == StageInsets(
+            leading: PanelMetrics.inset, trailing: PanelMetrics.inset, top: shown.top, bottom: shown.bottom,
+        ))
+        let grown = canvas.imageRect(in: canvas.viewSize)
+        let stage = canvas.stage(in: canvas.viewSize)
+        #expect(grown.width > fit.width && grown.height > fit.height, "\(grown.size), from \(fit.size)")
+        #expect(abs(grown.width - stage.width) < 0.5 || abs(grown.height - stage.height) < 0.5, "it fills the stage")
+        #expect(rendered() && canvas.renderTarget.size.width > size.width, "rendered at \(canvas.renderTarget.size)")
+
+        #expect(model.perform(.toggleSidePanels))
+        try await eventually { canvas.stageInsets == shown && rendered() }
+        #expect(canvas.imageRect(in: canvas.viewSize) == fit, "Tab again gives the panels their room back")
+        #expect(canvas.renderTarget.size == size)
+
+        #expect(model.perform(.toggleLeftPanel))
+        try await eventually { canvas.stageInsets != shown }
+        #expect(canvas.stageInsets.leading == PanelMetrics.inset && canvas.stageInsets.trailing == shown.trailing)
+        #expect(model.perform(.toggleLeftPanel))
+        #expect(model.perform(.toggleRightPanel))
+        try await eventually { canvas.stageInsets.trailing != shown.trailing }
+        #expect(canvas.stageInsets.leading == shown.leading && canvas.stageInsets.trailing == PanelMetrics.inset)
     }
 
     private func splitItems(of window: NSWindow) throws -> [NSSplitViewItem] {

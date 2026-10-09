@@ -93,14 +93,21 @@ struct FilmstripHidingTests {
         #expect(FilmstripPreference(defaults: defaults).hidesAutomatically)
     }
 
+    /// With both side panels showing.
+    private static func stageInsets(presenting: Bool = false, filmstrip: Bool) -> StageInsets {
+        PanelMetrics.stageInsets(
+            toolbarHeight: 52, presenting: presenting, leftPanel: true, rightPanel: true, filmstrip: filmstrip,
+        )
+    }
+
     @Test func `the stage keeps clear of the filmstrip only while the photo makes room for it`() {
-        let floating = PanelMetrics.stageInsets(toolbarHeight: 52, presenting: false, filmstrip: false)
-        let kept = PanelMetrics.stageInsets(toolbarHeight: 52, presenting: false, filmstrip: true)
+        let floating = Self.stageInsets(filmstrip: false)
+        let kept = Self.stageInsets(filmstrip: true)
         #expect(floating.bottom == PanelMetrics.inset, "the filmstrip floats over the photo")
         #expect(kept.bottom == PanelMetrics.inset + PanelMetrics.filmstripHeight + PanelMetrics.inset)
         #expect(kept.bottom == 126)
         #expect(kept.top == 52 && kept.leading == floating.leading && kept.trailing == floating.trailing)
-        #expect(PanelMetrics.stageInsets(toolbarHeight: 52, presenting: true, filmstrip: true) == .zero)
+        #expect(Self.stageInsets(presenting: true, filmstrip: true) == .zero)
     }
 
     /// A portrait photo fills the stage's height, so Fit reaches its bottom.
@@ -108,7 +115,7 @@ struct FilmstripHidingTests {
         let canvas = CanvasController()
         canvas.updateView(size: CGSize(width: 1800, height: 900), backingScale: 2)
         canvas.imageSize = PixelSize(width: 3024, height: 4032)
-        canvas.stageInsets = PanelMetrics.stageInsets(toolbarHeight: 52, presenting: false, filmstrip: true)
+        canvas.stageInsets = Self.stageInsets(filmstrip: true)
         let filmstripTop = 900 - PanelMetrics.inset - PanelMetrics.filmstripHeight
         let fit = canvas.imageRect(in: canvas.viewSize)
         #expect(abs(fit.maxY - (filmstripTop - PanelMetrics.inset)) < 0.5)
