@@ -75,6 +75,17 @@ struct PixelReadoutTests {
         #expect(EditorModel.readoutParts(readout, lab: true) == ["L* 50.0", "a* −0.3", "b* 0.0"])
     }
 
+    @Test func `under Redlamp Reproduction the line ends with the stops, ≈ from the typical anchor`() {
+        var readout = PixelReadout(rgb: SIMD3(45.24, 45, 45), lab: SIMD3(50.9, 0.1, -0.3), stops: 0.081)
+        #expect(EditorModel.readoutParts(readout, lab: true) == ["L* 50.9", "a* 0.1", "b* −0.3", "+0.08 EV"])
+        #expect(EditorModel.readoutParts(readout, lab: false).last == "+0.08 EV")
+        #expect(EditorModel.readoutParts(readout, lab: true, approximate: true).last == "≈ +0.08 EV")
+        readout.stops = -0.004
+        #expect(EditorModel.readoutParts(readout, lab: true).last == "0.00 EV")
+        readout.stops = -1.236
+        #expect(EditorModel.readoutParts(readout, lab: true).last == "−1.24 EV")
+    }
+
     @Test func `Show L*a*b* Values switches the line and is kept`() async throws {
         let (model, _, cleanup) = try await openEditor()
         defer { cleanup() }

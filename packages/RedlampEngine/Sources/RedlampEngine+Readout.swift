@@ -22,8 +22,11 @@ extension RedlampEngine {
     static let readoutPixels = 5
 
     /// `area` around `point` of the frame, rendered as the canvas renders it but without overlays,
-    /// at `readoutPixels` square, and averaged in linear light.
-    func readout(at point: CGPoint, area: CGSize, recipe: EditRecipe, session: ImageSession) throws -> PixelReadout {
+    /// at `readoutPixels` square, and averaged in linear light. With the readout encoding, the
+    /// stops under Redlamp Reproduction come from the same render.
+    func readout(
+        at point: CGPoint, area: CGSize, recipe: EditRecipe, session: ImageSession, output: OutputEncoding = .readout,
+    ) throws -> PixelReadout {
         let side = Self.readoutPixels
         let width = min(max(area.width, 1e-6), 1)
         let height = min(max(area.height, 1e-6), 1)
@@ -47,7 +50,7 @@ extension RedlampEngine {
         try encoding(commands) {
             try encodeDevelop(
                 recipe, session: session, into: texture, size: PixelSize(width: side, height: side), region: region,
-                encoding: .linear, showClipping: false, commands: commands, cacheDetail: false,
+                encoding: output, showClipping: false, commands: commands, cacheDetail: false,
                 retouchMaps: .refreshLater,
             )
             guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
@@ -61,10 +64,17 @@ extension RedlampEngine {
         try finish(commands)
         let halves = buffer.contents().assumingMemoryBound(to: Float16.self)
         var sum = SIMD3<Double>.zero
+        var luminance = 0.0
         for pixel in 0 ..< side * side {
             sum += SIMD3(Double(halves[pixel * 4]), Double(halves[pixel * 4 + 1]), Double(halves[pixel * 4 + 2]))
+            luminance += Double(halves[pixel * 4 + 3])
         }
-        return Self.readout(linearDisplayP3: sum / Double(side * side))
+        let count = Double(side * side)
+        var readout = Self.readout(linearDisplayP3: sum / count)
+        if output == .readout, recipe.baseLook.isReproduction {
+            readout.stops = log2(max(luminance / count, 1e-6) / PixelReadout.middleGrey)
+        }
+        return readout
     }
 
     /// The readout of a colour as the canvas holds it: linear Display P3.

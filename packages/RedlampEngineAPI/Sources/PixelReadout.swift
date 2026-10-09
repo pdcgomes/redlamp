@@ -7,9 +7,16 @@ public struct PixelReadout: Sendable, Equatable {
     public var rgb: SIMD3<Double>
     /// CIELAB relative to D50, as ICC profiles and Photoshop report it.
     public var lab: SIMD3<Double>
+    /// Under Redlamp Reproduction, the light the tone controls receive in stops from scene
+    /// `middleGrey`, where the anchor puts a metered grey (CAM-28); nil under other looks.
+    public var stops: Double?
 
-    public init(rgb: SIMD3<Double>, lab: SIMD3<Double>) {
+    /// Scene 0.18: an 18% grey, where `stops` is 0.
+    public static let middleGrey = 0.18
+
+    public init(rgb: SIMD3<Double>, lab: SIMD3<Double>, stops: Double? = nil) {
         self.rgb = rgb
         self.lab = lab
+        self.stops = stops
     }
 }

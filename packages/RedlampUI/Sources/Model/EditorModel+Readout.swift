@@ -15,16 +15,26 @@ public extension EditorModel {
         refreshReadout()
     }
 
-    /// The readout line's parts: "R 45.2", "G 44.8", "B 44.9 %", or "L* 50.9", "a* −0.3", "b* 0.8".
-    static func readoutParts(_ readout: PixelReadout, lab: Bool) -> [String] {
-        func number(_ value: Double) -> String {
-            let text = String(format: "%.1f", value)
-            return text == "-0.0" ? "0.0" : text.replacingOccurrences(of: "-", with: "−")
+    /// The readout line's parts: "R 45.2", "G 44.8", "B 44.9 %", or "L* 50.9", "a* −0.3", "b* 0.8"; under
+    /// Redlamp Reproduction then the stops, "+0.08 EV", which an `approximate` (typical) anchor marks "≈".
+    static func readoutParts(_ readout: PixelReadout, lab: Bool, approximate: Bool = false) -> [String] {
+        func number(_ value: Double, format: String = "%.1f") -> String {
+            let text = String(format: format, value)
+            guard Double(text) != 0 else { return String(format: format.replacingOccurrences(of: "+", with: ""), 0.0) }
+            return text.replacingOccurrences(of: "-", with: "−")
         }
-        if lab {
-            return ["L* \(number(readout.lab.x))", "a* \(number(readout.lab.y))", "b* \(number(readout.lab.z))"]
+        var parts = lab
+            ? ["L* \(number(readout.lab.x))", "a* \(number(readout.lab.y))", "b* \(number(readout.lab.z))"]
+            : ["R \(number(readout.rgb.x))", "G \(number(readout.rgb.y))", "B \(number(readout.rgb.z)) %"]
+        if let stops = readout.stops {
+            parts.append("\(approximate ? "≈ " : "")\(number(stops, format: "%+.2f")) EV")
         }
-        return ["R \(number(readout.rgb.x))", "G \(number(readout.rgb.y))", "B \(number(readout.rgb.z)) %"]
+        return parts
+    }
+
+    /// The readout's stops count from the typical anchor, not a calibration.
+    var readoutIsApproximate: Bool {
+        info?.isRaw == true && readoutRecipe?.exposureAnchor?.source != .target
     }
 }
 

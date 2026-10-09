@@ -584,4 +584,7 @@ public enum OutputEncoding: Float {
     /// OKLab of what Point Color receives, right after the Color Mixer, masks' adjustments before it
     /// included: the colour the eyedropper gives a swatch. Nothing after it is drawn.
     case pointColorInput = 5
+    /// As `linear`, with the light the tone controls receive (linear Rec. 2020 luminance, after
+    /// Exposure and a mask's exposure) in alpha: the histogram readout's stops.
+    case readout = 6
 }

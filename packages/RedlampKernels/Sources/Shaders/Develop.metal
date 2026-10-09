@@ -1231,13 +1231,14 @@ kernel void rl_develop(
     }
 
     // Output encoding: 0 linear output primaries, 1 sRGB-encoded sRGB, 2 sRGB-encoded Display P3,
-    // 4 OKLab (the output primaries are Rec.2020 then).
+    // 4 OKLab (the output primaries are Rec.2020 then), 6 linear with the luminance the tone
+    // controls received in alpha (the readout's stops).
     int encoding = int(p.geometry.z);
     // Where rotation or Transform leaves no photo, the frame is white, as Lightroom's is.
     if (outsideImage) encoded = float3(1.0f);
     float3 result = encoding == 4 ? rec2020ToOKLab(srgbDecode3(encoded))
-        : encoding == 0 || encoding == 3 ? srgbDecode3(encoded) : encoded;
-    out.write(float4(result, 1.0f), gid);
+        : encoding == 0 || encoding == 3 || encoding == 6 ? srgbDecode3(encoded) : encoded;
+    out.write(float4(result, encoding == 6 ? luma : 1.0f), gid);
 }
 
 // MARK: - Histogram

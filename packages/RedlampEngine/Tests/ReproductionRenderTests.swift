@@ -153,6 +153,23 @@ struct ReproductionRenderTests {
         )
     }
 
+    @Test func `the readout counts stops from the anchored 18% grey, only under the look`() throws {
+        let session = try makeRaw(width: 64, height: 64) { _, _ in SIMD3(repeating: 0.18) }
+        let engine = try RedlampEngine()
+        let point = CGPoint(x: 0.5, y: 0.5)
+        let area = CGSize(width: 0.08, height: 0.08)
+        var recipe = Self.reproduction()
+        let metered = try engine.readout(at: point, area: area, recipe: recipe, session: session)
+        #expect(abs((metered.stops ?? 1) - 0) < 0.005, "a scene 0.18 patch reads \(metered.stops ?? .nan) EV")
+        #expect(abs(metered.lab.x - 49.5) < 0.1, "and L* \(metered.lab.x)")
+        recipe[.exposure] = 1
+        let lifted = try engine.readout(at: point, area: area, recipe: recipe, session: session)
+        #expect(abs((lifted.stops ?? 0) - 1) < 0.005, "Exposure +1 reads \(lifted.stops ?? .nan) EV")
+        let linear = try engine.readout(at: point, area: area, recipe: recipe, session: session, output: .linear)
+        #expect(linear.rgb == lifted.rgb && linear.lab == lifted.lab, "RGB and L* are the linear render's")
+        #expect(try engine.readout(at: point, area: area, recipe: EditRecipe(), session: session).stops == nil)
+    }
+
     @Test func `a bitmap renders as the file, and Exposure scales its own light`() throws {
         let greys: [Float] = [0.02, 0.1, 0.18, 0.4, 0.9]
         let session = try makeBitmap(width: Self.block * greys.count, height: Self.block) { x, _ in

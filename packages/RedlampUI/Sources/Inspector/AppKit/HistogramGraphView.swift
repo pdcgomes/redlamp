@@ -143,7 +143,9 @@ final class HistogramGraphView: LayerDrawnView, NSViewToolTipOwner {
             histogram = model.histogram
             hasPhoto = model.info != nil
             summary = model.info?.exposureSummary ?? []
-            readout = model.pixelReadout.map { EditorModel.readoutParts($0, lab: model.showsLabReadout) }
+            readout = model.pixelReadout.map {
+                EditorModel.readoutParts($0, lab: model.showsLabReadout, approximate: model.readoutIsApproximate)
+            }
             showClipping = model.showClipping
             regionValue = region.map { model.value($0.parameter) } ?? 0
             update()
