@@ -42,8 +42,11 @@ public extension EditorModel {
         else { return false }
         let requested = ContinuousClock.now
         isModalDialogOpen = true
+        // The read starts now rather than once the menu that chose the command has let the main thread go.
+        let (folder, index) = (root.url, core.index)
+        let reading = Task.detached(priority: .userInitiated) { await MoveEditsModel.survey(folder, in: index) }
         Task {
-            let survey = await MoveEditsModel.survey(root.url, in: core.index)
+            let survey = await reading.value
             isModalDialogOpen = false
             let model = MoveEditsModel(
                 root: root, rootID: survey?.id, placement: survey?.placement ?? .besidePhotos,
