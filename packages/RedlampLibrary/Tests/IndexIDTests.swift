@@ -76,8 +76,8 @@ struct IndexIDTests {
     @Test func `a photo added after the photo with the largest ID left the index gets a larger one`() async throws {
         let (sandbox, _) = try await Self.library()
         defer { sandbox.remove() }
-        let last = try await sandbox.id("Trip/Day 2/IMG_0003.JPG")
-        #expect(try await Self.ids(sandbox.index)[.photos]?.max() == last)
+        // Whichever photo was written last: photos read side by side are written as their reads end.
+        let last = try await #require(Self.ids(sandbox.index)[.photos]?.max())
         try await sandbox.index.write { try $0.deletePhotos([last]) }
         let folder = try await Self.folder("Trip/Day 2", in: sandbox)
         let added = try await sandbox.index.write { writer in
