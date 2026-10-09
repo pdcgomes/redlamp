@@ -82,8 +82,9 @@ public extension LibraryIndex.Writer {
     /// memberships and text, and what's kept beside their rows (`removeRecords(ofPhotos:)`) but for `restorable`'s,
     /// photos a batch the file journal keeps can bring back under their IDs (every photo's when it's nil: a batch
     /// can't be read); the root marked first going first. With `budget`, it stops once that has passed, at a part's
-    /// end, so the writer holds other writes back no longer. The text index isn't merged (`withoutMergingText`). A
-    /// root with no photos left goes with its folders and its mark.
+    /// end, so the writer holds other writes back no longer. The rows deleted stay in the text index's segments,
+    /// marked, until they're merged (`IndexTextMerges`). A root with no photos left goes with its folders and its
+    /// mark.
     func sweepRemoved(limit: Int, keeping restorable: Set<Int64>? = [], budget: Duration? = nil) throws -> RootSweep {
         let marked = try removedRoots().keys.sorted()
         guard let root = marked.first else { return RootSweep() }
@@ -96,17 +97,15 @@ public extension LibraryIndex.Writer {
         let found = try photos.map { $0.int64(at: 0) }
         guard found.isEmpty else {
             let deadline = budget.map { ContinuousClock.now + $0 }
-            try withoutMergingText {
-                for start in stride(from: 0, to: found.count, by: Self.sweepPart) {
-                    let part = Array(found[start ..< min(start + Self.sweepPart, found.count)])
-                    try deletePhotos(part)
-                    if let restorable {
-                        try removeRecords(ofPhotos: part.filter { !restorable.contains($0) })
-                    }
-                    sweep.photos += part
-                    if let deadline, ContinuousClock.now >= deadline {
-                        break
-                    }
+            for start in stride(from: 0, to: found.count, by: Self.sweepPart) {
+                let part = Array(found[start ..< min(start + Self.sweepPart, found.count)])
+                try deletePhotos(part)
+                if let restorable {
+                    try removeRecords(ofPhotos: part.filter { !restorable.contains($0) })
+                }
+                sweep.photos += part
+                if let deadline, ContinuousClock.now >= deadline {
+                    break
                 }
             }
             return sweep

@@ -19,10 +19,14 @@ struct IndexSandbox {
         directory.appending(path: "Snapshots", directoryHint: .isDirectory)
     }
 
-    static func make(readers: Int = 2) async throws -> IndexSandbox {
+    /// `textMerges` says how the text index is merged after writes (`IndexTextMerges`).
+    static func make(readers: Int = 2, textMerges: IndexTextMerges.Limits = .init()) async throws -> IndexSandbox {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "redlamp-index-\(UUID().uuidString)", directoryHint: .isDirectory)
-        let index = try await LibraryIndex.open(at: directory.appending(path: "Index.sqlite"), readers: readers)
+        let url = directory.appending(path: "Index.sqlite")
+        let index = try await LibraryIndex.offCaller {
+            try LibraryIndex(url: url, readers: readers, migrations: LibraryIndex.migrations, textMerges: textMerges)
+        }
         let (volume, root) = try await index.write { writer in
             let volume = try writer.upsertVolume(VolumeRecord(uuid: "TEST-VOLUME", name: "Test", kind: .ssd))
             return try (volume, writer.upsertRoot(RootRecord(volume: volume, path: rootPath)))

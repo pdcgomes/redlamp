@@ -10,13 +10,14 @@ import Synchronization
 /// One connection writes, on a serial queue of its own, each `write` in one transaction. A few
 /// read-only connections read, each on its own serial queue, so a read never waits for a write
 /// (WAL), and one more checkpoints the write-ahead log, so a write doesn't wait for that either
-/// (`IndexCheckpoints`). Nothing here runs SQLite on the caller's thread, so the main thread never
-/// waits on it.
+/// (`IndexCheckpoints`). The text index is merged after the writes, between them (`IndexTextMerges`).
+/// Nothing here runs SQLite on the caller's thread, so the main thread never waits on it.
 public final class LibraryIndex: Sendable {
     public let url: URL
     private let writer: Connection
     private let readers: [Connection]
     private let checkpoints: IndexCheckpoints
+    private let merges: IndexTextMerges
     /// Reads waiting or running on each reader, so the next goes to the least busy.
     private let readerLoad: Mutex<[Int]>
     /// What this process's transactions changed, by the generation each made (LIB-44).
@@ -40,13 +41,16 @@ public final class LibraryIndex: Sendable {
     /// Opens the index, blocking: only ever off the main thread.
     init(
         url: URL, readers: Int, migrations: [Migration], logLimits: IndexCheckpoints.Limits = .init(),
-        idBlocks: [IndexIDs: Int64]? = nil, idSettling: Duration = .seconds(2),
+        textMerges: IndexTextMerges.Limits = .init(), idBlocks: [IndexIDs: Int64]? = nil,
+        idSettling: Duration = .seconds(2),
     ) throws {
         dispatchPrecondition(condition: .notOnQueue(.main))
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let database = try SQLiteDatabase(path: url.path)
         try Self.configure(database, writing: true)
         try Self.migrate(database, with: migrations)
+        try Self.leaveMergingToSteps(database)
+        merges = IndexTextMerges(limits: textMerges)
         let marks = IndexIDMarks(index: url, blocks: idBlocks)
         self.idSettling = idSettling
         // The tables the last IDs are worked out from are this build's schema's.
@@ -69,6 +73,21 @@ public final class LibraryIndex: Sendable {
             return Connection(reader, label: "reader")
         }
         readerLoad = Mutex(Array(repeating: 0, count: self.readers.count))
+        // What a session before this one left to merge.
+        if textMerges.following, merges.begin() {
+            startMerging()
+        }
+    }
+
+    /// Turns FTS5's automerge off for the text index, for every connection and process, which keeps the setting in
+    /// the table: the merges follow the writes instead (`IndexTextMerges`).
+    private static func leaveMergingToSteps(_ database: SQLiteDatabase) throws {
+        let automerge = try database.prepare("SELECT v FROM photo_text_config WHERE k = 'automerge'")
+            .first { $0.int(at: 0) }
+        guard automerge != 0 else { return }
+        try database.transaction(.immediate) {
+            try database.execute("INSERT INTO photo_text (photo_text, rank) VALUES ('automerge', 0)")
+        }
     }
 
     /// The design's settings: WAL, so readers never wait for the writer; `synchronous=NORMAL`,
@@ -97,13 +116,15 @@ public final class LibraryIndex: Sendable {
     /// back when it throws. Writes run one at a time, in the order they're called. Once called,
     /// a write runs even if the calling task is cancelled. A transaction that changes the index bumps
     /// its generation (`IndexGeneration`), and one that gives IDs past the marks beside the index sets them
-    /// ahead before it commits (`IndexIDMarks`).
+    /// ahead before it commits (`IndexIDMarks`). One that writes the text index has it merged after, and
+    /// returns once none of its levels is crowded with segments (`IndexTextMerges`).
     @discardableResult
     public func write<T: Sendable>(_ body: @escaping @Sendable (Writer) throws -> T) async throws -> T {
-        let result = try await writer.run { [journal, marks, checkpoints] database -> (T, Bool, Bool) in
+        let result = try await writer.run { [journal, marks, checkpoints] database -> Written<T> in
             checkpoints.copyIfFull()
             var staged: IndexGeneration?
             var gave = false
+            var committing = 0
             do {
                 let result = try database.transaction(.immediate) {
                     let before = database.totalChanges
@@ -114,9 +135,15 @@ public final class LibraryIndex: Sendable {
                     if database.totalChanges != before {
                         staged = try journal.stage(on: database)
                     }
+                    committing = database.totalChanges
                     return result
                 }
-                return (result, staged != nil, gave && marks.ahead)
+                // FTS5 writes the transaction's text as it commits, and its structure.
+                let wroteText = database.totalChanges > committing
+                return Written(
+                    result: result, changed: staged != nil, gaveIDs: gave && marks.ahead, wroteText: wroteText,
+                    structure: wroteText ? (try? Reader(database: database).textStructure()) : nil,
+                )
             } catch {
                 if let staged {
                     journal.unstage(staged)
@@ -124,13 +151,81 @@ public final class LibraryIndex: Sendable {
                 throw error
             }
         }
-        if result.1 {
+        if result.changed {
             journal.committed()
         }
-        if result.2 {
+        if result.gaveIDs {
             settleIDsLater()
         }
-        return result.0
+        if result.wroteText {
+            let (start, wait) = merges.wrote(result.structure)
+            if start {
+                startMerging()
+            }
+            if wait {
+                await merges.caughtUp()
+            }
+        }
+        return result.result
+    }
+
+    /// What a write's transaction did, beside its result.
+    private struct Written<T: Sendable>: Sendable {
+        var result: T
+        var changed: Bool
+        var gaveIDs: Bool
+        var wroteText: Bool
+        /// The text index's segments after it, when it wrote any text.
+        var structure: TextIndexStructure?
+    }
+
+    /// Merges the text index a step at a time on the writer's queue, each step after the writes asked for
+    /// before it, until FTS5 finds nothing to merge (`IndexTextMerges`); between steps, waits while the
+    /// checkpoints are behind, as the root sweep does.
+    private func startMerging() {
+        let limits = merges.limits
+        Task.detached(priority: .utility) { [weak self] in
+            while let index = self {
+                let step = try? await index.writer.run { [checkpoints = index.checkpoints] database in
+                    checkpoints.copyIfFull()
+                    return try Self.mergeStep(database, limits)
+                }
+                guard index.merges.stepped(step?.pages, leaving: step?.structure) else { return }
+                await index.checkpoints.settle()
+            }
+        }
+    }
+
+    /// One step of merging, in a transaction of its own: FTS5 merges `limits.pages` at a time until
+    /// `limits.step` has passed or it finds nothing to merge. The pages it asked for, 0 when there was nothing,
+    /// and the segments it left.
+    private static func mergeStep(
+        _ database: SQLiteDatabase, _ limits: IndexTextMerges.Limits,
+    ) throws -> (pages: Int, structure: TextIndexStructure?) {
+        let deadline = ContinuousClock.now + limits.step
+        return try database.transaction(.immediate) {
+            let writer = Writer(database: database)
+            var merged = 0
+            while try writer.mergeText(pages: limits.pages) {
+                merged += limits.pages
+                guard ContinuousClock.now < deadline else { break }
+            }
+            return try (merged, writer.textStructure())
+        }
+    }
+
+    /// Returns once the text index has nothing left to merge, merging it if no write has started the merges:
+    /// for a writer that has finished writing, and tests.
+    func mergeText() async {
+        if merges.begin() {
+            startMerging()
+        }
+        await merges.finished()
+    }
+
+    /// The text index's segments as the writer sees them now; nil when its structure can't be read.
+    func textStructure() async throws -> TextIndexStructure? {
+        try await writer.run { try Reader(database: $0).textStructure() }
     }
 
     /// Brings the marks beside the index down to the last IDs given once `idSettling` passes with no write giving
@@ -239,10 +334,12 @@ public final class LibraryIndex: Sendable {
 
     /// Closes the connections once the work queued on them is done: the readers and the
     /// checkpoints first, then the writer, which brings the marks beside the index down to the last
-    /// IDs given and folds the write-ahead log into the database as it closes. Reads and writes called
+    /// IDs given and folds the write-ahead log into the database as it closes. The text index's merges
+    /// stop after the step under way; what's left is merged after the next write. Reads and writes called
     /// afterwards throw `LibraryIndexError.closed`.
     public func close() async {
         settlingIDs.withLock { $0?.cancel() }
+        merges.close()
         for reader in readers {
             await reader.close()
         }
@@ -255,6 +352,7 @@ public final class LibraryIndex: Sendable {
     func closeAndWait() {
         dispatchPrecondition(condition: .notOnQueue(.main))
         settlingIDs.withLock { $0?.cancel() }
+        merges.close()
         for reader in readers {
             reader.closeAndWait()
         }
