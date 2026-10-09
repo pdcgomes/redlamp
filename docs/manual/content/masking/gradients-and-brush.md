@@ -3,7 +3,7 @@ deck = "Three components you draw yourself: a linear gradient for a sky or a for
 sources = [
   "`README.md`: Masking",
   "`packages/RedlampUI/Sources/Editor/MaskOverlayView.swift`",
-  "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift`",
+  "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift` (DrawingHint, BrushChoicePicker, AutoMaskToggle); `packages/RedlampUI/Sources/Inspector/MasksPanelNext.swift` (the picker)",
   "`packages/RedlampUI/Sources/Model/BrushSettings.swift`, `EditorModel+Brush.swift`, `EditorModel+BrushSize.swift`",
   "`packages/RedlampEngineAPI/Sources/Masks.swift` (LinearMask, RadialMask, BrushStroke)",
   "`packages/RedlampEngineAPI/Sources/ParameterSpec.swift`",
@@ -16,9 +16,9 @@ Drawn components follow your hand, not the photo. They need no download, they ap
 
 ## Linear Gradient
 
-Press [[M]], or choose Linear Gradient from Create New Mask, then drag on the photo from where the effect should be full to where it should have faded out. A click without a drag places a gradient that fades over a quarter of the photo's height, downwards from the click.
+Press [[M]], or choose Linear Gradient in the picker, then drag on the photo from where the effect should be full to where it should have faded out. The strip under the panel's header says the same: Drag on the photo from full effect to no effect. A click without a drag places a gradient that fades over a quarter of the photo's height, downwards from the click.
 
-The gradient is drawn as three lines: a solid line where the effect is full, a dashed line through the middle, and a solid line where it ends. Drag the round handle at either end to move that end, which also turns the gradient; drag the pin in the middle to move the whole gradient. A linear gradient has no settings of its own, so its section shows only the mask's sliders.
+The gradient is drawn as three lines: a solid line where the effect is full, a dashed line through the middle, and a solid line where it ends. Drag the round handle at either end to move that end, which also turns the gradient; drag the pin in the middle to move the whole gradient. A linear gradient has no settings of its own, so with it selected the mask's adjustments follow straight after Add, Subtract and Intersect.
 
 ### Darken a bright sky
 
@@ -39,7 +39,7 @@ Feather
 
 ## Brush
 
-Press [[K]], or choose Brush, and paint on the photo. The brush stays ready until you click Done, and every stroke goes into the same component, so you can paint in as many passes as you like. To paint more into a brush component later, click the brush on its row (Paint into this brush).
+Press [[K]], or choose Brush in the picker, and paint on the photo. The brush stays ready until you click Done, in the strip under the panel's header, and every stroke goes into the same component, so you can paint in as many passes as you like. To paint more into a brush component later, click the brush on its row (Paint into this brush).
 
 ### A, B and Erase
 

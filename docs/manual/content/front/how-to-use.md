@@ -38,10 +38,10 @@ Keys
 : Shown as keycaps: [[⌘]] Command, [[⌥]] Option, [[⇧]] Shift, [[⌫]] Delete, [[Esc]] Escape. [[⇧W]] means hold Shift and press W. Shortcuts are Lightroom Classic's wherever Lightroom has one.
 
 Labels
-: Buttons, menus, sliders and messages are named exactly as the app shows them: click Create New Mask, choose Duplicate and Invert.
+: Buttons, menus, sliders and messages are named exactly as the app shows them: click New Mask, choose Duplicate and Invert.
 
 Menus
-: A path through menus is written with ›, as in Settings › Models or Create New Mask › People › Teeth.
+: A path through menus is written with ›, as in Settings › Models or Mask Presets › Delete Preset.
 
 Right-click
 : Also means Control-click, or a two-finger click on a trackpad.

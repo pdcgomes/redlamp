@@ -3,7 +3,7 @@ deck = "Select by what is in the photo rather than where it is: a colour, a band
 sources = [
   "`README.md`: Masking",
   "`packages/RedlampEngineAPI/Sources/Masks.swift` (ColorRangeMask, LuminanceRangeMask, DepthRangeMask)",
-  "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift`",
+  "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift` (ColorSampleList, LuminanceRangeBar, LuminanceMapToggle, DepthRangeEditor, RangeBar, DrawingHint)",
   "`packages/RedlampUI/Sources/Editor/MaskOverlayView.swift`",
   "`packages/RedlampEngine/Sources/RedlampEngine+Masks.swift`, `RedlampEngine+Models.swift`",
 ]
@@ -15,11 +15,11 @@ Range masks are at their best as a second component. Intersect a colour range wi
 
 ## Color Range
 
-1. Press [[⇧J]], or choose Color Range.
+1. Press [[⇧J]], or choose Color Range in the picker.
 2. Click the colour you want. To take the average of an area instead, drag outwards from its centre: the circle you drag out is the area sampled.
 3. [[⇧]]-click to add another colour, up to five in all. Each sample shows on the photo as a white ring while the component is selected.
 4. Set Refine: how far a colour may be from the samples and still be selected.
-5. Click Done.
+5. Click Done, in the strip under the panel's header.
 
 {{table: sliders maskColorRefine}}
 
@@ -31,7 +31,9 @@ Press [[⇧Q]], or choose Luminance Range, and click a tone in the photo: Redlam
 
 {{figure: luminance-range}}
 
-The two inner handles, drawn wider, are where the selection is full; the two outer ones are where it has faded out. Drag the inner handles apart to select more tones fully, and the outer ones away from them to soften the transition. The readout with the bar shows where the selection is full, on a scale from 0 to 100.
+The two inner handles, drawn wider, are where the selection is full; the two outer ones are where it has faded out. Drag the inner handles apart to select more tones fully, and the outer ones away from them to soften the transition.
+
+Under the bar, four values, from 0 to 100, say where each handle is, left to right: where the range starts, where it's full from, where it stops being full, and where it ends. Drag a value left or right to move its handle, or click it and type a new one; a handle can't pass its neighbours, and a typed value is one step in History.
 
 Tick Show Luminance Map to see the photo as a map of its lightness, in place of the overlay's usual look, while you shape the band.
 
@@ -41,7 +43,7 @@ To protect the highlights from a brightening mask, add a Luminance Range on the 
 
 ## Depth Range
 
-Press [[⇧Z]], or choose Depth Range, to select by distance from the camera. Its bar works as Luminance Range's does, from Far on the left to Near on the right, and starts with the nearer part of the scene selected.
+Press [[⇧Z]], or choose Depth Range, to select by distance from the camera. Its bar and its four values work as Luminance Range's do, from Far on the left to Near on the right, and it starts with the nearer part of the scene selected.
 
 The depth comes from the photo itself when it has a depth map, as many iPhone photos do. For other photos Redlamp estimates it, with Depth Anything 3 if you've downloaded it and otherwise with Depth Anything V2 (small), which it asks to download the first time, as described under [](#masking.ai.downloading-a-model).
 
