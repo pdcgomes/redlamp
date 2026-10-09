@@ -77,6 +77,11 @@ import RedlampLibrary
     @ObservationIgnored @_spi(Harness) public private(set) var lastStacking: Duration = .zero
     @ObservationIgnored @_spi(Harness) public private(set) var stackingsMade = 0
 
+    /// Whether no stacking is under way, asked for meanwhile, or waiting for badges' changes to be quiet.
+    @_spi(Harness) public var isIdle: Bool {
+        !stacking && !pending && quiet == nil
+    }
+
     /// How long badges' changes are quiet before the stacks are found again.
     static let quietPause = Duration.seconds(1)
     /// The stacks a source's view keeps that don't follow Open All, at most; a larger source keeps its first ones.
@@ -328,6 +333,7 @@ import RedlampLibrary
         quiet = Task { [weak self] in
             try? await Task.sleep(for: Self.quietPause)
             guard !Task.isCancelled else { return }
+            self?.quiet = nil
             self?.restack(forgetting: true)
         }
     }

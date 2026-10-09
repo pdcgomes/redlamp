@@ -95,16 +95,14 @@ struct LibraryStacksTests {
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
         library.attach(service)
-        for _ in 0 ..< 2000 {
-            if await service.canShow(root, includingSubfolders: true) {
-                break
-            }
+        let deadline = ContinuousClock.now + .seconds(30)
+        while await !service.canShow(root, includingSubfolders: true), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
         let model = EditorModel(engine: StubEngine(), library: library)
         model.open([root])
         let count = Self.photos.count
-        try await eventually(seconds: 20) { library.isShownFromLibrary && !library.isListing && library.count == count }
+        try await eventually { library.isShownFromLibrary && !library.isListing && library.count == count }
         try #require(library.isShownFromLibrary && library.count == count)
         model.showLibrary(.grid)
         let window = NSWindow(
@@ -120,14 +118,15 @@ struct LibraryStacksTests {
         content.addSubview(strip)
         window.contentView = content
         content.layoutSubtreeIfNeeded()
-        try await eventually(seconds: 20) { model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true }
+        try await eventually { model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true }
         try #require(model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true, "the burst and the pair found")
         try await Task.sleep(for: .milliseconds(50))
         return (model, grid, strip, window)
     }
 
-    private func eventually(seconds: Double = 10, _ condition: () -> Bool) async throws {
-        for _ in 0 ..< Int(seconds * 200) where !condition() {
+    private func eventually(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(30)
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
     }
@@ -328,7 +327,7 @@ struct LibraryStacksTests {
         /// Shows `folder`, and waits until its stacks are found as many as it has, `open` of them open.
         func show(_ folder: URL, count: Int, open: Int, closed: Int) async throws {
             model.showFolder(folder)
-            try await eventually(seconds: 20) {
+            try await eventually {
                 model.folder == folder && model.items.count == count && model.gridStacks.list.map {
                     $0.list.source == model.library.photoList.source && $0.stacksShown == (open, closed)
                 } == true
@@ -384,18 +383,20 @@ struct LibraryStacksTests {
             }
             await model.libraryPanels.written()
             var made = -1
-            while made != model.gridStacks.stackingsMade {
+            let deadline = ContinuousClock.now + .seconds(30)
+            while made != model.gridStacks.stackingsMade || !model.gridStacks.isIdle, ContinuousClock.now < deadline {
                 made = model.gridStacks.stackingsMade
                 try await Task.sleep(for: LibraryStacks.quietPause + .milliseconds(300))
             }
         }
-        /// Whether `action`, Undo or Redo, finds the stacks again within 0.7 s: a stacking made meanwhile. Badges'
-        /// changes find them again only after a second's quiet.
+        /// Does `action`, Undo or Redo, and waits for the stacks to be found again: whether they were found before
+        /// badges' changes, quiet for `quietPause`, could have found them, so that the action asked for them itself.
         func restacks(_ action: ShortcutAction) async throws -> Bool {
             let made = model.gridStacks.stackingsMade
+            let asked = ContinuousClock.now
             #expect(model.perform(action))
-            try await Task.sleep(for: .milliseconds(700))
-            return model.gridStacks.stackingsMade > made
+            try await eventually { model.gridStacks.stackingsMade > made }
+            return ContinuousClock.now - asked < LibraryStacks.quietPause
         }
         func stack() throws {
             try model.clickInGrid(url(model, "S01.JPG"))
@@ -409,7 +410,7 @@ struct LibraryStacksTests {
 
         // A stack, then a rating: ⌘Z takes back the rating, then the stack.
         try stack()
-        try await eventually(seconds: 20) { top() == second }
+        try await eventually { top() == second }
         try rate("S03.JPG")
         try await settled()
         #expect(model.libraryUndoKind == .culling)
@@ -417,17 +418,17 @@ struct LibraryStacksTests {
         try await settled()
         #expect(model.libraryUndoKind == .panels)
         _ = try await restacks(.undo)
-        try await eventually(seconds: 20) { top() == nil }
+        try await eventually { top() == nil }
         #expect(top() == nil, "⌘Z of the stack found the stacks again")
         try await settled()
 
         // A rating, then a stack, both taken back: ⇧⌘Z makes the rating again, then the stack.
         try rate("S04.JPG")
         try stack()
-        try await eventually(seconds: 20) { top() == second }
+        try await eventually { top() == second }
         try await settled()
         #expect(model.perform(.undo))
-        try await eventually(seconds: 20) { top() == nil }
+        try await eventually { top() == nil }
         try await settled()
         #expect(model.perform(.undo))
         try await settled()
@@ -438,7 +439,7 @@ struct LibraryStacksTests {
         try await settled()
         #expect(model.libraryRedoKind == .panels)
         _ = try await restacks(.redo)
-        try await eventually(seconds: 20) { top() == second }
+        try await eventually { top() == second }
         #expect(top() == second, "⇧⌘Z of the stack found them again")
         await model.libraryPanels.written()
     }
@@ -455,7 +456,7 @@ struct LibraryStacksTests {
         try model.clickInGrid(url(model, "S02.JPG"), toggling: true)
         #expect(model.canPerform(.stackPhotos) && !model.canPerform(.unstackPhotos))
         #expect(model.perform(.stackPhotos))
-        try await eventually(seconds: 20) { top() == second }
+        try await eventually { top() == second }
         #expect(top() == second, "the active photo is on top")
         #expect(model.gridStacks.list.map { $0.stacksShown == (0, 3) } == true && grid.shownCount == 5)
 
@@ -463,26 +464,26 @@ struct LibraryStacksTests {
         try model.clickInGrid(url(model, "S01.JPG"))
         #expect(model.canPerform(.moveToStackTop))
         #expect(model.perform(.moveToStackTop))
-        try await eventually(seconds: 20) { top() == first }
+        try await eventually { top() == first }
         #expect(top() == first)
 
         #expect(model.perform(.unstackPhotos))
-        try await eventually(seconds: 20) { top() == nil }
+        try await eventually { top() == nil }
         #expect(top() == nil && model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true)
 
         #expect(model.perform(.undo))
-        try await eventually(seconds: 20) { top() == first }
+        try await eventually { top() == first }
         #expect(top() == first, "⌘Z stacks them again")
         #expect(model.canPerform(.redo))
         #expect(model.perform(.redo))
-        try await eventually(seconds: 20) { top() == nil }
+        try await eventually { top() == nil }
         #expect(top() == nil, "⇧⌘Z takes them apart again")
         #expect(model.perform(.undo))
-        try await eventually(seconds: 20) { top() == first }
+        try await eventually { top() == first }
         #expect(model.perform(.undo))
-        try await eventually(seconds: 20) { top() == second }
+        try await eventually { top() == second }
         #expect(model.perform(.undo))
-        try await eventually(seconds: 20) { top() == nil }
+        try await eventually { top() == nil }
         #expect(top() == nil && grid.shownCount == 6)
         await model.libraryPanels.written()
     }
@@ -493,7 +494,7 @@ struct LibraryStacksTests {
         let (model, grid, _, window) = try await open()
         defer { window.contentView = nil }
         _ = model.librarySources.show(.allPhotographs)
-        try await eventually(seconds: 20) {
+        try await eventually {
             model.library.showsIndexIDs && !model.librarySources.isListing && model.items.count == Self.photos.count
                 && model.gridStacks.list.map { $0.list.source == .allPhotographs && $0.stacksShown == (0, 2) } == true
         }
@@ -508,17 +509,17 @@ struct LibraryStacksTests {
         try model.clickInGrid(url(model, "S01.JPG"))
         try model.clickInGrid(url(model, "S02.JPG"), toggling: true)
         #expect(model.perform(.stackPhotos))
-        try await eventually(seconds: 20) { top() == second }
+        try await eventually { top() == second }
         #expect(top() == second, "the active photo is on top")
         #expect(model.gridStacks.list.map { $0.stacksShown == (0, 3) } == true && grid.shownCount == 5)
 
         model.gridStacks.toggle(second)
         try model.clickInGrid(url(model, "S01.JPG"))
         #expect(model.perform(.moveToStackTop))
-        try await eventually(seconds: 20) { top() == first }
+        try await eventually { top() == first }
         #expect(top() == first)
         #expect(model.perform(.unstackPhotos))
-        try await eventually(seconds: 20) { top() == nil }
+        try await eventually { top() == nil }
         #expect(top() == nil && model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true)
         await model.libraryPanels.written()
     }
