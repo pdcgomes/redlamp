@@ -126,7 +126,7 @@ struct RenameTests {
         }
 
         func cleanUp() {
-            service?.close()
+            service?.closeWithIndex()
             try? FileManager.default.removeItem(at: base)
         }
 

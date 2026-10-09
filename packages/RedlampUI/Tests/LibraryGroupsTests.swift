@@ -56,7 +56,17 @@ struct LibraryGroupsTests {
         UserDefaults(suiteName: suite)!
     }
 
+    private let opened = Opened()
+
+    @MainActor
+    final class Opened {
+        var services: [LibraryService] = []
+    }
+
     private func cleanUp() {
+        for service in opened.services {
+            service.closeWithIndex()
+        }
         try? FileManager.default.removeItem(at: base)
         UserDefaults().removePersistentDomain(forName: suite)
     }
@@ -118,6 +128,7 @@ struct LibraryGroupsTests {
         ) { url, size in
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
+        opened.services.append(service)
         library.attach(service)
         for _ in 0 ..< 2000 {
             if await service.canShow(root, includingSubfolders: true) {
@@ -229,7 +240,9 @@ struct LibraryGroupsTests {
         try await group(model, by: .ungrouped)
         #expect(grid.shownCount == 14 && grid.headers.isEmpty && grid.sections == nil)
     }
+}
 
+extension LibraryGroupsTests {
     // MARK: - Opening and closing
 
     @Test func `opening and closing groups keeps the selection and the active photo, moving the grid's cells`(
@@ -397,7 +410,7 @@ struct LibraryGroupsTests {
         #expect(stripNames(strip, model) == listed)
     }
 
-    @Test func `⇧ and Auto Advance move on in the grid's order, past closed groups, in Library, the loupe and Develop`(
+    @Test func `moving on with ⇧ and Auto Advance goes in the grid's order, past closed groups, in Library, the loupe and Develop`(
     ) async throws {
         defer { cleanUp() }
         let (model, _, window) = try await open()
@@ -451,7 +464,7 @@ struct LibraryGroupsTests {
         grid.content.keyDown(with: event)
     }
 
-    @Test func `Option-Left and Option-Right go to the first photo of the group before and after, opening it`(
+    @Test func `the Option-Left and Option-Right keys go to the first photo of the group before and after, opening it`(
     ) async throws {
         defer { cleanUp() }
         let (model, _, window) = try await open()
@@ -631,7 +644,7 @@ struct LibraryGroupsTests {
         #expect(model.libraryViews.looseness == -2)
     }
 
-    @Test func `Group By is kept with each source's view, and across launches`() async throws {
+    @Test func `the Group By choice is kept with each source's view, and across launches`() async throws {
         defer { cleanUp() }
         let (model, _, window) = try await open()
         defer { window.contentView = nil }

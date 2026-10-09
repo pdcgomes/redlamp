@@ -275,7 +275,7 @@ final class EditRenderFixture {
         for window in windows {
             window.contentView = nil
         }
-        service?.close()
+        service?.closeWithIndex()
         try? FileManager.default.removeItem(at: base)
     }
 

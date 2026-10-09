@@ -103,7 +103,7 @@ struct RecentlyTrashedTests {
         for place in await service.trashedPlaces() {
             try? FileManager.default.removeItem(atPath: place)
         }
-        service.close()
+        service.closeWithIndex()
     }
 
     /// The index's row IDs of the photos at `paths`, by path.

@@ -71,7 +71,7 @@ struct LibraryPanelsTests {
         }
 
         func close() {
-            service?.close()
+            service?.closeWithIndex()
             try? FileManager.default.removeItem(at: base)
         }
 

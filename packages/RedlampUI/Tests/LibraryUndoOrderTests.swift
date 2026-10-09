@@ -113,7 +113,7 @@ struct LibraryUndoOrderTests {
                 for place in await service.trashedPlaces() {
                     try? FileManager.default.removeItem(atPath: place)
                 }
-                service.close()
+                service.closeWithIndex()
             }
             try? FileManager.default.removeItem(at: base)
         }
@@ -274,7 +274,7 @@ struct LibraryUndoOrderTests {
         }
     }
 
-    @Test func `Put Backs count towards the library's one limit, and alone keep its newest steps`() async throws {
+    @Test func `the Put Backs count towards the library's one limit, and alone keep its newest steps`() async throws {
         try await Sandbox.with { sandbox in
             let model = try #require(sandbox.model)
             let limit = 20

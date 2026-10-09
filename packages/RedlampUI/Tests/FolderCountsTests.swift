@@ -25,7 +25,17 @@ struct FolderCountsTests {
         UserDefaults(suiteName: suite)!
     }
 
+    private let opened = Opened()
+
+    @MainActor
+    final class Opened {
+        var services: [LibraryService] = []
+    }
+
     private func cleanUp() {
+        for service in opened.services {
+            service.closeWithIndex()
+        }
         try? FileManager.default.setAttributes(
             [.posixPermissions: 0o644],
             ofItemAtPath: photo("Year/B/C/locked.JPG").path,
@@ -83,6 +93,7 @@ struct FolderCountsTests {
             paths: LibraryPaths(root: base.appending(path: "Library", directoryHint: .isDirectory)),
             sidecars: library.sidecars,
         ) { url, size in StoreThumbnailMaker.imageIO(url, nil, size) }
+        opened.services.append(service)
         library.attach(service)
         for _ in 0 ..< 2000 where await !service.canShow(root, includingSubfolders: true) {
             try await Task.sleep(for: .milliseconds(10))
@@ -101,7 +112,7 @@ struct FolderCountsTests {
         return rows
     }
 
-    @Test func `Show Photos in Subfolders is on by default, and a choice the user made is kept`() throws {
+    @Test func `the Show Photos in Subfolders setting is on by default, and a choice the user made is kept`() throws {
         defer { cleanUp() }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         #expect(FolderLibrary().includesSubfolders)

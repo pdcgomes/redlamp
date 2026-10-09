@@ -27,7 +27,17 @@ struct LibraryLaunchTests {
         root.appending(path: name, directoryHint: .notDirectory)
     }
 
+    private let opened = Opened()
+
+    @MainActor
+    final class Opened {
+        var services: [LibraryService] = []
+    }
+
     private func cleanUp() {
+        for service in opened.services {
+            service.closeWithIndex()
+        }
         try? FileManager.default.removeItem(at: base)
     }
 
@@ -44,6 +54,7 @@ struct LibraryLaunchTests {
         let service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
+        opened.services.append(service)
         library.attach(service)
         return (library, service)
     }
@@ -186,6 +197,7 @@ struct LibraryLaunchTests {
         let service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
+        opened.services.append(service)
         defer { service.close() }
         // The index waits 5 s for a lock before it gives up: what's checked meanwhile is quick.
         try holder.execute("BEGIN IMMEDIATE")

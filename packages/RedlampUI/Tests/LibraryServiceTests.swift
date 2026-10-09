@@ -30,7 +30,17 @@ struct LibraryServiceTests {
         UserDefaults(suiteName: suite)!
     }
 
+    private let opened = Opened()
+
+    @MainActor
+    final class Opened {
+        var services: [LibraryService] = []
+    }
+
     private func cleanUp() {
+        for service in opened.services {
+            service.closeWithIndex()
+        }
         try? FileManager.default.removeItem(at: base)
         UserDefaults().removePersistentDomain(forName: suite)
     }
@@ -77,9 +87,11 @@ struct LibraryServiceTests {
     }
 
     private func service(_ library: FolderLibrary, defaults: UserDefaults? = nil) -> LibraryService {
-        LibraryService(paths: paths, sidecars: library.sidecars, defaults: defaults) { url, size in
+        let service = LibraryService(paths: paths, sidecars: library.sidecars, defaults: defaults) { url, size in
             StoreThumbnailMaker.imageIO(url, nil, size)
         }
+        opened.services.append(service)
+        return service
     }
 
     /// A library following the root, once it has indexed it and caught up with the disk.
@@ -276,6 +288,7 @@ struct LibraryServiceTests {
             paths: LibraryPaths(root: base.appending(path: "Blocked/Library", directoryHint: .isDirectory)),
             sidecars: library.sidecars,
         ) { _, _ in nil }
+        opened.services.append(service)
         library.attach(service)
         try await eventually { service.state != .opening }
         guard case .unavailable = service.state else {
@@ -315,11 +328,14 @@ struct LibraryServiceTests {
         // finds its edit.
         let relaunched = FolderLibrary()
         relaunched.add([root])
-        relaunched.attach(self.service(relaunched, defaults: defaults))
+        let relaunchedService = self.service(relaunched, defaults: defaults)
+        relaunched.attach(relaunchedService)
         let reopened = EditorModel(engine: StubEngine(), library: relaunched)
         try await open(photo, in: reopened)
         #expect(reopened.recipe[.exposure] == 0.8)
         #expect(SidecarStore().load(for: photo) == nil, "a photo outside the library's folders reads beside it")
+        // Its index open, so it's closed before the folder goes.
+        try await eventually { relaunchedService.state != .opening }
     }
 
     @Test func `an indexed folder's thumbnails come from the store, not the photos or the folder's pack`() async throws {
