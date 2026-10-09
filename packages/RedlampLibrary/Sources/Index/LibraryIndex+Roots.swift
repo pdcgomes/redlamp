@@ -79,9 +79,11 @@ public extension LibraryIndex.Writer {
     }
 
     /// Takes out the rows of up to `limit` photos of a root marked removed, with their keywords, collection
-    /// memberships and text, the root marked first going first; a root with no photos left goes with its folders
-    /// and its mark.
-    func sweepRemoved(limit: Int) throws -> RootSweep {
+    /// memberships and text, and what's kept beside their rows (`removeRecords(ofPhotos:)`) but for `restorable`'s,
+    /// photos a batch the file journal keeps can bring back under their IDs (every photo's when it's nil: a batch
+    /// can't be read); the root marked first going first. A root with no photos left goes with its folders and its
+    /// mark.
+    func sweepRemoved(limit: Int, keeping restorable: Set<Int64>? = []) throws -> RootSweep {
         let marked = try removedRoots().keys.sorted()
         guard let root = marked.first else { return RootSweep() }
         var sweep = RootSweep(more: true)
@@ -93,6 +95,9 @@ public extension LibraryIndex.Writer {
         sweep.photos = try photos.map { $0.int64(at: 0) }
         guard sweep.photos.isEmpty else {
             try deletePhotos(sweep.photos)
+            if let restorable {
+                try removeRecords(ofPhotos: sweep.photos.filter { !restorable.contains($0) })
+            }
             return sweep
         }
         let folders = try database.cached("DELETE FROM folders WHERE root = ?")

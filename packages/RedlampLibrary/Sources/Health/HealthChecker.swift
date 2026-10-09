@@ -76,9 +76,9 @@ struct HealthChecker: Sendable {
 }
 
 extension IndexQueries {
-    /// The photos marked unreadable, in ID order.
+    /// The photos marked unreadable, in ID order; not of roots marked removed.
     func unreadablePhotoIDs() throws -> [Int64] {
-        let statement = try database.cached("SELECT id FROM photos WHERE state & ? != 0 ORDER BY id")
+        let statement = try database.cached("SELECT id FROM photos WHERE state & ? != 0 AND \(inLibrary()) ORDER BY id")
         try statement.bind(PhotoRecord.State.unreadable.rawValue, at: 1)
         return try statement.map { $0.int64(at: 0) }
     }

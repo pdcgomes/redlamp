@@ -146,6 +146,96 @@ struct RootRemovalTests {
         #expect(try await sandbox.index.read { try $0.removedRoots() }.isEmpty)
     }
 
+    /// What's kept beside the photos' rows of each of the library's: a finding, a full hash and a record of what was
+    /// merged with other apps.
+    static func keepRecords(of photos: [Int64], in index: LibraryIndex) async throws {
+        try await index.write { writer in
+            for id in photos {
+                guard let row = try writer.photo(id: id) else { continue }
+                try writer.setHealth(
+                    PhotoHealth(size: row.size, modified: row.modified, damage: .empty),
+                    forPhoto: id,
+                    name: row.name,
+                )
+                try writer.setPhotoHashes([PhotoHash(row, sha256: Data(repeating: UInt8(id), count: 32))])
+                try XMPMergeRecord.save(
+                    [id: XMPMergeRecord(other: XMPFields(), redlampFields: XMPFields())], dropping: [], in: writer,
+                )
+            }
+        }
+    }
+
+    /// The photos the index keeps a finding, a full hash and a record of what was merged for.
+    static func records(of photos: [Int64], in index: LibraryIndex) async throws -> [[Int64]] {
+        try await index.read { reader in
+            try [
+                reader.database.prepare("SELECT photo FROM photo_health ORDER BY photo").map { $0.int64(at: 0) },
+                reader.database.prepare("SELECT photo FROM photo_hashes ORDER BY photo").map { $0.int64(at: 0) },
+                XMPMergeRecord.records(photos, in: reader).keys.sorted(),
+            ]
+        }
+    }
+
+    @Test func `a root's photos take their findings, hashes and XMP records as they're swept, but one a batch can put back`(
+    ) async throws {
+        let (sandbox, indexer) = try await Self.library(batchSize: 1)
+        defer { sandbox.remove() }
+        let trip = try await sandbox.ids(["Trip/IMG_0001.JPG", "Trip/Day 2/IMG_0002.JPG"])
+        let home = try await sandbox.id("Home/IMG_0003.JPG")
+        try await Self.keepRecords(of: trip + [home], in: sandbox.index)
+        #expect(try await Self.records(of: trip + [home], in: sandbox.index) == Array(
+            repeating: (trip + [home]).sorted(),
+            count: 3,
+        ))
+        // Trip's second photo was put back from the Trash: the batch that moved it there can put it back again.
+        let row = try #require(try await sandbox.index.read { try $0.photo(id: trip[1]) })
+        try FileJournal(paths: sandbox.paths).write(FileBatch(
+            kind: .trash, title: "Move 1 photo to the Trash", steps: [FileStep(kind: .trash, removed: [
+                RemovedPhoto(photo: IndexedPhoto(row), folder: LibraryIndexer.path(sandbox.url("Trip/Day 2"))),
+            ])],
+        ))
+
+        let engine = QueryEngine(index: sandbox.index)
+        try await engine.load()
+        let roots = LibraryRoots(index: sandbox.index, indexer: indexer, live: LibraryLive(engine: engine))
+        try #require(try await roots.remove(sandbox.url("Trip"), keeping: [sandbox.url("Home")]) != nil)
+        await roots.swept()
+        #expect(try await sandbox.index.read { try $0.photoCount() } == 1)
+        #expect(try await Self.records(of: trip + [home], in: sandbox.index) == Array(
+            repeating: [trip[1], home].sorted(),
+            count: 3,
+        ))
+    }
+
+    @Test func `until its rows are swept, a root taken out has no damaged file or wrong extension in Library Health`(
+    ) async throws {
+        let (sandbox, _) = try await Self.library()
+        defer { sandbox.remove() }
+        let trip = try await sandbox.ids(["Trip/IMG_0001.JPG", "Trip/Day 2/IMG_0002.JPG"])
+        let home = try await sandbox.id("Home/IMG_0003.JPG")
+        // Trip's first is damaged and its second a HEIC named .JPG, as is Home's.
+        try await sandbox.index.write { writer in
+            for (id, health) in [
+                (trip[0], { PhotoHealth(size: $0.size, modified: $0.modified, damage: .empty) }),
+                (trip[1], { PhotoHealth(size: $0.size, modified: $0.modified, format: .heif) }),
+                (home, { PhotoHealth(size: $0.size, modified: $0.modified, format: .heif, damage: .empty) }),
+            ] as [(Int64, (PhotoRecord) -> PhotoHealth)] {
+                let row = try #require(try writer.photo(id: id))
+                try writer.setHealth(health(row), forPhoto: id, name: row.name)
+            }
+        }
+        let checker = HealthChecker(index: sandbox.index, paths: sandbox.paths) { Date(timeIntervalSinceNow: 3600) }
+        #expect(try await checker.findings(.damaged, store: nil).photos.sorted() == [trip[0], home].sorted())
+        #expect(try await checker.findings(.extensions, store: nil).photos.sorted() == [trip[1], home].sorted())
+
+        // Marked removed, none of its rows swept yet.
+        let (tripPath, homePath) = (LibraryIndexer.path(sandbox.url("Trip")), LibraryIndexer.path(sandbox.url("Home")))
+        try #require(try await sandbox.index.write { try $0.markRemoved(tripPath, keeping: [homePath]) } != nil)
+        #expect(try await sandbox.index.read { try $0.photoCount() } == 3)
+        #expect(try await checker.findings(.damaged, store: nil).photos == [home])
+        #expect(try await checker.findings(.extensions, store: nil).photos == [home])
+    }
+
     @Test func `a root taken out never shows in a store built or mapped before its sweep is over`() async throws {
         let (sandbox, indexer) = try await Self.library()
         defer { sandbox.remove() }

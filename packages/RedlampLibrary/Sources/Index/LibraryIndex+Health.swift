@@ -70,12 +70,12 @@ public extension IndexQueries {
         return found
     }
 
-    /// Every photo's health that stands, by ID, with its photo's name.
+    /// Every photo's health that stands, by ID, with its photo's name; not of roots marked removed.
     func photoHealth() throws -> [Int64: (health: PhotoHealth, name: String)] {
         var found: [Int64: (health: PhotoHealth, name: String)] = [:]
         try database.cached("""
         SELECT \(Self.healthColumns), h.photo, p.name FROM photo_health h JOIN photos p ON p.id = h.photo
-        WHERE p.size = h.size AND abs(p.modified - h.modified) < 1e-6
+        WHERE p.size = h.size AND abs(p.modified - h.modified) < 1e-6 AND \(inLibrary(folder: "p.folder"))
         """).forEachRow { row in
             found[row.int64(at: 8)] = (Self.health(row), row.string(at: 9) ?? "")
         }
@@ -114,6 +114,20 @@ public extension IndexQueries {
 }
 
 extension LibraryIndex.Writer {
+    /// Removes what's kept for photos `ids` beside their rows, which outlives them while a batch can bring them back:
+    /// their health rows, hashes and XMP merge records.
+    func removeRecords(ofPhotos ids: [Int64]) throws {
+        let deletes = try ["photo_health", "photo_hashes"]
+            .map { try database.cached("DELETE FROM \($0) WHERE photo = ?") }
+        for id in ids {
+            for delete in deletes {
+                try delete.bind(id, at: 1)
+                try delete.run()
+            }
+            try setSetting(nil, for: XMPMergeRecord.key(id))
+        }
+    }
+
     /// Removes the health rows and hashes of photos the index no longer has, but for `keeping`'s;
     /// returns how many photos they were.
     @discardableResult
