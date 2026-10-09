@@ -125,13 +125,33 @@ public extension FileOperations {
     /// safe step after every `namesPerStep` photos renamed, and after the last.
     internal static func recordingOriginalNames(_ steps: [FileStep], moves: [PhotoMove]) -> [FileStep] {
         let originals = Dictionary(moves.map { ($0.id, $0.from) }) { first, _ in first }
+        return writingOriginalNames(.recordOriginalNames, after: steps, originals: originals) { original, now in
+            FilePlanner.split(original).name != FilePlanner.split(now).name
+        }
+    }
+
+    /// `steps`, an Undo's moves, with the original names a rename recorded taken out of each photo's sidecar after
+    /// the steps that move it back, as recording writes them: an Undo that's stopped leaves the photos it didn't
+    /// reach their original names. `recorded` is each photo's path before the rename.
+    internal static func clearingOriginalNames(_ steps: [FileStep], recorded: [Int64: String]) -> [FileStep] {
+        writingOriginalNames(.clearOriginalNames, after: steps, originals: recorded) { _, _ in true }
+    }
+
+    /// `steps` with a step of `kind` for the photos of `originals` (each one's path before the batch) that
+    /// `including` takes, after the steps that move them: at the first safe step after every `namesPerStep` photos
+    /// moved, and after the last. The steps before each are unsafe, so a batch stopped among them writes the names
+    /// of the photos it moved before it stops (`FileRunner.stop(before:)`).
+    private static func writingOriginalNames(
+        _ kind: FileStep.Kind, after steps: [FileStep], originals: [Int64: String],
+        including: (_ original: String, _ now: String) -> Bool,
+    ) -> [FileStep] {
         var result: [FileStep] = []
-        var renamed: [Int64: String] = [:]
+        var moved: [Int64: String] = [:]
         var order: [Int64] = []
         for (index, step) in steps.enumerated() {
             var step = step
             for photo in step.photos where originals[photo.id] != nil {
-                if renamed.updateValue(photo.to, forKey: photo.id) == nil {
+                if moved.updateValue(photo.to, forKey: photo.id) == nil {
                     order.append(photo.id)
                 }
             }
@@ -142,13 +162,11 @@ public extension FileOperations {
             }
             step.isSafe = false
             result.append(step)
-            result.append(FileStep(kind: .recordOriginalNames, photos: order.compactMap { id in
-                guard let original = originals[id], let now = renamed[id],
-                      FilePlanner.split(original).name != FilePlanner.split(now).name
-                else { return nil }
+            result.append(FileStep(kind: kind, photos: order.compactMap { id in
+                guard let original = originals[id], let now = moved[id], including(original, now) else { return nil }
                 return PhotoMove(id: id, from: original, to: now)
             }))
-            renamed = [:]
+            moved = [:]
             order = []
         }
         return result

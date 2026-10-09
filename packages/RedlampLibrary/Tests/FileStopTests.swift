@@ -130,6 +130,44 @@ struct FileStopTests {
         #expect(try await sandbox.rows() == rows)
     }
 
+    @Test func `a rename's Undo stopped partway takes the original names out of the photos it put back alone, and Undo again the rest`(
+    ) async throws {
+        let hold = Hold()
+        let sandbox = try await Self.sandbox(5, hold)
+        defer { sandbox.remove() }
+        let rows = try await sandbox.rows()
+        let ids = (1 ... 5).compactMap { rows[Self.name($0)] }
+        let before = try await Self.state(sandbox)
+        let operations = sandbox.operations()
+        let preview = try await operations.renamePreview(NamingTemplate(parsing: "Trip-{sequence}"), photos: ids)
+        #expect(try await operations.run(operations.planRename(preview)).isFinished)
+        let renamed = try #require(try await operations.lastUndoable())
+        let undo = try await operations.planUndo(renamed.id)
+        #expect(undo.steps.last?.kind == .clearOriginalNames && undo.steps.dropLast().allSatisfy { !$0.isSafe })
+        #expect(undo.steps.filter { $0.kind == .clearOriginalNames }.count == 1, "the names go after the moves")
+        let held = hold.hold("move " + sandbox.url("Shoot/Trip-3.JPG").path)
+
+        let undone = try await Self.stop({ try await operations.undo() }, at: held)
+        #expect(undone.state == .stopped)
+        let back = Set(undone.photoIDs)
+        #expect(!back.isEmpty && back.count < ids.count, "\(back)")
+        for (number, id) in zip(1 ... 5, ids) {
+            let original = "IMG_000\(number).JPG"
+            if back.contains(id) {
+                #expect(sandbox.files()["Shoot/" + original] != nil, "\(original) is back")
+                #expect(try await sandbox.sidecar("Shoot/" + original)?.metadata?.originalName == nil)
+            } else {
+                let metadata = try await sandbox.sidecar("Shoot/Trip-\(number).JPG")?.metadata
+                #expect(metadata?.originalName == original, "Trip-\(number) keeps its original name")
+            }
+        }
+
+        let rest = try await operations.undo()
+        #expect(rest.isFinished && Set(rest.photoIDs) == Set(ids).subtracting(back))
+        #expect(try await Self.state(sandbox) == before, "every name back, and the original names taken out")
+        #expect(try await sandbox.rows() == rows)
+    }
+
     @Test func `an Undo stopped partway leaves each photo whole where it is, and Undo again takes back the rest`(
     ) async throws {
         let hold = Hold()

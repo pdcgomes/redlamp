@@ -6,8 +6,8 @@ public extension FileOperations {
     /// photos taken from where they are now back where they were, with whatever sidecars they have by
     /// then; the folders it made removed and those it removed made again; what it moved to the
     /// Trash put back, while it's still there (as `TrashSurvey` finds it), and what it put back moved
-    /// to the Trash again; and the original names it recorded taken out. What isn't where the batch
-    /// left it any more is left out (`FileOutcome.gone`).
+    /// to the Trash again; and the original names it recorded taken out as their photos go back. What
+    /// isn't where the batch left it any more is left out (`FileOutcome.gone`).
     @discardableResult
     func undo(_ id: UUID? = nil, progress: (@Sendable (FileProgress) -> Void)? = nil) async throws -> FileOutcome {
         let target: UUID
@@ -36,7 +36,7 @@ public extension FileOperations {
         var first: [Int64: String] = [:]
         var last: [Int64: String] = [:]
         var order: [Int64] = []
-        var clearing: [FileStep] = []
+        var recorded: [Int64: String] = [:]
         var making: [FileStep] = []
         var folders: [FileStep] = []
         var files: [FileStep] = []
@@ -70,7 +70,9 @@ public extension FileOperations {
             case .putBack:
                 trashing.insert(step.inverse(trashed: []), at: 0)
             case .recordOriginalNames:
-                clearing.insert(step.inverse(trashed: []), at: 0)
+                for photo in step.photos {
+                    recorded[photo.id] = photo.from
+                }
             case .clearOriginalNames, .copy, .detachCopies:
                 break
             }
@@ -82,7 +84,7 @@ public extension FileOperations {
         let locator = try await locator()
         let fileSystem = fileSystem
         let (planned, gone) = try await LibraryIndex.offCaller { [
-            clearing,
+            recorded,
             making,
             folders,
             files,
@@ -119,8 +121,8 @@ public extension FileOperations {
                 }
                 return step.items.contains(where: \.isRequired) ? step : nil
             }
-            let moved = planner.moveSteps(present)
-            return (clearing + making + folders + moved + files + removing + back + again, gone)
+            let moved = Self.clearingOriginalNames(planner.moveSteps(present), recorded: recorded)
+            return (making + folders + moved + files + removing + back + again, gone)
         }
         guard !planned.isEmpty else {
             // Nothing it did is where it left it: the batch stays as it is, for when it is.
