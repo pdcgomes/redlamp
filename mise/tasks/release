@@ -4,11 +4,11 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-# DRY_RUN=1 builds, signs and zips without pushing a version bump, notarizing, tagging or
-# publishing. With it, REF builds another commit, such as unpushed changes to this script.
-# Without it, REF can name an earlier commit of main, to release it without what came after:
-# its version bump is tagged rather than pushed, and main is given the same version so the
-# next release moves on from it.
+# DRY_RUN=1 builds and signs the app, its zip and its disk image without pushing a version bump,
+# notarizing, tagging or publishing. With it, REF builds another commit, such as unpushed changes
+# to this script. Without it, REF can name an earlier commit of main, to release it without what
+# came after: its version bump is tagged rather than pushed, and main is given the same version so
+# the next release moves on from it.
 DRY_RUN="${DRY_RUN:-0}"
 NOTARY_PROFILE="${REDLAMP_NOTARY_PROFILE:?REDLAMP_NOTARY_PROFILE is not set (run through mise)}"
 TEAM_ID="${REDLAMP_TEAM_ID:?REDLAMP_TEAM_ID is not set (run through mise)}"
@@ -46,8 +46,10 @@ OUT="build/release"
 PRODUCTS="$OUT/DerivedData/Build/Products/Release"
 APP="$OUT/Redlamp.app"
 ZIP="$OUT/Redlamp-$VERSION.zip"
+DMG="$OUT/Redlamp-$VERSION.dmg"
 DSYMS="$OUT/dSYMs"
-# Not Redlamp-*.zip, which the site's download button takes for the app (web/lib/github.ts).
+# Not Redlamp-*.zip, which the site's download button takes for the app when a release has no disk
+# image (web/lib/github.ts).
 DSYMS_ZIP="$OUT/dSYMs-$VERSION.zip"
 
 # The keychain can hold several Developer ID certificates with the same name, which
@@ -194,9 +196,26 @@ zip_app() {
     scripts/check-release-zip.sh "$ZIP" ${1:+"$1"} || fail "the zip doesn't unpack to the app as it was signed; see above"
 }
 
+# redlamp.app's download button offers the disk image, the app beside a link to /Applications;
+# updates and Homebrew take the zip. Making and checking the image mounts it, which the agent's
+# sandbox refuses: SKIP_DMG="<why>" leaves it out, and the button offers the zip.
+dmg_app() {
+    if [ -n "${SKIP_DMG:-}" ]; then
+        echo "==> Disk image skipped: $SKIP_DMG"
+        return
+    fi
+    scripts/release-dmg.sh "$APP" "$DMG" || fail "couldn't make the disk image; see above"
+    codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+    [ -z "${1:-}" ] || mise run notarize -- "$DMG"
+    scripts/check-release-dmg.sh "$DMG" ${1:+"$1"} || fail "the disk image doesn't hold the app as it was signed; see above"
+}
+
 if [ "$DRY_RUN" = 1 ]; then
     zip_app
-    echo "==> Dry run: signed but not notarized: $ZIP (mise run notarize -- $APP to notarize it), dSYMs $DSYMS_ZIP"
+    dmg_app
+    MADE="$ZIP"
+    [ -n "${SKIP_DMG:-}" ] || MADE="$ZIP and $DMG"
+    echo "==> Dry run: signed but not notarized: $MADE (mise run notarize -- $APP to notarize it), dSYMs $DSYMS_ZIP"
     exit 0
 fi
 
@@ -209,8 +228,10 @@ KEY="$("$SPARKLE_BIN/generate_keys" --account redlamp -p)" \
 
 mise run notarize -- "$APP"
 
-# Zipped after stapling so the download carries its ticket and opens offline.
+# The zip and the disk image are made after stapling, so the app in each carries its ticket and
+# opens offline.
 zip_app --notarized
+dmg_app --notarized
 
 # GitHub's generated notes are only a changelog link, since nothing lands through pull requests.
 # The release's highlights, chosen in the release room, lead when docs/releases/<version>.md has them,
@@ -244,7 +265,9 @@ echo "==> Publishing $TAG..."
 git tag -a "$TAG" "$COMMIT" -m "Redlamp $VERSION"
 git push origin "$TAG"
 # redlamp.app's download button, the Homebrew cask and the update feed follow the release marked Latest.
-gh release create "$TAG" "$ZIP" "$DSYMS_ZIP" "$OUT/appcast.xml" --verify-tag --latest --title "Redlamp $VERSION" \
+ASSETS=("$ZIP" "$DSYMS_ZIP" "$OUT/appcast.xml")
+[ -n "${SKIP_DMG:-}" ] || ASSETS+=("$DMG")
+gh release create "$TAG" "${ASSETS[@]}" --verify-tag --latest --title "Redlamp $VERSION" \
     --notes-file "$NOTES" --generate-notes
 
 for _ in 1 2 3 4 5 6; do
