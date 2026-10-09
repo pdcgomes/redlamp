@@ -119,17 +119,19 @@ struct FolderRemovalTests {
         defer { sandbox.remove() }
         let (model, window, item) = try await Self.removeFromFolders(in: sandbox)
         defer { window.contentView = nil }
+        let service = try #require(sandbox.service)
+        let index = try #require(service.core).index
+        let before = try await index.read { try $0.roots().map { "\($0.id) \($0.path)" } }
         try NSApplication.shared.sendAction(#require(item.action), to: item.target, from: item)
         #expect(model.library.roots.map(\.url) == [sandbox.root])
         try await sandbox.counts { $0.count(of: .allPhotographs) == 1 }
-        let service = try #require(sandbox.service)
-        let (roots, removing) = try await #require(service.core).index.read { reader in
-            try (reader.roots().map(\.path), reader.removedRoots().count)
+        let (roots, removing) = try await index.read { reader in
+            try (reader.roots().map { "\($0.id) \($0.path)" }, reader.removedRoots().count)
         }
         let found = try await Self.ids("", service).count
         #expect(
             model.librarySources.count(of: .allPhotographs) == 1,
-            "the index's roots \(roots), \(removing) being taken out; the query engine finds \(found)",
+            "the index's roots \(roots), \(before) before; \(removing) being taken out; the engine finds \(found)",
         )
     }
 
