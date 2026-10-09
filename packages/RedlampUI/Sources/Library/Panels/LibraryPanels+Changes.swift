@@ -9,9 +9,16 @@ import Synchronization
 final class PanelStep {
     let title: String
     let changes: [PanelChange]
-    /// The photos it's made on, for their saves and Develop's open photo, and their IDs in the index.
+    /// The photos it's made on, for their saves and Develop's open photo, and their IDs in the index. A large
+    /// source's whose rows aren't read have no URL here.
     let photos: [URL]
     let ids: [Int64]
+
+    /// Some of its photos are known by their IDs alone: a large source's.
+    var knowsSomeByID: Bool {
+        photos.count < ids.count
+    }
+
     /// Each change's batch as it was made last, and its Undo as it was taken back last.
     var batches: [UUID?]
     var undos: [UUID?]
@@ -372,22 +379,17 @@ extension LibraryPanels {
     /// Makes `changes` as one step with Undo, `overlay` showing it until the library has it. Made `onSelection`,
     /// the photos selected wait for their saves, and Develop's open photo among them saves first; a change to
     /// the keyword list reaches the photos with its keywords, wherever they are. Made on `photos` (a drop's or a
-    /// stroke of the painter's), those photos do as the selection's would.
+    /// stroke of the painter's), those photos do as the selection's would. A large source's photos whose rows
+    /// aren't read are known by their IDs alone (`waitForSaves`), so a step on a million starts at once.
     @discardableResult
     func make(
         _ changes: [PanelChange], title: String, overlay: PanelOverlay? = nil, onSelection: Bool = true,
         photos: (urls: [URL], ids: [Int64])? = nil,
     ) -> Bool {
         guard let model, model.library.service?.isReady == true else { return false }
-        // A large source's photos selected whose rows aren't read are read first: the step waits for their saves.
-        if photos == nil, onSelection, !model.hasReadSelection {
-            model.withSelectedPhotos { [weak self] _ in
-                self?.make(changes, title: title, overlay: overlay, onSelection: onSelection)
-            }
-            return true
-        }
+        let selected = onSelection && !model.library.items.readsOnRequest ? model.selectedPhotos : []
         let step = PanelStep(
-            title: title, changes: changes, photos: photos?.urls ?? (onSelection ? model.selectedPhotos : []),
+            title: title, changes: changes, photos: photos?.urls ?? selected,
             ids: photos?.ids ?? (onSelection ? selection.ids : []),
         )
         problem = nil
@@ -408,7 +410,10 @@ extension LibraryPanels {
     /// its saves count the batch's change as another writer's, so they never write it over the batch's. The
     /// batch waits for both (`waitForSaves`).
     private func saveOpenPhoto(of step: PanelStep) {
-        guard let model, model.info != nil, !model.isReadOnly, let url = model.selection, step.photos.contains(url)
+        guard let model, model.info != nil, !model.isReadOnly, let url = model.selection else { return }
+        let library = model.library
+        guard step.photos.contains(url) || step.knowsSomeByID && library.showsIndexIDs
+            && library.photoID(of: url).map(step.ids.contains) == true
         else { return }
         model.saveNow()
         model.saves.enqueue(.track(nil, opened: model.sidecarToSave), for: url)
@@ -434,7 +439,7 @@ extension LibraryPanels {
     /// saves first; then shows what the library has.
     private func run(_ step: PanelStep, as making: Making) async {
         guard let model, let service = model.library.service else { return }
-        await waitForSaves(of: step.photos)
+        await waitForSaves(of: step)
         let title = making == .undo ? "Undo \(step.title)" : making == .redo ? "Redo \(step.title)" : step.title
         let report = progressReport(title, total: max(step.ids.count, 1))
         var reasons: [String: String] = [:]
@@ -506,11 +511,22 @@ extension LibraryPanels {
         }
     }
 
-    /// Returns once the saves asked for any of `photos` before the call are on disk, so a batch reads their
-    /// sidecars as those saves leave them.
-    private func waitForSaves(of photos: [URL]) async {
-        guard let saves = model?.saves, !photos.isEmpty else { return }
-        let pending = await Task.detached(priority: .userInitiated) { saves.pending(photos) }.value
+    /// Returns once the saves asked for any of `step`'s photos before the call are on disk, so a batch reads their
+    /// sidecars as those saves leave them. Those known by their IDs alone are found among the photos being saved,
+    /// which are few, by those photos' IDs in the index.
+    private func waitForSaves(of step: PanelStep) async {
+        guard let saves = model?.saves, !step.photos.isEmpty || !step.ids.isEmpty else { return }
+        let (photos, ids) = (step.photos, step.ids)
+        let index = step.knowsSomeByID ? model?.library.service?.core?.index : nil
+        let pending = await Task.detached(priority: .userInitiated) { () -> [URL] in
+            let pending = saves.pending(photos)
+            guard let index else { return pending }
+            let others = Array(Set(saves.pending()).subtracting(pending))
+            guard !others.isEmpty else { return pending }
+            let found = await LibraryService.indexIDs(of: others, in: index)
+            let wanted = Set(ids)
+            return pending + others.filter { found[$0].map(wanted.contains) == true }
+        }.value
         for photo in pending {
             await saves.wait(for: photo)
         }

@@ -25,7 +25,6 @@ public extension EditorModel {
     @discardableResult
     func stackSelectedPhotos() -> Bool {
         guard canStackSelection else { return false }
-        guard hasRead(selectedOwnIDs, then: { [weak self] in self?.stackSelectedPhotos() }) else { return true }
         let photos = selectedForStacks
         let top = selection.flatMap(library.photoID(of:)).flatMap(gridStacks.indexID(of:))
         return makeStackChange(
@@ -38,7 +37,6 @@ public extension EditorModel {
     @discardableResult
     func unstackSelectedPhotos() -> Bool {
         guard canUnstackSelection else { return false }
-        guard hasRead(selectedOwnIDs, then: { [weak self] in self?.unstackSelectedPhotos() }) else { return true }
         let photos = selectedForStacks
         return makeStackChange(
             .unstack(photos.ids), title: "Unstack \(LibraryPanels.count(photos.ids.count))", photos: photos,
@@ -52,9 +50,6 @@ public extension EditorModel {
               let id = gridStacks.indexID(of: own), let stacks = libraryViews.stacks?.list?.stacks,
               let stack = stacks.stack(containing: own)
         else { return false }
-        guard hasRead(stacks.allPhotos(of: stack), then: { [weak self] in self?.moveToTopOfStack() }) else {
-            return true
-        }
         let photos = stackPhotos(stacks.allPhotos(of: stack))
         return makeStackChange(.top(id), title: "Move \(url.lastPathComponent) to the Top of Its Stack", photos: photos)
     }
@@ -383,17 +378,9 @@ public extension EditorModel {
         stackPhotos(selectedOwnIDs)
     }
 
-    /// Whether the rows of `photos`, by their IDs here, and of the others of their pairs, are read: always, unless
-    /// they're a large source's, when they're read and `then` is called.
-    private func hasRead(_ photos: [Int64], then: (@MainActor () -> Void)? = nil) -> Bool {
-        let stacks = libraryViews.stacks?.list?.stacks ?? Stacks()
-        let members = photos.flatMap { stacks.pair(containing: $0)?.photos ?? [$0] }
-        guard !library.hasRead(members) else { return true }
-        library.whenRead(members) { then?() }
-        return false
-    }
-
-    /// `photos`, by their IDs here, with the others of their pairs, as their URLs and their IDs in the index.
+    /// `photos`, by their IDs here, with the others of their pairs, as their IDs in the index and the URLs of those
+    /// whose rows are read: a large source's others are known by their IDs alone, their rows left unread, and the
+    /// change finds them among the photos being saved by those (`LibraryPanels.make`).
     private func stackPhotos(_ photos: [Int64]) -> (urls: [URL], ids: [Int64]) {
         let stacks = libraryViews.stacks?.list?.stacks ?? Stacks()
         let stacking = gridStacks
@@ -401,8 +388,10 @@ public extension EditorModel {
         var found: (urls: [URL], ids: [Int64]) = ([], [])
         for photo in photos {
             for member in stacks.pair(containing: photo)?.photos ?? [photo] where seen.insert(member).inserted {
-                guard let id = stacking.indexID(of: member), let url = library.url(ofPhoto: member) else { continue }
-                found.urls.append(url)
+                guard let id = stacking.indexID(of: member) else { continue }
+                if let url = library.url(ofPhoto: member) {
+                    found.urls.append(url)
+                }
                 found.ids.append(id)
             }
         }

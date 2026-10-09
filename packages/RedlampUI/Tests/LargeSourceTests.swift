@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import RedlampDocument
+import RedlampEngineAPI
 import RedlampLibrary
 import Testing
 @_spi(Harness) @testable import RedlampUI
@@ -123,6 +124,124 @@ struct LargeSourceTests {
         let read = library.items.rowsRead
         #expect(read.count == 40)
         #expect(urls == library.photoIDs.compactMap { read[$0]?.url }, "in the grid's order")
+    }
+
+    /// Every photo of the shoot, by its URL.
+    private func photos(_ sandbox: SourcesSandbox, count: Int) -> [URL] {
+        (0 ..< count).map { sandbox.photo(String(format: "Shoot/P%03d.JPG", $0)) }
+    }
+
+    @Test func `Sync on a large source's whole selection starts at once, its rows unread, and reaches every photo but the open one`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        let diffs = DiffLog()
+        let (model, _, window) = try await open(sandbox, count: 40, diffs: diffs)
+        defer { window.contentView = nil }
+        let library = model.library
+        let open = try #require(model.selection)
+        // Sync is Develop's: the photo it syncs from is open there.
+        model.showModule(.develop)
+        try await sandbox.eventually { model.info?.url == open && !model.isLoading }
+        try #require(model.info?.url == open, "the active photo open in Develop")
+        model.setValue(.exposure, 1)
+        model.copySelection = .default
+        model.selectAllPhotos()
+        let read = library.items.rowsRead.count
+        #expect(!model.hasReadSelection)
+        model.syncSettings()
+        #expect(model.settingsSync.progress?.total == 39, "it starts at once, on every photo but the open one")
+        await model.settingsSync.idle()
+        #expect(library.items.rowsRead.count == read, "no row was read for it")
+        let store = model.settingsSync.store
+        for photo in photos(sandbox, count: 40) where photo != open {
+            #expect(store.load(for: photo)?.recipe[.exposure] == 1, "\(photo.lastPathComponent) synced")
+        }
+        #expect(model.settingsSync.canUndo)
+        model.undoSync()
+        await model.settingsSync.idle()
+        for photo in photos(sandbox, count: 40) where photo != open {
+            #expect(
+                (store.load(for: photo)?.recipe ?? EditRecipe())[.exposure] == 0,
+                "\(photo.lastPathComponent) put back",
+            )
+        }
+    }
+
+    @Test func `Show in Finder shows a large source's whole selection, in order, its rows unread`() async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        let diffs = DiffLog()
+        let (model, _, window) = try await open(sandbox, count: 40, diffs: diffs)
+        defer { window.contentView = nil }
+        let library = model.library
+        final class Revealed {
+            var photos: [URL] = []
+        }
+        let revealed = Revealed()
+        model.libraryViews.revealInFinder = { revealed.photos += $0 }
+        model.selectAllPhotos()
+        let read = library.items.rowsRead.count
+        model.showInFinder()
+        try await sandbox.eventually { !revealed.photos.isEmpty }
+        #expect(library.items.rowsRead.count == read, "no row was read for it")
+        await library.read(library.photoIDs)
+        let rows = library.items.rowsRead
+        #expect(revealed.photos == library.photoIDs.compactMap { rows[$0]?.url }, "every photo, in the grid's order")
+    }
+
+    @Test func `a keyword added to a large source's whole selection or dropped on it reaches every photo, its rows unread`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        let diffs = DiffLog()
+        let (model, _, window) = try await open(sandbox, count: 40, diffs: diffs)
+        defer { window.contentView = nil }
+        let (library, panels) = (model.library, model.libraryPanels)
+        let engine = try #require(sandbox.service?.engine)
+        panels.follow()
+        model.selectAllPhotos()
+        try await sandbox.eventually { panels.selection.ids.count == 40 }
+        let read = library.items.rowsRead.count
+        func tagged(_ keyword: String) async throws -> Int {
+            try await engine.list(.allPhotographs, matching: LibraryQuery(parsing: "keyword:\"\(keyword)\"")).count
+        }
+        // The Keywording panel's field, a change on the selection.
+        #expect(try panels.add([#require(KeywordPath("Trips/2007"))]))
+        await panels.written()
+        try await SourcesSandbox.eventually { try await tagged("Trips/2007") == 40 }
+        #expect(try await tagged("Trips/2007") == 40, "on every photo selected")
+        // Dropped on the selection.
+        #expect(try panels.change([#require(KeywordPath("Places/Lisbon"))], ids: model.selectedIDs))
+        await panels.written()
+        try await SourcesSandbox.eventually { try await tagged("Places/Lisbon") == 40 }
+        #expect(try await tagged("Places/Lisbon") == 40, "on every photo selected")
+        #expect(library.items.rowsRead.count == read, "no row was read for them")
+    }
+
+    @Test func `stacking a large source's whole selection stacks every photo, its rows unread`() async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        let diffs = DiffLog()
+        let (model, _, window) = try await open(sandbox, count: 40, diffs: diffs)
+        defer { window.contentView = nil }
+        let library = model.library
+        let active = try #require(model.selection.flatMap(library.photoID(of:)))
+        model.selectAllPhotos()
+        let read = library.items.rowsRead.count
+        #expect(model.perform(.stackPhotos))
+        #expect(model.libraryPanels.undoSteps.last?.changes.contains(where: \.isStacks) == true, "made at once")
+        #expect(library.items.rowsRead.count == read, "no row was read for it")
+        await model.libraryPanels.written()
+        func stacked() -> Int {
+            guard let stacks = model.gridStacks.list?.stacks, let stack = stacks.stack(containing: active) else {
+                return 0
+            }
+            return stacks.allPhotos(of: stack).count
+        }
+        try await sandbox.eventually { stacked() == 40 }
+        #expect(stacked() == 40, "one stack of every photo")
+        #expect(model.gridStacks.list?.stacks.stack(containing: active)?.top == active, "the active photo on top")
     }
 
     @Test func `a large source's list hands over a change row by row when it keeps the order and changes few`() {

@@ -10,8 +10,8 @@ public extension EditorModel {
     /// The photos selected, in the filmstrip's order: a pass over the photos' IDs, so views follow
     /// `photoSelection` itself. The selection is read once: each read is an observed access, which a view's body
     /// would make a photo at a time; and only the photos selected are read, each a copy of many references. Of a
-    /// large source's photos, only those whose rows are read: what acts on them all asks for them through
-    /// `withSelectedPhotos`.
+    /// large source's photos, only those whose rows are read: what acts on them all takes them through
+    /// `selectionForAction`, or takes their IDs.
     var selectedPhotos: [URL] {
         let selected = photoSelection
         guard !selected.isEmpty else { return selection.map { [$0] } ?? [] }
@@ -26,25 +26,24 @@ public extension EditorModel {
         return selectedPlaces(selected).map { ids[$0] }
     }
 
-    /// Calls `body` with the photos selected once their rows are read: at once, unless they're a large source's and
-    /// some aren't read yet, which are read first. `body` isn't called when another source is shown meanwhile.
-    func withSelectedPhotos(_ body: @escaping @MainActor ([URL]) -> Void) {
-        guard library.items.readsOnRequest else { return body(selectedPhotos) }
-        library.whenRead(selectedIDs) { [weak self] in
-            guard let self else { return }
-            body(selectedPhotos)
+    /// The photos selected, for an action on them all to work through (`SelectedPhotos`): their URLs, or a large
+    /// source's IDs, the rows not read left unread. `excluding` leaves out the photo at that URL, the open one for
+    /// Sync and Paste.
+    internal func selectionForAction(excluding: URL? = nil) -> SelectedPhotos {
+        guard library.items.readsOnRequest, let source = library.rowSource else {
+            let photos = selectedPhotos
+            return SelectedPhotos(excluding.map { url in photos.filter { $0 != url } } ?? photos)
         }
+        // Every photo of a list selected is its IDs as they are, without a pass over them.
+        let selected = photoSelection.isEmpty ? ContiguousArray(selectedIDs) : photoSelection.ids(in: library.photoList)
+        let left = excluding.flatMap(library.photoID(of:))
+        let ids = left.map { left in ContiguousArray(selected.lazy.filter { $0 != left }) } ?? selected
+        return SelectedPhotos(ids: ids, read: library.items.rowsRead.mapValues(\.url), source: source)
     }
 
     /// Whether every photo selected has its row read: always, unless they're a large source's.
     var hasReadSelection: Bool {
         !library.items.readsOnRequest || library.hasRead(selectedIDs)
-    }
-
-    /// Returns once every photo selected has its row read, a large source's read first (`withSelectedPhotos`).
-    func readSelection() async {
-        guard library.items.readsOnRequest else { return }
-        await library.read(selectedIDs)
     }
 
     /// How many photos are selected: the active photo alone when nothing else is.

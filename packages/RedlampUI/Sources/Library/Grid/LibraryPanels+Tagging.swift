@@ -14,7 +14,19 @@ extension LibraryPanels {
         guard !keywords.isEmpty, !urls.isEmpty, let core = model?.library.service?.core else { return false }
         let found = await LibraryService.indexIDs(of: urls, in: core.index)
         let known = urls.filter { found[$0] != nil }
-        let ids = known.compactMap { found[$0] }
+        return change(keywords, removing: removing, photos: (known, known.compactMap { found[$0] }))
+    }
+
+    /// Puts `keywords` on the photos with the index's IDs `ids`, or with `removing` takes them off: a large source's
+    /// selection, whose rows aren't read for it.
+    @discardableResult
+    func change(_ keywords: [KeywordPath], removing: Bool = false, ids: [Int64]) -> Bool {
+        guard !keywords.isEmpty else { return false }
+        return change(keywords, removing: removing, photos: ([], ids))
+    }
+
+    private func change(_ keywords: [KeywordPath], removing: Bool, photos: (urls: [URL], ids: [Int64])) -> Bool {
+        let ids = photos.ids
         guard !ids.isEmpty else { return false }
         var overlay = PanelOverlay(ids: ids.sorted())
         if removing {
@@ -25,7 +37,7 @@ extension LibraryPanels {
         return make(
             [.keywords(removing ? .remove(keywords, from: ids) : .add(keywords, to: ids))],
             title: Self.title(removing ? "Remove" : "Add", keywords, ids.count, from: removing), overlay: overlay,
-            photos: (known, ids),
+            photos: photos,
         )
     }
 }

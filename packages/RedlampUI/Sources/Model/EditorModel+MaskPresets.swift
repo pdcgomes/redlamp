@@ -48,9 +48,8 @@ public extension EditorModel {
         let selection = isMultiSelecting
         if selection {
             saveNow()
-            await readSelection()
             settingsSync.run(
-                .applyMaskPreset(preset), on: otherSelectedPhotos, title: "Apply \(preset.name)", done: written,
+                .applyMaskPreset(preset), on: otherSelectedForAction, title: "Apply \(preset.name)", done: written,
             )
         }
         // The batch takes it to the rest of the selection: Auto Sync mustn't add it there again.

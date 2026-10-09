@@ -427,18 +427,19 @@ public extension EditorModel {
         guard isMultiSelecting, let open = selection, info != nil, !isFindingDust, settingsSync.progress == nil else {
             return
         }
-        await readSelection()
-        let targets = [open] + otherSelectedPhotos
+        let chosen = selectionForAction()
         saveNow()
         isFindingDust = true
         defer {
             isFindingDust = false
             dustSearch = nil
         }
-        let selected = selectedPhotos
         let openRecipe = recipe
+        dustSearch = SettingsSync.Progress(title: "Finding Dust", done: 0, total: chosen.count)
+        // A large source's photos are found by their IDs, off the main thread, their rows left unread.
+        let selected = await chosen.all()
         let others = selected.filter { $0 != open }
-        dustSearch = SettingsSync.Progress(title: "Finding Dust", done: 0, total: selected.count)
+        let targets = [open] + others
         for url in others {
             await saves.wait(for: url)
         }

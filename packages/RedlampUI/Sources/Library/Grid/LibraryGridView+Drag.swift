@@ -92,10 +92,12 @@ extension LibraryGridView {
         else { return false }
         let panels = model.libraryPanels
         switch target {
+        case .selection where model.library.items.readsOnRequest:
+            // A large source's photos have the index's IDs: their rows aren't read for it.
+            panels.change([keyword], ids: model.selectedIDs)
         case .selection:
-            model.withSelectedPhotos { photos in
-                Task { await panels.change([keyword], on: photos) }
-            }
+            let photos = model.selectedPhotos
+            Task { await panels.change([keyword], on: photos) }
         case let .photo(_, url):
             let photos = model.photos(standingFor: url)
             Task { await panels.change([keyword], on: photos) }

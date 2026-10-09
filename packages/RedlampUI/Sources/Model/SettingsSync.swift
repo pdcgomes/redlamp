@@ -153,10 +153,12 @@ public final class SettingsSync {
     @ObservationIgnored private var run: AutoSyncRun?
     /// A photo's history session for a run keeps this many steps at most, as the editor's does.
     static let maximumRunSteps = 500
+    /// The photos a batch reads the URLs of at a time, for a large source's selection.
+    static let batch = 256
 
     private struct Job {
         var change: Change
-        var photos: [URL]
+        var photos: SelectedPhotos
         var title: String
         /// The step's title in each photo's history.
         var stepTitle: String
@@ -226,6 +228,14 @@ public final class SettingsSync {
         _ change: Change, on photos: [URL], title: String, step: RunStep? = nil,
         done: @escaping (URL, EditRecipe) -> Void,
     ) {
+        run(change, on: SelectedPhotos(photos), title: title, step: step, done: done)
+    }
+
+    /// `run` on a selection's photos, which a large source's are read for a batch at a time as the batch reaches them.
+    func run(
+        _ change: Change, on photos: SelectedPhotos, title: String, step: RunStep? = nil,
+        done: @escaping (URL, EditRecipe) -> Void,
+    ) {
         var job = Job(change: change, photos: photos, title: title, stepTitle: title, done: done)
         if let step, isAutoSyncing {
             record(step)
@@ -242,7 +252,13 @@ public final class SettingsSync {
 
     /// One Auto Sync step of `source`, onto `photos`; gathered with the steps queued just before it.
     func autoSync(_ source: EditRecipe, step: RunStep, on photos: [URL], done: @escaping (URL, EditRecipe) -> Void) {
-        guard !step.carried.isEmpty, !photos.isEmpty else { return }
+        autoSync(source, step: step, on: SelectedPhotos(photos), done: done)
+    }
+
+    func autoSync(
+        _ source: EditRecipe, step: RunStep, on photos: SelectedPhotos, done: @escaping (URL, EditRecipe) -> Void,
+    ) {
+        guard !step.carried.isEmpty, photos.count > 0 else { return }
         record(step)
         let stepTitle = "Auto Sync: \(step.title)"
         if progress != nil, let last = queue.last, last.isAutoSync, last.session == step.session,
@@ -267,9 +283,18 @@ public final class SettingsSync {
         _ source: EditRecipe, undone: Set<UUID>, session: UUID, on photos: [URL], title: String,
         done: @escaping (URL, EditRecipe) -> Void,
     ) {
-        guard isAutoSyncing, let run, run.session == session else { return }
-        let members = photos.filter { run.photos[$0] != nil }
-        guard !members.isEmpty else { return }
+        follow(source, undone: undone, session: session, on: SelectedPhotos(photos), title: title, done: done)
+    }
+
+    /// `follow` on a selection's photos: those a large source's aren't known by URL yet are told from the run's as the
+    /// batch reaches them.
+    func follow(
+        _ source: EditRecipe, undone: Set<UUID>, session: UUID, on photos: SelectedPhotos, title: String,
+        done: @escaping (URL, EditRecipe) -> Void,
+    ) {
+        guard isAutoSyncing, let run, run.session == session, !run.photos.isEmpty else { return }
+        let members = photos.urls.map { SelectedPhotos($0.filter { run.photos[$0] != nil }) } ?? photos
+        guard members.count > 0 else { return }
         let job = Job(
             change: .follow(source, undone), photos: members, title: title, stepTitle: title, session: session,
             done: done,
@@ -301,7 +326,7 @@ public final class SettingsSync {
     }
 
     private func enqueue(_ job: Job) {
-        guard !job.photos.isEmpty else { return }
+        guard job.photos.count > 0 else { return }
         if progress == nil {
             start(job)
         } else {
@@ -440,111 +465,118 @@ public final class SettingsSync {
         var presetsNotMade = 0
         var presetsFull = 0
         let inRun = job.session != nil && run?.session == job.session
-        for url in job.photos {
-            guard !Task.isCancelled else { break }
-            defer { progress?.done += 1 }
-            /// The editor made the change, or left the photo as it is.
-            func madeInEditor(_ outcome: EditorOutcome) {
-                run?.photos[url] = nil
-                switch outcome {
-                case let .applied(recipe?):
-                    job.done(url, recipe)
-                case .left where job.isFollow:
-                    editedSince += 1
-                case .left:
-                    skipped += 1
-                case .applied(nil), .notOpen:
-                    break
-                }
-            }
-            if !job.isFollow, let editor, editor.isOpen(url) {
-                let outcome = await editor.apply(.change(job.change), to: url, title: job.stepTitle)
-                if case .notOpen = outcome {} else {
-                    madeInEditor(outcome)
+        var batches = job.photos.batches(of: Self.batch)
+        photos: while !Task.isCancelled, let batch = await batches.next() {
+            for url in batch {
+                guard !Task.isCancelled else { break photos }
+                defer { progress?.done += 1 }
+                // A large selection's photos aren't told from the run's before the batch reaches them.
+                if job.isFollow, job.photos.urls == nil, run?.photos[url] == nil {
                     continue
                 }
-            }
-            await saves?.wait(for: url)
-            // Sidecars are read and written off the main thread: on a busy disk one write can take seconds.
-            let store = store
-            // Nil when it's protected; a failure when it's there but can't be read now.
-            let read = await Task.detached { () -> Result<Sidecar?, any Error>? in
-                store.protection(for: url) == nil ? Result { try store.loadThrowing(for: url) } : nil
-            }.value
-            guard case let .success(existing)? = read else {
-                skipped += 1
-                continue
-            }
-            let original = existing?.recipe ?? EditRecipe()
-            // The run goes on for a photo it last left as it is; otherwise it starts over from here.
-            let member = inRun ? run?.photos[url].flatMap { $0.last == original ? $0 : nil } : nil
-            var change = job.change
-            var start = original
-            if case let .follow(source, undone) = job.change {
-                guard let run, let member else {
-                    if run?.photos[url] != nil {
+                /// The editor made the change, or left the photo as it is.
+                func madeInEditor(_ outcome: EditorOutcome) {
+                    run?.photos[url] = nil
+                    switch outcome {
+                    case let .applied(recipe?):
+                        job.done(url, recipe)
+                    case .left where job.isFollow:
                         editedSince += 1
+                    case .left:
+                        skipped += 1
+                    case .applied(nil), .notOpen:
+                        break
+                    }
+                }
+                if !job.isFollow, let editor, editor.isOpen(url) {
+                    let outcome = await editor.apply(.change(job.change), to: url, title: job.stepTitle)
+                    if case .notOpen = outcome {} else {
+                        madeInEditor(outcome)
+                        continue
+                    }
+                }
+                await saves?.wait(for: url)
+                // Sidecars are read and written off the main thread: on a busy disk one write can take seconds.
+                let store = store
+                // Nil when it's protected; a failure when it's there but can't be read now.
+                let read = await Task.detached { () -> Result<Sidecar?, any Error>? in
+                    store.protection(for: url) == nil ? Result { try store.loadThrowing(for: url) } : nil
+                }.value
+                guard case let .success(existing)? = read else {
+                    skipped += 1
+                    continue
+                }
+                let original = existing?.recipe ?? EditRecipe()
+                // The run goes on for a photo it last left as it is; otherwise it starts over from here.
+                let member = inRun ? run?.photos[url].flatMap { $0.last == original ? $0 : nil } : nil
+                var change = job.change
+                var start = original
+                if case let .follow(source, undone) = job.change {
+                    guard let run, let member else {
+                        if run?.photos[url] != nil {
+                            editedSince += 1
+                        }
+                        continue
+                    }
+                    change = .paste(source, run.carried(to: member, without: undone))
+                    start = member.base ?? EditRecipe()
+                }
+                guard let applied = await applying(change, to: start, current: original, url, &engine) else { continue }
+                let next = applied.recipe
+                failedMasks += applied.failedMasks
+                switch applied.missedPreset {
+                case .notMade: presetsNotMade += 1
+                case .full: presetsFull += 1
+                case nil: break
+                }
+                guard next != original else {
+                    if var member {
+                        member.reached.formUnion(job.steps)
+                        run?.photos[url] = member
                     }
                     continue
                 }
-                change = .paste(source, run.carried(to: member, without: undone))
-                start = member.base ?? EditRecipe()
-            }
-            guard let applied = await applying(change, to: start, current: original, url, &engine) else { continue }
-            let next = applied.recipe
-            failedMasks += applied.failedMasks
-            switch applied.missedPreset {
-            case .notMade: presetsNotMade += 1
-            case .full: presetsFull += 1
-            case nil: break
-            }
-            guard next != original else {
-                if var member {
-                    member.reached.formUnion(job.steps)
-                    run?.photos[url] = member
+                var session = member?.session
+                    ?? HistorySession(steps: [
+                        HistoryStep(action: .open, title: existing == nil ? "Import" : "Opened", recipe: original),
+                    ])
+                session.steps.append(HistoryStep(action: change.action, title: job.stepTitle, recipe: next))
+                if session.steps.count > Self.maximumRunSteps {
+                    session.steps.removeFirst(session.steps.count - Self.maximumRunSteps)
                 }
-                continue
+                await beforeWriting(url)
+                let inEditor: EditorChange = job.isFollow ? .edit(next, over: original) : .change(job.change)
+                let saved: Sidecar
+                switch await land(url, inEditor, title: job.stepTitle, { [session] store in
+                    Self.saving(next, session: session, over: original, for: url, in: store)
+                }) {
+                case let .saved(.saved(sidecar)):
+                    saved = sidecar
+                case .saved(.unreadable):
+                    skipped += 1
+                    continue
+                case .saved(.editedSince):
+                    changedMeanwhile += 1
+                    continue
+                case .saved(.failed):
+                    continue
+                case let .inEditor(outcome):
+                    madeInEditor(outcome)
+                    continue
+                }
+                // updateValue: a photo without a sidecar keeps its nil (a subscript would drop the key).
+                before.updateValue(existing?.recipe, forKey: url)
+                written[url] = saved
+                if inRun {
+                    run?.photos[url] = AutoSyncRun.Member(
+                        base: member.map(\.base) ?? existing?.recipe, reached: (member?.reached ?? []).union(job.steps),
+                        last: saved.recipe, session: session,
+                    )
+                } else {
+                    run?.photos[url] = nil
+                }
+                job.done(url, next)
             }
-            var session = member?.session
-                ?? HistorySession(steps: [
-                    HistoryStep(action: .open, title: existing == nil ? "Import" : "Opened", recipe: original),
-                ])
-            session.steps.append(HistoryStep(action: change.action, title: job.stepTitle, recipe: next))
-            if session.steps.count > Self.maximumRunSteps {
-                session.steps.removeFirst(session.steps.count - Self.maximumRunSteps)
-            }
-            await beforeWriting(url)
-            let inEditor: EditorChange = job.isFollow ? .edit(next, over: original) : .change(job.change)
-            let saved: Sidecar
-            switch await land(url, inEditor, title: job.stepTitle, { [session] store in
-                Self.saving(next, session: session, over: original, for: url, in: store)
-            }) {
-            case let .saved(.saved(sidecar)):
-                saved = sidecar
-            case .saved(.unreadable):
-                skipped += 1
-                continue
-            case .saved(.editedSince):
-                changedMeanwhile += 1
-                continue
-            case .saved(.failed):
-                continue
-            case let .inEditor(outcome):
-                madeInEditor(outcome)
-                continue
-            }
-            // updateValue: a photo without a sidecar keeps its nil (a subscript would drop the key).
-            before.updateValue(existing?.recipe, forKey: url)
-            written[url] = saved
-            if inRun {
-                run?.photos[url] = AutoSyncRun.Member(
-                    base: member.map(\.base) ?? existing?.recipe, reached: (member?.reached ?? []).union(job.steps),
-                    last: saved.recipe, session: session,
-                )
-            } else {
-                run?.photos[url] = nil
-            }
-            job.done(url, next)
         }
         var preset: (name: String, notMade: Int, full: Int)?
         if case let .applyMaskPreset(applied) = job.change {

@@ -53,13 +53,23 @@ public extension EditorModel {
         libraryViews.setLoupeZoom(zoom)
     }
 
-    /// ⌘R: the selected photos in Finder, or `url` alone when it isn't among them.
+    /// ⌘R: the selected photos in Finder, or `url` alone when it isn't among them. A large source's are found by their
+    /// IDs off the main thread, their rows left unread; they're shown unless another source is meanwhile.
     func showInFinder(_ url: URL? = nil) {
         if let url, library.photoID(of: url).map(photoSelection.contains) != true {
             return libraryViews.revealInFinder([url])
         }
-        withSelectedPhotos { [weak self] shown in
-            guard let self, !shown.isEmpty else { return }
+        let photos = selectionForAction()
+        if let shown = photos.urls {
+            if !shown.isEmpty {
+                libraryViews.revealInFinder(shown)
+            }
+            return
+        }
+        let generation = library.generation
+        Task { [weak self] in
+            let shown = await photos.all()
+            guard let self, library.generation == generation, !shown.isEmpty else { return }
             libraryViews.revealInFinder(shown)
         }
     }
