@@ -260,27 +260,28 @@ public struct FileJournal: Sendable {
     }
 
     /// Removes the batches that are over but for the `kept` newest, and what interrupted writes left;
-    /// returns whether any batch went. An older batch that moved photos to the Trash stays while any of
-    /// them is still there, or its Trash can't be reached (`TrashSurvey`), for Put Back; one this build
-    /// can't read stays too.
+    /// returns the photos the batches that went had taken out of the index, nil when none went. An older
+    /// batch that moved photos to the Trash stays while any of them is still there, or its Trash can't be
+    /// reached (`TrashSurvey`), for Put Back; one this build can't read stays too.
     @discardableResult
-    func prune(fileSystem: any LibraryFileSystem) -> Bool {
-        guard let entries = try? entries(), let names = try? fileNames() else { return false }
+    func prune(fileSystem: any LibraryFileSystem) -> Set<Int64>? {
+        guard let entries = try? entries(), let names = try? fileNames() else { return nil }
         let older = Array(entries.filter { !$0.state.isUnfinished }.dropLast(Self.kept))
-        var pruned = false
+        var removed: Set<Int64>?
         if !older.isEmpty, let survey = try? TrashSurvey(journal: self, entries: older, fileSystem: fileSystem) {
             for entry in older where !survey.holds(entry.id) {
                 guard let name = names[entry.id] else { continue }
+                let steps = (try? load(entry.id).batch.steps) ?? []
                 unlink(folder.appending(path: name + ".batch").path)
                 unlink(folder.appending(path: name + ".log").path)
-                pruned = true
+                removed = (removed ?? []).union(steps.flatMap { $0.removed.map(\.photo.id) })
             }
         }
         for name in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
             where name.hasPrefix(".") && name.contains(".batch.") {
             unlink(folder.appending(path: name).path)
         }
-        return pruned
+        return removed
     }
 
     /// The photos whose rows the batches the journal keeps took out of the index, which Undo and Put

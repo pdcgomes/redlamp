@@ -236,7 +236,8 @@ extension LibraryIndexer {
         private func write(_ batch: [Item]) async {
             var outcome: Outcome
             do {
-                outcome = try await index.write { writer in try Self.apply(batch, writer) }
+                let restorable = await Self.restorable(before: batch, in: index)
+                outcome = try await index.write { writer in try Self.apply(batch, writer, keeping: restorable) }
             } catch {
                 outcome = Outcome()
                 outcome.failure = String(describing: error)
@@ -251,9 +252,29 @@ extension LibraryIndexer {
             }
         }
 
+        /// The photos the file journal beside the index can bring back under their IDs (LIB-26), when `batch` removes
+        /// photos; nil when a batch of it can't be read. Read after the listings that found photos gone, so a batch
+        /// that moved one to the Trash is among them.
+        static func restorable(before batch: [Item], in index: LibraryIndex) async -> Set<Int64>? {
+            let removes = batch.contains { item in
+                switch item {
+                case .delete, .deleteFolder: true
+                default: false
+                }
+            }
+            guard removes else { return [] }
+            let journal = FileJournal(paths: LibraryPaths(root: index.url.deletingLastPathComponent()))
+            return try? await LibraryIndex.offCaller { journal.restorable() }
+        }
+
         /// Writes `batch` in one transaction: folders first, in order, then moves, then photos with their
-        /// health, then their ends, then what's removed, then the folders that are indexed.
-        static func apply(_ batch: [Item], _ writer: LibraryIndex.Writer) throws -> Outcome {
+        /// health, then their ends, then what's removed, then the folders that are indexed. The photos removed
+        /// take their XMP merge records with them, but for `restorable`'s (all of them while it's nil), which a
+        /// batch of the file journal can bring back; their health and hashes go once none can
+        /// (`FileOperations.removeUnrestorable`).
+        static func apply(
+            _ batch: [Item], _ writer: LibraryIndex.Writer, keeping restorable: Set<Int64>? = [],
+        ) throws -> Outcome {
             var outcome = Outcome()
             var folders: [String: Int64] = [:]
             func folderID(_ path: String) throws -> Int64? {
@@ -354,6 +375,9 @@ extension LibraryIndexer {
                 guard let id = try folderID(path) else { continue }
                 outcome.removed += try writer.photoIDs(inSubtreeOf: id)
                 try writer.deleteFolder(id)
+            }
+            if let restorable, !outcome.removed.isEmpty {
+                try XMPMergeRecord.save([:], dropping: outcome.removed.filter { !restorable.contains($0) }, in: writer)
             }
             for completion in completed {
                 guard let id = try folderID(completion.counts.path) else { continue }

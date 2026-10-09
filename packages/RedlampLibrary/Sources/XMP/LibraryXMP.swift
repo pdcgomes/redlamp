@@ -161,19 +161,23 @@ public struct LibraryXMP: Sendable {
         report.dryRun ? [] : report.photos.filter { !$0.taken.isEmpty && $0.problem == nil }.compactMap(\.photo)
     }
 
-    /// Removes what's recorded of photos the index no longer has; returns how many.
+    /// Removes what's recorded of photos the index no longer has, but for those a batch of the file journal
+    /// can bring back under their IDs (LIB-26); returns how many. None goes while a batch can't be read.
     @discardableResult
     public func removeOrphanedRecords() async throws -> Int {
-        try await index.write { writer in
+        let journal = FileJournal(paths: paths)
+        guard let kept = try await LibraryIndex.offCaller({ journal.restorable() }) else { return 0 }
+        return try await index.write { writer in
             let prefix = XMPMergeRecord.key(0).dropLast()
             let statement = try writer.database.cached("""
-            DELETE FROM settings WHERE key > ?1 AND key < ?2
+            SELECT CAST(substr(key, length(?1) + 1) AS INTEGER) FROM settings WHERE key > ?1 AND key < ?2
               AND CAST(substr(key, length(?1) + 1) AS INTEGER) NOT IN (SELECT id FROM photos)
             """)
             try statement.bind(String(prefix), at: 1)
             try statement.bind(String(prefix.dropLast()) + "/", at: 2)
-            try statement.run()
-            return writer.database.changes
+            let gone = try statement.map { $0.int64(at: 0) }.filter { !kept.contains($0) }
+            try XMPMergeRecord.save([:], dropping: gone, in: writer)
+            return gone.count
         }
     }
 }

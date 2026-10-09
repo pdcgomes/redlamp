@@ -94,7 +94,9 @@ struct IndexChanges: Sendable {
 
 extension FileOperations {
     /// Writes what `steps` did to the index in one transaction, without reading any photo: file
-    /// identifiers and sidecars' dates are taken from the files' attributes. Then `live` hears of it.
+    /// identifiers and sidecars' dates are taken from the files' attributes. Rows of files gone that held a
+    /// place a step took go with their XMP merge records, unless a batch can bring them back. Then `live`
+    /// hears of it.
     func record(_ changes: IndexChanges, locator: SidecarLocator) async throws {
         guard !changes.isEmpty else { return }
         let fileSystem = fileSystem
@@ -154,6 +156,9 @@ extension FileOperations {
                 folders.insert(path)
             }
             return (restored, stale, folders)
+        }
+        if !written.stale.isEmpty {
+            try await removeUnrestorableNow(gone: Set(written.stale))
         }
         guard let live else { return }
         let changed = Array(Set(changes.placed.keys).union(changes.refreshed.keys))

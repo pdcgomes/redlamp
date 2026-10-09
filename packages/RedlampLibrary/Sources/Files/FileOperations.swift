@@ -135,8 +135,8 @@ public final class FileOperations: Sendable {
             try journal.write(written)
             return pruned
         }
-        if pruned {
-            try await removeUnrestorableNow()
+        if let pruned {
+            try await removeUnrestorableNow(gone: pruned)
         }
         let runner = try FileRunner(
             batch: batch, log: journal.log(batch.id), fileSystem: fileSystem, store: SidecarStore(locator: locator),
@@ -264,11 +264,16 @@ public final class FileOperations: Sendable {
         try await serially { [self] in try await removeUnrestorableNow() }
     }
 
+    /// `removeUnrestorable`, and the XMP merge records of those of `gone`, photos that left the index, it doesn't
+    /// have and no batch the journal keeps can bring back (LIB-24): the photos of the batches the journal let go.
     @discardableResult
-    private func removeUnrestorableNow() async throws -> Int {
+    func removeUnrestorableNow(gone: Set<Int64> = []) async throws -> Int {
         let journal = journal
         guard let kept = try await LibraryIndex.offCaller({ journal.restorable() }) else { return 0 }
-        return try await index.write { try $0.removeOrphanedHealth(keeping: kept) }
+        return try await index.write { writer in
+            try XMPMergeRecord.drop(ofPhotosGone: gone.subtracting(kept), in: writer)
+            return try writer.removeOrphanedHealth(keeping: kept)
+        }
     }
 
     private func recover(_ id: UUID, _ choice: FileRecovery, progress: (@Sendable (FileProgress) -> Void)?)

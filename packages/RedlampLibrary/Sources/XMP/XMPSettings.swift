@@ -81,4 +81,17 @@ extension XMPMergeRecord {
             try writer.setSetting(nil, for: key(photo))
         }
     }
+
+    /// Drops the records of those of photos `ids` the index no longer has.
+    static func drop(ofPhotosGone ids: some Sequence<Int64>, in writer: LibraryIndex.Writer) throws {
+        let present = try writer.database.cached("SELECT 1 FROM photos WHERE id = ?")
+        var gone: [Int64] = []
+        for id in ids {
+            try present.bind(id, at: 1)
+            if try present.first({ _ in true }) == nil {
+                gone.append(id)
+            }
+        }
+        try save([:], dropping: gone, in: writer)
+    }
 }
