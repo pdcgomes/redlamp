@@ -44,17 +44,19 @@ extension LibraryIndexer.Run {
             record.sidecarModified = sidecar.modified
             record.state = []
             record.fileID = job.entry.fileIdentifier
-            let photo = LibraryIndexer.PendingPhoto(
+            var photo = LibraryIndexer.PendingPhoto(
                 folder: job.folder, record: record, keywords: changed.keywords,
                 collections: sidecar.summary.metadata.collections, isNew: false,
             )
+            photo.listed = job.existing
             count(photo, in: job.folder)
             await batcher.add([.photo(photo)])
         case .refresh:
             guard var record = job.existing else { return }
             record.state = []
             record.fileID = job.entry.fileIdentifier
-            let photo = LibraryIndexer.PendingPhoto(folder: job.folder, record: record, isNew: false)
+            var photo = LibraryIndexer.PendingPhoto(folder: job.folder, record: record, isNew: false)
+            photo.listed = job.existing
             count(photo, in: job.folder)
             await batcher.add([.photo(photo)])
         }
@@ -206,6 +208,7 @@ extension LibraryIndexer.Run {
         )
         photo.health = health
         photo.endCheck = endCheck
+        photo.listed = job.existing
         return photo
     }
 
@@ -651,6 +654,9 @@ extension LibraryIndexer {
         var health: PhotoHealth?
         /// Its end, still to be read once its row is written.
         var endCheck: EndCheck?
+        /// Its row as its folder's listing found it; nil for a photo new to the index. A row that has changed since
+        /// was written after this read began, and what was read isn't written over it.
+        var listed: PhotoRecord?
 
         init(
             folder: String, record: PhotoRecord, camera: CameraName? = nil, lens: String? = nil,

@@ -126,6 +126,8 @@ public extension LibraryMetadata {
     /// them since), the index of every one of its photos, and the definitions. Running it again after
     /// a forced quit changes nothing it already put back.
     internal func rollBack(_ batch: MetadataBatch, logged: MetadataJournal.Progress) async throws {
+        let writing = index.photoWrites.begin(batch.photos.map(\.id))
+        defer { writing.end() }
         let log = try journal.log(batch.id)
         try await LibraryIndex.offCaller { try log.state(.rollingBack) }
         if let change = batch.definitions {

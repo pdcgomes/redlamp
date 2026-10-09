@@ -107,6 +107,8 @@ public final class LibraryMetadata: Sendable {
         if let change = batch.definitions {
             try await collections.updateDefinitions { change.applied(to: $0) }
         }
+        let writing = index.photoWrites.begin(batch.photos.map(\.id))
+        defer { writing.end() }
         let changed = try await writeIndex(batch)
         outcome.photos = changed.count
         outcome.indexTime = clock.now - started

@@ -160,7 +160,8 @@ struct FileBatchListingTests {
             .photo(LibraryIndexer.PendingPhoto(folder: rootPath, record: read, isNew: false)),
             .delete([(row.id, rootFolder.id)]),
         ]
-        let outcome = try await index.write { try LibraryIndexer.Batcher.apply(late, $0) }
+        let writing = index.photoWrites
+        let outcome = try await index.write { try LibraryIndexer.Batcher.apply(late, $0, writing: writing) }
         #expect(outcome.inserted.isEmpty && outcome.updated.isEmpty && outcome.removed.isEmpty, "\(outcome)")
         let rows = try await library.sandbox.rows()
         #expect(rows["A.JPG"] == nil, "no row where the photo was")
@@ -169,9 +170,11 @@ struct FileBatchListingTests {
     }
 }
 
-/// Another file system that holds the thread moving one file, once it has moved, until the pause is released: a
-/// batch stopped between its files and its index.
+/// Another file system that holds the thread moving one file, once it has moved, or reading one past its first byte,
+/// until the pause is released: a batch stopped between its files and its index, or the indexer between a photo's row
+/// and its end.
 final class PausingFileSystem: LibraryFileSystem {
+    /// A thread held until `release`: `hold` blocks the thread that calls it.
     final class Pause: Sendable {
         let path: String
         let reached = Signal()
@@ -185,7 +188,7 @@ final class PausingFileSystem: LibraryFileSystem {
             released.signal()
         }
 
-        fileprivate func hold() {
+        func hold() {
             reached.fire()
             released.wait()
         }
@@ -193,6 +196,7 @@ final class PausingFileSystem: LibraryFileSystem {
 
     let base: any LibraryFileSystem
     private let pending = Mutex<Pause?>(nil)
+    private let pendingRead = Mutex<Pause?>(nil)
 
     init(_ base: any LibraryFileSystem) {
         self.base = base
@@ -202,6 +206,14 @@ final class PausingFileSystem: LibraryFileSystem {
     func pause(after path: String) -> Pause {
         let pause = Pause(path)
         pending.withLock { $0 = pause }
+        return pause
+    }
+
+    /// Holds the first read of the file at `path` that starts past its first byte, before it reads, until the pause
+    /// returned is released.
+    func pause(reading path: String) -> Pause {
+        let pause = Pause(path)
+        pendingRead.withLock { $0 = pause }
         return pause
     }
 
@@ -224,7 +236,13 @@ final class PausingFileSystem: LibraryFileSystem {
     }
 
     func read(_ url: URL, range: Range<Int>) throws -> Data {
-        try base.read(url, range: range)
+        let pause = range.lowerBound == 0 ? nil : pendingRead.withLock { pending -> Pause? in
+            guard let pause = pending, pause.path == LibraryIndexer.path(url) else { return nil }
+            pending = nil
+            return pause
+        }
+        pause?.hold()
+        return try base.read(url, range: range)
     }
 
     func volume(of url: URL) throws -> VolumeInfo {

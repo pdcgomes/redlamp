@@ -54,6 +54,8 @@ extension LibraryIndexer {
         /// The index's name for the volume.
         let key: String
         let id: Int64
+        /// The paths of the run's roots on it.
+        let roots: [String]
         let io: VolumeIO
         let walk: WalkQueue
         let photos: PhotoQueue
@@ -125,6 +127,7 @@ extension LibraryIndexer {
             }
             if !Task.isCancelled {
                 await conclude()
+                await rereadStale()
             }
             await finish()
         }
@@ -207,7 +210,8 @@ extension LibraryIndexer {
                 let prioritised: @Sendable () -> Set<String> = { [indexer] in indexer.prioritised }
                 let readers = Self.photoWorkers(io)
                 let volume = VolumeWork(
-                    key: entry.key, id: record.volume, io: io, walk: WalkQueue(prioritised: prioritised),
+                    key: entry.key, id: record.volume, roots: record.roots.map(\.path), io: io,
+                    walk: WalkQueue(prioritised: prioritised),
                     photos: PhotoQueue(prioritised: prioritised), readers: readers,
                     ends: EndQueue(producers: readers),
                 )
@@ -387,6 +391,8 @@ extension LibraryIndexer {
         var conventions = XMPConventions()
         /// The index holds what `LibraryXMP` merged of some photos.
         var hasMergeRecords = false
+        /// Photos whose reads the library overtook, to be read again once it's done (`PhotoWrites`).
+        var stale: [Batcher.StaleRead] = []
     }
 
     struct FolderWork: Sendable {
@@ -530,30 +536,15 @@ extension LibraryIndexer.Run {
         _ folder: String, _ entries: [FileEntry], _ rows: [PhotoRecord], merged: [Int64: XMPMergeRecord],
         signature: FolderSignature, on volume: LibraryIndexer.VolumeWork,
     ) -> [LibraryIndexer.PhotoJob] {
-        var sidecars: [String: FileEntry] = [:]
-        var xmps: [String: FileEntry] = [:]
-        var photos: [FileEntry] = []
-        for entry in entries {
-            let name = entry.name.lowercased()
-            if name.hasSuffix(".redlamp") {
-                sidecars[String(entry.name.dropLast(".redlamp".count))] = entry
-            } else if !entry.isDirectory, name.hasSuffix(".xmp") {
-                xmps[name] = entry
-            } else if FolderWalk.isPhoto(entry) {
-                photos.append(entry)
-            }
-        }
-        photos.sort { FileOrder.precedes($0.name, $1.name) }
+        let files = LibraryIndexer.ListedFiles(entries)
+        let photos = files.photos.sorted { FileOrder.precedes($0.name, $1.name) }
         let byName = Dictionary(rows.map { ($0.name, $0) }) { first, _ in first }
         var jobs: [LibraryIndexer.PhotoJob] = []
         for entry in photos {
-            let sidecar = sidecars[entry.name]
-            let (xmp, darktable) = Self.xmps(for: entry.name, in: xmps)
+            let sidecar = files.sidecars[entry.name]
+            let (xmp, darktable) = Self.xmps(for: entry.name, in: files.xmps)
             func job(_ kind: LibraryIndexer.PhotoJob.Kind, _ existing: PhotoRecord?) -> LibraryIndexer.PhotoJob {
-                LibraryIndexer.PhotoJob(
-                    kind: kind, folder: folder, entry: entry, existing: existing, sidecar: sidecar, xmp: xmp,
-                    darktable: darktable, merged: existing.flatMap { merged[$0.id] },
-                )
+                files.job(kind, folder: folder, entry: entry, existing: existing, merged: merged)
             }
             guard let row = byName[entry.name] else {
                 jobs.append(job(.new, nil))
@@ -742,6 +733,7 @@ extension LibraryIndexer.Run {
             state.summary.photosMoved += outcome.moved
             state.summary.photosRemoved += outcome.removed.count
             state.summary.foldersIndexed += outcome.completed.count
+            state.stale += outcome.stale
         }
         if let failure = outcome.failure {
             state.withLock { $0.summary.failures += 1 }

@@ -24,6 +24,8 @@ public final class LibraryIndex: Sendable {
     let journal = IndexJournal()
     /// The folders file batches are changing, which the indexer lists once their index is written (LIB-26).
     let folderHolds = FolderHolds()
+    /// The photos the library's batches are writing, whose reads the indexer writes only once they're done (LIB-07).
+    let photoWrites = PhotoWrites()
     /// Marks at or above the last IDs given, kept beside the index too (LIB-05).
     let marks: IndexIDMarks
     /// How long after the last write that gave IDs the marks are brought down to them (`IndexIDMarks.settle`).

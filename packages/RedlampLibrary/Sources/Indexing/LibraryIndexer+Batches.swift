@@ -60,7 +60,16 @@ extension LibraryIndexer {
             var completed: [FolderIndexed] = []
             /// The volumes whose photos were marked offline, by key.
             var offline: [String] = []
+            /// Photos whose reads weren't written, the library having changed them since they were listed.
+            var stale: [StaleRead] = []
             var failure: String?
+        }
+
+        /// A photo read where its folder's listing found it, which the library changed before the read was written.
+        struct StaleRead: Sendable, Hashable {
+            let photo: Int64
+            let folder: String
+            let name: String
         }
 
         private struct State {
@@ -238,7 +247,10 @@ extension LibraryIndexer {
             var outcome: Outcome
             do {
                 let restorable = await Self.restorable(before: batch, in: index)
-                outcome = try await index.write { writer in try Self.apply(batch, writer, keeping: restorable) }
+                let writing = index.photoWrites
+                outcome = try await index.write { writer in
+                    try Self.apply(batch, writer, writing: writing, keeping: restorable)
+                }
             } catch {
                 outcome = Outcome()
                 outcome.failure = String(describing: error)
@@ -272,14 +284,14 @@ extension LibraryIndexer {
 
 extension LibraryIndexer.Batcher {
     /// Writes `batch` in one transaction: folders first, in order, then moves, then photos with their
-    /// health, then their ends, then what's removed, then the folders that are indexed. The photos removed
-    /// take their XMP merge records with them, but for `restorable`'s (all of them while it's nil), which a
-    /// batch of the file journal can bring back; their health and hashes go once none can
-    /// (`FileOperations.removeUnrestorable`).
+    /// health, then their ends, then what's removed, then the folders that are indexed. A photo `writing` names, or
+    /// whose row changed since it was listed, isn't written. The photos removed take their XMP merge records with
+    /// them, but for `restorable`'s (all of them while it's nil), which a batch of the file journal can bring back;
+    /// their health and hashes go once none can (`FileOperations.removeUnrestorable`).
     static func apply(
-        _ batch: [Item], _ writer: LibraryIndex.Writer, keeping restorable: Set<Int64>? = [],
+        _ batch: [Item], _ writer: LibraryIndex.Writer, writing: PhotoWrites, keeping restorable: Set<Int64>? = [],
     ) throws -> Outcome {
-        var write = BatchWrite(writer: writer)
+        var write = BatchWrite(writer: writer, writing: writing)
         var items = BatchItems()
         for item in batch {
             try write.sort(item, into: &items)
@@ -308,13 +320,15 @@ private struct BatchItems {
 /// A batch's transaction as `Batcher.apply` writes it: each folder's ID looked up once, and what it changed.
 private struct BatchWrite {
     let writer: LibraryIndex.Writer
+    let writing: PhotoWrites
     var outcome = LibraryIndexer.Batcher.Outcome()
     private var folders: [String: Int64] = [:]
     /// The photos counted among `outcome.updated` so far.
     private var updated = Set<Int64>()
 
-    init(writer: LibraryIndex.Writer) {
+    init(writer: LibraryIndex.Writer, writing: PhotoWrites) {
         self.writer = writer
+        self.writing = writing
     }
 
     mutating func folderID(_ path: String) throws -> Int64? {
@@ -370,14 +384,23 @@ private struct BatchWrite {
     }
 
     /// Writes `photos` with their keywords, collections and health. A row read where it no longer is, moved since by a
-    /// file batch, is left where the batch put it.
+    /// file batch, is left where the batch put it. One the library is writing, or has changed since its folder was
+    /// listed, is left as the library has it, and its photo is among the stale reads: the read began before the
+    /// library's change, and would put back what it replaced.
     mutating func write(_ photos: [LibraryIndexer.PendingPhoto]) throws {
         var records: [PhotoRecord] = []
         var written: [LibraryIndexer.PendingPhoto] = []
         for var photo in photos {
             guard let folder = try folderID(photo.folder) else { continue }
-            if !photo.isNew, try writer.photo(folder: folder, name: photo.record.name)?.id != photo.record.id {
-                continue
+            if !photo.isNew {
+                guard let row = try writer.photo(folder: folder, name: photo.record.name),
+                      row.id == photo.record.id else { continue }
+                if writing.isWriting(row.id) || photo.listed.map({ !row.isUnchanged(since: $0) }) == true {
+                    outcome.stale.append(LibraryIndexer.Batcher.StaleRead(
+                        photo: row.id, folder: photo.folder, name: photo.record.name,
+                    ))
+                    continue
+                }
             }
             photo.record.folder = folder
             if let camera = photo.camera {
@@ -456,5 +479,15 @@ private struct BatchWrite {
             try writer.setOffline(true, onVolume: volume.volume, uuid: volume.key)
             outcome.offline.append(volume.key)
         }
+    }
+}
+
+private extension PhotoRecord {
+    /// Whether the row is as `listed` was, wherever it is now: a moved photo's read was listed where it was.
+    func isUnchanged(since listed: PhotoRecord) -> Bool {
+        var listed = listed
+        listed.folder = folder
+        listed.name = name
+        return self == listed
     }
 }

@@ -11,8 +11,10 @@ import Synchronization
 /// modification date; their photos in Finder's order. A run that stops partway leaves every folder
 /// it didn't finish to the next, which reads only the photos the index doesn't hold as they are.
 /// A photo that vanishes from its folder while one with its file identifier, size and date appears
-/// on the same volume was renamed or moved in the Finder: its row moves, keeping its ID. Runs go
-/// one at a time, in the order they're asked for.
+/// on the same volume was renamed or moved in the Finder: its row moves, keeping its ID. A photo the
+/// library changes after its folder was listed, before what was read of it is written, keeps the
+/// library's change: the read isn't written, and the photo is read again once the library is done
+/// (`PhotoWrites`). Runs go one at a time, in the order they're asked for.
 ///
 /// Photos of the folders asked for are read on the scheduler's on-screen lane, the others on its
 /// background lane, which waits in Low Power Mode and while the Mac is hot.
