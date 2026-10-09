@@ -223,7 +223,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | --- | --- | --- | --- | --- | --- | --- |
 | JPEG, HEIC, AVIF, PNG and TIFF | Yes | Done | | | EDT-13, EDT-15 | 8, 10 or 16 bits, in sRGB or Display P3 |
 | Size, metadata and export presets | Yes | Done | | | EDT-15 | With Export with Previous |
-| Adobe RGB, ProPhoto and custom ICC output | Yes | Planned | | P4 | | |
+| Adobe RGB, ProPhoto and custom ICC output | Yes | Planned | | P4 | EDT-26 | |
 | DNG, PSD and JPEG XL output | Yes | Planned | | P4 | | |
 | Watermarks | Yes | Planned | | P4 | EDT-25 | |
 | Output sharpening | Yes | Planned | | P4 | | |

@@ -1,0 +1,19 @@
+{
+  "description": "Chart shots for greyscale.py. Patch centres are fractions of the rendered frame (x across, y down); patchHalfSize is a fraction of its width. Reference L* are the chart's own when known, otherwise published averages.",
+  "shots": [
+    {
+      "id": "sigma-fp-passport",
+      "file": "build/look-dev/Sigma_fp.DNG",
+      "camera": "Sigma fp",
+      "source": "raw.pixls.us, CC0 (the look-development set, mise run lookdev). Not metered: ISO 3200, f/1.0, 1/50 s, under reddish light",
+      "chart": "ColorChecker Passport (classic 24), grey row along the top",
+      "patchNames": ["Black 2", "Neutral 3.5", "Neutral 5", "Neutral 6.5", "Neutral 8", "White 9.5"],
+      "referenceL": [20.46, 35.66, 50.87, 66.77, 81.26, 96.54],
+      "referenceSource": "BabelColor's averages of ColorChecker charts made before November 2014 (D50); this chart's own values aren't known",
+      "greyPatches": [[0.155, 0.166], [0.196, 0.164], [0.236, 0.162], [0.277, 0.160], [0.316, 0.159], [0.357, 0.158]],
+      "patchHalfSize": 0.006,
+      "anchor": 2,
+      "startTemperature": 5000
+    }
+  ]
+}
