@@ -6,7 +6,10 @@ extension HealthChecker {
     /// extension gives it, unless another photo of its folder has that name.
     func extensions() async throws -> HealthFindings {
         let definitions = definitions
-        let found = try await index.read { reader -> [(PhotoRecord, String, PhotoHealth, Set<String>)] in
+        struct Found: Sendable {
+            let photo: PhotoRecord, folder: String, health: PhotoHealth, names: Set<String>
+        }
+        let found = try await index.read { reader -> [Found] in
             let wrong = try reader.photoHealth().filter { !$0.value.health.format.fits(name: $0.value.name) }
             var names: [Int64: Set<String>] = [:]
             return try reader.photosWithPaths(wrong.keys.sorted()).compactMap { photo, folder in
@@ -14,12 +17,13 @@ extension HealthChecker {
                 if names[photo.folder] == nil {
                     names[photo.folder] = try Set(reader.photoNames(inFolder: photo.folder).map(NamingJob.fold))
                 }
-                return (photo, folder, health, names[photo.folder] ?? [])
+                return Found(photo: photo, folder: folder, health: health, names: names[photo.folder] ?? [])
             }
         }
         var findings: [HealthFinding] = []
         var kept = 0
-        for (photo, folder, health, names) in found where !photo.state.contains(.unreadable) {
+        for item in found where !item.photo.state.contains(.unreadable) {
+            let (photo, folder, health, names) = (item.photo, item.folder, item.health, item.names)
             if definitions.keeps(
                 .extensions, contentKey: photo.contentKey, path: folder + "/" + photo.name, size: photo.size,
                 modified: photo.modified,
@@ -37,7 +41,8 @@ extension HealthChecker {
             ))
         }
         return HealthFindings(
-            check: .extensions, findings: Self.byPath(findings, found.map { ($0.0, $0.1, ()) }), keptAnyway: kept,
+            check: .extensions, findings: Self.byPath(findings, found.map { ($0.photo, $0.folder, ()) }),
+            keptAnyway: kept,
         )
     }
 

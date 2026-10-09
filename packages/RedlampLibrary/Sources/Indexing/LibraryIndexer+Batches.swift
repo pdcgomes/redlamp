@@ -266,129 +266,184 @@ extension LibraryIndexer {
             let journal = FileJournal(paths: LibraryPaths(root: index.url.deletingLastPathComponent()))
             return try? await LibraryIndex.offCaller { journal.restorable() }
         }
+    }
+}
 
-        /// Writes `batch` in one transaction: folders first, in order, then moves, then photos with their
-        /// health, then their ends, then what's removed, then the folders that are indexed. The photos removed
-        /// take their XMP merge records with them, but for `restorable`'s (all of them while it's nil), which a
-        /// batch of the file journal can bring back; their health and hashes go once none can
-        /// (`FileOperations.removeUnrestorable`).
-        static func apply(
-            _ batch: [Item], _ writer: LibraryIndex.Writer, keeping restorable: Set<Int64>? = [],
-        ) throws -> Outcome {
-            var outcome = Outcome()
-            var folders: [String: Int64] = [:]
-            func folderID(_ path: String) throws -> Int64? {
-                if let id = folders[path] {
-                    return id
-                }
-                let id = try writer.folder(path: path)?.id
-                folders[path] = id
-                return id
-            }
-            var photos: [PendingPhoto] = []
-            var moves: [PendingMove] = []
-            var deleted: [Int64] = []
-            var deletedFolders: [String] = []
-            var completed: [FolderCompletion] = []
-            var offline: [(volume: Int64, key: String)] = []
-            var ends: [EndResult] = []
-            for item in batch {
-                switch item {
-                case let .folder(listing):
-                    if let id = try folderID(listing.path) {
-                        try writer.setListing(signature: listing.signature, listedAt: listing.listedAt, forFolder: id)
-                    } else {
-                        let parent = try listing.parent.flatMap { try folderID($0) }
-                        folders[listing.path] = try writer.upsertFolder(FolderRecord(
-                            root: listing.root, parent: parent, path: listing.path, signature: listing.signature,
-                            listedAt: listing.listedAt,
-                        ))
-                    }
-                case let .photo(photo): photos.append(photo)
-                case let .move(move): moves.append(move)
-                case let .delete(ids): deleted += ids
-                case let .deleteFolder(path): deletedFolders.append(path)
-                case let .complete(completion): completed.append(completion)
-                case let .offline(volume, key): offline.append((volume, key))
-                case let .end(result): ends.append(result)
-                }
-            }
+extension LibraryIndexer.Batcher {
+    /// Writes `batch` in one transaction: folders first, in order, then moves, then photos with their
+    /// health, then their ends, then what's removed, then the folders that are indexed. The photos removed
+    /// take their XMP merge records with them, but for `restorable`'s (all of them while it's nil), which a
+    /// batch of the file journal can bring back; their health and hashes go once none can
+    /// (`FileOperations.removeUnrestorable`).
+    static func apply(
+        _ batch: [Item], _ writer: LibraryIndex.Writer, keeping restorable: Set<Int64>? = [],
+    ) throws -> Outcome {
+        var write = BatchWrite(writer: writer)
+        var items = BatchItems()
+        for item in batch {
+            try write.sort(item, into: &items)
+        }
+        try write.move(items.moves, replacing: &items.photos)
+        try write.write(items.photos)
+        try write.end(items.ends)
+        try write.remove(items.deleted, folders: items.deletedFolders, keeping: restorable)
+        try write.complete(items.completed)
+        try write.markOffline(items.offline)
+        return write.outcome
+    }
+}
 
-            var moving: [(photo: Int64, folder: Int64, name: String)] = []
-            var updated = Set<Int64>()
-            for move in moves {
-                guard let folder = try folderID(move.folder) else { continue }
-                moving.append((move.id, folder, move.name))
-                updated.insert(move.id)
-                if let replacement = move.replacement {
-                    photos.append(replacement)
-                }
-            }
-            try writer.movePhotos(moving)
-            outcome.updated = moving.map(\.photo)
-            outcome.moved = moving.count
+/// A batch's items other than its folders, by kind, each in the order it came.
+private struct BatchItems {
+    var photos: [LibraryIndexer.PendingPhoto] = []
+    var moves: [LibraryIndexer.PendingMove] = []
+    var deleted: [Int64] = []
+    var deletedFolders: [String] = []
+    var completed: [LibraryIndexer.FolderCompletion] = []
+    var offline: [(volume: Int64, key: String)] = []
+    var ends: [LibraryIndexer.EndResult] = []
+}
 
-            var records: [PhotoRecord] = []
-            var written: [PendingPhoto] = []
-            for var photo in photos {
-                guard let folder = try folderID(photo.folder) else { continue }
-                photo.record.folder = folder
-                if let camera = photo.camera {
-                    photo.record.camera = try writer.cameraID(for: camera.name, make: camera.make, model: camera.model)
-                }
-                if let lens = photo.lens {
-                    photo.record.lens = try writer.lensID(for: lens)
-                }
-                records.append(photo.record)
-                written.append(photo)
-            }
-            for (photo, id) in try zip(written, writer.upsertPhotos(records)) {
-                if let keywords = photo.keywords, !(photo.isNew && keywords.isEmpty) {
-                    try writer.setKeywords(keywords, forPhoto: id)
-                }
-                if let collections = photo.collections, !(photo.isNew && collections.isEmpty) {
-                    try writer.setCollections(collections, forPhoto: id)
-                }
-                if let health = photo.health {
-                    try writer.setHealth(health, forPhoto: id, name: photo.record.name)
-                }
-                if photo.isNew {
-                    outcome.inserted.append(id)
-                } else if updated.insert(id).inserted {
-                    outcome.updated.append(id)
-                }
-            }
-            for end in ends {
-                let check = end.check
-                guard let id = try writer.setEnd(
-                    end.damage, ofPhotoNamed: check.name, inFolder: check.folder, size: check.size,
-                    modified: check.modified,
-                ), !outcome.inserted.contains(id), updated.insert(id).inserted else { continue }
-                outcome.ended.append(id)
-            }
+/// A batch's transaction as `Batcher.apply` writes it: each folder's ID looked up once, and what it changed.
+private struct BatchWrite {
+    let writer: LibraryIndex.Writer
+    var outcome = LibraryIndexer.Batcher.Outcome()
+    private var folders: [String: Int64] = [:]
+    /// The photos counted among `outcome.updated` so far.
+    private var updated = Set<Int64>()
 
-            if !deleted.isEmpty {
-                try writer.deletePhotos(deleted)
-                outcome.removed += deleted
+    init(writer: LibraryIndex.Writer) {
+        self.writer = writer
+    }
+
+    mutating func folderID(_ path: String) throws -> Int64? {
+        if let id = folders[path] {
+            return id
+        }
+        let id = try writer.folder(path: path)?.id
+        folders[path] = id
+        return id
+    }
+
+    /// Writes a folder's listing as it comes; keeps every other item for later.
+    mutating func sort(_ item: LibraryIndexer.Batcher.Item, into items: inout BatchItems) throws {
+        switch item {
+        case let .folder(listing): try record(listing)
+        case let .photo(photo): items.photos.append(photo)
+        case let .move(move): items.moves.append(move)
+        case let .delete(ids): items.deleted += ids
+        case let .deleteFolder(path): items.deletedFolders.append(path)
+        case let .complete(completion): items.completed.append(completion)
+        case let .offline(volume, key): items.offline.append((volume, key))
+        case let .end(result): items.ends.append(result)
+        }
+    }
+
+    private mutating func record(_ listing: LibraryIndexer.FolderListing) throws {
+        if let id = try folderID(listing.path) {
+            try writer.setListing(signature: listing.signature, listedAt: listing.listedAt, forFolder: id)
+        } else {
+            let parent = try listing.parent.flatMap { try folderID($0) }
+            folders[listing.path] = try writer.upsertFolder(FolderRecord(
+                root: listing.root, parent: parent, path: listing.path, signature: listing.signature,
+                listedAt: listing.listedAt,
+            ))
+        }
+    }
+
+    /// Moves `moves`' photos, adding the photos they replace to `photos`.
+    mutating func move(_ moves: [LibraryIndexer.PendingMove], replacing photos: inout [LibraryIndexer.PendingPhoto])
+        throws {
+        var moving: [(photo: Int64, folder: Int64, name: String)] = []
+        for move in moves {
+            guard let folder = try folderID(move.folder) else { continue }
+            moving.append((move.id, folder, move.name))
+            updated.insert(move.id)
+            if let replacement = move.replacement {
+                photos.append(replacement)
             }
-            for path in deletedFolders {
-                guard let id = try folderID(path) else { continue }
-                outcome.removed += try writer.photoIDs(inSubtreeOf: id)
-                try writer.deleteFolder(id)
+        }
+        try writer.movePhotos(moving)
+        outcome.updated = moving.map(\.photo)
+        outcome.moved = moving.count
+    }
+
+    /// Writes `photos` with their keywords, collections and health.
+    mutating func write(_ photos: [LibraryIndexer.PendingPhoto]) throws {
+        var records: [PhotoRecord] = []
+        var written: [LibraryIndexer.PendingPhoto] = []
+        for var photo in photos {
+            guard let folder = try folderID(photo.folder) else { continue }
+            photo.record.folder = folder
+            if let camera = photo.camera {
+                photo.record.camera = try writer.cameraID(for: camera.name, make: camera.make, model: camera.model)
             }
-            if let restorable, !outcome.removed.isEmpty {
-                try XMPMergeRecord.save([:], dropping: outcome.removed.filter { !restorable.contains($0) }, in: writer)
+            if let lens = photo.lens {
+                photo.record.lens = try writer.lensID(for: lens)
             }
-            for completion in completed {
-                guard let id = try folderID(completion.counts.path) else { continue }
-                try writer.setIndexedSignature(completion.signature, forFolder: id)
-                outcome.completed.append(completion.counts)
+            records.append(photo.record)
+            written.append(photo)
+        }
+        for (photo, id) in try zip(written, writer.upsertPhotos(records)) {
+            try writeDetails(of: photo, as: id)
+            if photo.isNew {
+                outcome.inserted.append(id)
+            } else if updated.insert(id).inserted {
+                outcome.updated.append(id)
             }
-            for volume in offline {
-                try writer.setOffline(true, onVolume: volume.volume, uuid: volume.key)
-                outcome.offline.append(volume.key)
-            }
-            return outcome
+        }
+    }
+
+    private func writeDetails(of photo: LibraryIndexer.PendingPhoto, as id: Int64) throws {
+        if let keywords = photo.keywords, !(photo.isNew && keywords.isEmpty) {
+            try writer.setKeywords(keywords, forPhoto: id)
+        }
+        if let collections = photo.collections, !(photo.isNew && collections.isEmpty) {
+            try writer.setCollections(collections, forPhoto: id)
+        }
+        if let health = photo.health {
+            try writer.setHealth(health, forPhoto: id, name: photo.record.name)
+        }
+    }
+
+    mutating func end(_ ends: [LibraryIndexer.EndResult]) throws {
+        for end in ends {
+            let check = end.check
+            guard let id = try writer.setEnd(
+                end.damage, ofPhotoNamed: check.name, inFolder: check.folder, size: check.size,
+                modified: check.modified,
+            ), !outcome.inserted.contains(id), updated.insert(id).inserted else { continue }
+            outcome.ended.append(id)
+        }
+    }
+
+    mutating func remove(_ deleted: [Int64], folders deletedFolders: [String], keeping restorable: Set<Int64>?) throws {
+        if !deleted.isEmpty {
+            try writer.deletePhotos(deleted)
+            outcome.removed += deleted
+        }
+        for path in deletedFolders {
+            guard let id = try folderID(path) else { continue }
+            outcome.removed += try writer.photoIDs(inSubtreeOf: id)
+            try writer.deleteFolder(id)
+        }
+        if let restorable, !outcome.removed.isEmpty {
+            try XMPMergeRecord.save([:], dropping: outcome.removed.filter { !restorable.contains($0) }, in: writer)
+        }
+    }
+
+    mutating func complete(_ completed: [LibraryIndexer.FolderCompletion]) throws {
+        for completion in completed {
+            guard let id = try folderID(completion.counts.path) else { continue }
+            try writer.setIndexedSignature(completion.signature, forFolder: id)
+            outcome.completed.append(completion.counts)
+        }
+    }
+
+    mutating func markOffline(_ offline: [(volume: Int64, key: String)]) throws {
+        for volume in offline {
+            try writer.setOffline(true, onVolume: volume.volume, uuid: volume.key)
+            outcome.offline.append(volume.key)
         }
     }
 }

@@ -391,7 +391,9 @@ public final class QueryEngine: Sendable {
             }
         }
     }
+}
 
+extension QueryEngine {
     /// Keeps `key`'s order in the store from now on, sorting it once, unless it's kept already.
     func prepareOrder(_ key: QuerySort.Key) async throws {
         guard state.withLock({ $0.store.map { !$0.keepsOrder(key) } ?? false }) else { return }
@@ -516,7 +518,9 @@ public final class QueryEngine: Sendable {
         }
         return try await task.value
     }
+}
 
+extension QueryEngine {
     // MARK: - Searching
 
     /// The photos `query` finds, in `sort`'s order: the first `pageSize` as soon as they're found,
@@ -749,7 +753,9 @@ public final class QueryEngine: Sendable {
             return kept
         }
     }
+}
 
+extension QueryEngine {
     // MARK: - Library Health
 
     /// What Library Health's `check` finds in the store as it is now (LIB-40), worked out once for
