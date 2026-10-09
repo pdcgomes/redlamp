@@ -22,7 +22,8 @@ private final class ReadLog: Sendable {
 /// click or the next photo selects one.
 @MainActor
 struct PhotoSelectionTests {
-    @Test func `the photos selected are read with one read of the selection, as a panel's view reads them`() {
+    /// 20,000 photos in Library, all of them selected.
+    private func allSelected() -> (EditorModel, [URL]) {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let model = EditorModel(engine: StubEngine())
         model.showModule(.library)
@@ -30,7 +31,18 @@ struct PhotoSelectionTests {
         model.library.replace(with: photos.map { LibraryItem(url: $0) })
         model.select(photos[0])
         model.selectAllPhotos()
+        return (model, photos)
+    }
+
+    @Test func `selecting all of 20,000 photos selects every one, in the filmstrip's order`() {
+        let (model, photos) = allSelected()
         #expect(model.selectedPhotos == photos)
+        #expect(model.selectedRows == Array(photos.indices))
+    }
+
+    @Test(.measuresSpeed)
+    func `the photos selected are read with one read of the selection, as a panel's view reads them`() {
+        let (model, _) = allSelected()
         /// Each read of the selection inside a view's body is an observed access, which `selectedRows` makes once.
         func median(_ read: () -> Void) -> Duration {
             let clock = ContinuousClock()

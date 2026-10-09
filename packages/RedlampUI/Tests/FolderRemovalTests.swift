@@ -92,10 +92,9 @@ struct FolderRemovalTests {
         #expect(model.items.count == 4, "All Photographs, shown, has them again")
     }
 
-    @Test func `Remove from Folders, chosen in a root's menu as a click does, holds the main thread for no time`(
-    ) async throws {
-        let sandbox = SourcesSandbox()
-        defer { sandbox.remove() }
+    /// The sandbox's photo and Trip in the library, Folders in a window, and Remove from Folders in Trip's row's menu,
+    /// as a click on it finds it.
+    static func removeFromFolders(in sandbox: SourcesSandbox) async throws -> (EditorModel, NSWindow, NSMenuItem) {
         try sandbox.photos(["A.jpg"])
         let trip = try Self.trip(in: sandbox)
         let model = try await sandbox.open()
@@ -105,23 +104,40 @@ struct FolderRemovalTests {
             defer: false,
         )
         window.contentView = SidebarListViews.make(model: model)
-        defer { window.contentView = nil }
         let identifier = "folders." + trip.standardizedFileURL.path
         var row: NSView?
-        for _ in 0 ..< 500 where row == nil {
+        try await sandbox.eventually {
             window.contentView?.layoutSubtreeIfNeeded()
             row = Self.view(identifier, in: window.contentView)
-            try await Task.sleep(for: .milliseconds(10))
+            return row != nil
         }
         let cell = try #require(row as? SidebarCellView, "Trip's row on screen")
         let item = try #require(cell.contextMenu()?.items.first { $0.title == "Remove from Folders" })
+        return (model, window, item)
+    }
+
+    @Test func `Remove from Folders, chosen in a root's menu as a click does, takes the folder out`() async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        let (model, window, item) = try await Self.removeFromFolders(in: sandbox)
+        defer { window.contentView = nil }
+        try NSApplication.shared.sendAction(#require(item.action), to: item.target, from: item)
+        #expect(model.library.roots.map(\.url) == [sandbox.root])
+        try await sandbox.counts { $0.count(of: .allPhotographs) == 1 }
+        #expect(model.librarySources.count(of: .allPhotographs) == 1)
+    }
+
+    @Test(.measuresSpeed)
+    func `Remove from Folders, chosen in a root's menu as a click does, holds the main thread for no time`(
+    ) async throws {
+        let sandbox = SourcesSandbox()
+        defer { sandbox.remove() }
+        let (_, window, item) = try await Self.removeFromFolders(in: sandbox)
+        defer { window.contentView = nil }
         let started = ContinuousClock.now
         try NSApplication.shared.sendAction(#require(item.action), to: item.target, from: item)
         let took = ContinuousClock.now - started
         #expect(took < .milliseconds(100), "the action took \(took)")
-        #expect(model.library.roots.map(\.url) == [sandbox.root])
-        try await sandbox.counts { $0.count(of: .allPhotographs) == 1 }
-        #expect(model.librarySources.count(of: .allPhotographs) == 1)
     }
 
     /// The photos the Keyword List counts for Lisbon's keyword; nil until it's read.

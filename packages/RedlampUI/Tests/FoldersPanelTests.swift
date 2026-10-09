@@ -162,8 +162,8 @@ struct FoldersPanelTests {
         #expect(rows(list.folders).first?.count == nil)
     }
 
-    @Test func `five thousand subfolders make only the rows on screen`() async throws {
-        defer { try? FileManager.default.removeItem(at: root) }
+    /// Big, a root of five thousand empty subfolders, open in the panel.
+    private func showBig() async throws -> (EditorModel, SidebarListView, NSWindow) {
         try FileManager.default.createDirectory(at: root.appending(path: "Big"), withIntermediateDirectories: true)
         for index in 0 ..< 5000 {
             try FileManager.default.createDirectory(
@@ -174,8 +174,14 @@ struct FoldersPanelTests {
         model.library.add([root.appending(path: "Big")])
         model.library.setExpanded(root.appending(path: "Big"), true)
         let (list, window) = showPanel(model)
-        defer { window.contentView = nil }
         try await eventually { list.folders.numberOfRows == 5001 }
+        return (model, list, window)
+    }
+
+    @Test func `five thousand subfolders make only the rows on screen`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (model, list, window) = try await showBig()
+        defer { window.contentView = nil }
         #expect(list.folders.numberOfRows == 5001)
         list.layoutSubtreeIfNeeded()
         let made = (0 ..< list.folders.numberOfRows).count {
@@ -189,11 +195,24 @@ struct FoldersPanelTests {
         try FileManager.default.createDirectory(
             at: root.appending(path: "Big/00001/Inner"), withIntermediateDirectories: false,
         )
-        let start = ContinuousClock.now
         model.library.listTree(root.appending(path: "Big/00001"))
         try await eventually { list.folders.isExpandable(list.folders.item(atRow: 2)) }
         #expect(list.folders.isExpandable(list.folders.item(atRow: 2)), "00001 has a subfolder now")
         #expect(list.folders.view(atColumn: 0, row: 3, makeIfNecessary: false) === neighbour, "only its row reloaded")
+    }
+
+    @Test(.measuresSpeed)
+    func `a subfolder found among five thousand shows on its row within half a second`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (model, list, window) = try await showBig()
+        defer { window.contentView = nil }
+        list.layoutSubtreeIfNeeded()
+        try FileManager.default.createDirectory(
+            at: root.appending(path: "Big/00001/Inner"), withIntermediateDirectories: false,
+        )
+        let start = ContinuousClock.now
+        model.library.listTree(root.appending(path: "Big/00001"))
+        try await eventually { list.folders.isExpandable(list.folders.item(atRow: 2)) }
         #expect(ContinuousClock.now - start < .milliseconds(500))
     }
 }
