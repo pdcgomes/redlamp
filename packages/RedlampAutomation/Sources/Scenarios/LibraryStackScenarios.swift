@@ -104,6 +104,18 @@
             }
         }
 
+        /// Presses `action`'s key, or chooses its item in the menu bar on a keyboard without a key that types its
+        /// character by itself; the way it took.
+        func pressOrChoose(_ action: ShortcutAction) throws -> InputPath {
+            do {
+                try press(action)
+                return .key
+            } catch is ScenarioSkip {
+                try choose(action)
+                return .menu
+            }
+        }
+
         /// The ID of the photo named `name` among those shown.
         func photoID(_ name: String) throws -> Int64 {
             let id = try main { model in
@@ -128,7 +140,91 @@
     }
 
     enum LibraryStackScenarios {
-        static let all: [Scenario] = [shown, changes, perSource]
+        static let all: [Scenario] = [shown, changes, perSource, order]
+
+        static let order = Scenario(
+            "library.stacks-order",
+            "In an open burst, ⇧[ and ⇧] and the palette move the active photo up and down and a drag moves it to "
+                + "another's place, each photo's sidecar keeping its place; Split Stack in the Photo menu splits the "
+                + "stack before a photo and Remove from Stack in the filmstrip's menu takes one out, each one change ⌘Z "
+                + "takes back",
+            claims: [
+                .action(.moveUpInStack), .action(.moveDownInStack), .action(.splitStack), .action(.removeFromStack),
+                .feature("library.stacks"),
+            ],
+        ) { app in
+            try app.withStacks { scratch in
+                let burst = StackScratch.burst
+                let ids = try burst.map(app.photoID)
+                let changes = try app.main { $0.libraryPanels.undoCount }
+                defer {
+                    try? app.run("the stacks' changes taken back", timeout: 120) { model in
+                        model.showModule(.library)
+                        while model.libraryPanels.undoCount > changes, model.libraryPanels.undoInLibrary() == true {}
+                        await model.libraryPanels.written()
+                    }
+                }
+                /// Waits for the stack holding frame `holding` to be `frames`, by their places in the burst.
+                func wait(_ what: String, for frames: [Int], holding: Int = 0) throws {
+                    try app.wait(what, timeout: 60) { model in
+                        model.gridStacks.list?.stacks.stack(containing: ids[holding])?.photos == frames.map { ids[$0] }
+                    }
+                }
+
+                // The burst opened with S, its last frame active.
+                try app.clickStill("grid.\(burst[0])")
+                try app.press(.toggleStack)
+                try app.waitForStacks("S to open the burst", open: 1, closed: 1)
+                try app.clickStill("grid.\(burst[2])")
+
+                // ⇧[ and ⇧], then the palette.
+                try app.covered(.action(.moveUpInStack), via: app.pressOrChoose(.moveUpInStack))
+                try wait("⇧[ to move the last frame up", for: [0, 2, 1])
+                let place = SidecarStore().load(for: scratch.sources.photo(burst[1]))?.metadata?.stack?.position
+                try app.expect(place == 2, "BURST_2's sidecar puts it at \(place.map(String.init) ?? "no place")")
+                try app.covered(.action(.moveDownInStack), via: app.pressOrChoose(.moveDownInStack))
+                try wait("⇧] to move it down again", for: [0, 1, 2])
+                try app.runFromPalette(.moveUpInStack)
+                try wait("the palette's Move Up in Stack", for: [0, 2, 1])
+                app.covered(.action(.moveUpInStack), via: .palette)
+
+                // Dragged onto the first frame, it takes its place.
+                try app.simulateLibraryDrags(true)
+                defer { try? app.simulateLibraryDrags(false) }
+                try app.dragGridPhoto(burst[2], onto: "grid.\(burst[0])")
+                try wait("the drag onto the first frame", for: [2, 0, 1])
+                app.covered(.feature("library.stacks"), via: .mouse)
+
+                // Split before the first frame from the Photo menu: the last one dragged up stands alone.
+                try app.clickStill("grid.\(burst[0])")
+                try app.choose(.splitStack)
+                try wait("Split Stack to split it", for: [0, 1])
+                try app.waitForStacks("the half below open", open: 1, closed: 1)
+                app.covered(.action(.splitStack), via: .menu)
+
+                // Remove from Stack in the filmstrip's menu: neither is in a stack.
+                let strip = try app.frame(of: .filmstrip(burst[1]))
+                try app.chooseInContextMenu(
+                    ShortcutAction.removeFromStack.title, at: NSPoint(x: strip.midX, y: strip.midY),
+                    submenu: "Stacking",
+                )
+                try app.waitForStacks(
+                    "Remove from Stack to leave the pair alone a stack",
+                    open: 0,
+                    closed: 1,
+                    timeout: 60,
+                )
+                app.covered(.action(.removeFromStack), via: .mouse)
+
+                for (step, frames) in [[0, 1], [2, 0, 1], [0, 2, 1], [0, 1, 2], [0, 2, 1], [0, 1, 2]].enumerated() {
+                    try app.press(.undo)
+                    try wait("⌘Z \(step + 1) to take a change back", for: frames)
+                }
+                try app.wait("⌘Z to make it a burst again", timeout: 30) { model in
+                    model.gridStacks.list?.stacks.stack(containing: ids[0])?.kind == .burst
+                }
+            }
+        }
 
         static let perSource = Scenario(
             "library.stacks-per-source",

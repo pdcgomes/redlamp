@@ -150,24 +150,23 @@ public extension EditorModel {
         guard library.service?.isReady == true, !photos.isEmpty, let stacked = libraryViews.stacks?.list,
               let group = stacked.stacks.stackIndex(containing: target), openStack(of: target, in: stacked) != nil
         else { return false }
-        let into = stacked.stacks.pair(containing: target)?.top ?? target
+        let stacks = stacked.stacks
+        let into = stacks.pair(containing: target)?.top ?? target
         return photos.allSatisfy { photo in
-            stacked.stacks
-                .stackIndex(containing: photo) == group && (stacked.stacks.pair(containing: photo)?.top ?? photo) !=
-                into
+            stacks.stackIndex(containing: photo) == group && (stacks.pair(containing: photo)?.top ?? photo) != into
         }
     }
 
     /// How many photos the open burst or stack made by hand holding photo `id` (by its ID here) has, a raw and its JPEG
     /// counting two; nil when it's closed, or the list doesn't show it as one.
-    func openStackSize(of id: Int64) -> Int? {
+    internal func openStackSize(of id: Int64) -> Int? {
         guard let stacked = libraryViews.stacks?.list, let open = openStack(of: id, in: stacked) else { return nil }
         return stacked.stacks.allPhotos(of: open.stack).count
     }
 
     /// The open burst or stack made by hand holding photo `id` (by its ID here), and the frames of it the list shows,
     /// each by its top photo, in the stack's order; nil when it's closed, or the list doesn't show it as one.
-    func openStack(of id: Int64, in stacked: StackedList) -> (stack: Stack, frames: [Int64])? {
+    internal func openStack(of id: Int64, in stacked: StackedList) -> (stack: Stack, frames: [Int64])? {
         guard let outer = stacked.shownStacks(of: id).first, outer.kind != .pair, outer.isOpen,
               let stack = stacked.stacks.stack(containing: id)
         else { return nil }

@@ -152,6 +152,12 @@
                     unavailable: "needs stacks in a folder the library has: checked on a scratch folder by "
                         + "library.stacks and library.stacks-changes",
                 )
+            case .removeFromStack, .splitStack, .moveUpInStack, .moveDownInStack:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs an open stack in a folder the library has: checked on a scratch folder by "
+                        + "library.stacks-order",
+                )
             case .showInFinder:
                 ActionCheck(action: action, setUp: { app in
                     try app.main { $0.libraryViews.revealInFinder = { Revealed.photos.append(contentsOf: $0) } }
