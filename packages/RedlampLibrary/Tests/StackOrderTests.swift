@@ -145,6 +145,17 @@ struct StackOrderTests {
         #expect(choices.place([solo[0], solo[1]], at: solo[1], in: stacks).isEmpty)
     }
 
+    @Test func `a stacked list finds a photo in its open stacks from those stacks alone`() {
+        let shoot = Shoot()
+        var stacked = StackedList(shoot.library.list, stacks: shoot.library.find())
+        #expect(!stacked.anyOpenStack { $0 == shoot.burst[1] }, "the burst is closed")
+        _ = stacked.open(shoot.burst[0])
+        #expect(stacked.anyOpenStack { $0 == shoot.jpeg }, "the JPEG beside a raw in the open burst")
+        #expect(!stacked.anyOpenStack { shoot.alone.contains($0) }, "photos in no stack")
+        _ = stacked.close(shoot.burst[0])
+        #expect(!stacked.anyOpenStack { $0 == shoot.burst[1] })
+    }
+
     @Test func `a stack's photos with places come first in their order, those without after them by capture time`() {
         let shoot = Shoot()
         let solo = shoot.alone

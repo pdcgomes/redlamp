@@ -372,6 +372,24 @@ public struct StackedList: Sendable, RandomAccessCollection {
         return shown
     }
 
+    /// Whether an open burst or manual stack the list shows as one holds a photo of the list's that `holds` is true
+    /// of: what's selected in an open stack is found from the stacks open, which are few, rather than from every photo
+    /// of a selection of thousands.
+    public func anyOpenStack(holds: (Int64) -> Bool) -> Bool {
+        var found = false
+        opened.forEach { stack in
+            guard stacks.groups.contains(stack), stack < places.count, places[stack] >= 0 else { return true }
+            for top in stacks.members(of: stack) {
+                for photo in stacks.frame(of: top) where list.contains(photo) && holds(photo) {
+                    found = true
+                    return false
+                }
+            }
+            return true
+        }
+        return found
+    }
+
     /// Calls `body` with each closed stack's cell and the photos it stands for, the cell's first.
     func forEachClosedStack(_ body: (Int64, ContiguousArray<Int64>) -> Void) {
         var photos = ContiguousArray<Int64>()

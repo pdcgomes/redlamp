@@ -45,7 +45,16 @@ public extension EditorModel {
     @discardableResult
     func removeSelectedFromStacks() -> Bool {
         guard canRemoveSelectionFromStacks, let stacked = libraryViews.stacks?.list else { return false }
-        let leaving = selectedOwnIDs.filter { openStack(of: $0, in: stacked) != nil }
+        var isOpen: [Int: Bool] = [:]
+        let leaving = selectedOwnIDs.filter { id in
+            guard let group = stacked.stacks.stackIndex(containing: id) else { return false }
+            if let open = isOpen[group] {
+                return open
+            }
+            let open = openStack(of: id, in: stacked) != nil
+            isOpen[group] = open
+            return open
+        }
         guard hasRead(leaving, then: { [weak self] in self?.removeSelectedFromStacks() }) else { return true }
         let photos = stackPhotos(leaving)
         let frames = Set(leaving.map { stacked.stacks.pair(containing: $0)?.top ?? $0 })
@@ -115,17 +124,15 @@ public extension EditorModel {
 
     // MARK: - What they can do
 
-    /// Whether Remove from Stack would take anything out: a photo selected is in an open burst or stack made by hand.
-    /// Each stack is asked about once, however many of its photos are selected.
+    /// Whether Remove from Stack would take anything out: a photo selected, or the active photo when none is, is in an
+    /// open burst or stack made by hand.
     var canRemoveSelectionFromStacks: Bool {
         guard library.service?.isReady == true, let stacked = libraryViews.stacks?.list else { return false }
-        var asked = Set<Int>()
-        return selectedOwnIDs.contains { id in
-            guard let group = stacked.stacks.stackIndex(containing: id), asked.insert(group).inserted else {
-                return false
-            }
-            return openStack(of: id, in: stacked) != nil
+        let selected = photoSelection
+        guard !selected.isEmpty else {
+            return selection.flatMap(library.photoID(of:)).map { openStack(of: $0, in: stacked) != nil } ?? false
         }
+        return stacked.anyOpenStack(holds: selected.contains)
     }
 
     /// Whether Split Stack would split anything: the active photo is in an open burst or stack made by hand, below
