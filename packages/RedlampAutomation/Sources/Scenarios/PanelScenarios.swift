@@ -478,6 +478,17 @@
                 )
                 app.covered([.action(.importKeywords), .action(.exportKeywords)], via: .menu)
                 app.covered(.feature("library.keywords"), via: .mouse)
+
+                // The scenarios after this one find the list unfiltered: E2E deleted, the caret past it.
+                try app.clickControl("keywordList.filter")
+                for _ in 0 ..< 3 {
+                    try app.pressInWindow(KeyCombo(.delete))
+                }
+                try app.wait("the filter emptied") { _ in
+                    guard let root = Views.editorWindow?.contentView?.superview else { return false }
+                    return Views.all(NSTextField.self, in: root)
+                        .first { $0.accessibilityIdentifier() == "keywordList.filter" }?.stringValue.isEmpty == true
+                }
             }
         }
 
