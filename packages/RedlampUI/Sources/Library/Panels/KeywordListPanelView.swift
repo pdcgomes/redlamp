@@ -105,9 +105,9 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
 
     // MARK: - Showing
 
-    /// Shows `list`: the keywords that came or went put in or taken out where they go, the others' counts in place;
-    /// the column is laid out again only when the panel's height changes, as its line saying there are none comes or
-    /// goes, since laying out every panel of the column takes a tenth of a second.
+    /// Shows `list`: the keywords that came or went put in or taken out where they go, the others' counts in place,
+    /// the outline's rows made at once; the column is laid out again only when the panel's height changes, as its line
+    /// saying there are none comes or goes, since laying out every panel of the column takes a tenth of a second.
     private func showList(_ list: KeywordList?) {
         let counts = list.map { $0.keywords.mapValues(\.count) }
         let wasEmpty = empty.isHidden
@@ -146,6 +146,7 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         if visible != nil {
             outline.expandItem(nil, expandChildren: true)
         }
+        outline.layoutSubtreeIfNeeded()
     }
 
     /// The keywords that came into `list` or left it, put in or taken out of the rows the outline shows: at the top
@@ -185,6 +186,7 @@ final class KeywordListPanelView: PanelStackView, NSOutlineViewDataSource, NSOut
         for item in closed {
             outline.reloadItem(item)
         }
+        outline.layoutSubtreeIfNeeded()
     }
 
     /// The rows the outline has made show their keywords as the list has them now.

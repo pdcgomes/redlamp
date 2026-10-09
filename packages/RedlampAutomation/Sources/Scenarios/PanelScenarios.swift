@@ -184,14 +184,20 @@
 
         /// Makes the keyword list's row of `path` the one chosen, as a click on it does.
         func chooseKeywordRow(_ path: String) throws {
-            try main { _ in
+            @MainActor func found() -> (NSOutlineView, Int)? {
                 guard let window = Views.editorWindow, let root = window.contentView?.superview,
                       let outline = Views.all(NSOutlineView.self, in: root)
                       .first(where: { $0.accessibilityIdentifier() == "keywordList.outline" }),
                       let row = Views.all(NSView.self, in: outline)
                       .first(where: { $0.accessibilityIdentifier() == "keywordList.row.\(path)" })
                       .map(outline.row(for:)), row >= 0
-                else { throw ScenarioFailure("\(path) isn't in the keyword list") }
+                else { return nil }
+                return (outline, row)
+            }
+            // The outline makes a row's view as it's laid out, a moment after its keyword arrives.
+            try wait("\(path) in the keyword list") { _ in found() != nil }
+            try main { _ in
+                guard let (outline, row) = found() else { throw ScenarioFailure("\(path) isn't in the keyword list") }
                 outline.selectRowIndexes([row], byExtendingSelection: false)
             }
         }
