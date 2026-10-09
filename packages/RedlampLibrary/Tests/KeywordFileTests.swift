@@ -37,6 +37,45 @@ struct KeywordFileTests {
         "\t東京",
     ].map { $0 + "\n" }.joined()
 
+    /// The same keywords as Redlamp writes them: each keyword's in the library's name order, Folders' own, which takes
+    /// digits before brackets and braces after letters, where Lightroom puts them first.
+    static let exported = [
+        "[Animals]",
+        "\tBirds",
+        "\t\t{Aves}",
+        "\t\tBlack-tailed Godwit",
+        "\t\tGull",
+        "\t\t\t{Larus}",
+        "\t\t\t{Seagull}",
+        "C:\\Photos\\Keep",
+        "Music",
+        "\tAC/DC",
+        "\tFish, Chips & \"Peas\"",
+        "\tGuns N' Roses",
+        "[People]",
+        "\t50% off",
+        "\t[[draft]]",
+        "\tAna (née Silva)",
+        "\t\t{Ana Silva}",
+        "\tJosé 🙂",
+        "Places",
+        "\tPortugal",
+        "\t\tLisbon",
+        "\t\t\t{Lisboa}",
+        "\t\t\t{Lisbonne}",
+        "\t\tPorto",
+        "\tSpain",
+        "\t\tMadrid {old}",
+        "\t[{curly}]",
+        "\tالقاهرة",
+        "\t東京",
+    ].map { $0 + "\n" }.joined()
+
+    /// `keywords` by their paths, whatever their order.
+    static func byPath(_ keywords: [LightroomKeywordFile.Keyword]) -> [String: LightroomKeywordFile.Keyword] {
+        Dictionary(uniqueKeysWithValues: keywords.map { ($0.path.text, $0) })
+    }
+
     @Test func `a keyword file reads back what it was written from, and writes the same file again`() throws {
         let keywords = LightroomKeywordFile.read(Self.file)
         let byPath = Dictionary(uniqueKeysWithValues: keywords.map { ($0.path, $0) })
@@ -53,10 +92,11 @@ struct KeywordFileTests {
         #expect(try byPath[#require(KeywordPath(names: ["C:\\Photos\\Keep"]))] != nil)
 
         let export = LightroomKeywordFile.write(keywords)
-        #expect(export.text == Self.file)
+        #expect(export.text == Self.exported)
         #expect(export.keywords == 23 && export.unrepresentable.isEmpty)
         #expect(try export.refusedByLightroom == [#require(KeywordPath(names: ["Music", "Fish, Chips & \"Peas\""]))])
-        #expect(LightroomKeywordFile.read(export.text) == keywords)
+        #expect(Self.byPath(LightroomKeywordFile.read(export.text)) == Self.byPath(keywords))
+        #expect(LightroomKeywordFile.write(LightroomKeywordFile.read(export.text)).text == Self.exported)
     }
 
     @Test func `files from other systems and editors read the same`() throws {
@@ -91,7 +131,7 @@ struct KeywordFileTests {
             LightroomKeywordFile.Keyword(path: #require(KeywordPath(names: ["Ends*"])), synonyms: ["{s}"]),
         ]
         let export = LightroomKeywordFile.write(keywords)
-        #expect(export.text == "[[hidden]]\n[shown]\n{shown}\nEnds*\n\t{{s}}\n")
+        #expect(export.text == "[[hidden]]\n[shown]\nEnds*\n\t{{s}}\n{shown}\n")
         #expect(try export.unrepresentable == [
             #require(KeywordPath(names: ["[shown]"])),
             #require(KeywordPath(names: ["{shown}"])),
@@ -114,7 +154,7 @@ struct KeywordFileTests {
         #expect(list[kw("Places/Portugal/Lisbon")]?.count == 1)
         #expect(list[kw("Places/Portugal/Lisbon")]?.options.synonyms == ["Lisboa", "Lisbonne"])
         #expect(list[kw("Animals")]?.options.includeOnExport == false)
-        #expect(try await keywords.exportLightroomFile().text == Self.file)
+        #expect(try await keywords.exportLightroomFile().text == Self.exported)
         #expect(try await sandbox.search("kw:Lisbonne") == ["A.JPG"])
 
         try await keywords.undo()
