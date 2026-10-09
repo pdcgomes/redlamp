@@ -30,6 +30,15 @@ struct FromLibrary {
     /// list, which `LibrarySources` keeps (`FolderLibrary+Collections`).
     var sourcePhotos: PhotoSource?
     weak var sourceList: LibrarySourceList?
+    /// The content keys and the paths of the entry's or the collection's photos, filtered or not, by their IDs in
+    /// the index, which are their IDs here; nil until its photos are shown.
+    var sourceKeys: [Int64: ContentKey] = [:]
+    var sourcePaths: PhotoPaths?
+
+    /// What freeing takes milliseconds of for thousands of photos, for doing off the main thread.
+    var tables: some Sendable {
+        (keys, sourceKeys, sourcePaths)
+    }
 }
 
 /// What `FolderLibrary` keeps for counting the folder tree from the library.
@@ -57,6 +66,7 @@ public extension FolderLibrary {
             self?.countFolders()
             self?.followTrash()
             self?.findUnfinishedSidecarMove()
+            self?.readHighestIndexID()
         }
         service.removed = { [weak self] in self?.onRemoved?() }
         service.start(following: roots.map(\.url), removingOthers: hasSavedRoots)
@@ -81,7 +91,7 @@ public extension FolderLibrary {
     /// The store's thumbnails and the content key of a photo shown from the library, or from Recently
     /// Trashed.
     func storeThumbnail(for item: LibraryItem) -> (StoreThumbnails, ContentKey)? {
-        guard let key = fromLibrary.keys[item.url] ?? trash.keys[item.url], let thumbnails = service?.thumbnails
+        guard let key = contentKey(of: item.url) ?? trash.keys[item.url], let thumbnails = service?.thumbnails
         else { return nil }
         return (thumbnails, key)
     }
@@ -90,6 +100,25 @@ public extension FolderLibrary {
     /// Redlamp's own writes on this Mac.
     func sidecarSaved(_ photo: URL) {
         service?.sidecarSaved(photo, store: sidecars.store(for: photo))
+    }
+}
+
+extension FolderLibrary {
+    /// Notes the highest photo ID the index has given, as it opens and as it changes, so the IDs given here stay
+    /// above it.
+    func readHighestIndexID() {
+        guard !isReadingHighestIndexID, let core = service?.core else { return }
+        isReadingHighestIndexID = true
+        Task { [weak self] in
+            let highest = await (try? core.index.read { reader in
+                try reader.database.cached("SELECT max(id) FROM photos").first { $0.int64(at: 0) }
+            }) ?? nil
+            guard let self else { return }
+            isReadingHighestIndexID = false
+            if let highest {
+                noteIndexID(highest)
+            }
+        }
     }
 }
 
@@ -137,7 +166,9 @@ extension FolderLibrary {
     func closeLibraryList() {
         fromLibrary.list?.close()
         fromLibrary.sourceList?.close()
+        let tables = fromLibrary.tables
         fromLibrary = FromLibrary(gaveUp: fromLibrary.gaveUp)
+        scheduler.submit(.background) { withExtendedLifetime(tables) {} }
     }
 
     private func received(_ change: LibraryFolderList.Change, generation: Int) {

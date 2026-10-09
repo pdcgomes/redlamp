@@ -71,6 +71,11 @@ public struct PhotoList: Sendable, RandomAccessCollection {
     public func contains(_ id: Int64) -> Bool {
         id >= 0 && Int(id) < members.wordCount << 6 && members.contains(Int(id))
     }
+
+    /// The highest of the photos' IDs; nil for an empty list.
+    public var highestID: Int64? {
+        places.isEmpty ? nil : lowest + Int64(places.count) - 1
+    }
 }
 
 extension PhotoList: Equatable {

@@ -112,10 +112,15 @@ public final class FolderLibrary {
     public private(set) var revision = 0
 
     @ObservationIgnored public internal(set) var items: [LibraryItem] = []
-    /// Each photo's ID, beside `items`: given as it's listed and kept while it's shown, never reused, so
-    /// a selection over them (`photoList`) outlives any change.
+    /// Each photo's ID, beside `items`, so a selection over them (`photoList`) outlives any change: the index's ID
+    /// for the photos of a Library entry or a collection (`FolderLibrary+Collections`), which the index never
+    /// gives twice; for others, one given here as it's listed and kept while it's shown, never reused, and above
+    /// every ID the index has given by `ownIDMargin`, so the two never meet.
     @ObservationIgnored public internal(set) var photoIDs: ContiguousArray<Int64> = []
     @ObservationIgnored var nextPhotoID: Int64 = 0
+    /// The highest photo ID the index is known to have given, as a launch kept it.
+    @ObservationIgnored var highestIndexID: Int64 = 0
+    @ObservationIgnored var isReadingHighestIndexID = false
     @ObservationIgnored private var madeList: PhotoList?
     @ObservationIgnored var positions: [URL: Int] = [:]
     @ObservationIgnored let scheduler: WorkScheduler
@@ -191,11 +196,12 @@ public final class FolderLibrary {
     // MARK: - Reading
 
     public func index(of url: URL) -> Int? {
-        positions[url]
+        guard let paths = fromLibrary.sourcePaths else { return positions[url] }
+        return paths.id(of: url).flatMap(photoList.index(of:))
     }
 
     public func item(for url: URL) -> LibraryItem? {
-        positions[url].map { items[$0] }
+        index(of: url).map { items[$0] }
     }
 
     /// The photos shown, by ID in their order, for selections; made again after photos come or go.
@@ -211,22 +217,39 @@ public final class FolderLibrary {
     }
 
     public func photoID(of url: URL) -> Int64? {
-        positions[url].map { photoIDs[$0] }
+        index(of: url).map { photoIDs[$0] }
     }
 
     public func url(ofPhoto id: Int64) -> URL? {
         photoList.index(of: id).map { items[$0].url }
     }
 
+    /// How far above the index's IDs those given here start: a session would have to index more photos than this
+    /// before one of them met an ID given here, while bits over IDs (`PhotoList`) stay small.
+    static let ownIDMargin: Int64 = 1 << 21
+
     /// IDs for `count` photos just listed.
     func newPhotoIDs(_ count: Int) -> Range<Int64> {
+        nextPhotoID = max(nextPhotoID, highestIndexID + Self.ownIDMargin)
         defer { nextPhotoID += Int64(count) }
         return nextPhotoID ..< nextPhotoID + Int64(count)
+    }
+
+    /// The index has given photo IDs up to `id`: those given here from now on are above it.
+    func noteIndexID(_ id: Int64) {
+        guard id > highestIndexID else { return }
+        highestIndexID = id
+        defaults?.set(id, forKey: Key.highestIndexID)
     }
 
     /// Photos came or went: `photoList` is made again when it's next asked for.
     func photosMoved() {
         madeList = nil
+    }
+
+    /// Photos came or went, as `list`, made off the main thread, has them.
+    func photosMoved(to list: PhotoList) {
+        madeList = list
     }
 
     /// Calls `handler` after every change, until the returned token is released.
@@ -365,9 +388,10 @@ public final class FolderLibrary {
         probeSidecars(in: start ..< items.count, generation: generation)
     }
 
-    /// Adds a photo in name order (a stack document just saved).
+    /// Adds a photo in name order (a stack document just saved), to a folder's photos: a Library entry's or a
+    /// collection's photos are the library's, whose list brings it.
     func insert(_ item: LibraryItem) {
-        guard positions[item.url] == nil else { return }
+        guard fromLibrary.sourcePaths == nil, positions[item.url] == nil else { return }
         let index = items.firstIndex { FileOrder.precedes(item.name, $0.name) } ?? items.count
         items.insert(item, at: index)
         photoIDs.insert(newPhotoIDs(1).lowerBound, at: index)
@@ -378,7 +402,7 @@ public final class FolderLibrary {
 
     /// Changes one photo's badges.
     func update(_ url: URL, _ change: (inout LibraryItem) -> Void) {
-        guard let index = positions[url] else { return }
+        guard let index = index(of: url) else { return }
         var item = items[index]
         change(&item)
         guard item != items[index] else { return }

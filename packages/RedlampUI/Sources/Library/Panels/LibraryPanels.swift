@@ -213,7 +213,7 @@ public final class LibraryPanels {
         let library = model.library
         let snapshot = SelectionSnapshot(
             selection: model.photoSelection, list: library.photoList, items: library.items,
-            active: model.selection.flatMap(library.index(of:)),
+            active: model.selection.flatMap(library.index(of:)), indexed: library.showsIndexIDs,
         )
         let ids = photoIDs
         reading = Task { [weak self] in
@@ -258,26 +258,31 @@ public final class LibraryPanels {
     private nonisolated static func read(
         _ snapshot: SelectionSnapshot, core: LibraryCore, ids: PanelPhotoIDs,
     ) async -> PanelSelection {
-        var photos: [(list: Int64, url: URL)] = []
+        var places: [Int] = []
         let list = snapshot.list
         let active = snapshot.active.flatMap { list.indices.contains($0) ? list[$0] : nil }
         if snapshot.selection.isEmpty {
             if let active = snapshot.active, list.indices.contains(active), snapshot.items.indices.contains(active) {
-                photos = [(list[active], snapshot.items[active].url)]
+                places = [active]
             }
         } else {
-            photos.reserveCapacity(snapshot.selection.count)
+            places.reserveCapacity(snapshot.selection.count)
             for place in list.indices where snapshot.items.indices.contains(place)
                 && snapshot.selection.contains(list[place]) {
-                photos.append((list[place], snapshot.items[place].url))
+                places.append(place)
             }
         }
         var read = PanelSelection()
-        read.count = photos.count
+        read.count = places.count
         read.isAvailable = true
-        let found = await ids.ids(of: photos, in: core.index)
-        read.ids = found.values.sorted()
-        read.activeID = active.flatMap { found[$0] }
+        if snapshot.indexed {
+            read.ids = places.map { list[$0] }.sorted()
+            read.activeID = active.flatMap { snapshot.selection.isEmpty || snapshot.selection.contains($0) ? $0 : nil }
+        } else {
+            let found = await ids.ids(of: places.map { (list[$0], snapshot.items[$0].url) }, in: core.index)
+            read.ids = found.values.sorted()
+            read.activeID = active.flatMap { found[$0] }
+        }
         guard !read.ids.isEmpty, !Task.isCancelled else { return read }
         let photoIDs = read.ids
         async let keywords = try? core.engine.keywordCounts(ofPhotos: photoIDs)
@@ -368,6 +373,8 @@ struct SelectionSnapshot: Sendable {
     let items: [LibraryItem]
     /// The active photo's place in the list.
     let active: Int?
+    /// The list's IDs are the index's (`FolderLibrary.photoIDs`).
+    let indexed: Bool
 }
 
 /// What a change shows before the library has it: the keywords added and taken off, and the fields given, to

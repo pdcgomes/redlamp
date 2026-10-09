@@ -4,9 +4,11 @@ import RedlampLibrary
 import Synchronization
 
 /// A Library entry's or a collection's photos, for the grid and the filmstrip (LIB-23): the source's photo
-/// list, in capture order, as `LibraryItem`s at their own folders, kept current by `LibraryLive`. Each update
-/// is mapped off the main thread, reading only the rows of the photos new to the list or changed; an update
-/// is taken once the one before it has reached the main thread, so what changes meanwhile comes as one.
+/// list, in capture order, by the photos' IDs in the index, with each one as a `LibraryItem` at its own folder,
+/// kept current by `LibraryLive`. Each update is mapped off the main thread, reading only the rows of the photos
+/// new to the list or changed; an update is taken once the one before it has reached the main thread, so what
+/// changes meanwhile comes as one. Nothing is kept by URL: a photo is found from its URL by its folder and name
+/// (`PhotoPaths`), as hashing a million URLs took seconds.
 ///
 /// With a filter or a sort (LIB-18) it hands over the photos the filter finds, in the sort's order, each time
 /// the filter or the source's photos change, worked out off the main thread from the photos it already has,
@@ -16,19 +18,19 @@ import Synchronization
 final class LibrarySourceList: Sendable {
     /// The photos in the list's order, and how they differ from those handed over before.
     struct Change: Sendable {
+        /// The photos' IDs in the index, in the list's order.
+        var list: PhotoList
+        /// The photos, in the list's order.
         var items: [LibraryItem]
-        var positions: [URL: Int]
-        /// Each photo's place in the photos handed over before; -1 for a photo new to them.
-        var previous: [Int32]
         /// How many photos were handed over before; -1 for the first change.
         var previousCount: Int
         /// The rows removed, inserted and changed, or a reset when the photos that stayed moved.
         var diff: LibraryDiff
-        /// The content keys of the source's photos that have one, filtered or not, for their thumbnails from the
-        /// store.
-        var keys: [URL: ContentKey]
-        /// The index's ID of each of the source's photos, filtered or not, by its URL.
-        var ids: [URL: Int64]
+        /// The content keys of the source's photos that have one, filtered or not, by their IDs, for their
+        /// thumbnails from the store.
+        var keys: [Int64: ContentKey]
+        /// The source's photos by their folders and names, filtered or not.
+        var paths: PhotoPaths
         /// The source's photos, filtered or not.
         var total = 0
         /// The filter it was made with, while one is on and for the change that took it off; nil for the source's
@@ -166,7 +168,7 @@ final class LibrarySourceList: Sendable {
         if filter.reversed {
             ids.reverse()
         }
-        var change = mapping.change(handing: ids)
+        var change = mapping.change(handing: ids, of: source)
         change.filter = filter.isEmpty && before?.isEmpty != false ? nil : filter
         change.took = (queried, clock.now - started - queried)
         return change
@@ -181,14 +183,14 @@ final class LibrarySourceList: Sendable {
         private(set) var ids: [Int64] = []
         private(set) var hasList = false
         /// Handed over whole with every change: merging a list's thousands on the main thread takes milliseconds.
-        private var keys: [URL: ContentKey] = [:]
-        private var indexIDs: [URL: Int64] = [:]
+        private var keys: [Int64: ContentKey] = [:]
+        private var paths = PhotoPaths()
         /// The photos whose rows changed or that went since the last change was handed over: only those can differ
         /// from its rows. The rows handed over aren't kept: the main thread changes their badges in place, which
         /// a copy kept here would make it copy whole.
         private var touched = Set<Int64>()
-        /// The IDs handed over last, in order, and each one's place among them; nil before the first.
-        private var handed: (ids: [Int64], places: [Int64: Int32])?
+        /// The photos handed over last, in order; nil before the first.
+        private var handed: PhotoList?
         /// The last update was taken whole, so `ids` are the photos the next one's diff counts from.
         private var inStep = false
         /// Photos of the list whose rows weren't read when they came: read again with the next update.
@@ -229,10 +231,14 @@ final class LibrarySourceList: Sendable {
             if fresh {
                 items.reserveCapacity(count)
                 keys.reserveCapacity(count)
-                indexIDs.reserveCapacity(count)
             }
             for photo in read.parts.joined() {
                 keep(photo, fresh: fresh)
+            }
+            if fresh {
+                for part in read.parts {
+                    paths.insert(part)
+                }
             }
             if !stepped, !fresh {
                 let kept = Set(ids)
@@ -240,7 +246,7 @@ final class LibrarySourceList: Sendable {
             }
             for id in leaving {
                 guard let item = items.removeValue(forKey: id) else { continue }
-                forget(item.url)
+                forget(id, at: item.url)
                 touched.insert(id)
             }
             unread = count == reading.count ? [] : reading.filter { items[$0] == nil }
@@ -252,88 +258,78 @@ final class LibrarySourceList: Sendable {
         /// Keeps `photo` as it was read; when none of the source's photos were kept before (`fresh`), without looking
         /// for what it was.
         private mutating func keep(_ photo: Read, fresh: Bool) {
-            let url = photo.item.url
             if fresh {
                 items[photo.id] = photo.item
                 // Photos not handed over before differ from none handed over.
                 if handed != nil {
                     touched.insert(photo.id)
                 }
-                keys[url] = photo.key
-                indexIDs[url] = photo.id
+                keys[photo.id] = photo.key
                 return
             }
-            if let old = items[photo.id]?.url, old != url {
-                forget(old)
+            let old = items[photo.id]?.url
+            if old != photo.item.url {
+                if let old {
+                    paths.remove(at: old)
+                }
+                paths.insert(photo.id, folder: photo.item.folderPath, name: photo.name)
             }
             if items[photo.id] != photo.item {
                 items[photo.id] = photo.item
                 touched.insert(photo.id)
             }
             // Written only when they differ: the main thread holds the last change's, which a write copies.
-            if keys[url] != photo.key {
-                keys[url] = photo.key
-            }
-            if indexIDs[url] != photo.id {
-                indexIDs[url] = photo.id
+            if keys[photo.id] != photo.key {
+                keys[photo.id] = photo.key
             }
         }
 
-        private mutating func forget(_ url: URL) {
-            keys.removeValue(forKey: url)
-            indexIDs.removeValue(forKey: url)
+        private mutating func forget(_ id: Int64, at url: URL) {
+            keys.removeValue(forKey: id)
+            paths.remove(at: url)
         }
 
-        /// The change handing over the photos `ids` names, in its order, against those handed over before.
-        mutating func change(handing ids: [Int64]) -> Change {
-            let first = handed == nil
-            let before = handed ?? ([], [:])
-            var change = Change(
-                items: [], positions: [:], previous: [], previousCount: first ? -1 : before.ids.count,
-                diff: LibraryDiff(), keys: keys, ids: indexIDs, total: self.ids.count,
-            )
-            change.items.reserveCapacity(ids.count)
-            change.positions.reserveCapacity(ids.count)
-            change.previous.reserveCapacity(ids.count)
-            var listed: [Int64] = []
+        /// The change handing over the photos `ids` names, in its order, as `source`'s list, against those handed
+        /// over before.
+        mutating func change(handing ids: [Int64], of source: PhotoSource) -> Change {
+            let before = handed
+            var shown: [LibraryItem] = []
+            shown.reserveCapacity(ids.count)
+            var listed = ContiguousArray<Int64>()
             listed.reserveCapacity(ids.count)
-            var places: [Int64: Int32] = [:]
-            places.reserveCapacity(ids.count)
             var updated = IndexSet()
             var carried = IndexSet()
+            var inserted = IndexSet()
             var inOrder = true
-            var lastCarried: Int32 = -1
+            var lastCarried = -1
             for id in ids {
                 guard let item = items[id] else { continue }
-                let index = change.items.count
-                // A URL listed twice keeps its first place.
-                if let earlier = change.positions.updateValue(index, forKey: item.url) {
-                    change.positions[item.url] = earlier
-                    continue
-                }
-                let place = first ? -1 : before.places[id] ?? -1
-                if place >= 0 {
-                    carried.insert(Int(place))
+                let index = shown.count
+                if let place = before?.index(of: id) {
+                    carried.insert(place)
                     inOrder = inOrder && place > lastCarried
                     lastCarried = place
                     if touched.contains(id) {
                         updated.insert(index)
                     }
+                } else {
+                    inserted.insert(index)
                 }
-                change.items.append(item)
-                change.previous.append(place)
+                shown.append(item)
                 listed.append(id)
-                places[id] = Int32(index)
             }
-            change.diff = LibraryDiff(reset: true)
-            if !first, inOrder {
-                let removed = IndexSet(integersIn: 0 ..< before.ids.count).subtracting(carried)
-                let inserted = IndexSet(change.previous.indices.filter { change.previous[$0] < 0 })
+            let list = PhotoList(source: source, ids: listed)
+            var change = Change(
+                list: list, items: shown, previousCount: before?.count ?? -1, diff: LibraryDiff(reset: true),
+                keys: keys, paths: paths, total: self.ids.count,
+            )
+            if let before, inOrder {
+                let removed = IndexSet(integersIn: 0 ..< before.count).subtracting(carried)
                 if removed.count + inserted.count <= LibrarySourceList.largestDiff {
                     change.diff = LibraryDiff(removed: removed, inserted: inserted, updated: updated)
                 }
             }
-            handed = (listed, places)
+            handed = list
             touched = []
             return change
         }
@@ -341,11 +337,62 @@ final class LibrarySourceList: Sendable {
 }
 
 extension LibrarySourceList {
-    /// A photo of the source as the grid shows it, at its folder, and its content key, as its row is read.
+    /// A photo of the source as the grid shows it, at its folder, its name and its content key, as its row is
+    /// read.
     struct Read: Sendable {
         var id: Int64
         var item: LibraryItem
+        var name: String
         var key: ContentKey?
+    }
+}
+
+/// The photos of a source by their folders and names, to find one from its URL: a table keyed by every photo's URL
+/// took seconds to make at a million photos, where this hashes a folder's path once for each run of its photos.
+struct PhotoPaths: Sendable {
+    /// Each folder's photos by name, by the folder's path as the index keeps it.
+    private var folders: [String: [String: Int64]] = [:]
+
+    /// The photo at `url`, as the source's list makes its URL from its folder and its name.
+    func id(of url: URL) -> Int64? {
+        let (folder, name) = Self.split(url.path)
+        return folders[folder]?[name]
+    }
+
+    mutating func insert(_ id: Int64, folder: String, name: String) {
+        folders[folder, default: [:]][name] = id
+    }
+
+    /// Adds `photos`, read a run of one folder's at a time.
+    mutating func insert(_ photos: some Sequence<LibrarySourceList.Read>) {
+        var folder: String?
+        var names: [String: Int64] = [:]
+        for photo in photos {
+            if photo.item.folderPath != folder {
+                if let folder {
+                    folders[folder] = names
+                }
+                folder = photo.item.folderPath
+                names = folders.removeValue(forKey: photo.item.folderPath) ?? [:]
+            }
+            names[photo.name] = photo.id
+        }
+        if let folder {
+            folders[folder] = names
+        }
+    }
+
+    mutating func remove(at url: URL) {
+        let (folder, name) = Self.split(url.path)
+        guard folders[folder]?.removeValue(forKey: name) != nil, folders[folder]?.isEmpty == true else { return }
+        folders[folder] = nil
+    }
+
+    /// A photo's path as its folder's and its name; `/` for a photo at the top of its disk.
+    private static func split(_ path: String) -> (folder: String, name: String) {
+        guard let slash = path.lastIndex(of: "/") else { return ("", path) }
+        let folder = slash == path.startIndex ? "/" : String(path[..<slash])
+        return (folder, String(path[path.index(after: slash)...]))
     }
 }
 
@@ -453,7 +500,7 @@ extension LibrarySourceList.Mapping {
         )
         let url = URL(fileURLWithPath: (folder == "/" ? "" : folder) + "/" + photo.name, isDirectory: false)
         return LibrarySourceList.Read(
-            id: photo.id, item: LibraryFolderList.Mapping.item(photo, url: url, folder: folder),
+            id: photo.id, item: LibraryFolderList.Mapping.item(photo, url: url, folder: folder), name: photo.name,
             key: photo.contentKey.flatMap(ContentKey.init(data:)),
         )
     }

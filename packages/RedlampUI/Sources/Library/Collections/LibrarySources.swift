@@ -64,10 +64,9 @@ public final class LibrarySources {
     @ObservationIgnored weak var model: EditorModel?
     @ObservationIgnored private(set) var counts = LibraryCounts()
     @ObservationIgnored private var observers: [UUID: @MainActor (Set<LibrarySource>) -> Void] = [:]
-    /// The source shown's list, its opening's generation, and the index's ID of each of its photos.
+    /// The source shown's list and its opening's generation.
     @ObservationIgnored private var list: LibrarySourceList?
     @ObservationIgnored private var generation: Int?
-    @ObservationIgnored private var ids: [URL: Int64] = [:]
     @ObservationIgnored private var awaitingFirst = false
     @ObservationIgnored private var libraryObservation: LibraryObservation?
     @ObservationIgnored private var following: Following?
@@ -438,8 +437,6 @@ public final class LibrarySources {
     private func received(_ change: LibrarySourceList.Change, generation: Int) {
         guard let model, generation == self.generation, model.library.showSource(change, generation: generation)
         else { return }
-        Self.release(ids)
-        ids = change.ids
         model.healthProposals.follow(shown)
         if awaitingFirst, let shown {
             awaitingFirst = false
@@ -454,12 +451,6 @@ public final class LibrarySources {
     /// load the others' as they come into view. Asking the store for ten thousand at once holds the main thread
     /// for milliseconds.
     static let warmedAsShown = 1000
-
-    /// Frees `ids` off the main thread: tens of thousands of URLs take milliseconds.
-    private static func release(_ ids: [URL: Int64]) {
-        guard !ids.isEmpty else { return }
-        Task.detached(priority: .utility) { withExtendedLifetime(ids) {} }
-    }
 
     /// Ends the source shown when another opening replaces it: a folder, Recently Trashed, or another source.
     private func followShown() {
@@ -476,8 +467,6 @@ public final class LibrarySources {
         generation = nil
         shown = nil
         shownImport = nil
-        Self.release(ids)
-        ids = [:]
         awaitingFirst = false
         model?.healthProposals.follow(nil)
     }
@@ -489,12 +478,12 @@ public final class LibrarySources {
 
     /// The index's ID of the photo at `url`, while it's one of the source shown's.
     func indexID(ofShown url: URL) -> Int64? {
-        ids[url]
+        model?.library.sourcePhotoID(of: url)
     }
 
     /// The index's IDs of `photos`, from the source shown when they're among its photos, else from the index.
     func indexIDs(of photos: [URL]) async -> [Int64] {
-        let known = photos.compactMap { ids[$0] }
+        let known = photos.compactMap(indexID(ofShown:))
         if known.count == photos.count {
             return known
         }

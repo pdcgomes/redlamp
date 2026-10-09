@@ -56,6 +56,12 @@ extension FolderLibrary {
     /// where the active photo goes. Returns the IDs the photos shown again were given, by their URLs.
     @discardableResult
     func show(_ moves: LibraryMoves, before: () -> Void = {}) async -> [URL: Int64] {
+        // Nothing moves in the photos shown: a Library entry's or a collection's, whose list follows the batch.
+        if moves.moves.isEmpty, moves.restoring.isEmpty {
+            before()
+            publish(LibraryDiff())
+            return [:]
+        }
         while true {
             let restoredIDs = moves.restoring.isEmpty ? [] : Array(newPhotoIDs(moves.restoring.count))
             let shown = (items: items, ids: photoIDs, positions: positions, revision: revision, filtered: isFiltered)
@@ -186,7 +192,8 @@ extension FolderLibrary {
 
     /// The content key of the photo shown at `url`, when it's shown from the library.
     func contentKey(of url: URL) -> ContentKey? {
-        fromLibrary.keys[url]
+        guard let paths = fromLibrary.sourcePaths else { return fromLibrary.keys[url] }
+        return paths.id(of: url).flatMap { fromLibrary.sourceKeys[$0] }
     }
 
     /// Returns once the open folder's list from the library has handed over every change the library had for

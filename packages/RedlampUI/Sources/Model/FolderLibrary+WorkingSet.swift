@@ -247,12 +247,15 @@ extension FolderLibrary {
         static let subfolders = "folders.includesSubfolders"
         static let expanded = "folders.expanded"
         static let lastPhotos = "folders.lastPhotos"
+        /// The highest photo ID the index was known to have given (`FolderLibrary.noteIndexID`).
+        static let highestIndexID = "library.highestPhotoID"
         /// The single folder earlier versions remembered.
         static let legacyFolder = "lastFolder"
     }
 
     func loadSettings() {
         guard let defaults else { return }
+        highestIndexID = Int64(defaults.integer(forKey: Key.highestIndexID))
         if let data = defaults.data(forKey: Key.roots),
            let saved = try? JSONDecoder().decode([WorkingFolder].self, from: data) {
             roots = saved
