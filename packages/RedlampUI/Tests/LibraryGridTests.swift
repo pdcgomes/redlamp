@@ -231,6 +231,9 @@ struct LibraryGridTests {
         strip.layoutSubtreeIfNeeded()
         strip.collectionView.layoutSubtreeIfNeeded()
         try await fixture.settle()
+        // A strip opens at the active photo, which leaves the band's first photos out of sight.
+        strip.center(row: 0, animated: false)
+        strip.collectionView.layoutSubtreeIfNeeded()
         for row in [0, 1] {
             let cell = try #require((strip.collectionView.item(at: IndexPath(item: row, section: 0)) as? FilmstripItem)?
                 .cell)
