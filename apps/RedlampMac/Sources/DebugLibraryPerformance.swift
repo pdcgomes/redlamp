@@ -30,7 +30,8 @@
     /// culling every photo at once (LIB-15): a rating, a flag, a label and the mark, each undone, each
     /// on screen and in every sidecar, the sidecars checked to read as they did after the last Undo, and
     /// Group By in the grid (LIB-41): each key and moments' setting, every group closed and opened, and
-    /// the arrow keys held through the groups. `--library-perf-groups-only` measures Group By alone once the
+    /// the arrow keys held through the groups, and relaunches with every edit rendered (LIB-17): when the grid's
+    /// first screen shows the stored renders. `--library-perf-groups-only` measures Group By alone once the
     /// fixture is open.
     /// The footprint is followed through every phase, then after a memory-pressure trim and a few idle
     /// seconds.
@@ -138,6 +139,9 @@
             var toggled: [Double] = []
             var groupArrows: MainThreadMonitor.Summary?
             var grouped = false
+            /// After each relaunch (LIB-17), the milliseconds until every photo on the grid's first screen whose render
+            /// is stored shows it.
+            var relaunchRenders: [Double] = []
         }
 
         static func scheduleIfRequested(model: EditorModel) {
@@ -150,15 +154,19 @@
             }
         }
 
-        /// What the phases after the launch share: the fixture, the editor and its library, and what they've
-        /// measured and reported so far.
+        /// What the phases after the launch share: the fixture, the editor and its library, what a relaunch opens
+        /// them again with, and what they've measured and reported so far.
         struct Session {
             let fixture: URL
-            let model: EditorModel
-            let library: FolderLibrary
-            let loader: ThumbnailLoader
+            var model: EditorModel
+            var library: FolderLibrary
+            var loader: ThumbnailLoader
             let memory: MemoryPhases
-            let service: LibraryService
+            var service: LibraryService
+            let paths: LibraryPaths
+            let packs: ThumbnailPacks
+            let engine: any EditingEngine
+            let thumbnail: @Sendable (URL, Int) -> CGImage?
             var lines: [String]
             var measured: Measured
         }
@@ -230,7 +238,7 @@
             let service = LibraryService(paths: paths, sidecars: library.sidecars, thumbnail: thumbnail)
             var session = Session(
                 fixture: fixture, model: model, library: library, loader: loader, memory: memory, service: service,
-                lines: lines, measured: measured,
+                paths: paths, packs: packs, engine: engine, thumbnail: thumbnail, lines: lines, measured: measured,
             )
             await launch(&session)
             await open(&session)
@@ -249,6 +257,9 @@
             }
             await measureBrowsing(&session)
             await measureEditing(&session)
+            if part("relaunch") {
+                await relaunch(&session)
+            }
             await settle(&session, stalls: stalls)
             report(session)
         }
@@ -460,6 +471,7 @@
                 "library-main-group-toggles": measured.toggling?.p99 ?? .infinity,
                 "library-group-toggle-on-screen": measured.toggled.max() ?? .infinity,
                 "library-main-group-arrows": measured.groupArrows?.p99 ?? .infinity,
+                "library-relaunch-renders": percentile(measured.relaunchRenders, 0.5),
             ])
             let budgets: [Budget] = budgets(measured, arrows: arrows, blank: blank, browsing: browsing)
                 + groupBudgets(measured)
@@ -471,8 +483,8 @@
             )
         }
 
-        /// Whether the part `name` (grid, typing, arrows, switching, edits, culling or grouping) runs: every part,
-        /// unless `--library-perf-only` names those that do, comma-separated, for profiling one.
+        /// Whether the part `name` (grid, typing, arrows, switching, edits, culling, grouping or relaunch) runs: every
+        /// part, unless `--library-perf-only` names those that do, comma-separated, for profiling one.
         static func part(_ name: String) -> Bool {
             letGoOfHiddenWindows()
             let arguments = LaunchArguments.all

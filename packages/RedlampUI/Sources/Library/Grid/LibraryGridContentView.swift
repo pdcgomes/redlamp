@@ -154,6 +154,18 @@ final class LibraryGridContentView: NSView {
         return shown
     }
 
+    /// The cells on screen of a grid made by `make` that show an edited photo (LIB-17), by the photo's path: whether
+    /// its thumbnail is in, and whether that's the render of its edit rather than its embedded preview.
+    @MainActor public static func edits(in view: NSView) -> [String: (image: Bool, render: Bool)] {
+        guard let grid = view as? LibraryGridView else { return [:] }
+        var shown: [String: (image: Bool, render: Bool)] = [:]
+        for cell in grid.cells.values where !cell.root.isHidden {
+            guard let item = cell.item, item.hasEdits else { continue }
+            shown[item.url.path] = (cell.image != nil, cell.image != nil && cell.shownEdit != nil)
+        }
+        return shown
+    }
+
     /// What a click sets in an expanded cell.
     public enum CellPart: Sendable {
         case star(Int), flag, mark

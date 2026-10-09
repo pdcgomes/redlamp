@@ -249,6 +249,15 @@ public final class EditRenders {
         schedulePump()
     }
 
+    /// Whether `item`'s edit, as its file and sidecar are now, is rendered: true once it is, false once it's found
+    /// it can't be, nil until then. For measurements.
+    @_spi(Harness) public func isRendered(_ item: LibraryItem) -> Bool? {
+        guard let entry = known[item.url], Self.isCurrent(entry, for: item), entry.state != .unrendered else {
+            return nil
+        }
+        return entry.state == .rendered
+    }
+
     /// Stops the render running and lets the engine go: for measurements.
     @_spi(Harness) public func letEngineGo() {
         current?.task.cancel()
