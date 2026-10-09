@@ -80,33 +80,124 @@ struct DriverTests {
         #expect((coverage?["claims"] as? [String: [String]])?["action.export"] == ["menu"])
     }
 
-    @Test func `a key typed on the Mac doesn't reach the app's handlers, and the run's events name it`() throws {
+    /// An event as the person's keyboard or trackpad makes it, from outside this process.
+    private func foreign(_ event: CGEvent) throws -> NSEvent {
+        event.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
+        return try #require(NSEvent(cgEvent: event))
+    }
+
+    private func typed(_ character: String, keyCode: CGKeyCode, command: Bool = false) throws -> CGEvent {
+        let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true))
+        event.keyboardSetUnicodeString(stringLength: 1, unicodeString: Array(character.utf16))
+        if command {
+            event.flags = .maskCommand
+        }
+        return event
+    }
+
+    /// What the run's events say was dropped.
+    private func dropped(in directory: URL) throws -> [[String: Any]] {
+        let url = directory.appending(path: "events-main.jsonl")
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        return try String(contentsOf: url, encoding: .utf8).split(separator: "\n").compactMap {
+            try JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any]
+        }.filter { $0["event"] as? String == "foreign-input" }
+    }
+
+    /// A menu item's action, as AppKit sends it for a key equivalent.
+    private final class Chosen: NSObject {
+        var count = 0
+
+        @objc func choose(_: Any?) {
+            count += 1
+        }
+    }
+
+    /// Its monitors come before the filter and after it, and the menu bar looks for ⌘P.
+    @Test func `a key from outside the app reaches none of its monitors or menus, and the run's events name it`()
+        throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "foreign-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         var handled: [String] = []
-        let shortcuts = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            handled.append(event.charactersIgnoringModifiers ?? "")
-            return event
+        func shortcuts() -> Any? {
+            NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
+                handled.append(event.type == .keyDown ? event.charactersIgnoringModifiers ?? "" : "flags")
+                return event
+            }
         }
-        defer { shortcuts.map(NSEvent.removeMonitor) }
+        let earlier = shortcuts()
+        defer { earlier.map(NSEvent.removeMonitor) }
         ForeignInput.keepOut(recording: Recorder(directory: directory, launch: "main"))
         defer { ForeignInput.letIn() }
+        let later = shortcuts()
+        defer { later.map(NSEvent.removeMonitor) }
+        let chosen = Chosen()
+        let item = NSMenuItem(title: "Pick", action: #selector(Chosen.choose(_:)), keyEquivalent: "p")
+        item.target = chosen
+        let photo = NSMenuItem(title: "Photo", action: nil, keyEquivalent: "")
+        photo.submenu = NSMenu(title: "Photo")
+        photo.submenu?.addItem(item)
+        let bar = NSMenu(title: "Main")
+        bar.addItem(photo)
+        let menus = NSApp.mainMenu
+        NSApp.mainMenu = bar
+        defer { NSApp.mainMenu = menus }
 
-        let sent = try Keyboard.event(.char("u"))
-        let typed = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 35, keyDown: true))
-        typed.keyboardSetUnicodeString(stringLength: 1, unicodeString: Array("p".utf16))
-        typed.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
-        let foreign = try #require(NSEvent(cgEvent: typed))
-        #expect(!ForeignInput.isForeign(sent) && ForeignInput.isForeign(foreign))
-        NSApp.sendEvent(sent)
-        NSApp.sendEvent(foreign)
-        #expect(handled == ["u"])
-        let lines = try String(contentsOf: directory.appending(path: "events-main.jsonl"), encoding: .utf8)
-            .split(separator: "\n")
-        let dropped = try lines.map { try JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
-        #expect(dropped.count == 1 && dropped.first??["event"] as? String == "foreign-input")
-        #expect(dropped.first??["characters"] as? String == "p" && dropped.first??["keyCode"] as? Int == 35)
+        let option = try #require(CGEvent(source: nil))
+        option.type = .flagsChanged
+        option.flags = .maskAlternate
+        let fromTheMac = try [
+            foreign(typed("p", keyCode: 35)), foreign(typed("p", keyCode: 35, command: true)), foreign(option),
+        ]
+        #expect(fromTheMac.allSatisfy(ForeignInput.isForeign))
+        for event in fromTheMac {
+            NSApp.sendEvent(event)
+        }
+        #expect(handled == [])
+        #expect(chosen.count == 0)
+
+        let sent = try [Keyboard.event(.char("u")), Keyboard.event(.char("p", command: true))]
+        #expect(!sent.contains(where: ForeignInput.isForeign))
+        for event in sent {
+            NSApp.sendEvent(event)
+        }
+        #expect(handled == ["u", "u", "p", "p"])
+        #expect(chosen.count == 1)
+        let records = try dropped(in: directory)
+        #expect(records.map { $0["type"] as? String } == ["keyDown", "keyDown", "flagsChanged"])
+        #expect(records.prefix(2).allSatisfy { $0["characters"] as? String == "p" && $0["keyCode"] as? Int == 35 })
+    }
+
+    /// Its monitors come before the filter and after it, as the canvas's do.
+    @Test func `a scroll from outside the app reaches none of its monitors, and the run's events name it`() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "foreign-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var scrolled = 0
+        func canvas() -> Any? {
+            NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                scrolled += 1
+                return event
+            }
+        }
+        let earlier = canvas()
+        defer { earlier.map(NSEvent.removeMonitor) }
+        ForeignInput.keepOut(recording: Recorder(directory: directory, launch: "main"))
+        defer { ForeignInput.letIn() }
+        let later = canvas()
+        defer { later.map(NSEvent.removeMonitor) }
+        func scroll() throws -> CGEvent {
+            try #require(CGEvent(
+                scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: -3, wheel2: 0, wheel3: 0,
+            ))
+        }
+
+        try NSApp.sendEvent(foreign(scroll()))
+        #expect(scrolled == 0)
+        try NSApp.sendEvent(#require(NSEvent(cgEvent: scroll())))
+        #expect(scrolled == 2)
+        #expect(try dropped(in: directory).map { $0["type"] as? String } == ["scrollWheel"])
     }
 
     @Test func `a failure's record is named for its scenario and step`() {
