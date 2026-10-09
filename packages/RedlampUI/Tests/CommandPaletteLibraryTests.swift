@@ -61,8 +61,7 @@ struct CommandPaletteLibraryTests {
     }
 
     private func cleanUp() {
-        opened.service?.closeWithIndex()
-        try? FileManager.default.removeItem(at: base)
+        LibrarySandbox.remove(base, closing: [opened.service])
         UserDefaults().removePersistentDomain(forName: suite)
     }
 

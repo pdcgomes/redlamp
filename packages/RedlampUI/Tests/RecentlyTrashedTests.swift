@@ -85,27 +85,6 @@ struct RecentlyTrashedTests {
         return (EditorModel(engine: StubEngine(), library: library), service)
     }
 
-    /// Runs `body` on the library once it has indexed the photos, then removes what it left in the Trash and
-    /// the test's folder, whether `body` threw or not.
-    private func withLibrary(_ body: (EditorModel, LibraryService) async throws -> Void) async throws {
-        defer { try? FileManager.default.removeItem(at: base) }
-        let (model, service) = try await indexedLibrary()
-        do {
-            try await body(model, service)
-        } catch {
-            await cleanUp(service)
-            throw error
-        }
-        await cleanUp(service)
-    }
-
-    private func cleanUp(_ service: LibraryService) async {
-        for place in await service.trashedPlaces() {
-            try? FileManager.default.removeItem(atPath: place)
-        }
-        service.closeWithIndex()
-    }
-
     /// The index's row IDs of the photos at `paths`, by path.
     private func rows(_ paths: [String], in service: LibraryService) async throws -> [String: Int64] {
         let core = try #require(service.core)
@@ -408,5 +387,33 @@ struct RecentlyTrashedTests {
             let cell = list.folders.view(atColumn: 0, row: index, makeIfNecessary: true) as? SidebarCellView
             #expect(cell?.toolTip == RecentlyTrashedText.help)
         }
+    }
+}
+
+extension RecentlyTrashedTests {
+    /// Runs `body` on the library once it has indexed the photos, then removes what it left in the Trash and
+    /// the test's folder, whether `body` threw or not.
+    private func withLibrary(_ body: (EditorModel, LibraryService) async throws -> Void) async throws {
+        let opened: (model: EditorModel, service: LibraryService)
+        do {
+            opened = try await indexedLibrary()
+        } catch {
+            LibrarySandbox.remove(base, closing: [])
+            throw error
+        }
+        do {
+            try await body(opened.model, opened.service)
+        } catch {
+            await cleanUp(opened.service)
+            throw error
+        }
+        await cleanUp(opened.service)
+    }
+
+    private func cleanUp(_ service: LibraryService) async {
+        for place in await service.trashedPlaces() {
+            try? FileManager.default.removeItem(atPath: place)
+        }
+        LibrarySandbox.remove(base, closing: [service])
     }
 }

@@ -113,9 +113,8 @@ struct LibraryUndoOrderTests {
                 for place in await service.trashedPlaces() {
                     try? FileManager.default.removeItem(atPath: place)
                 }
-                service.closeWithIndex()
             }
-            try? FileManager.default.removeItem(at: base)
+            LibrarySandbox.remove(base, closing: [service])
         }
 
         func eventually(seconds: Double = 15, _ condition: () -> Bool) async throws {

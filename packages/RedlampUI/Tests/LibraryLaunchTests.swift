@@ -35,10 +35,7 @@ struct LibraryLaunchTests {
     }
 
     private func cleanUp() {
-        for service in opened.services {
-            service.closeWithIndex()
-        }
-        try? FileManager.default.removeItem(at: base)
+        LibrarySandbox.remove(base, closing: opened.services)
     }
 
     private func photos(_ names: [String]) throws {

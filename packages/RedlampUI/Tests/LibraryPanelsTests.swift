@@ -71,8 +71,7 @@ struct LibraryPanelsTests {
         }
 
         func close() {
-            service?.closeWithIndex()
-            try? FileManager.default.removeItem(at: base)
+            LibrarySandbox.remove(base, closing: [service])
         }
 
         /// Selects the photos numbered `numbers`, the last one clicked active, and waits for the panels to show

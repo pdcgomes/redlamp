@@ -33,14 +33,11 @@ struct FolderCountsTests {
     }
 
     private func cleanUp() {
-        for service in opened.services {
-            service.closeWithIndex()
-        }
         try? FileManager.default.setAttributes(
             [.posixPermissions: 0o644],
             ofItemAtPath: photo("Year/B/C/locked.JPG").path,
         )
-        try? FileManager.default.removeItem(at: base)
+        LibrarySandbox.remove(base, closing: opened.services)
         UserDefaults().removePersistentDomain(forName: suite)
     }
 

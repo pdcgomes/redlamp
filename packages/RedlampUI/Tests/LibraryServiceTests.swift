@@ -38,10 +38,7 @@ struct LibraryServiceTests {
     }
 
     private func cleanUp() {
-        for service in opened.services {
-            service.closeWithIndex()
-        }
-        try? FileManager.default.removeItem(at: base)
+        LibrarySandbox.remove(base, closing: opened.services)
         UserDefaults().removePersistentDomain(forName: suite)
     }
 

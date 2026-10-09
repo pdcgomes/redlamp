@@ -126,8 +126,7 @@ struct RenameTests {
         }
 
         func cleanUp() {
-            service?.closeWithIndex()
-            try? FileManager.default.removeItem(at: base)
+            LibrarySandbox.remove(base, closing: [service])
         }
 
         /// A small JPEG, or a TIFF for a `.DNG`, taken `second` seconds after noon on 1 March 2024.

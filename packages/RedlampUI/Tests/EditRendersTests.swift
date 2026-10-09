@@ -275,8 +275,7 @@ final class EditRenderFixture {
         for window in windows {
             window.contentView = nil
         }
-        service?.closeWithIndex()
-        try? FileManager.default.removeItem(at: base)
+        LibrarySandbox.remove(base, closing: [service])
     }
 
     /// The colour in the middle of `image`, in sRGB.
