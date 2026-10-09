@@ -36,6 +36,7 @@
             let mainThread = try app.main { _ in mach_thread_self() }
             let profiling = ProcessInfo.processInfo.environment["REDLAMP_MENU_PROFILE"] != nil
             func watched(_ name: String, _ body: () throws -> Void) throws -> String {
+                app.step(name)
                 let profile = profiling ? StackPerformanceScenarios.StackCallProfile(thread: mainThread) : nil
                 defer {
                     for marker in ["Commands", "makeMainMenu"] {
@@ -77,9 +78,17 @@
             guard FileManager.default.fileExists(atPath: fixture.path) else {
                 throw ScenarioSkip("\(fixture.path) isn't on this Mac")
             }
+            // The run's supervisor stops a launch that reports nothing for 300 s: the copy is made, shown and removed
+            // in about 4 minutes on a busy Mac.
+            app.step("copying \(fixture.lastPathComponent)")
             let scratch = try DragBudgetScratch(cloning: fixture)
-            defer { scratch.remove(app) }
+            defer {
+                app.step("removing the copy")
+                scratch.remove(app)
+            }
+            app.step("showing the copy")
             let count = try scratch.show(app)
+            app.step("the copy shown")
             try app.main { model in
                 model.setGroupKey(.ungrouped)
                 model.setCellStyle(.compact)
