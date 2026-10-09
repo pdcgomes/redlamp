@@ -52,7 +52,9 @@ draft: true              # optional: shown by `mise run site`, left out of produ
 Technical articles, longer than posts and often interactive, are `content/articles/<slug>/index.md`. They take the blog's front matter and Markdown rules, images and drafts included, and become `/articles/<slug>`, listed at `/articles` and in the sitemap, each with its own share card.
 
 - A line of its own, `<div data-figure="name"></div>`, places one of the article's figures: a React component in `components/articles/<slug>/`, listed under the article's slug in `components/articles/figures.ts`. Figures that respond to the reader are client components (`"use client"`); the rest render when the site builds.
+- Figures take the site's look from `components/articles/parts.tsx` (the `Figure` frame, legends, chart colours) and `interactive.tsx` (sliders, toggles, and `useWidth`, which lets a chart draw at its real width so its text stays readable on a phone).
 - A figure line that `figures.ts` doesn't list for the article stops the build, naming the article and the figure.
+- `lib/tone.ts` holds the tone curve and colour maths the first article draws with, and `npm test` checks it against the figures in its research note.
 
 ## What's New
 
