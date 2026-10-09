@@ -56,10 +56,14 @@ extension ShortcutAction {
         .unpickedMoments: ["moment", "unpicked", "coverage", "no pick", "missing", "cull", "library"],
         .toggleStack: ["stack", "open", "close", "collapse", "expand", "burst", "raw and jpeg", "pair", "library"],
         .stackPhotos: ["stack", "group into stack", "make stack", "bundle", "burst", "library"],
-        .unstackPhotos: ["stack", "unstack", "split", "take out", "remove from stack", "library"],
+        .unstackPhotos: ["stack", "unstack", "take apart", "dissolve", "ungroup", "library"],
         .moveToStackTop: ["stack", "top", "cover", "pick", "move to top", "library"],
         .openAllStacks: ["stack", "open", "expand", "all", "every photo", "raw and jpeg", "library"],
         .closeAllStacks: ["stack", "close", "collapse", "all", "library"],
+        .removeFromStack: ["stack", "remove", "take out", "leave", "unstack", "library"],
+        .splitStack: ["stack", "split", "divide", "break", "two stacks", "library"],
+        .moveUpInStack: ["stack", "move up", "earlier", "order", "reorder", "left", "library"],
+        .moveDownInStack: ["stack", "move down", "later", "order", "reorder", "right", "library"],
         .previousGroup: ["group", "moment", "previous", "back", "jump"],
         .nextGroup: ["group", "moment", "next", "jump", "skip"],
         .keywordSet1: ["keyword", "tag", "keyword set", "apply", "library"],
@@ -237,6 +241,10 @@ extension ShortcutAction {
         case .moveToStackTop: "arrow.up.square"
         case .openAllStacks: "arrow.up.left.and.arrow.down.right"
         case .closeAllStacks: "arrow.down.right.and.arrow.up.left"
+        case .removeFromStack: "minus.square"
+        case .splitStack: "square.split.2x1"
+        case .moveUpInStack: "arrow.left.square"
+        case .moveDownInStack: "arrow.right.square"
         case .previousGroup: "chevron.left.2"
         case .nextGroup: "chevron.right.2"
         case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,

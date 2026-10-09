@@ -551,4 +551,137 @@ extension LibraryStacksTests {
         #expect(top() == nil && model.gridStacks.list.map { $0.stacksShown == (0, 2) } == true)
         await model.libraryPanels.written()
     }
+
+    // MARK: - Removing, splitting and moving in a stack
+
+    /// The photos, by their IDs here, of the burst or stack made by hand holding `photo`, in its order.
+    private func stack(_ model: EditorModel, holding photo: Int64) -> [Int64]? {
+        model.gridStacks.list?.stacks.stack(containing: photo)?.photos
+    }
+
+    @Test func `Remove from Stack takes the photos selected out of their open stack, which stays open, and Unstack takes it all apart`(
+    ) async throws {
+        defer { cleanUp() }
+        let shown = try await open()
+        let model = shown.model
+        defer { shown.window.contentView = nil }
+        let burst = try ["B01.JPG", "B02.JPG", "B03.JPG"].map { try id(model, $0) }
+        try model.clickInGrid(url(model, "B01.JPG"))
+        #expect(!model.canPerform(.removeFromStack), "a closed stack's photos aren't taken out of it")
+        model.gridStacks.toggle(burst[0])
+        try model.clickInGrid(url(model, "B02.JPG"))
+        #expect(model.canPerform(.removeFromStack) && model.canPerform(.unstackPhotos))
+        #expect(model.perform(.removeFromStack))
+        try await eventually { stack(model, holding: burst[0]) == [burst[0], burst[2]] }
+        #expect(stack(model, holding: burst[0]) == [burst[0], burst[2]] && stack(model, holding: burst[1]) == nil)
+        #expect(model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true, "the burst is still open")
+
+        #expect(model.perform(.undo))
+        try await eventually { stack(model, holding: burst[0]) == burst }
+        #expect(stack(model, holding: burst[0]) == burst, "⌘Z puts it back")
+        try model.clickInGrid(url(model, "B02.JPG"))
+        #expect(model.perform(.unstackPhotos))
+        try await eventually { stack(model, holding: burst[0]) == nil }
+        #expect(burst.allSatisfy { stack(model, holding: $0) == nil }, "every frame stands alone")
+        #expect(model.gridStacks.list.map { $0.stacksShown == (0, 1) } == true, "the pair is still one photo")
+        #expect(model.perform(.undo))
+        try await eventually { stack(model, holding: burst[0]) == burst }
+        await model.libraryPanels.written()
+    }
+
+    @Test func `⇧[ and ⇧] move the active photo in its open stack, in its order, and Split Stack splits it before the photo, each with Undo`(
+    ) async throws {
+        defer { cleanUp() }
+        let shown = try await open()
+        let model = shown.model
+        defer { shown.window.contentView = nil }
+        let burst = try ["B01.JPG", "B02.JPG", "B03.JPG"].map { try id(model, $0) }
+        model.gridStacks.toggle(burst[0])
+        try model.clickInGrid(url(model, "B03.JPG"))
+        #expect(model.canPerform(.moveUpInStack) && model.canPerform(.splitStack))
+        #expect(!model.canPerform(.moveDownInStack), "the last photo goes no lower")
+
+        #expect(model.perform(.moveUpInStack))
+        try await eventually { stack(model, holding: burst[0]) == [burst[0], burst[2], burst[1]] }
+        #expect(model.gridStacks.list?.stacks.stack(containing: burst[0])?.kind == .manual, "made a stack by hand")
+        let moved = try SidecarStore().load(for: url(model, "B02.JPG"))?.metadata?.stack
+        #expect(moved?.position == 2 && moved?.id != nil, "each photo's sidecar keeps its place")
+        #expect(model.perform(.moveUpInStack))
+        try await eventually { stack(model, holding: burst[0]) == [burst[2], burst[0], burst[1]] }
+        #expect(!model.canPerform(.moveUpInStack) && !model.canPerform(.splitStack), "the top goes no higher")
+        #expect(model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true, "the stack stays open")
+        #expect(model.perform(.moveDownInStack))
+        try await eventually { stack(model, holding: burst[0]) == [burst[0], burst[2], burst[1]] }
+
+        #expect(model.perform(.splitStack))
+        try await eventually { stack(model, holding: burst[2]) == [burst[2], burst[1]] }
+        #expect(stack(model, holding: burst[0]) == nil, "the photo above it stands alone")
+        #expect(model.gridStacks.list.map { $0.stacksShown == (1, 1) } == true, "the half below it opens")
+
+        let (first, second, third) = (burst[0], burst[1], burst[2])
+        for expected in [[first, third, second], [third, first, second], [first, third, second], burst] {
+            #expect(model.perform(.undo))
+            try await eventually { stack(model, holding: first) == expected }
+            #expect(stack(model, holding: first) == expected)
+        }
+        #expect(model.gridStacks.list?.stacks.stack(containing: first)?.kind == .burst, "⌘Z makes it a burst again")
+        await model.libraryPanels.written()
+    }
+
+    @Test func `a raw and its JPEG move as one, by a key or dragged onto another photo of their open stack`(
+    ) async throws {
+        defer { cleanUp() }
+        let shown = try await open()
+        let model = shown.model
+        defer { shown.window.contentView = nil }
+        let (pair, first, second) = try (id(model, "P01.JPG"), id(model, "S01.JPG"), id(model, "S02.JPG"))
+        try model.clickInGrid(url(model, "S01.JPG"))
+        try model.clickInGrid(url(model, "S02.JPG"), toggling: true)
+        try model.clickInGrid(url(model, "P01.JPG"), toggling: true)
+        #expect(model.perform(.stackPhotos))
+        try await eventually { stack(model, holding: first) == [pair, first, second] }
+        model.gridStacks.toggle(pair)
+        try model.clickInGrid(url(model, "P01.JPG"))
+        #expect(model.perform(.moveDownInStack))
+        try await eventually { stack(model, holding: first) == [first, pair, second] }
+        let (jpeg, heic) = try (
+            SidecarStore().load(for: url(model, "P01.JPG"))?.metadata?.stack,
+            SidecarStore().load(for: url(model, "P01.HEIC"))?.metadata?.stack,
+        )
+        #expect(jpeg?.position == 1 && heic == jpeg, "the HEIC keeps its JPEG's place")
+
+        #expect(!model.canMovePhotos([second], inStackTo: second))
+        #expect(try !model.canMovePhotos([id(model, "S03.JPG")], inStackTo: first), "a photo of no stack stays")
+        #expect(model.movePhotos([second], inStackTo: first))
+        try await eventually { stack(model, holding: first) == [second, first, pair] }
+        #expect(model.perform(.undo))
+        try await eventually { stack(model, holding: first) == [first, pair, second] }
+        await model.libraryPanels.written()
+    }
+
+    @Test func `the menus' Remove, Split and Move items follow a stack opened and closed with S`() async throws {
+        defer { cleanUp() }
+        let shown = try await open()
+        let model = shown.model
+        defer { shown.window.contentView = nil }
+        let menu = MenuBarState(model: model)
+        let actions: [ShortcutAction] = [.removeFromStack, .splitStack, .moveUpInStack, .moveDownInStack]
+        func enabled() -> [Bool] {
+            actions.map(menu.isEnabled)
+        }
+        try model.clickInGrid(url(model, "B01.JPG"))
+        try await eventually { enabled() == [false, false, false, false] }
+        #expect(enabled() == [false, false, false, false])
+        #expect(model.perform(.toggleStack))
+        try await eventually { enabled() == [true, false, false, true] }
+        #expect(enabled() == [true, false, false, true], "open, the top can go down and leave the stack")
+        let item = try #require(LibraryGridMenu.stacking(for: url(model, "B01.JPG"), model: model).submenu)
+        let shownItems = actions.map { action in
+            item.items.first { $0.accessibilityIdentifier() == "library.menu.\(action.rawValue)" }?.isEnabled
+        }
+        #expect(shownItems == [true, false, false, true], "the grid's and the filmstrip's Stacking say the same")
+        #expect(model.perform(.toggleStack))
+        try await eventually { enabled() == [false, false, false, false] }
+        #expect(enabled() == [false, false, false, false])
+    }
 }

@@ -119,6 +119,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case groupByMomentCamera, tighterMoments, looserMoments, toggleGroup, openAllGroups, closeAllGroups
     case unpickedMoments
     case toggleStack, stackPhotos, unstackPhotos, moveToStackTop, openAllStacks, closeAllStacks
+    case removeFromStack, splitStack, moveUpInStack, moveDownInStack
     case keywordSet1, keywordSet2, keywordSet3, keywordSet4, keywordSet5, keywordSet6, keywordSet7, keywordSet8
     case keywordSet9
     case importKeywords, exportKeywords, editCaptureTime
@@ -184,6 +185,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .groupByOrientation, .groupByMomentCamera, .tighterMoments, .looserMoments, .toggleGroup,
              .openAllGroups, .closeAllGroups, .unpickedMoments,
              .toggleStack, .stackPhotos, .unstackPhotos, .moveToStackTop, .openAllStacks, .closeAllStacks,
+             .removeFromStack, .splitStack, .moveUpInStack, .moveDownInStack,
              .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9, .importKeywords, .exportKeywords, .editCaptureTime, .renamePhotos,
              .moveToFolder, .copyToFolder, .keywordPainter, .moveEditsAndMetadata, .acceptHealthProposals, .keepAnyway,
@@ -281,6 +283,10 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .moveToStackTop: "Move to Top of Stack"
         case .openAllStacks: "Open All Stacks"
         case .closeAllStacks: "Close All Stacks"
+        case .removeFromStack: "Remove from Stack"
+        case .splitStack: "Split Stack"
+        case .moveUpInStack: "Move Up in Stack"
+        case .moveDownInStack: "Move Down in Stack"
         case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9:
             "Keyword Set: Keyword \(keywordSetNumber ?? 0)"
@@ -447,7 +453,11 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .stackPhotos: [.char("g", command: true)]
         case .unstackPhotos: [.char("g", shift: true, command: true)]
         case .moveToStackTop: [.char("s", shift: true)]
-        case .openAllStacks, .closeAllStacks: []
+        case .openAllStacks, .closeAllStacks, .removeFromStack, .splitStack: []
+        // Lightroom Classic's Move Up and Move Down in Stack, in Library, where ⇧[ and ⇧] don't step the rating and
+        // advance as they do in Develop (`isLibraryOnly`).
+        case .moveUpInStack: [.char("[", shift: true)]
+        case .moveDownInStack: [.char("]", shift: true)]
         case .renamePhotos: [KeyCombo(.function(2))]
         case .moveToFolder, .copyToFolder, .moveEditsAndMetadata, .acceptHealthProposals, .keepAnyway, .listAgain: []
         // Lightroom Classic's Enable Painting.

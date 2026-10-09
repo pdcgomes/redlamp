@@ -3,10 +3,12 @@ import RedlampDocument
 import RedlampLibrary
 
 /// Stacks in the Library (LIB-28), with Lightroom Classic's keys: S opens or closes the active photo's stack,
-/// ⌘G stacks the photos selected, ⇧⌘G takes them out of their stacks and ⇧S shows the active photo for its
-/// stack, each also in the Photo menu's Stacking, the grid's context menu and the palette, with Open All Stacks
-/// and Close All Stacks. Stacking and unstacking are batches of the library's with Undo, among the panels'
-/// changes (`LibraryPanels`), shown once the library has them.
+/// ⌘G stacks the photos selected, ⇧⌘G takes apart the stacks holding them, ⇧S shows the active photo for its
+/// stack, and ⇧[ and ⇧] move it up and down its open stack, each also in the Photo menu's Stacking, the grid's
+/// and the filmstrip's context menus and the palette, with Remove from Stack, Split Stack, Open All Stacks and
+/// Close All Stacks; a photo also moves in its open stack when it's dragged onto another of its photos. Each
+/// change is a batch of the library's with Undo, among the panels' changes (`LibraryPanels`), shown once the
+/// library has it, a raw and its JPEG going together.
 ///
 /// A closed stack's cell selects all of its photos: whatever changes the selection, the photos a closed stack
 /// stands for are selected with its cell and only with it, and a photo inside a closed stack that becomes active
@@ -32,12 +34,18 @@ public extension EditorModel {
         )
     }
 
-    /// ⇧⌘G: the photos selected taken out of their stacks, each standing alone, as one change with Undo. A raw and
-    /// its JPEG stay one photo.
+    /// ⇧⌘G: the stacks holding the photos selected taken apart, every photo of them standing alone, as one change
+    /// with Undo, as Lightroom Classic's Unstack does. A raw and its JPEG stay one photo.
     @discardableResult
     func unstackSelectedPhotos() -> Bool {
-        guard canUnstackSelection else { return false }
-        let photos = selectedForStacks
+        guard canUnstackSelection, let stacks = libraryViews.stacks?.list?.stacks else { return false }
+        var groups = Set<Int>()
+        var members: [Int64] = []
+        for id in selectedOwnIDs {
+            guard let group = stacks.stackIndex(containing: id), groups.insert(group).inserted else { continue }
+            members += stacks.allPhotos(of: stacks[group])
+        }
+        let photos = stackPhotos(members)
         return makeStackChange(
             .unstack(photos.ids), title: "Unstack \(LibraryPanels.count(photos.ids.count))", photos: photos,
         )
@@ -254,12 +262,19 @@ public extension EditorModel {
             return action == .openAllStacks || action == .closeAllStacks ? canPerform(action) : false
         }
         let stacks = stacked.stacks
+        let ready = library.service?.isReady == true
         switch action {
         case .stackPhotos: return false
-        case .unstackPhotos: return library.service?.isReady == true && stacks.stack(containing: id) != nil
+        case .unstackPhotos: return ready && stacks.stack(containing: id) != nil
         case .moveToStackTop:
-            guard library.service?.isReady == true, let stack = stacks.stack(containing: id) else { return false }
+            guard ready, let stack = stacks.stack(containing: id) else { return false }
             return (stacks.pair(containing: id)?.top ?? id) != stack.top
+        case .removeFromStack: return ready && openStack(of: id, in: stacked) != nil
+        case .splitStack, .moveUpInStack, .moveDownInStack:
+            guard ready, let open = openStack(of: id, in: stacked),
+                  let place = open.frames.firstIndex(of: stacks.pair(containing: id)?.top ?? id)
+            else { return false }
+            return open.frames.indices.contains(place + (action == .moveDownInStack ? 1 : -1))
         case .toggleStack: return !stacked.shownStacks(of: stacked.cell(for: id) ?? id).isEmpty
         default: return canPerform(action)
         }
@@ -274,6 +289,9 @@ public extension EditorModel {
     /// it again, which the panels' Undo does. Nil for every other action: culling moves on in the grid's order itself
     /// (`cull(_:advance:)`).
     internal func performStackShortcut(_ action: ShortcutAction) -> Bool? {
+        if let made = performStackChange(action) {
+            return made
+        }
         switch action {
         case .toggleStack:
             guard canToggleStack, let id = (opening ?? selection).flatMap(library.photoID(of:)) else { return false }
@@ -284,9 +302,6 @@ public extension EditorModel {
         case .closeAllStacks:
             guard canPerformStackShortcut(action) == true else { return false }
             gridStacks.closeAll()
-        case .stackPhotos: return stackSelectedPhotos()
-        case .unstackPhotos: return unstackSelectedPhotos()
-        case .moveToStackTop: return moveToTopOfStack()
         case .previousPhoto, .nextPhoto:
             guard libraryViews.groups?.list == nil, let stacked = libraryViews.stacks?.list else { return nil }
             return step(by: action == .nextPhoto ? 1 : -1, in: stacked)
@@ -315,12 +330,12 @@ public extension EditorModel {
     /// is read for the menus to follow the stacks as they're found again.
     internal func canPerformStackShortcut(_ action: ShortcutAction) -> Bool? {
         let outline = action.category == .library ? libraryViews.stacks?.outline : nil
+        if let can = canPerformStackChange(action) {
+            return can
+        }
         switch action {
         case .toggleStack: return canToggleStack
         case .openAllStacks, .closeAllStacks: return outline?.hasStacks ?? false
-        case .stackPhotos: return canStackSelection
-        case .unstackPhotos: return canUnstackSelection
-        case .moveToStackTop: return canMoveToTopOfStack
         case .previousPhoto, .nextPhoto:
             guard libraryViews.groups?.list == nil, let stacked = libraryViews.stacks?.list else { return nil }
             return cell(after: action == .nextPhoto ? 1 : -1, in: stacked) != nil
@@ -366,7 +381,7 @@ public extension EditorModel {
 
     /// The IDs here of the photos selected, in the list's order, or the active photo's when none is. The selection is
     /// read once: the menus ask for this after every change they follow, and each read is an observed access.
-    private var selectedOwnIDs: [Int64] {
+    internal var selectedOwnIDs: [Int64] {
         let selected = photoSelection
         guard !selected.isEmpty else { return selection.flatMap(library.photoID(of:)).map { [$0] } ?? [] }
         return Array(selected.ids(in: library.photoList))
@@ -378,10 +393,20 @@ public extension EditorModel {
         stackPhotos(selectedOwnIDs)
     }
 
+    /// Whether the rows of `photos`, by their IDs here, and of the others of their pairs, are read: always, unless
+    /// they're a large source's, when they're read and `then` is called.
+    internal func hasRead(_ photos: [Int64], then: (@MainActor () -> Void)? = nil) -> Bool {
+        let stacks = libraryViews.stacks?.list?.stacks ?? Stacks()
+        let members = photos.flatMap { stacks.pair(containing: $0)?.photos ?? [$0] }
+        guard !library.hasRead(members) else { return true }
+        library.whenRead(members) { then?() }
+        return false
+    }
+
     /// `photos`, by their IDs here, with the others of their pairs, as their IDs in the index and the URLs of those
     /// whose rows are read: a large source's others are known by their IDs alone, their rows left unread, and the
     /// change finds them among the photos being saved by those (`LibraryPanels.make`).
-    private func stackPhotos(_ photos: [Int64]) -> (urls: [URL], ids: [Int64]) {
+    internal func stackPhotos(_ photos: [Int64]) -> (urls: [URL], ids: [Int64]) {
         let stacks = libraryViews.stacks?.list?.stacks ?? Stacks()
         let stacking = gridStacks
         var seen = Set<Int64>()
@@ -398,8 +423,11 @@ public extension EditorModel {
         return found
     }
 
-    /// Makes `change` as one of the panels' changes with Undo, then shows the stacks as the library has them.
-    private func makeStackChange(_ change: StackChange, title: String, photos: (urls: [URL], ids: [Int64])) -> Bool {
+    /// Makes `change` as one of the panels' changes with Undo, then shows the stacks as the library has them, those
+    /// holding `opening` (by their IDs here) open.
+    internal func makeStackChange(
+        _ change: StackChange, title: String, photos: (urls: [URL], ids: [Int64]), opening: [Int64] = [],
+    ) -> Bool {
         guard !photos.ids.isEmpty, libraryPanels.make(
             [.stacks(change)],
             title: title,
@@ -407,16 +435,16 @@ public extension EditorModel {
             photos: photos,
         )
         else { return false }
-        restackAfterPanels()
+        restackAfterPanels(opening: opening)
         return true
     }
 
-    /// Shows the stacks again once the panels' changes asked for are made.
-    private func restackAfterPanels() {
+    /// Shows the stacks again once the panels' changes asked for are made, those holding `opening` open.
+    private func restackAfterPanels(opening: [Int64] = []) {
         let (panels, stacks) = (libraryPanels, gridStacks)
         Task {
             await panels.written()
-            stacks.restack(forgetting: true)
+            stacks.restack(forgetting: true, opening: opening)
         }
     }
 }

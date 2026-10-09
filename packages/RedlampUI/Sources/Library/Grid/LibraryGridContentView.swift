@@ -23,7 +23,7 @@ final class LibraryGridContentView: NSView {
         setAccessibilityRole(.grid)
         setAccessibilityLabel("Grid")
         setAccessibilityIdentifier("library.grid")
-        registerForDraggedTypes([LibraryDrags.keyword])
+        registerForDraggedTypes([LibraryDrags.keyword, LibraryDrags.photos])
     }
 
     @available(*, unavailable)
@@ -81,14 +81,14 @@ final class LibraryGridContentView: NSView {
         grid?.accessibleCells()
     }
 
-    // MARK: - A keyword dropped (`LibraryGridView+Drag`)
+    // MARK: - A keyword dropped (`LibraryGridView+Drag`), or photos moved in their stack (`LibraryGridView+StackDrop`)
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        grid?.keywordDragged(sender) ?? []
+        grid?.dropOperation(sender) ?? []
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        grid?.keywordDragged(sender) ?? []
+        grid?.dropOperation(sender) ?? []
     }
 
     override func draggingExited(_: (any NSDraggingInfo)?) {
@@ -96,7 +96,7 @@ final class LibraryGridContentView: NSView {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        grid?.keywordDropped(sender) ?? false
+        grid?.dropped(sender) ?? false
     }
 
     override func concludeDragOperation(_: (any NSDraggingInfo)?) {

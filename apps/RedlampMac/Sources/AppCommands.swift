@@ -148,7 +148,12 @@ struct AppCommands: Commands {
         Menu("Stacking") {
             item(.stackPhotos)
             item(.unstackPhotos)
+            item(.removeFromStack)
+            item(.splitStack)
+            Divider()
             mouseItem(.moveToStackTop)
+            mouseItem(.moveUpInStack)
+            mouseItem(.moveDownInStack)
             Divider()
             mouseItem(.toggleStack)
             item(.openAllStacks)

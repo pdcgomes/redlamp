@@ -52,6 +52,9 @@ import RedlampLibrary
     /// its stacks are first found.
     @ObservationIgnored @_spi(Harness) public private(set) var list: StackedList?
     @_spi(Harness) public private(set) var outline = Outline()
+    /// Counts the stacks opened and closed, for what follows which are open (Remove from Stack, Split Stack, moving in
+    /// a stack); the outline doesn't change as they do.
+    @_spi(Harness) public private(set) var toggles = 0
     /// Whether the stacks a list gains come open: after Open All Stacks, until Close All Stacks.
     @ObservationIgnored private(set) var opensNew = false
     /// The source shown and its stacks as its view kept them, until they've been found and opened so.
@@ -70,6 +73,9 @@ import RedlampLibrary
     @ObservationIgnored private var pending = false
     /// What the next stacking forgets first: the stacks found before, and their photos' names.
     @ObservationIgnored private var forgetting = (stacks: false, names: false)
+    /// Photos, by their IDs here, whose stacks the next stacking opens: a stack's change left them in an open stack
+    /// that the stacks open before wouldn't open again, as the half of one split below the photo split at.
+    @ObservationIgnored private var opening = Set<Int64>()
     /// The stacking that follows badges' changes once they're quiet, for a stack changed in a sidecar by another
     /// Mac or app.
     @ObservationIgnored private var quiet: Task<Void, Never>?
@@ -117,15 +123,17 @@ import RedlampLibrary
     // MARK: - Stacking
 
     /// Finds the source's stacks again, off the main thread, and shows them; `forgetting` the stacks found
-    /// before, and their photos' names with `names`. Without the library, or for a source not shown from it,
-    /// there are none.
-    func restack(forgetting: Bool = false, names: Bool = false) {
+    /// before, and their photos' names with `names`, and opening those holding `opening`. Without the library,
+    /// or for a source not shown from it, there are none.
+    func restack(forgetting: Bool = false, names: Bool = false, opening: [Int64] = []) {
         guard let model else { return }
         self.forgetting.stacks = self.forgetting.stacks || forgetting
         self.forgetting.names = self.forgetting.names || forgetting && names
+        self.opening.formUnion(opening)
         let library = model.library
         guard library.isShownFromLibrary, let core = library.service?.core else {
             pending = false
+            self.opening = []
             if list != nil {
                 show(nil, changed: true)
             }
@@ -139,10 +147,11 @@ import RedlampLibrary
         pending = false
         let request = Request(
             items: library.showsIndexIDs ? nil : library.items.allRows, ids: library.photoIDs, list: library.photoList,
-            previous: list, opensNew: opensNew, finder: finder, photoIDs: model.libraryPanels.photoIDs,
-            forgetting: self.forgetting,
+            previous: list, opensNew: opensNew, opening: self.opening, finder: finder,
+            photoIDs: model.libraryPanels.photoIDs, forgetting: self.forgetting,
         )
         self.forgetting = (false, false)
+        self.opening = []
         // Detached, so the stacking starts at once rather than once the main thread has drawn what asked for it.
         Task.detached(priority: .userInitiated) { [weak self] in
             let started = ContinuousClock.now
@@ -158,6 +167,7 @@ import RedlampLibrary
         var list: PhotoList
         var previous: StackedList?
         var opensNew: Bool
+        var opening: Set<Int64>
         var finder: LibraryStackFinder
         var photoIDs: PanelPhotoIDs
         var forgetting: (stacks: Bool, names: Bool)
@@ -211,6 +221,11 @@ import RedlampLibrary
         }
         if request.opensNew, stacked.stacksShown.closed > 0 {
             stacked.openAll()
+            changed = true
+        }
+        for photo in request.opening {
+            guard let outer = stacked.shownStacks(of: photo).first, outer.kind != .pair, !outer.isOpen else { continue }
+            _ = stacked.open(outer.first)
             changed = true
         }
         let shown = stacked.stacksShown
@@ -305,6 +320,8 @@ import RedlampLibrary
         var next = outline
         if change == .restacked {
             next.stackings += 1
+        } else {
+            toggles += 1
         }
         let shown = list?.stacksShown ?? (open: 0, closed: 0)
         next.hasStacks = shown.open + shown.closed > 0

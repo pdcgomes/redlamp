@@ -64,6 +64,15 @@ struct ShortcutRegistryTests {
         #expect(ShortcutAction.resolve(.char("z", shift: true))?.action == .depthRangeMask)
     }
 
+    @Test func `⇧[ and ⇧] move a photo in its stack in Library, as in Lightroom Classic, and step the rating in Develop`() {
+        #expect(ShortcutAction.resolve(.char("[", shift: true), in: .library)?.action == .moveUpInStack)
+        #expect(ShortcutAction.resolve(.char("]", shift: true), in: .library)?.action == .moveDownInStack)
+        let lower = ShortcutAction.resolve(.char("[", shift: true), in: .develop)
+        #expect(lower?.action == .decreaseRating && lower?.shifted == true, "a brush's feather, or a rating and on")
+        #expect(ShortcutAction.resolve(.char("]", shift: true), in: .develop)?.action == .increaseRating)
+        #expect(ShortcutAction.resolve(.char("["), in: .library)?.action == .decreaseRating)
+    }
+
     @Test func `shift with a rating key advances`() {
         let resolved = ShortcutAction.resolve(.char("3", shift: true))
         #expect(resolved?.action == .rating3)

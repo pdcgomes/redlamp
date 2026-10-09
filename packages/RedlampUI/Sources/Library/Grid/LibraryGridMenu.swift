@@ -114,7 +114,8 @@ enum LibraryGridMenu {
         let stacking = NSMenu(title: "Stacking")
         stacking.autoenablesItems = false
         let actions: [ShortcutAction?] = [
-            .stackPhotos, .unstackPhotos, .moveToStackTop, nil, .toggleStack, .openAllStacks, .closeAllStacks,
+            .stackPhotos, .unstackPhotos, .removeFromStack, .splitStack, nil, .moveToStackTop, .moveUpInStack,
+            .moveDownInStack, nil, .toggleStack, .openAllStacks, .closeAllStacks,
         ]
         for action in actions {
             guard let action else {
