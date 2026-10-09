@@ -141,7 +141,7 @@
     }
 
     enum GroupScenarios {
-        static let all: [Scenario] = [groupBy, openAndClose, moving, setting, unpicked]
+        static let all: [Scenario] = [groupBy, openAndClose, moving, setting, unpicked, cullingOrder]
 
         /// The identifiers of the grid's elements whose middle is on show, not under a bar or kept just off screen.
         @MainActor static func onScreen() -> [String] {
@@ -422,6 +422,78 @@
             try app.wait("every moment again") { !$0.gridGroups.showsUnpicked }
             try app.main { $0.setGroupKey(.ungrouped) }
             try app.backToDevelop()
+        }
+
+        static let cullingOrder = Scenario(
+            "library.groups-culling-order",
+            "Grouped, ⇧ with a rating and Auto Advance move on in the grid's order, past a closed group; the "
+                + "filmstrip leaves the closed group out, and Develop's ← steps back over it",
+            claims: [.action(.autoAdvance), .feature("library.grid"), .feature("library.filmstrip")],
+        ) { app in
+            try app.withCulling { _ in
+                try app.main { $0.gridStacks.openAll() }
+                try app.showGroups(by: .camera)
+                // Each group's photos with a cell of their own on show: a stack's others aren't.
+                let groups = try app.main { model -> [[String]] in
+                    guard let list = model.gridGroups.list else { return [] }
+                    let shown = Set(GroupScenarios.onScreen())
+                    return list.groups.indices.map { group in
+                        list.groups.photos(ofGroup: group).compactMap { model.library.url(ofPhoto: $0) }
+                            .map(\.lastPathComponent).filter { shown.contains("grid.\($0)") }
+                    }
+                }
+                // Three groups in a row with cells: the middle one is closed.
+                guard let first = groups.indices.dropLast(2).first(where: { start in
+                    (start ..< start + 3).allSatisfy { !groups[$0].isEmpty }
+                }), let last = groups[first].last, let closed = groups[first + 1].first,
+                let next = groups[first + 2].first
+                else { throw ScenarioFailure("Grouped by camera, groups of \(groups.map(\.count)) photos") }
+                func selectLast() throws {
+                    try app.clickStill("grid.\(last)")
+                    try app.wait("\(last) selected") { $0.selection?.lastPathComponent == last }
+                }
+
+                try selectLast()
+                try app.clickStill("grid.group.\(first + 1)")
+                try app.wait("a click to close \(closed)'s group") { model in
+                    model.gridGroups.list.map { !$0.isOpen(first + 1) } == true
+                }
+                try app.press(.rating1, shift: true)
+                try app.wait("⇧1 to move past the closed group to \(next)") { $0.selection?.lastPathComponent == next }
+                app.covered(.feature("library.grid"), via: .key)
+
+                try selectLast()
+                try app.choose(.autoAdvance)
+                try app.wait("Auto Advance on") { $0.autoAdvance }
+                try app.press(.flagPick)
+                try app.wait("Auto Advance past the closed group to \(next)") { model in
+                    model.selection?.lastPathComponent == next
+                }
+                app.covered(.action(.autoAdvance), via: .menu)
+
+                let shown = try [last, next, closed].map { try app.exists(.filmstrip($0)) }
+                try app.expect(
+                    shown == [true, true, false],
+                    "The filmstrip shows \(last), \(next) and the closed group's \(closed): \(shown)",
+                )
+                let (before, after) = try (app.frame(of: .filmstrip(last)), app.frame(of: .filmstrip(next)))
+                try app.expect(
+                    before.maxX <= after.minX, "The filmstrip shows \(last) at \(before), \(next) at \(after)",
+                )
+                app.covered(.feature("library.filmstrip"), via: .model)
+
+                try app.press(.developModule)
+                try app.settle()
+                try app.press(.previousPhoto)
+                try app.wait("Develop's ← back over the closed group to \(last)") { model in
+                    model.selection?.lastPathComponent == last
+                }
+                try app.settle()
+                try app.main { model in
+                    model.openAllGroups()
+                    model.setGroupKey(.ungrouped)
+                }
+            }
         }
     }
 
