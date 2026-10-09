@@ -147,9 +147,9 @@ export const features: Feature[] = [
   {
     id: "color",
     eyebrow: "Colour",
-    title: "Serious colour science, scene-referred from the start.",
+    title: "Serious colour science, on the light the camera recorded.",
     body: [
-      "The pipeline is linear and scene-referred, with a proper camera white-balance model. The Color Mixer works in OKLCh, so hues move the way your eye expects, and some looks are measured against cameras' own renderings.",
+      "White balance, exposure and tone work on linear, scene-referred light, with a proper camera white-balance model, before a tone curve renders it for the screen. The Color Mixer works in OKLCh, so hues move the way your eye expects, and some looks are measured against cameras' own renderings.",
     ],
     points: [
       "Temperature and Tint with Robertson's method and the camera's matrix",
@@ -300,7 +300,7 @@ export const principles = [
   },
   {
     title: "Serious colour",
-    body: "Scene-referred and linear, with camera profiles, LUTs and looks fitted by measurement.",
+    body: "Linear and scene-referred up to the tone curve, with camera profiles, LUTs and looks fitted by measurement.",
   },
   {
     title: "Computational photography",
