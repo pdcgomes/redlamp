@@ -588,12 +588,14 @@ static inline float3 wideGlow(texture2d<float, access::sample> map, float2 uv, f
 // MARK: - Develop
 
 // Process 3: a bitmap is already rendered, so it stands in for the tone curve's output: undo the
-// curve and the default edit shows the file as it is (as Lightroom does).
+// curve and the default edit shows the file as it is (as Lightroom does). Redlamp Reproduction,
+// which has no curve to stand in for, undoes it only as far as its Amount falls short of 100.
 static inline float3 undoneToneCurve(float3 camera, constant DevelopParams &p) {
     float3 shown = clamp(mul3(p.camToWork0, p.camToWork1, p.camToWork2, camera), 0.0f, 1.0f);
     // Undoing the curve saturates bright colours beyond the camera's (sRGB) primaries, so a
     // channel may go negative here; working space takes it back.
-    return mul3(p.workToCam0, p.workToCam1, p.workToCam2, inverseToneCurve(shown));
+    float3 undone = mul3(p.workToCam0, p.workToCam1, p.workToCam2, inverseToneCurve(shown));
+    return p.lookTable.w > 0.0f ? mix(undone, camera, p.lookTable.w) : undone;
 }
 
 // Calibration's Shadows Tint: green or magenta in the shadows, fading out by middle grey, at
@@ -851,7 +853,7 @@ kernel void rl_develop(
             }
         }
     }
-    if (p.render.x > 0.5f) {
+    if (p.render.x > 0.5f && p.lookTable.w < 1.0f) {
         camera = undoneToneCurve(camera, p);
         for (int k = 0; k < splitCount; k++) {
             splitInside[k] = undoneToneCurve(splitInside[k], p);
@@ -947,6 +949,10 @@ kernel void rl_develop(
         scene = max(scene + splitDelta * whitePoint, 0.0f);
     }
     float3 display = toneCurve(scene / whitePoint);
+    // Redlamp Reproduction leaves the curve out, so each tone keeps its scene value up to white.
+    if (p.lookTable.w > 0.0f) {
+        display = p.lookTable.w < 1.0f ? mix(display, scene / whitePoint, p.lookTable.w) : scene / whitePoint;
+    }
 
     // A scene-referred Base Look (a film model) takes the place of the tone curve.
     if (p.lookTable.x > 0.0f && p.lookTable.z > 0.5f) {

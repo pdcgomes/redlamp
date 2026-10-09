@@ -33,8 +33,8 @@ options:
   --coverage               write the last mask's coverage as the renderer draws it (the B&W overlay),
                            at the size asked for, instead of the photo; use with --16bit
   --process <n>            render as process version n, as an edit made then would be
-  --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome, or embedded (the
-                           camera profile's look a DNG carries); --profile works too
+  --base-look <name>       color, neutral, vivid, landscape, portrait, monochrome, reproduction, or
+                           embedded (the camera profile's look a DNG carries); --profile works too
   --wb <mode>              asShot, auto, daylight, cloudy, shade, tungsten, fluorescent, flash
   --upright <mode>         auto, level, vertical or full, from the photo's own edges
   --heal <x>,<y>,<radius>  heal a spot (x, y 0...1 across the photo as shown, radius a fraction

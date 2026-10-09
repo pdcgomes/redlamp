@@ -34,6 +34,17 @@ struct RecipeCatalogTests {
         #expect(zip(sources, read).allSatisfy { $0.reference == $1.reference && $0.parameters == $1.parameters })
     }
 
+    @Test func `Redlamp Reproduction has a section of its own, after the others`() throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let catalog = try catalog(StubEngine())
+        let sections = BaseLookGroups(catalog.currentBaseLooks).sections
+        #expect(sections.last?.name == "Reproduction")
+        #expect(sections.last?.looks.map(\.id) == [BuiltInBaseLook.reproduction.rawValue])
+        let redlamp = try #require(sections.first { $0.name == "Redlamp" })
+        #expect(Set(redlamp.looks.map(\.id)) ==
+            Set(BuiltInBaseLook.allCases.filter { $0 != .reproduction }.map(\.rawValue)))
+    }
+
     @Test func `toggling a favourite registers nothing`() throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let engine = StubEngine()

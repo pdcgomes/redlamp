@@ -39,6 +39,11 @@ public struct BaseLookReference: Sendable, Hashable {
         id.hasPrefix(Self.embeddedIDPrefix)
     }
 
+    /// Whether it's Redlamp Reproduction, which has no tone curve.
+    public var isReproduction: Bool {
+        BuiltInBaseLook(reference: self) == .reproduction
+    }
+
     /// Whether `other` names the same look and version, whatever its strength.
     public func isSameLook(as other: BaseLookReference) -> Bool {
         id == other.id && version == other.version && contentHash == other.contentHash
@@ -80,6 +85,7 @@ public enum BuiltInBaseLook: String, CaseIterable, Sendable {
     case landscape = "redlamp/base/landscape"
     case portrait = "redlamp/base/portrait"
     case monochrome = "redlamp/base/monochrome"
+    case reproduction = "redlamp/base/reproduction"
 
     /// The id sidecars used before looks were namespaced and versioned (`redlamp.color`).
     public init?(legacyID: String) {
@@ -101,6 +107,7 @@ public enum BuiltInBaseLook: String, CaseIterable, Sendable {
         case .landscape: "Redlamp Landscape"
         case .portrait: "Redlamp Portrait"
         case .monochrome: "Redlamp Monochrome"
+        case .reproduction: "Redlamp Reproduction"
         }
     }
 
@@ -112,6 +119,7 @@ public enum BuiltInBaseLook: String, CaseIterable, Sendable {
         case .landscape: "Richer greens and blues with a little extra contrast."
         case .portrait: "Softer contrast and gentle, even skin tones."
         case .monochrome: "A balanced black-and-white conversion."
+        case .reproduction: "No tone curve: every tone renders as measured, for copying artwork from a target. Anything brighter than white turns white."
         }
     }
 
@@ -137,6 +145,7 @@ public enum BuiltInBaseLook: String, CaseIterable, Sendable {
         case .landscape: BaseLookParameters(contrast: 1.08, saturation: 1.15, warmth: -0.02, greenBoost: 0.12)
         case .portrait: BaseLookParameters(contrast: 0.9, saturation: 0.94, warmth: 0.03, skinSoftening: 0.25)
         case .monochrome: BaseLookParameters(contrast: 1.05, saturation: 0, warmth: 0, isMonochrome: true)
+        case .reproduction: .identity
         }
     }
 

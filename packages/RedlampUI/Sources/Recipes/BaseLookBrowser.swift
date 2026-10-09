@@ -8,7 +8,8 @@ struct BaseLookGroups {
     var sections: [(name: String, looks: [BaseLookPackage])]
 
     init(_ looks: [BaseLookPackage]) {
-        let builtIn = looks.filter { BuiltInBaseLook(rawValue: $0.id) != nil }
+        let reproduction = looks.filter { $0.id == BuiltInBaseLook.reproduction.rawValue }
+        let builtIn = looks.filter { BuiltInBaseLook(rawValue: $0.id).map { $0 != .reproduction } ?? false }
         let catalogue = FilmLookCatalog.looks.map(\.baseLookID)
         let stocks = looks.filter { catalogue.contains($0.id) }
             .sorted { (catalogue.firstIndex(of: $0.id) ?? 0) < (catalogue.firstIndex(of: $1.id) ?? 0) }
@@ -17,8 +18,10 @@ struct BaseLookGroups {
                 && !catalogue.contains($0.id)
         }
         let other = looks.filter { !$0.id.hasPrefix(RecipeNamespace.bundled + "/") }
-        sections = [("Redlamp", builtIn), ("Film Stocks", stocks), ("Film Styles", film), ("Installed", other)]
-            .filter { !$0.1.isEmpty }
+        sections = [
+            ("Redlamp", builtIn), ("Film Stocks", stocks), ("Film Styles", film), ("Installed", other),
+            ("Reproduction", reproduction),
+        ].filter { !$0.1.isEmpty }
     }
 
     /// The catalogue's current looks, sorted once for each change to it rather than for each

@@ -101,6 +101,9 @@ enum DevelopParameters {
                 baseLook.tableSpace == .sceneLog ? 1 : 0, 0,
             )
         }
+        if recipe.baseLook.isReproduction {
+            p.lookTable.w = Float(min(recipe.baseLook.amount / 100, 1))
+        }
         p.recipe = SIMD4(
             Float(recipe[.colorChrome] / 100),
             Float(recipe[.colorChromeBlue] / 100),

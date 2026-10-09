@@ -57,8 +57,8 @@ struct TreatmentPicker: View {
     }
 }
 
-/// The Base Look popup (Lightroom's Profile): built-in looks, the film-style looks, and
-/// installed ones, plus the browser.
+/// The Base Look popup (Lightroom's Profile): built-in looks, the film-style looks, installed
+/// ones and Redlamp Reproduction, plus the browser.
 struct BaseLookMenu: View {
     @Environment(EditorModel.self) private var model
     @Environment(\.openWindow) private var openWindow

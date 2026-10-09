@@ -42,7 +42,8 @@ struct DevelopParams {
     float4 masks;             // x layer count, y overlay layer index (-1 none), z component count, w overlay color
     float4 region;            // rendered part of the output frame: xy origin, zw size (normalized)
     float4 denoised;          // area covered by the denoised texture: xy origin, zw size (normalized, source); z 0 = none
-    float4 lookTable;         // x Base Look table amount (0 = none, 1 = 100%), y table size, z 1 = scene-referred
+    float4 lookTable;         // x Base Look table amount (0 = none, 1 = 100%), y table size, z 1 = scene-referred,
+                              // w how far the tone curve is left out (Redlamp Reproduction's Amount, 0...1)
     float4 recipe;            // x color chrome, y chrome FX blue (0...1), z dynamic-range highlight compression
     float4 haze;              // xyz airlight (pyramid camera RGB), w Dehaze (slider / 100); needs the haze map
     float4 glow;              // x halation amount, y halation radius, z bloom amount, w bloom radius (radii as fractions of the long side)
