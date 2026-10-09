@@ -238,7 +238,7 @@ struct LibraryPanelsTests {
         #expect(!folder.model.canPerform(.keywordSet1), "Library's keys")
     }
 
-    @Test func `Undo and Redo go back through culling's changes and the panels' in the order they were made`(
+    @Test func `undoing and redoing go back through culling's changes and the panels' in the order they were made`(
     ) async throws {
         let folder = Folder()
         defer { folder.close() }
@@ -308,7 +308,10 @@ struct LibraryPanelsTests {
         try await folder.eventually { folder.model.items.count == 4 }
         #expect(Set(folder.model.items.map(\.url)) == Set([0, 1, 2, 3].map { folder.photos[$0] }))
     }
+}
 
+@MainActor
+extension LibraryPanelsTests {
     @Test func `a keyword is edited, merged into another and deleted from the list, with Undo`() async throws {
         let folder = Folder()
         defer { folder.close() }
@@ -348,7 +351,7 @@ struct LibraryPanelsTests {
         #expect(panels.keywordList?[Self.path("Animals/Birds")]?.count == 0, "kept in the list with no photos")
     }
 
-    @Test func `Lightroom's keyword-list file is imported with Undo, and exported`() async throws {
+    @Test func `a keyword-list file from Lightroom is imported with Undo, and exported`() async throws {
         let folder = Folder()
         defer { folder.close() }
         try await folder.open(keywords: [0: ["Places/Portugal/Lisbon"]])
@@ -541,7 +544,7 @@ struct LibraryPanelsTests {
         #expect(folder.metadata(0) == nil && folder.metadata(1) == nil, "the zones their files record")
     }
 
-    @Test func `Undo of a capture-time change on Develop's open photo leaves its sidecar's metadata as it was`(
+    @Test func `undoing a capture-time change on Develop's open photo leaves its sidecar's metadata as it was`(
     ) async throws {
         let folder = Folder()
         defer { folder.close() }

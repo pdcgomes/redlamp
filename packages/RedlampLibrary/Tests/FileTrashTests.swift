@@ -104,7 +104,7 @@ struct FileTrashTests {
         #expect(try await operations.run(nothing).notInIndex == [gone])
     }
 
-    @Test func `Undo puts back what's still in the Trash and says what isn't`() async throws {
+    @Test func `undoing puts back what's still in the Trash and says what isn't`() async throws {
         let (sandbox, _, trash) = try await Self.sandbox()
         defer { sandbox.remove() }
         let ids = try await sandbox.rows()

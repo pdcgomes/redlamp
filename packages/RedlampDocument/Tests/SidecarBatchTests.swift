@@ -222,7 +222,9 @@ struct SidecarBatchTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: store.editURL(for: locked).path)
         #expect(store.load(for: locked)?.metadata?.keywords == nil, "the edit that couldn't be opened is as it was")
     }
+}
 
+extension SidecarBatchTests {
     @Test func `a sidecar that can't be read fails its photo's change, and is never taken for none`() throws {
         let shoot = try Shoot()
         defer { shoot.remove() }

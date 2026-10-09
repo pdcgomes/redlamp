@@ -126,21 +126,29 @@ struct SidecarBatchBenchTests {
         let count = Self.photos
         let store = SidecarStore()
         BenchFixture.report("\(count) photos, load average \(BenchFixture.loadAverage())")
-        let variants: [(String, width: Int, group: Int, edits: EditWriter)] = [
-            ("A batch one at a time: one coordination each, the edit read once", 1, 1, .foundation),
-            ("Coordinated 64 at a time", 1, 64, .foundation),
-            ("Coordinated 64 at a time, 8 groups in flight", 8, 64, .foundation),
-            ("The same, each edit renamed into place in its package", 8, 64, EditWriter(
+        struct Variant {
+            let label: String, width: Int, group: Int, edits: EditWriter
+
+            init(_ label: String, _ width: Int, _ group: Int, _ edits: EditWriter) {
+                (self.label, self.width, self.group, self.edits) = (label, width, group, edits)
+            }
+        }
+        let variants: [Variant] = [
+            Variant("A batch one at a time: one coordination each, the edit read once", 1, 1, .foundation),
+            Variant("Coordinated 64 at a time", 1, 64, .foundation),
+            Variant("Coordinated 64 at a time, 8 groups in flight", 8, 64, .foundation),
+            Variant("The same, each edit renamed into place in its package", 8, 64, EditWriter(
                 replace: SidecarStore.writeByRenaming, create: SidecarStore.writeByRenaming,
             )),
-            ("The same, a new package's edit written as it is: the batch as it ships", 8, 64, .renaming),
-            ("The same, renamed in from beside the package", 8, 64, BenchFixture.beside),
-            ("The same, 4 groups in flight", 4, 64, .renaming),
-            ("The same, 16 groups in flight", 16, 64, .renaming),
-            ("The same, 8 groups of 16 in flight", 8, 16, .renaming),
-            ("The same, 8 groups of 256 in flight", 8, 256, .renaming),
+            Variant("The same, a new package's edit written as it is: the batch as it ships", 8, 64, .renaming),
+            Variant("The same, renamed in from beside the package", 8, 64, BenchFixture.beside),
+            Variant("The same, 4 groups in flight", 4, 64, .renaming),
+            Variant("The same, 16 groups in flight", 16, 64, .renaming),
+            Variant("The same, 8 groups of 16 in flight", 8, 16, .renaming),
+            Variant("The same, 8 groups of 256 in flight", 8, 256, .renaming),
         ]
-        for (label, width, group, edits) in variants {
+        for variant in variants {
+            let (label, width, group, edits) = (variant.label, variant.width, variant.group, variant.edits)
             let fixture = try BenchFixture(count)
             let failures = BenchFixture.Counter()
             BenchFixture.measure(label, count) {

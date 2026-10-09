@@ -29,7 +29,7 @@ struct NamingPresetTests {
         [digits(date.year, 4), digits(date.month), digits(date.day)].joined(separator: separator)
     }
 
-    @Test func `Lightroom's templates name the fixture's photos as Lightroom does`() throws {
+    @Test func `templates from Lightroom name the fixture's photos as Lightroom does`() throws {
         let expectations: [(String, (Int, FixturePhoto) -> String)] = [
             ("lightroom-custom-name-sequence", { index, _ in "Wedding-\(index + 1)" }),
             ("lightroom-custom-name-x-of-y", { index, _ in "Wedding (\(index + 1) of 12)" }),
@@ -59,7 +59,7 @@ struct NamingPresetTests {
         #expect(try Self.names("lightroom-custom-name").results.map(\.name) == custom)
     }
 
-    @Test func `Redlamp's own presets show the time to the millisecond, carry a counter on and number each folder`(
+    @Test func `the built-in presets show the time to the millisecond, carry a counter on and number each folder`(
     ) throws {
         for (photo, result) in try zip(Self.photos, Self.names("redlamp-capture-time").results) {
             let time = [photo.captured.hour, photo.captured.minute, photo.captured.second].map { digits($0) }.joined()

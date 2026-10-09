@@ -199,7 +199,7 @@ struct XMPIndexTests {
         #expect(try await sandbox.shown("IMG_0001.NEF") == Shown(rating: 5, label: .red))
     }
 
-    @Test func `Bridge's and Review Status's labels, Lightroom's label colours and picks, and flat keywords are indexed`(
+    @Test func `the labels of Bridge and Review Status, Lightroom's label colours and picks, and flat keywords are indexed`(
     ) async throws {
         let sandbox = try await XMPSandbox.make()
         defer { sandbox.remove() }
@@ -271,7 +271,7 @@ struct XMPIndexTests {
         #expect(try await sandbox.row("IMG_0004.ARW").xmpModified == nil)
     }
 
-    @Test func `Music|AC/DC in Lightroom's keyword paths is two levels, the second AC/DC`() async throws {
+    @Test func `in Lightroom's keyword paths, Music|AC/DC is two levels, the second AC/DC`() async throws {
         let sandbox = try await XMPSandbox.make()
         defer { sandbox.remove() }
         try sandbox.photo("IMG_0006.ARW")

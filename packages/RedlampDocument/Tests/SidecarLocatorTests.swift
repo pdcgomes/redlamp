@@ -70,7 +70,7 @@ struct SidecarLocatorTests {
         )
     }
 
-    @Test func `SidecarStore() keeps every sidecar beside its photo, with the bytes it always wrote`() throws {
+    @Test func `a SidecarStore() keeps every sidecar beside its photo, with the bytes it always wrote`() throws {
         let sandbox = try Sandbox()
         defer { sandbox.remove() }
         let image = try sandbox.photo("Day 1/IMG_0001.ARW")
@@ -103,7 +103,7 @@ struct SidecarLocatorTests {
         #expect(!FileManager.default.fileExists(atPath: sandbox.mac.path))
     }
 
-    @Test func `SidecarStore(locator:) writes on this Mac and reads beside the photo first`() throws {
+    @Test func `a SidecarStore(locator:) writes on this Mac and reads beside the photo first`() throws {
         let sandbox = try Sandbox()
         defer { sandbox.remove() }
         let image = try sandbox.photo("DCIM 100/IMG 0001.ARW")

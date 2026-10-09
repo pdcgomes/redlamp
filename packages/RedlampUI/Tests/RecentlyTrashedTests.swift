@@ -124,7 +124,7 @@ struct RecentlyTrashedTests {
         return try #require(library.items.first { library.trashedPhoto(at: $0.url)?.original == original }?.url)
     }
 
-    @Test func `Recently Trashed lists what a batch moved to the Trash, at its places there, with its badges and thumbnails from the store`(
+    @Test func `the Recently Trashed source lists what a batch moved to the Trash, at its places there, with its badges and thumbnails from the store`(
     ) async throws {
         try photos(["Shoot/A.JPG", "Shoot/B.JPG", "Shoot/C.JPG"])
         try SidecarStore().save(Self.edited(rating: 3), for: photo("Shoot/A.JPG"))
@@ -157,7 +157,7 @@ struct RecentlyTrashedTests {
         }
     }
 
-    @Test func `Put Back by photo, by the selection and by batch brings back the photos, their sidecars and their rows`(
+    @Test func `putting back by photo, by the selection and by batch brings back the photos, their sidecars and their rows`(
     ) async throws {
         let names = ["A", "B", "C", "D", "E"].map { "Shoot/\($0).JPG" }
         try photos(names)

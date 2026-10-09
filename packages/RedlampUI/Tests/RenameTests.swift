@@ -226,7 +226,10 @@ struct RenameTests {
         #expect(field?.stringValue == sheet.text || field != nil)
         #expect(all.contains { $0.accessibilityIdentifier() == "rename.template.tokens" })
     }
+}
 
+@MainActor
+extension RenameTests {
     @Test func `a template's error is said in words, and the last template that reads stays named`() async throws {
         let folder = RenameFolder()
         defer { folder.cleanUp() }
@@ -347,7 +350,7 @@ struct RenameTests {
         #expect(model.fileUndoCount == 1)
     }
 
-    @Test func `Undo and Redo take a rename back and make it again, the grid and the selection following`(
+    @Test func `undoing and redoing take a rename back and make it again, the grid and the selection following`(
     ) async throws {
         let folder = RenameFolder()
         defer { folder.cleanUp() }
@@ -385,7 +388,7 @@ struct RenameTests {
         #expect(try await folder.indexAgain() == 0, "the index follows without reading a photo again")
     }
 
-    @Test func `Undo takes back the newest of a rename and a culling change first, and Redo makes them in turn`(
+    @Test func `undoing takes back the newest of a rename and a culling change first, and redoing makes them in turn`(
     ) async throws {
         let folder = RenameFolder()
         defer { folder.cleanUp() }

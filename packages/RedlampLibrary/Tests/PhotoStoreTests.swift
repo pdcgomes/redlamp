@@ -6,6 +6,18 @@ import Testing
 /// The store keeps what it's given by content key, tier and edit, across reopening, compaction,
 /// eviction and moves, and never trusts a shard it can't read.
 struct PhotoStoreTests {
+    /// A record stored: the data the store holds under its key, tier and edit.
+    struct Stored {
+        let key: ContentKey
+        let tier: PhotoStore.Tier
+        let edit: EditDigest
+        let data: Data
+
+        init(_ key: ContentKey, _ tier: PhotoStore.Tier, _ edit: EditDigest, _ data: Data) {
+            (self.key, self.tier, self.edit, self.data) = (key, tier, edit, data)
+        }
+    }
+
     static let modified = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
     /// A key of its own for `number`, in `shard` when given.
@@ -167,24 +179,29 @@ struct PhotoStoreTests {
         let folder = try TemporaryFolder()
         let store = PhotoStore(root: folder.url)
         let edit = EditDigest(hashing: Data("crop".utf8))
-        var expected: [(ContentKey, PhotoStore.Tier, EditDigest, Data)] = []
+        var expected: [Stored] = []
         for number in 0 ..< 2000 {
             let key = Self.key(number)
-            expected.append((key, .grid, .unedited, Self.store(store, key, length: 200 + number % 300)))
+            expected.append(Stored(key, .grid, .unedited, Self.store(store, key, length: 200 + number % 300)))
             if number % 10 == 0 {
-                expected.append((key, .preview, .unedited, Self.store(store, key, "p", tier: .preview, length: 3000)))
+                expected.append(Stored(
+                    key,
+                    .preview,
+                    .unedited,
+                    Self.store(store, key, "p", tier: .preview, length: 3000),
+                ))
             }
             if number % 7 == 0 {
-                expected.append((key, .grid, edit, Self.store(store, key, "e", edit: edit)))
+                expected.append(Stored(key, .grid, edit, Self.store(store, key, "e", edit: edit)))
             }
         }
         for number in stride(from: 0, to: 2000, by: 50) {
             store.remove(Self.key(number), tier: .grid)
         }
         let removed = Set(stride(from: 0, to: 2000, by: 50).map { Self.key($0) })
-        let present = expected.filter { !($0.1 == .grid && $0.2 == .unedited && removed.contains($0.0)) }
-        func check(_ store: PhotoStore, _ records: [(ContentKey, PhotoStore.Tier, EditDigest, Data)]) {
-            #expect(records.allSatisfy { store.data(for: $0.0, tier: $0.1, edit: $0.2) == $0.3 })
+        let present = expected.filter { !($0.tier == .grid && $0.edit == .unedited && removed.contains($0.key)) }
+        func check(_ store: PhotoStore, _ records: [Stored]) {
+            #expect(records.allSatisfy { store.data(for: $0.key, tier: $0.tier, edit: $0.edit) == $0.data })
             #expect(removed.allSatisfy { !store.contains($0, tier: .grid) })
             #expect(store.statistics().records == records.count)
         }
@@ -208,7 +225,7 @@ struct PhotoStoreTests {
         var added = present
         for number in 2000 ..< 2300 {
             let key = Self.key(number)
-            added.append((key, PhotoStore.Tier.grid, EditDigest.unedited, Self.store(unclosed, key)))
+            added.append(Stored(key, .grid, .unedited, Self.store(unclosed, key)))
         }
         check(PhotoStore(root: folder.url), added)
     }
@@ -247,7 +264,9 @@ struct PhotoStoreTests {
         #expect(keys.dropFirst().allSatisfy { reopened.data(for: $0, tier: .grid) != nil })
         #expect(reopened.size(of: .grid) == Int64(19 * record))
     }
+}
 
+extension PhotoStoreTests {
     @Test func `previews over their budget go least recently used first, and grid thumbnails stay`() throws {
         let folder = try TemporaryFolder()
         let clock = StoreTestClock()
@@ -406,30 +425,35 @@ struct PhotoStoreTests {
         let destination = folder.url.appending(path: "Elsewhere/Thumbnails", directoryHint: .isDirectory)
         let store = PhotoStore(root: source)
         let edit = EditDigest(hashing: Data("black and white".utf8))
-        var expected: [(ContentKey, PhotoStore.Tier, EditDigest, Data)] = []
+        var expected: [Stored] = []
         for number in 0 ..< 600 {
             let key = Self.key(number)
-            expected.append((key, .grid, .unedited, Self.store(store, key)))
+            expected.append(Stored(key, .grid, .unedited, Self.store(store, key)))
             if number % 6 == 0 {
-                expected.append((key, .preview, .unedited, Self.store(store, key, "p", tier: .preview, length: 5000)))
-                expected.append((key, .grid, edit, Self.store(store, key, "e", edit: edit)))
+                expected.append(Stored(
+                    key,
+                    .preview,
+                    .unedited,
+                    Self.store(store, key, "p", tier: .preview, length: 5000),
+                ))
+                expected.append(Stored(key, .grid, edit, Self.store(store, key, "e", edit: edit)))
             }
         }
         let size = store.size(of: .preview)
         let packs = try FileManager.default.contentsOfDirectory(atPath: source.path).count { $0.hasSuffix(".rlps") }
         try store.move(to: destination)
         #expect(store.root == destination)
-        #expect(expected.allSatisfy { store.data(for: $0.0, tier: $0.1, edit: $0.2) == $0.3 })
+        #expect(expected.allSatisfy { store.data(for: $0.key, tier: $0.tier, edit: $0.edit) == $0.data })
         #expect(!FileManager.default.fileExists(atPath: source.path))
         let moved = try FileManager.default.contentsOfDirectory(atPath: destination.path)
         #expect(moved.count(where: { $0.hasSuffix(".rlps") }) == packs && packs > 200)
         #expect(!moved.contains(where: { $0.hasPrefix(".") }))
 
         let late = Self.key(9999)
-        expected.append((late, .grid, .unedited, Self.store(store, late)))
+        expected.append(Stored(late, .grid, .unedited, Self.store(store, late)))
         store.close()
         let reopened = PhotoStore(root: destination)
-        #expect(expected.allSatisfy { reopened.data(for: $0.0, tier: $0.1, edit: $0.2) == $0.3 })
+        #expect(expected.allSatisfy { reopened.data(for: $0.key, tier: $0.tier, edit: $0.edit) == $0.data })
         #expect(reopened.size(of: .preview) == size)
     }
 

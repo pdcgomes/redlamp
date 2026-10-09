@@ -50,7 +50,7 @@ struct SidecarMoveTests {
         try await sidecars.index.read { try $0.root(id: root)?.sidecars }
     }
 
-    @Test func `Cancel stops the move between two parts, turns it round in its journal and puts back what moved`(
+    @Test func `cancelling stops the move between two parts, turns it round in its journal and puts back what moved`(
     ) async throws {
         let (sandbox, sidecars, root) = try await Self.library()
         defer { sandbox.remove() }

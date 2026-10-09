@@ -11,7 +11,7 @@ struct FilePutBackTests {
         sandbox.files().merging(FileSandbox.contents(of: trash).map { ("Trash/" + $0.key, $0.value) }) { $1 }
     }
 
-    @Test func `Put Back restores each photo with its sidecar, .xmp and pair, and the index has them again with their content keys`(
+    @Test func `putting back restores each photo with its sidecar, .xmp and pair, and the index has them again with their content keys`(
     ) async throws {
         for onThisMac in [false, true] {
             var watched: WatchedFileSystem?
@@ -119,7 +119,7 @@ struct FilePutBackTests {
     }
 
     @Test(arguments: [FileRecovery.finish, .rollBack])
-    func `Put Back's Undo, and a forced quit during it, finish or roll back`(_ choice: FileRecovery) async throws {
+    func `undoing a Put Back, and a forced quit during it, finish or roll back`(_ choice: FileRecovery) async throws {
         let (sandbox, trash) = try await FileTrashedTests.sandbox()
         defer { sandbox.remove() }
         let ids = try await sandbox.rows()
@@ -176,7 +176,7 @@ struct FilePutBackTests {
         }
     }
 
-    @Test func `Put Back of a photo of a folder that went to the Trash whole brings the folder back`() async throws {
+    @Test func `putting back a photo of a folder that went to the Trash whole brings the folder back`() async throws {
         let (sandbox, trash) = try await FileTrashedTests.sandbox(onThisMac: true)
         defer { sandbox.remove() }
         let before = sandbox.files()

@@ -105,7 +105,7 @@ struct ExportFieldsTests {
     // MARK: - Under each policy
 
     @Test(arguments: ExportFormat.allCases)
-    func `All carries every field in IPTC and XMP, beside the edit`(format: ExportFormat) throws {
+    func `exporting All carries every field in IPTC and XMP, beside the edit`(format: ExportFormat) throws {
         let data = try Self.export(format)
         let iptc = try Self.dictionary(kCGImagePropertyIPTCDictionary, of: data)
         #expect(iptc[kCGImagePropertyIPTCObjectName] as? String == "Tram 28 at dusk")
@@ -142,7 +142,9 @@ struct ExportFieldsTests {
     }
 
     @Test(arguments: ExportFormat.allCases)
-    func `All Except Location leaves out the location fields as it leaves out GPS`(format: ExportFormat) throws {
+    func `exporting All Except Location leaves out the location fields as it leaves out GPS`(
+        format: ExportFormat,
+    ) throws {
         let data = try Self.export(format, policy: .allExceptLocation)
         let iptc = try Self.dictionary(kCGImagePropertyIPTCDictionary, of: data)
         for key in [
@@ -165,7 +167,7 @@ struct ExportFieldsTests {
     }
 
     @Test(arguments: ExportFormat.allCases)
-    func `None writes none of the fields`(format: ExportFormat) throws {
+    func `exporting None writes none of the fields`(format: ExportFormat) throws {
         let data = try Self.export(format, policy: .none)
         let iptc = try Self.dictionary(kCGImagePropertyIPTCDictionary, of: data)
         #expect(iptc[kCGImagePropertyIPTCObjectName] == nil)

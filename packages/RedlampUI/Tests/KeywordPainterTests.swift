@@ -123,7 +123,7 @@ struct KeywordPainterTests {
         #expect(sandbox.keywords("A.JPG") == ["Lisbon"] && sandbox.keywords("B.JPG") == ["Lisbon"])
     }
 
-    @Test func `Esc, its key and its buttons in the toolbar and the Keywording panel take it out and put it away`(
+    @Test func `pressing Esc, its key or its buttons in the toolbar and the Keywording panel takes it out and puts it away`(
     ) async throws {
         let sandbox = try await open(["A.JPG", "B.JPG"])
         defer { sandbox.close() }

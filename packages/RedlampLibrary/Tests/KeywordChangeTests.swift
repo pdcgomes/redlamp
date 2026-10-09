@@ -152,7 +152,7 @@ struct KeywordChangeTests {
         #expect(try await sandbox.search("kw:Portugal") == ["A.JPG", "B.JPG"])
     }
 
-    @Test func `Undo keeps what changed in a photo since, and the batches go back one at a time`() async throws {
+    @Test func `undoing keeps what changed in a photo since, and the batches go back one at a time`() async throws {
         let sandbox = try await sandbox()
         defer { sandbox.remove() }
         let keywords = sandbox.keywords()

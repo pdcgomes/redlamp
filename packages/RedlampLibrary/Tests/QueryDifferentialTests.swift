@@ -38,11 +38,8 @@ struct QueryDifferentialTests {
 
         private mutating func value(for field: LibraryQuery.Field, ranges: Bool) -> LibraryQuery.Value {
             switch field {
-            case .rating: number([0, 1, 2, 3, 4, 5], ranges: ranges)
-            case .iso: number([64, 100, 200, 250, 800, 1600, 3200, 6400, 12800], ranges: ranges)
-            case .aperture: number([1.2, 1.4, 1.6, 1.7, 1.78, 2, 2.8, 4, 5.6, 8, 16], ranges: ranges)
-            case .focal: number([5.1, 6.765, 18.3, 23, 24, 35, 50, 70, 85, 200, 400], ranges: ranges)
-            case .shutter: number([1.0 / 8000, 1.0 / 1000, 1.0 / 250, 1.0 / 30, 0.25, 1, 2, 30], ranges: ranges)
+            case .rating, .iso, .aperture, .focal, .shutter, .megapixels, .aspect:
+                number(Self.numbers[field] ?? [], ranges: ranges)
             case .date: date(ranges: ranges)
             case .flag: .flag(random.pick([.pick, .reject, nil]))
             case .label:
@@ -62,13 +59,21 @@ struct QueryDifferentialTests {
             case .copyright: .text(random.pick(["©", "2019", "Silva", "Agency"]))
             case .sublocation, .city, .state, .country, .countryCode:
                 .text(part(of: random.pick(Self.places.flatMap(\.self).filter { !$0.isEmpty } + ["Nowhere"])))
-            case .megapixels: number([0.1, 1, 12.2, 24, 40, 44.8, 48, 61], ranges: ranges)
-            case .aspect: number([1, 4.0 / 3, 1.5, 16.0 / 9, 2, 3], ranges: ranges)
             case .orientation: .orientation(random.pick([nil] + PhotoOrientation.allCases))
             case .trait: .trait(random.pick(LibraryQuery.Trait.allCases.filter { $0.query != nil }))
             }
         }
 
+        /// The values the numeric fields are compared with.
+        static let numbers: [LibraryQuery.Field: [Double]] = [
+            .rating: [0, 1, 2, 3, 4, 5],
+            .iso: [64, 100, 200, 250, 800, 1600, 3200, 6400, 12800],
+            .aperture: [1.2, 1.4, 1.6, 1.7, 1.78, 2, 2.8, 4, 5.6, 8, 16],
+            .focal: [5.1, 6.765, 18.3, 23, 24, 35, 50, 70, 85, 200, 400],
+            .shutter: [1.0 / 8000, 1.0 / 1000, 1.0 / 250, 1.0 / 30, 0.25, 1, 2, 30],
+            .megapixels: [0.1, 1, 12.2, 24, 40, 44.8, 48, 61],
+            .aspect: [1, 4.0 / 3, 1.5, 16.0 / 9, 2, 3],
+        ]
         static let creators = ["Ana Silva", "Ana Silva; João Costa", "Élodie Tremblay", "Nobody"]
         static let customLabels = ["Approved", "second", "Client", "To Do"]
         static let collections = ["Trips", "Lisbon", "Trips/Lisbon", "Portfolio", "AC/DC", "Selects", "nothing"]

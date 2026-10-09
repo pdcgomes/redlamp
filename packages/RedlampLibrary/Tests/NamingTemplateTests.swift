@@ -82,7 +82,7 @@ struct NamingTemplateTests {
         for (text, expected) in cases {
             #expect(try Self.parse(text) == expected, "\(text)")
         }
-        #expect(Set(cases.map { try! Self.parse($0.0).tokens[0].field }) == Set(NamingField.allCases))
+        #expect(try Set(cases.map { try Self.parse($0.0).tokens[0].field }) == Set(NamingField.allCases))
     }
 
     @Test func `modifiers apply in the order they're written, each with its values`() throws {

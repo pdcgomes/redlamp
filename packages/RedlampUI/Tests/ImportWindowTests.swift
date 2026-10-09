@@ -43,7 +43,7 @@ struct ImportWindowTests {
         #expect(model.chosen.photos == 3)
     }
 
-    @Test func `Library's keys rate, flag, label and choose the photos selected in the grid`() async throws {
+    @Test func `the keys Library uses rate, flag, label and choose the photos selected in the grid`() async throws {
         let fixture = try await ImportWindowFixture.make()
         defer { fixture.remove() }
         let model = fixture.model()
@@ -147,7 +147,7 @@ struct ImportWindowTests {
         #expect(await example() == "2026/2026-10-05 Wedding/IMG_0000.JPG", "the first photo chosen")
     }
 
-    @Test func `Import copies the photos chosen to the destination and the backup, with their choices, then shows them in Library, selected`(
+    @Test func `importing copies the photos chosen to the destination and the backup, with their choices, then shows them in Library, selected`(
     ) async throws {
         let fixture = try await ImportWindowFixture.make()
         defer { fixture.remove() }
@@ -201,8 +201,11 @@ struct ImportWindowTests {
         #expect(model.isLeftOut(copied))
         #expect(model.importBlocker == "No photos are chosen.")
     }
+}
 
-    @Test func `Cancel stops the copying with nothing half copied, and Import again copies the rest`() async throws {
+@MainActor
+extension ImportWindowTests {
+    @Test func `cancelling stops the copying with nothing half copied, and Import again copies the rest`() async throws {
         let fixture = try await ImportWindowFixture.make()
         defer { fixture.remove() }
         // A slow card: 4 MB a second, one read at a time, so its 24 photos take seconds to copy.
@@ -302,7 +305,7 @@ struct ImportWindowTests {
         )
     }
 
-    @Test func `Eject after Import ejects a card once every photo copied from it is verified`() async throws {
+    @Test func `ejecting after Import ejects a card once every photo copied from it is verified`() async throws {
         let fixture = try await ImportWindowFixture.make()
         defer { fixture.remove() }
         let cards = try [

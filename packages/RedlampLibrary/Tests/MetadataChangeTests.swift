@@ -129,7 +129,7 @@ struct MetadataChangeTests {
         }
     }
 
-    @Test func `Undo shows other apps' values as theirs again, so a change only the sidecar has reads nothing`(
+    @Test func `undoing shows other apps' values as theirs again, so a change only the sidecar has reads nothing`(
     ) async throws {
         let sandbox = try await XMPSandbox.make()
         defer { sandbox.remove() }
@@ -270,7 +270,7 @@ struct MetadataChangeTests {
         #expect(sandbox.sidecar(paths[0])?.metadata?.rating == 2 && sandbox.sidecar(paths[2])?.metadata?.rating == 2)
     }
 
-    @Test func `Redo is the Undo of the Undo: a photo changed since keeps its change, and Redo has an Undo of its own`(
+    @Test func `redoing is the Undo of the Undo: a photo changed since keeps its change, and Redo has an Undo of its own`(
     ) async throws {
         let (sandbox, paths, ids) = try await Self.library()
         defer { sandbox.remove() }

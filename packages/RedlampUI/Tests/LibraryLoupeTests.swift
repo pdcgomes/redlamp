@@ -28,7 +28,7 @@ struct LibraryLoupeTests {
         }
     }
 
-    @Test func `Z and a click zoom the loupe to 1:1 from the photo itself and fit it again`() async throws {
+    @Test func `the Z key and a click zoom the loupe to 1:1 from the photo itself and fit it again`() async throws {
         let fixture = ModuleFixture()
         defer { fixture.cleanUp() }
         fixture.engine.decodedThumbnail = { _, size in Self.photo(size) }

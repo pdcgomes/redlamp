@@ -156,7 +156,7 @@ struct HealthProposalsTests {
         #expect(!model.canPerform(.acceptHealthProposals) && !model.canPerform(.keepAnyway))
     }
 
-    @Test func `Keep Anyway leaves the check until ⌘Z, in turn with culling's changes, and ⇧⌘Z keeps it again`(
+    @Test func `choosing Keep Anyway leaves the check until ⌘Z, in turn with culling's changes, and ⇧⌘Z keeps it again`(
     ) async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }

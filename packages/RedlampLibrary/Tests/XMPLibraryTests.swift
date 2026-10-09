@@ -212,7 +212,9 @@ struct XMPLibraryTests {
         ) }
         #expect(try Data(contentsOf: photo) == Data([1, 2, 3]))
     }
+}
 
+extension XMPLibraryTests {
     @Test func `a raw and its JPEG share name.xmp, and neither one's write removes the other's fields`() async throws {
         let sandbox = try await XMPSandbox.make()
         defer { sandbox.remove() }
