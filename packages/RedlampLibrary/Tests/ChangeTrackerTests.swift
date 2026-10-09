@@ -332,7 +332,7 @@ struct ChangeTrackerTests {
             let info = VolumeInfo(uuid: key, name: nil, isLocal: true, isInternal: true)
             return ChangeTracker.Followed(
                 key: key, io: VolumeIO(volume: info, fileSystem: LocalFileSystem(), probe: URL(fileURLWithPath: "/")),
-                roots: ["/" + key],
+                roots: ["/" + key], session: 1,
             )
         }
         func history(_ event: UInt64, _ database: String = "D") -> VolumeEventHistory {

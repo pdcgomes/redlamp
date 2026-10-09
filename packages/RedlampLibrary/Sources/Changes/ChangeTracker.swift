@@ -97,7 +97,9 @@ public final class ChangeTracker: Sendable {
     }
 
     /// Starts following `roots`, adding them to the library if they aren't in it, after stopping what
-    /// was followed before. The stream ends once `stop` is called.
+    /// was followed before: what that left going (volumes still being found, its volumes' events and
+    /// polls, its worker) follows no volume and runs no work from then on. The stream ends once `stop`
+    /// is called.
     public func start(_ roots: [URL]) -> AsyncStream<Event> {
         stop()
         let (events, continuation) = AsyncStream.makeStream(of: Event.self)
@@ -109,14 +111,14 @@ public final class ChangeTracker: Sendable {
             return state.session
         }
         let worker = Task { [self] in
-            while let work = await next() {
+            while let work = await next(in: session) {
                 await perform(work, events: continuation)
             }
             continuation.finish()
         }
         let paths = roots.map(LibraryIndexer.path)
         let following = Task { [self] in
-            await follow(paths)
+            await follow(paths, in: session)
         }
         let current = state.withLock { state in
             guard state.session == session, !state.stopped else { return false }
@@ -287,9 +289,10 @@ public final class ChangeTracker: Sendable {
         }
     }
 
+    /// Adds `work` to what waits, unless its volume was followed by a session that has stopped.
     func enqueue(_ work: Work) {
         let (handed, dropped) = state.withLock { state -> ((CheckedContinuation<Work?, Never>, Work)?, [Work]) in
-            guard !state.stopped else { return (nil, [work]) }
+            guard !state.stopped, state.session == work.volume.session else { return (nil, [work]) }
             let dropped = state.pending.add(work)
             guard let waiter = state.waiter, let next = state.pending.next() else { return (nil, dropped) }
             state.waiter = nil
@@ -303,10 +306,11 @@ public final class ChangeTracker: Sendable {
         }
     }
 
-    private func next() async -> Work? {
+    /// The next work of `session`'s worker; nil once the session has stopped, whether or not another has started.
+    private func next(in session: UInt64) async -> Work? {
         await withCheckedContinuation { continuation in
             let ready = state.withLock { state -> Work?? in
-                if state.stopped {
+                if state.stopped || state.session != session {
                     return .some(nil)
                 }
                 if let work = state.pending.next() {

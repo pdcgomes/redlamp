@@ -4,9 +4,9 @@ import Synchronization
 extension ChangeTracker {
     // MARK: - Following volumes
 
-    /// Finds the volumes of `roots` and follows each. Roots whose volumes can't be found have their
-    /// photos marked offline, and are looked for again with backoff.
-    func follow(_ roots: [String]) async {
+    /// Finds the volumes of `roots` and follows each, while `session` lasts. Roots whose volumes can't be
+    /// found have their photos marked offline, and are looked for again with backoff.
+    func follow(_ roots: [String], in session: UInt64) async {
         var found: [String: (io: VolumeIO, roots: [String])] = [:]
         var missing: [String] = []
         for root in roots {
@@ -21,17 +21,18 @@ extension ChangeTracker {
         }
         if !missing.isEmpty {
             await markOffline(missing, except: Set(found.keys))
-            look(for: missing)
+            look(for: missing, in: session)
         }
         for (key, entry) in found.sorted(by: { $0.key < $1.key }) {
-            await follow(Followed(key: key, io: entry.io, roots: entry.roots), after: nil)
+            await follow(Followed(key: key, io: entry.io, roots: entry.roots, session: session), after: nil)
         }
     }
 
-    /// Follows `volume` through its event history, or by polling; `reason` is why it's followed again.
+    /// Follows `volume` through its event history, or by polling, unless its session has stopped; `reason`
+    /// is why it's followed again.
     private func follow(_ volume: Followed, after reason: Reason?) async {
         let replaced = state.withLock { state -> Followed?? in
-            guard !state.stopped else { return nil }
+            guard !state.stopped, state.session == volume.session else { return nil }
             defer { state.volumes[volume.key] = volume }
             return .some(state.volumes[volume.key])
         }
@@ -192,8 +193,8 @@ extension ChangeTracker {
     }
 
     /// Looks for the volumes of `roots` again, with the readers' probe backoff, and follows those
-    /// found.
-    private func look(for roots: [String]) {
+    /// found, while `session` lasts.
+    private func look(for roots: [String], in session: UInt64) {
         let intervals = indexer.volumes.configuration.probeIntervals
         let task = Task { [weak self] in
             var waiting = roots
@@ -215,13 +216,20 @@ extension ChangeTracker {
                 }
                 for (key, entry) in found.sorted(by: { $0.key < $1.key }) {
                     let roots = (state.withLock { $0.volumes[key]?.roots } ?? []) + entry.roots
-                    await follow(Followed(key: key, io: entry.io, roots: roots), after: .reconnected)
+                    await follow(Followed(key: key, io: entry.io, roots: roots, session: session), after: .reconnected)
                 }
                 waiting = missing
                 delay = min(delay * 2, intervals.upperBound)
             }
         }
-        state.withLock { $0.tasks.append(task) }
+        let current = state.withLock { state in
+            guard !state.stopped, state.session == session else { return false }
+            state.tasks.append(task)
+            return true
+        }
+        if !current {
+            task.cancel()
+        }
     }
 
     // MARK: - Polling
@@ -302,12 +310,16 @@ extension ChangeTracker {
         let key: String
         let io: VolumeIO
         let roots: [String]
+        /// The tracker's session that follows it (`ChangeTracker.start`): its work is dropped once another
+        /// starts.
+        let session: UInt64
         private let state = Mutex(State())
 
-        init(key: String, io: VolumeIO, roots: [String]) {
+        init(key: String, io: VolumeIO, roots: [String], session: UInt64) {
             self.key = key
             self.io = io
             self.roots = roots
+            self.session = session
         }
 
         var urls: [URL] {
