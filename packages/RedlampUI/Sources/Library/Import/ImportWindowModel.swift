@@ -362,7 +362,9 @@ final class ImportWindowModel {
         }
         countsChanged()
     }
+}
 
+extension ImportWindowModel {
     /// Tells the window its counts changed, at most every `countsInterval`: browsing changes them a batch
     /// at a time.
     private func countsChanged() {

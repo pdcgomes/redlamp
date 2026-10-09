@@ -191,35 +191,9 @@ struct ImportPlanner {
     func plan(_ photos: [ImportPhoto], sources: [ImportSource], others: [String: Int] = [:]) -> ImportPlan {
         var left: [ImportPlan.Left] = []
         func leave(_ photo: ImportPhoto, _ files: [ImportFile], _ reason: ImportPlan.Reason) {
-            left += files.map { ImportPlan.Left(photo: photo.id, file: photo.folder + "/" + $0.name, reason: reason) }
+            left += Self.left(photo, files, reason)
         }
-        var units: [Unit] = []
-        for photo in photos {
-            guard photo.choices.isChosen else {
-                leave(photo, photo.photoFiles, .notChosen)
-                continue
-            }
-            guard photo.isRead, photo.files.contains(where: { $0.contentKey != nil }) else {
-                leave(photo, photo.photoFiles, .unreadable)
-                continue
-            }
-            var files = photo.photoFiles
-            if settings.rawOnly {
-                leave(photo, files.filter { !$0.isRaw }, .rawOnly)
-                files.removeAll { !$0.isRaw }
-            }
-            if settings.skipsImported {
-                leave(photo, files.filter { photo.imported.contains($0.name) }, .imported)
-                files.removeAll { photo.imported.contains($0.name) }
-            }
-            if !files.isEmpty {
-                units.append(Unit(photo: photo, files: files))
-            }
-        }
-        units.sort { first, second in
-            first.photo.captured != second.photo.captured
-                ? first.photo.captured < second.photo.captured : first.photo.id < second.photo.id
-        }
+        var units = chosenUnits(of: photos, leaving: &left)
 
         let context = NamingContext(date: date, texts: settings.texts)
         let levels = settings.folderLevels.map { level in
@@ -351,6 +325,47 @@ struct ImportPlanner {
             },
             items: items, left: left, folders: folders.sorted(), counters: batch.counters, problems: problems,
         )
+    }
+
+    /// The photos chosen, each with its photo files left to copy, in the order they were taken; the files they
+    /// leave out go in `left`.
+    private func chosenUnits(of photos: [ImportPhoto], leaving left: inout [ImportPlan.Left]) -> [Unit] {
+        var units: [Unit] = []
+        for photo in photos {
+            guard photo.choices.isChosen else {
+                left += Self.left(photo, photo.photoFiles, .notChosen)
+                continue
+            }
+            guard photo.isRead, photo.files.contains(where: { $0.contentKey != nil }) else {
+                left += Self.left(photo, photo.photoFiles, .unreadable)
+                continue
+            }
+            var files = photo.photoFiles
+            if settings.rawOnly {
+                left += Self.left(photo, files.filter { !$0.isRaw }, .rawOnly)
+                files.removeAll { !$0.isRaw }
+            }
+            if settings.skipsImported {
+                left += Self.left(photo, files.filter { photo.imported.contains($0.name) }, .imported)
+                files.removeAll { photo.imported.contains($0.name) }
+            }
+            if !files.isEmpty {
+                units.append(Unit(photo: photo, files: files))
+            }
+        }
+        units.sort { first, second in
+            first.photo.captured != second.photo.captured
+                ? first.photo.captured < second.photo.captured : first.photo.id < second.photo.id
+        }
+        return units
+    }
+
+    private static func left(
+        _ photo: ImportPhoto,
+        _ files: [ImportFile],
+        _ reason: ImportPlan.Reason,
+    ) -> [ImportPlan.Left] {
+        files.map { ImportPlan.Left(photo: photo.id, file: photo.folder + "/" + $0.name, reason: reason) }
     }
 
     /// What naming knows of one of a photo's files: its own name and date, its photo's metadata, the

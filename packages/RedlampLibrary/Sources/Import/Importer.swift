@@ -347,7 +347,9 @@ public final class Importer: Sendable {
         try log.state(state)
         return outcome(plan, state: state, tally: counts, elapsed: ContinuousClock.now - started)
     }
+}
 
+extension Importer {
     /// What became of one photo.
     private enum Result: Sendable {
         case placed(files: Int, backups: Int, bytes: Int64, sidecars: Int, sidecarFailed: String?)

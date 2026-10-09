@@ -202,7 +202,9 @@ public final class ImportSession: Sendable {
             }
         }
     }
+}
 
+extension ImportSession {
     /// Lists `source`'s photo folder and every folder below it: a folder that can't be listed below
     /// the first is left out.
     private func list(_ source: ImportSource, io: VolumeIO) async throws {

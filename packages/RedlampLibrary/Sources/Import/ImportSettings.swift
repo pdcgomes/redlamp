@@ -146,7 +146,7 @@ public struct ImportSettings: Sendable, Hashable, Codable {
     ]
 
     private static func template(_ text: String) -> NamingTemplate {
-        try! NamingTemplate(parsing: text)
+        (try? NamingTemplate(parsing: text)) ?? NamingTemplate([])
     }
 
     /// The folder template's levels: its parts split at each `/` in its text.
