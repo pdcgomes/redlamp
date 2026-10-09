@@ -41,7 +41,7 @@
             try app.wait("the folder's row in the Folders panel") { _ in
                 Views.editorWindow.flatMap { Views.find(row, in: $0) } != nil
             }
-            try app.rightClickRow(row, choosing: ShortcutAction.moveEditsAndMetadata.title)
+            try app.rightClick(.identifier(row), choosing: ShortcutAction.moveEditsAndMetadata.title)
             try app.waitForSheet("Move Edits and Metadata")
             try app.wait("the sheet's numbers") { model in
                 model.moveEditsSheet?.count == "2 photos have edits or metadata beside the photos."
@@ -110,8 +110,10 @@
         }
 
         /// 10,000 photos, each with a sidecar, in twenty folders of a root of their own: Move Edits and Metadata… from
-        /// the root's menu, the time until the sheet is on screen with its numbers and until the disk is looked
-        /// through, the move to Redlamp on this Mac and back, and the main thread throughout.
+        /// the root's menu, the time from the command, as a click on the item runs it, until the index has read the
+        /// sheet's numbers, until the sheet is on screen (with them in it) and until the disk is looked through, the
+        /// move to Redlamp on this Mac and back, and the main thread throughout. With `REDLAMP_MENU_PROFILE` set, each
+        /// right-click's main thread goes in `move-edits-timeline-<there or back>-<pid>.txt`.
         static let performance = Scenario(
             "performance.move-edits",
             "Move Edits and Metadata… on a root of 10,000 photos with sidecars: the sheet's numbers, the move to "
@@ -137,15 +139,31 @@
             var surveyed: [Double] = []
             var read: [Double] = []
             var checked: [Double] = []
+            var withNumbers: [Bool] = []
             var menus: [String] = []
             let mainThread = try app.main { _ in mach_thread_self() }
             let profiling = ProcessInfo.processInfo.environment["REDLAMP_MENU_PROFILE"] != nil
             for (name, goingTo) in [("there", "Redlamp on this Mac"), ("back", "Beside the photos")] {
                 let mark = try app.menuMark()
                 let profile = profiling ? StackPerformanceScenarios.StackCallProfile(thread: mainThread) : nil
-                try app.rightClickRow(row, choosing: ShortcutAction.moveEditsAndMetadata.title)
-                try app.waitForSheet("Move Edits and Metadata", timeout: 10)
-                try app.wait("the sheet's numbers") { $0.moveEditsSheet?.shownAfter != nil }
+                let timeline = profiling ? MainThreadTimeline(thread: mainThread) : nil
+                if let timeline {
+                    try app.main { _ in timeline.watchRunLoop() }
+                }
+                _ = MoveEditsTrace.take()
+                let timelineFile = app.runDirectory.appending(path: "move-edits-timeline-\(name)-\(getpid()).txt")
+                do {
+                    try app.rightClick(
+                        .identifier(row), choosing: ShortcutAction.moveEditsAndMetadata.title, marking: timeline,
+                    )
+                    try app.waitForSheet("Move Edits and Metadata", timeout: 10)
+                    try app.wait("the sheet's numbers") { model in
+                        model.moveEditsSheet.map { $0.shownAfter != nil && $0.surveyedAfter != nil } == true
+                    }
+                } catch {
+                    try? timeline.map { try Self.write($0, to: timelineFile) }
+                    throw error
+                }
                 let toNumbers = try app.menuRebuilds(since: mark)
                 for marker in ["makeMainMenu", "MoveEdits"] {
                     profile?.write(
@@ -158,12 +176,16 @@
                 shown.append(Self.milliseconds(sheet?.shownAfter))
                 surveyed.append(Self.milliseconds(sheet?.surveyedAfter))
                 read.append(Self.milliseconds(sheet?.readAfter))
+                withNumbers.append(sheet?.appearedWithNumbers == true)
                 try app.expect(
                     sheet?.count.hasPrefix("10,000 photos have edits or metadata") == true && sheet?.goingTo == goingTo,
                     "the sheet says \(String(describing: sheet))",
                 )
                 try app.wait("the root looked through", timeout: 120) { $0.moveEditsSheet?.canMove == true }
                 checked.append(Date().timeIntervalSince(opened) * 1000)
+                if let timeline {
+                    try Self.write(timeline, to: timelineFile)
+                }
                 try menus.append(
                     "menu bar, the sheet \(name) to its numbers: \(MenuPerformanceScenarios.describe(toNumbers)); "
                         +
@@ -197,11 +219,12 @@
                 )
             } + [
                 String(
-                    format: "numbers from the index: %@ ms, the read over in %@ ms; sheet on screen with them: %@ ms; "
-                        + "root looked through: %@ ms; load %@",
-                    surveyed.map { String(format: "%.1f", $0) }.joined(separator: " and "),
+                    format: "the index's read over %@ ms after the command; the numbers in the sheet at %@ ms; the "
+                        + "sheet on screen at %@ ms, %@; root looked through: %@ ms; load %@",
                     read.map { String(format: "%.1f", $0) }.joined(separator: " and "),
+                    surveyed.map { String(format: "%.1f", $0) }.joined(separator: " and "),
                     shown.map { String(format: "%.1f", $0) }.joined(separator: " and "),
+                    withNumbers.map { $0 ? "with them" : "without them" }.joined(separator: " and "),
                     checked.map { String(format: "%.0f", $0) }.joined(separator: " and "),
                     "\(ProcessInfo.processInfo.loadAverage)",
                 ),
@@ -216,12 +239,40 @@
                     "moving \(name): main thread p99 \(phase.summary?.p99 ?? 0) ms",
                 )
             }
-            try app.expect((surveyed.max() ?? .infinity) < 8.3, "the sheet's numbers took \(surveyed) ms to read")
+            try app.expect((read.max() ?? .infinity) < 8.3, "the index read the sheet's numbers in \(read) ms")
+            try app.expect(withNumbers.allSatisfy(\.self), "the sheet appeared without its numbers: \(withNumbers)")
         }
 
         static func milliseconds(_ duration: Duration?) -> Double {
             guard let parts = duration?.components else { return -1 }
             return Double(parts.seconds) * 1000 + Double(parts.attoseconds) / 1e15
+        }
+
+        /// A right-click's timeline with the command's steps on it, written to `url`: the main thread over the whole
+        /// right-click, from the command to the read's start, and from the read's end to the sheet having the numbers.
+        static func write(_ timeline: MainThreadTimeline, to url: URL) throws {
+            try MainThread.run { timeline.stop() }
+            let steps = MoveEditsTrace.take()
+            for step in steps {
+                timeline.mark("app: " + step.text, at: step.time)
+            }
+            func step(_ prefix: String) -> ContinuousClock.Instant? {
+                steps.first { $0.text.hasPrefix(prefix) }?.time
+            }
+            let end = ContinuousClock.now
+            var windows: [(name: String, from: ContinuousClock.Instant, to: ContinuousClock.Instant)] = [
+                ("the whole right-click", timeline.start, end),
+            ]
+            if let command = step("command") {
+                windows.append(("from the command to the read's start", command, step("read began") ?? end))
+            }
+            if let over = step("read over") {
+                windows.append((
+                    "from the read's end to the sheet having the numbers", over,
+                    step("the sheet has the numbers") ?? end,
+                ))
+            }
+            timeline.write(to: url, windows: windows)
         }
     }
 

@@ -493,10 +493,13 @@
         /// The menu tracks inside the press, and the main run loop answers nothing queued behind the
         /// press until the menu has closed, which the driver closes: so the driver asks nothing until
         /// the press has begun. The item chosen runs once the press is over, as a click on it runs it
-        /// once the menu has closed, and without the driver waiting: it may open a dialog.
+        /// once the menu has closed, and without the driver waiting: it may open a dialog. A command run
+        /// while the menu tracks would wait behind the menu's own work, which no click puts after it.
+        /// `timeline` gets a mark for each of those steps.
         @discardableResult
         func rightClick(
             _ target: Target, at point: CGPoint = CGPoint(x: 0.5, y: 0.5), choosing title: String? = nil,
+            marking timeline: MainThreadTimeline? = nil,
         ) throws -> [(title: String, on: Bool)] {
             let location = try Self.location(point, in: frame(of: target))
             let inside = try main { _ in Views.editorWindow?.contentView?.bounds.contains(location) == true }
@@ -505,9 +508,14 @@
             try main { _ in opened.watch() }
             defer { try? main { _ in opened.stop() } }
             let began = Flag(), ended = Flag()
+            timeline?.mark("driver: press posted")
             post { _ in
                 began.set()
-                defer { ended.set() }
+                timeline?.mark("driver: press runs")
+                defer {
+                    ended.set()
+                    timeline?.mark("driver: press over")
+                }
                 guard let window = Views.editorWindow else { return }
                 Views.lastPress = Views.Press(
                     kind: "right-click", location: location, window: Views.describe(window),
@@ -531,7 +539,13 @@
             try wait("\(target)'s context menu to open") { _ in opened.menu != nil }
             let (items, chosen) = try main { _ -> ([(title: String, on: Bool)], Int?) in
                 guard let menu = opened.menu else { return ([], nil) }
-                defer { menu.cancelTracking() }
+                if let began = opened.began {
+                    timeline?.mark("driver: menu began tracking", at: began)
+                }
+                defer {
+                    menu.cancelTracking()
+                    timeline?.mark("driver: tracking cancelled")
+                }
                 let items = menu.items.filter { !$0.isSeparatorItem }.map { (title: $0.title, on: $0.state == .on) }
                 guard let title else { return (items, nil) }
                 guard let index = menu.items.firstIndex(where: { $0.title == title }) else {
@@ -543,8 +557,14 @@
                 return (items, index)
             }
             try wait("\(target)'s context menu to close") { _ in opened.closed && ended.isSet }
+            if let ended = try main({ _ in opened.ended }) {
+                timeline?.mark("driver: menu ended tracking", at: ended)
+            }
             if let chosen {
-                post { _ in opened.menu?.performActionForItem(at: chosen) }
+                post { _ in
+                    timeline?.mark("driver: item chosen")
+                    opened.menu?.performActionForItem(at: chosen)
+                }
                 pause(0.05)
             }
             return items
@@ -663,6 +683,9 @@
         /// The menu's items as it opened, and whether each was checked and enabled.
         var items: [(title: String, on: Bool, enabled: Bool)] = []
         var closed = false
+        /// When the menu began and ended tracking.
+        var began: ContinuousClock.Instant?
+        var ended: ContinuousClock.Instant?
         /// Whether `onOpen` chose an item.
         var chose = false
         private var observers: [any NSObjectProtocol] = []
@@ -677,6 +700,7 @@
                     MainActor.assumeIsolated {
                         if self.menu == nil, let opened, opened.supermenu == nil {
                             self.menu = opened
+                            self.began = .now
                             self.items = opened.items.filter { !$0.isSeparatorItem }
                                 .map { (title: $0.title, on: $0.state == .on, enabled: $0.isEnabled) }
                             onOpen?(opened)
@@ -688,6 +712,7 @@
                     MainActor.assumeIsolated {
                         if let menu = self.menu, ended === menu {
                             self.closed = true
+                            self.ended = .now
                         }
                     }
                 },
