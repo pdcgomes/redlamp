@@ -227,7 +227,9 @@ final class LibrarySourceList: Sendable {
         change.took = (queried, clock.now - started - queried)
         return change
     }
+}
 
+extension LibrarySourceList {
     /// What maps a list's updates to changes: every photo of the source by ID, filtered or not, their folders'
     /// paths, and the photos handed over last; for a large source, its list alone.
     struct Mapping: Sendable {
