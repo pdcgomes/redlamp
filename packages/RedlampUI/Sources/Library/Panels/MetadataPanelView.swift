@@ -93,28 +93,41 @@ final class MetadataPanelView: PanelStackView, NSTextFieldDelegate {
         ]
     }
 
+    /// The selection's fields, each control set only when what it shows changes: a held arrow key shows another
+    /// photo every few frames, and setting a field, even to what it has, measures and lays it out again.
     private func show(_ selection: PanelSelection) {
-        summary.stringValue = KeywordingPanelView.summary(of: selection)
+        Self.set(summary, to: KeywordingPanelView.summary(of: selection))
         let enabled = selection.isAvailable && !selection.ids.isEmpty
         for (field, text) in fields {
-            text.isEnabled = enabled
+            if text.isEnabled != enabled {
+                text.isEnabled = enabled
+            }
             // The field being typed in keeps what's typed.
             guard text.currentEditor() == nil else { continue }
-            switch selection.fields[field] {
-            case let .same(value):
-                text.stringValue = value
-                text.placeholderString = nil
-            case .mixed:
-                text.stringValue = ""
-                text.placeholderString = "Mixed"
-            case .none:
-                text.stringValue = ""
-                text.placeholderString = nil
+            let (value, placeholder): (String, String?) = switch selection.fields[field] {
+            case let .same(value): (value, nil)
+            case .mixed: ("", "Mixed")
+            case .none: ("", nil)
+            }
+            Self.set(text, to: value)
+            if text.placeholderString != placeholder {
+                text.placeholderString = placeholder
             }
         }
-        presets.isEnabled = selection.isAvailable
-        editTime.isEnabled = enabled
-        captured.stringValue = Self.describe(selection.fields)
+        if presets.isEnabled != selection.isAvailable {
+            presets.isEnabled = selection.isAvailable
+        }
+        if editTime.isEnabled != enabled {
+            editTime.isEnabled = enabled
+        }
+        Self.set(captured, to: Self.describe(selection.fields))
+    }
+
+    /// Gives `field` `text` unless it has it.
+    static func set(_ field: NSTextField, to text: String) {
+        if field.stringValue != text {
+            field.stringValue = text
+        }
     }
 
     /// `2007-06-01 15:30:00`, or the first and last when they differ, or None.

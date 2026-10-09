@@ -68,6 +68,14 @@ class PanelStackView: NSView, HeightProviding {
         measured = nil
         invalidateColumnLayout()
     }
+
+    /// The rows' height changed by `delta` alone, as a panel that knows its rows' heights works it out: the column
+    /// lays the panel out again without measuring it, which takes a layout pass over every row of its own.
+    func rowsChanged(by delta: CGFloat) {
+        guard let known = measured else { return rowsChanged() }
+        measured = (known.width, known.height + delta)
+        invalidateColumnLayout()
+    }
 }
 
 @MainActor

@@ -1031,32 +1031,64 @@ public final class EditorModel {
         visits += 1
         selectionIndex = library.index(of: url)
         library.remember(url)
+        // Each is set only when it changes: an assignment tells the views reading it even of the same value, and
+        // the Library's held arrow keys leave a photo many times a second, Develop's views listening beneath it.
         // Cleared first so the resets below don't render the outgoing photo.
-        if !ready {
+        if !ready, info != nil {
             info = nil
         }
-        errorMessage = nil
-        formatNotSupportedYet = false
-        readOnlyReason = nil
-        hasUnmergedEdits = false
-        photoMetadata = library.item(for: url)?.metadata ?? PhotoMetadata()
+        if errorMessage != nil {
+            errorMessage = nil
+        }
+        if formatNotSupportedYet {
+            formatNotSupportedYet = false
+        }
+        if readOnlyReason != nil {
+            readOnlyReason = nil
+        }
+        if hasUnmergedEdits {
+            hasUnmergedEdits = false
+        }
+        let metadata = library.item(for: url)?.metadata ?? PhotoMetadata()
+        if photoMetadata != metadata {
+            photoMetadata = metadata
+        }
         endEyedroppers()
-        previewingRecipe = nil
-        previewingEdit = nil
-        // A tuple: assigning nil notifies even when it is nil already.
+        if previewingRecipe != nil {
+            previewingRecipe = nil
+        }
+        if previewingEdit != nil {
+            previewingEdit = nil
+        }
         if recipeApplication != nil {
             recipeApplication = nil
         }
         autoWhiteBalance = nil
-        selectedMaskID = nil
-        selectedComponentID = nil
-        drawingKind = nil
-        edgeBrushTarget = nil
-        edgeBrushStrokes = []
-        pendingModel = nil
+        if selectedMaskID != nil {
+            selectedMaskID = nil
+        }
+        if selectedComponentID != nil {
+            selectedComponentID = nil
+        }
+        if drawingKind != nil {
+            drawingKind = nil
+        }
+        if edgeBrushTarget != nil {
+            edgeBrushTarget = nil
+        }
+        if !edgeBrushStrokes.isEmpty {
+            edgeBrushStrokes = []
+        }
+        if pendingModel != nil {
+            pendingModel = nil
+        }
         // What they found was in the photo left.
-        closePeoplePicker()
-        closeLandscapePicker()
+        if peoplePicker != nil {
+            closePeoplePicker()
+        }
+        if landscapePicker != nil {
+            closeLandscapePicker()
+        }
     }
 
     /// Shows the photo's thumbnail on the canvas until its first frame arrives, or the preview the Library
@@ -1084,14 +1116,23 @@ public final class EditorModel {
     /// The canvas lets go of the photo the Library module moved on from: Develop opens the active one when
     /// it's shown.
     private func clearCanvas() {
-        isLoading = false
-        showFrame(nil)
+        // Each set only when it changes, as `leave(for:)` sets the photo's state.
+        if isLoading {
+            isLoading = false
+        }
+        if frames.current != nil || hasFrame {
+            showFrame(nil)
+        }
         pendingCanvas = nil
         latestFrame = nil
-        histogram = .empty
+        if histogram != .empty {
+            histogram = .empty
+        }
         selectionThumbnailRequest.map(thumbnailLoader.cancel)
         selectionThumbnailRequest = nil
-        selectionThumbnail = nil
+        if selectionThumbnail != nil {
+            selectionThumbnail = nil
+        }
     }
 
     /// A photo's sidecar as read when it opens.

@@ -54,6 +54,12 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var wasInSight = false
     /// Times every cell was made again.
     private(set) var reloads = 0
+    /// Until when the strip's last centering would have been animating: a centering asked for before then steps.
+    private var centering: ContinuousClock.Instant?
+    /// The centering that follows the last step.
+    private var pausing: Task<Void, Never>?
+    /// How long a centering animates.
+    private static let centeringTime = Duration.milliseconds(250)
 
     init(model: EditorModel) {
         self.model = model
@@ -280,7 +286,19 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         let origin = CGPoint(x: min(max(item.midX - clip.bounds.width / 2, 0), end), y: 0)
         // An animation doesn't advance while the window is off screen or the display is asleep.
         if animated, window?.occlusionState.contains(.visible) == true {
+            // A held arrow key moves on faster than a centering animates, and each move of the strip makes and lays
+            // out a cell and updates the window's tracking areas: until the key pauses, the strip moves only once the
+            // photo leaves its middle half, and then without animating, and it centres the photo once the key does.
+            let now = ContinuousClock.now
+            let stepping = centering.map { now < $0 } ?? false
+            centering = now + Self.centeringTime
+            if stepping {
+                centerWhenPaused()
+                let middle = clip.bounds.insetBy(dx: clip.bounds.width / 4, dy: 0)
+                guard item.midX < middle.minX || item.midX > middle.maxX else { return }
+            }
             NSAnimationContext.runAnimationGroup { context in
+                context.duration = stepping ? 0 : Double(Self.centeringTime / .milliseconds(1)) / 1000
                 context.allowsImplicitAnimation = true
                 clip.animator().setBoundsOrigin(origin)
             }
@@ -288,6 +306,17 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             clip.scroll(to: origin)
         }
         scrollView.reflectScrolledClipView(clip)
+    }
+
+    /// Centres the active photo once the strip has stopped stepping for a centering's time.
+    private func centerWhenPaused() {
+        pausing?.cancel()
+        pausing = Task { [weak self] in
+            try? await Task.sleep(for: Self.centeringTime)
+            guard let self, !Task.isCancelled, let selected, let item = item(of: selected) else { return }
+            centering = nil
+            center(row: item, animated: true)
+        }
     }
 
     // MARK: - Data source

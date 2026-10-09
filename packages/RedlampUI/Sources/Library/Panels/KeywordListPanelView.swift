@@ -476,13 +476,21 @@ final class KeywordRowView: NSTableCellView {
         showCheck(selection)
     }
 
+    /// Its checkbox for `selection`, set only when it changes: the selection changes every few frames of a held
+    /// arrow key, for every row on screen.
     func showCheck(_ selection: PanelSelection) {
         guard let path else { return }
-        check.isEnabled = !selection.ids.isEmpty
-        check.state = switch selection.hasEverywhere(path) {
+        let enabled = !selection.ids.isEmpty
+        let state: NSControl.StateValue = switch selection.hasEverywhere(path) {
         case true?: .on
         case nil: .mixed
         case false?: .off
+        }
+        if check.isEnabled != enabled {
+            check.isEnabled = enabled
+        }
+        if check.state != state {
+            check.state = state
         }
     }
 

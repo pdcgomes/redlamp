@@ -114,8 +114,13 @@ extension EditorModel {
 
     /// Opening another photo turns both eyedroppers and Calibrate from Target off.
     func endEyedroppers() {
-        eyedropperActive = false
-        pointColorEyedropperActive = false
+        // Set only when on: each assignment tells the views reading them, a photo left at a time.
+        if eyedropperActive {
+            eyedropperActive = false
+        }
+        if pointColorEyedropperActive {
+            pointColorEyedropperActive = false
+        }
         calibrationTargetActive = false
         calibrationTarget = nil
     }

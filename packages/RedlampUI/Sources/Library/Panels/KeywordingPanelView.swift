@@ -11,6 +11,11 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
     private let summary = PanelControls.label("", secondary: true)
     private let progress = NSProgressIndicator()
     private let keywords = NSStackView()
+    private var keywordRows: [KeywordRow] = []
+    /// Below the rows, how many keywords the rows leave out.
+    private let more = PanelControls.label("", secondary: true)
+    private var rowHeight: CGFloat?
+    private var moreHeight: CGFloat?
     private let entry = NSTextField()
     private let completions = NSStackView()
     private let sets = NSPopUpButton()
@@ -46,6 +51,8 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         keywords.orientation = .vertical
         keywords.alignment = .leading
         keywords.spacing = 2
+        more.isHidden = true
+        keywords.addArrangedSubview(more)
         entry.placeholderString = "Add keywords, separated by commas"
         entry.font = Typography.label.nsFont
         entry.delegate = self
@@ -106,40 +113,54 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
 
     // MARK: - Showing
 
+    /// The keywords of the photos selected, in rows kept from one selection to the next: a held arrow key shows
+    /// another photo's keywords every few frames, and making a row's controls, and measuring the panel when its
+    /// height changes, were much of its frames' work. Rows hold one line each, so the panel's height changes with
+    /// their number alone, by their heights (`keywordsHeight`).
     private func showSelection(_ selection: PanelSelection) {
-        summary.stringValue = Self.summary(of: selection)
-        entry.isEnabled = selection.isAvailable && !selection.ids.isEmpty
+        MetadataPanelView.set(summary, to: Self.summary(of: selection))
+        let enabled = selection.isAvailable && !selection.ids.isEmpty
+        if entry.isEnabled != enabled {
+            entry.isEnabled = enabled
+        }
         let all = selection.orderedKeywords
         let ordered = all.prefix(Self.rowLimit)
         let rows = ordered.map { "\($0.path.text) \($0.count)" } + ["\(all.count)"]
         guard rows != shown.rows else { return }
         shown.rows = rows
-        for view in keywords.arrangedSubviews {
-            view.removeFromSuperview()
-        }
-        for (path, count) in ordered {
-            let name = PanelControls.label(count < selection.ids.count ? path.displayName + " *" : path.displayName)
-            name.toolTip = count < selection.ids.count
-                ? "On \(count) of \(selection.ids.count) photos" : "On every photo selected"
-            name.setAccessibilityIdentifier("keywording.keyword.\(path.text)")
-            let remove = PanelControls.symbolButton(
-                "minus.circle", "Remove “\(path.displayName)”", identifier: "keywording.remove.\(path.text)",
-            ) { [weak panels] in _ = panels?.remove(path) }
-            var views: [NSView] = [name]
-            if count < selection.ids.count {
-                views.append(PanelControls.label("\(count) of \(selection.ids.count)", secondary: true))
-            }
-            views.append(remove)
-            let row = PanelControls.row(views)
-            keywords.addArrangedSubview(row)
+        let before = keywordsHeight
+        while keywordRows.count < ordered.count {
+            let row = KeywordRow(panels: panels)
+            keywords.insertArrangedSubview(row, at: keywordRows.count)
             row.widthAnchor.constraint(equalTo: keywords.widthAnchor).isActive = true
+            keywordRows.append(row)
         }
-        if all.count > ordered.count {
-            keywords.addArrangedSubview(PanelControls.label(
-                "and \(all.count - ordered.count) more, in the Keyword List", secondary: true,
-            ))
+        for (place, row) in keywordRows.enumerated() {
+            if ordered.indices.contains(place) {
+                row.show(ordered[place].path, on: ordered[place].count, of: selection.ids.count)
+            } else {
+                row.hide()
+            }
         }
-        rowsChanged()
+        more.stringValue = "and \(all.count - ordered.count) more, in the Keyword List"
+        more.isHidden = all.count <= ordered.count
+        if keywordsHeight != before {
+            rowsChanged(by: keywordsHeight - before)
+        }
+    }
+
+    /// The height of the keywords' rows shown and of the line below them, from a row's and the line's own, measured
+    /// once.
+    private var keywordsHeight: CGFloat {
+        let rows = keywordRows.count(where: { !$0.isHidden })
+        let lines = rows + (more.isHidden ? 0 : 1)
+        guard lines > 0 else { return 0 }
+        if rowHeight == nil {
+            rowHeight = KeywordRow(panels: panels).fittingSize.height
+            moreHeight = more.fittingSize.height
+        }
+        return CGFloat(rows) * (rowHeight ?? 0) + (more.isHidden ? 0 : moreHeight ?? 0)
+            + CGFloat(lines - 1) * keywords.spacing
     }
 
     /// Keywords shown at most: a selection of thousands can have hundreds.
@@ -276,5 +297,63 @@ final class KeywordingPanelView: PanelStackView, NSTextFieldDelegate {
         }
         completions.isHidden = matches.isEmpty
         rowsChanged()
+    }
+}
+
+/// A keyword of the photos selected in the Keywording panel: its name, marked when only some of them have it, with
+/// how many do, and a button that takes it off them all.
+private final class KeywordRow: NSStackView {
+    private let name = PanelControls.label("")
+    private let partial = PanelControls.label("", secondary: true)
+    private var remove: NSButton?
+    private var path: KeywordPath?
+
+    init(panels: LibraryPanels) {
+        super.init(frame: .zero)
+        let remove = PanelControls.symbolButton("minus.circle", "Remove", identifier: "") { [weak self, weak panels] in
+            guard let path = self?.path else { return }
+            _ = panels?.remove(path)
+        }
+        self.remove = remove
+        orientation = .horizontal
+        alignment = .centerY
+        spacing = 6
+        distribution = .fill
+        name.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        for view in [name, partial, remove] {
+            addArrangedSubview(view)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    /// Shows `path`, on `count` of the `selected` photos.
+    func show(_ path: KeywordPath, on count: Int, of selected: Int) {
+        isHidden = false
+        let isPartial = count < selected
+        let counted = "\(count) of \(selected)"
+        guard path != self.path || isPartial == partial.isHidden || counted != partial.stringValue else { return }
+        self.path = path
+        name.stringValue = isPartial ? path.displayName + " *" : path.displayName
+        name.toolTip = isPartial ? "On \(count) of \(selected) photos" : "On every photo selected"
+        name.setAccessibilityIdentifier("keywording.keyword.\(path.text)")
+        partial.stringValue = counted
+        partial.isHidden = !isPartial
+        let description = "Remove “\(path.displayName)”"
+        remove?.toolTip = description
+        remove?.setAccessibilityLabel(description)
+        remove?.setAccessibilityIdentifier("keywording.remove.\(path.text)")
+    }
+
+    /// Out of the panel until another keyword needs a row, its controls named for none.
+    func hide() {
+        guard !isHidden else { return }
+        isHidden = true
+        path = nil
+        name.setAccessibilityIdentifier("")
+        remove?.setAccessibilityIdentifier("")
     }
 }
