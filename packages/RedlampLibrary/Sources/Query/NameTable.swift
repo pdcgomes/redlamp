@@ -356,7 +356,9 @@ struct NameTable: Sendable {
             top = TopMatches(limit: limit)
         }
     }
+}
 
+extension NameTable {
     /// `scan`'s work on `entries`.
     private func scan(
         _ typed: TypedName, _ entries: ArraySlice<Int32>, fields: FieldSet, table: Int, limit: Int,

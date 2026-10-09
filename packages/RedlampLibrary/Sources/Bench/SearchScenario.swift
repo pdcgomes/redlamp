@@ -138,8 +138,7 @@ enum QueryScenario {
     /// snapshot. A store built from the index saves its snapshot, and is searched mapped from it, as
     /// after a launch. Throws `MissingIndex` when there's no index there, or one that doesn't hold
     /// the manifest's photos.
-    static func engine(searching context: BenchContext, in folder: URL?) async throws
-        -> (index: LibraryIndex, engine: QueryEngine, loaded: Duration, mapped: Bool) {
+    static func engine(searching context: BenchContext, in folder: URL?) async throws -> Setup {
         let url = (folder ?? indexFolder(for: context)).appending(path: "Index.sqlite")
         let expected = context.manifest.totals.photos
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -160,7 +159,16 @@ enum QueryScenario {
         if !mapped {
             try await engine.saveSnapshot()
         }
-        return (index, engine, loaded, mapped)
+        return Setup(index: index, engine: engine, loaded: loaded, mapped: mapped)
+    }
+
+    /// The index a query scenario searches, its engine, how long the engine took to load, and whether it
+    /// was mapped from its snapshot.
+    struct Setup {
+        let index: LibraryIndex
+        let engine: QueryEngine
+        let loaded: Duration
+        let mapped: Bool
     }
 
     /// The `fraction` percentile of `durations`, in milliseconds.

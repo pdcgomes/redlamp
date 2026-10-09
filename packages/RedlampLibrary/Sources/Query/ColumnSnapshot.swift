@@ -87,11 +87,14 @@ enum ColumnSnapshot {
             }
         }
         let blob = encode(store, names: names)
-        var entries: [(section: Section, offset: Int, length: Int, count: Int, checksum: UInt64)] = []
+        var entries: [Layout.Entry] = []
         var offset = page
         func put(_ section: Section, _ bytes: UnsafeRawBufferPointer) throws {
             try writeAll(descriptor, bytes, at: offset)
-            entries.append((section, offset, bytes.count, bytes.count / section.stride, checksum(bytes)))
+            entries.append(Layout.Entry(
+                section: section, offset: offset, length: bytes.count, count: bytes.count / section.stride,
+                checksum: checksum(bytes),
+            ))
             offset += ColumnPages.rounded(bytes.count)
         }
         try store.withSections { section, bytes in
@@ -127,7 +130,9 @@ enum ColumnSnapshot {
         guard rename(partial.path, url.path) == 0 else { throw POSIXError.current }
         renamed = true
     }
+}
 
+extension ColumnSnapshot {
     /// Says of the snapshot at `url`, saved as reflecting `saved`, that it reflects `generation`, the
     /// store being unchanged since: only the bytes of its header that change are written again, in
     /// place, so its pages stay in the file cache for the next launch. A header a crash cut short
@@ -371,22 +376,23 @@ enum ColumnSnapshot {
     /// page or one of zeros where data was gives another sum.
     static func checksum(_ bytes: UnsafeRawBufferPointer) -> UInt64 {
         let prime: UInt64 = 0x9E37_79B9_7F4A_7C15
-        var lanes: (UInt64, UInt64, UInt64, UInt64) = (
-            0x243F_6A88_85A3_08D3, 0x1319_8A2E_0370_7344, 0xA409_3822_299F_31D0, 0x082E_FA98_EC4E_6C89,
-        )
+        var lane0: UInt64 = 0x243F_6A88_85A3_08D3
+        var lane1: UInt64 = 0x1319_8A2E_0370_7344
+        var lane2: UInt64 = 0xA409_3822_299F_31D0
+        var lane3: UInt64 = 0x082E_FA98_EC4E_6C89
         let words = bytes.count / 8
         var index = 0
         var sum: UInt64
         if let base = bytes.baseAddress {
             while index + 4 <= words {
                 let at = index * 8
-                lanes.0 = (lanes.0 ^ base.loadUnaligned(fromByteOffset: at, as: UInt64.self)) &* prime
-                lanes.1 = (lanes.1 ^ base.loadUnaligned(fromByteOffset: at + 8, as: UInt64.self)) &* prime
-                lanes.2 = (lanes.2 ^ base.loadUnaligned(fromByteOffset: at + 16, as: UInt64.self)) &* prime
-                lanes.3 = (lanes.3 ^ base.loadUnaligned(fromByteOffset: at + 24, as: UInt64.self)) &* prime
+                lane0 = (lane0 ^ base.loadUnaligned(fromByteOffset: at, as: UInt64.self)) &* prime
+                lane1 = (lane1 ^ base.loadUnaligned(fromByteOffset: at + 8, as: UInt64.self)) &* prime
+                lane2 = (lane2 ^ base.loadUnaligned(fromByteOffset: at + 16, as: UInt64.self)) &* prime
+                lane3 = (lane3 ^ base.loadUnaligned(fromByteOffset: at + 24, as: UInt64.self)) &* prime
                 index += 4
             }
-            sum = lanes.0 ^ lanes.1.rotated(17) ^ lanes.2.rotated(31) ^ lanes.3.rotated(47)
+            sum = lane0 ^ lane1.rotated(17) ^ lane2.rotated(31) ^ lane3.rotated(47)
             for word in index ..< words {
                 sum = (sum ^ base.loadUnaligned(fromByteOffset: word * 8, as: UInt64.self)) &* prime
             }
@@ -394,7 +400,7 @@ enum ColumnSnapshot {
                 sum = (sum ^ UInt64(base.load(fromByteOffset: byte, as: UInt8.self))) &* prime
             }
         } else {
-            sum = lanes.0 ^ lanes.1.rotated(17) ^ lanes.2.rotated(31) ^ lanes.3.rotated(47)
+            sum = lane0 ^ lane1.rotated(17) ^ lane2.rotated(31) ^ lane3.rotated(47)
         }
         sum ^= UInt64(bytes.count)
         sum = (sum ^ (sum >> 33)) &* 0xFF51_AFD7_ED55_8CCD

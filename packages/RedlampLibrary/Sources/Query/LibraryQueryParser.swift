@@ -145,6 +145,41 @@ struct LibraryQueryParser {
         }
         position = operatorRange.upperBound
 
+        guard let items = try values(named: name, at: nameRange) else { return nil }
+
+        let reachesEnd = isUnfinished
+        var values: [LibraryQuery.Value] = []
+        for (index, item) in items.enumerated() {
+            do {
+                try values.append(LibraryQueryValues.value(item.text, for: field))
+            } catch {
+                if asYouType, reachesEnd, index == items.count - 1 {
+                    break
+                }
+                throw failure(item.range, error.message)
+            }
+        }
+        guard !values.isEmpty else { return nil }
+        if comparison.isOrdering {
+            if values.count > 1 {
+                throw failure(
+                    items[0].range.lowerBound ..< items[values.count - 1].range.upperBound,
+                    "a comparison takes one value",
+                )
+            }
+            switch values[0] {
+            case .numberRange, .dateRange: throw failure(items[0].range, "a comparison takes one value, not a range")
+            default: break
+            }
+        }
+        return .filter(LibraryQuery.Filter(field, comparison, values))
+    }
+
+    /// The values written after `name`'s comparison, each with where it's written; nil when the query is being typed
+    /// and none is written yet.
+    private mutating func values(
+        named name: String, at nameRange: Range<Int>,
+    ) throws(LibraryQueryError) -> [(text: String, range: Range<Int>)]? {
         var items: [(text: String, range: Range<Int>)] = []
         while true {
             if isAtEnd || Self.endsValue(characters[position]) {
@@ -185,33 +220,7 @@ struct LibraryQueryParser {
             guard position < characters.count, characters[position] == "," else { break }
             position += 1
         }
-
-        let reachesEnd = isUnfinished
-        var values: [LibraryQuery.Value] = []
-        for (index, item) in items.enumerated() {
-            do {
-                try values.append(LibraryQueryValues.value(item.text, for: field))
-            } catch {
-                if asYouType, reachesEnd, index == items.count - 1 {
-                    break
-                }
-                throw failure(item.range, error.message)
-            }
-        }
-        guard !values.isEmpty else { return nil }
-        if comparison.isOrdering {
-            if values.count > 1 {
-                throw failure(
-                    items[0].range.lowerBound ..< items[values.count - 1].range.upperBound,
-                    "a comparison takes one value",
-                )
-            }
-            switch values[0] {
-            case .numberRange, .dateRange: throw failure(items[0].range, "a comparison takes one value, not a range")
-            default: break
-            }
-        }
-        return .filter(LibraryQuery.Filter(field, comparison, values))
+        return items
     }
 
     // MARK: - Characters
@@ -296,7 +305,23 @@ enum LibraryQueryValues {
     }
 
     static func value(_ text: String, for field: LibraryQuery.Field) throws(Invalid) -> LibraryQuery.Value {
-        let lowered = text.lowercased()
+        switch field {
+        case .rating, .iso, .aperture, .focal, .shutter, .megapixels, .aspect:
+            try numeric(text, for: field)
+        case .date:
+            try dates(text)
+        case .trait, .flag, .label, .marked, .edited, .missing, .offline, .unreadable:
+            try word(text, for: field)
+        case .has, .orientation, .ext:
+            try attribute(text, for: field)
+        case .keyword, .camera, .lens, .folder, .name, .collection, .title, .caption, .creator, .copyright,
+             .sublocation, .city, .state, .country, .countryCode:
+            .text(text)
+        }
+    }
+
+    /// A numeric field's number, or range of numbers.
+    private static func numeric(_ text: String, for field: LibraryQuery.Field) throws(Invalid) -> LibraryQuery.Value {
         switch field {
         case .rating:
             return try numbers(text, invalid: "rating is a whole number from 0 to 5") { part in
@@ -325,6 +350,15 @@ enum LibraryQueryValues {
             ) {
                 ratio($0)
             }
+        default:
+            throw Invalid(message: "\(field.rawValue) isn't a number")
+        }
+    }
+
+    /// A trait, a flag, a label or yes or no.
+    private static func word(_ text: String, for field: LibraryQuery.Field) throws(Invalid) -> LibraryQuery.Value {
+        let lowered = text.lowercased()
+        switch field {
         case .trait:
             guard let trait = LibraryQuery.Trait(rawValue: lowered) else {
                 let names = LibraryQuery.Trait.allCases.map(\.rawValue)
@@ -333,8 +367,6 @@ enum LibraryQueryValues {
                 )
             }
             return .trait(trait)
-        case .date:
-            return try dates(text)
         case .flag:
             switch lowered {
             case "pick": return .flag(.pick)
@@ -353,6 +385,15 @@ enum LibraryQueryValues {
             case "no": return .bool(false)
             default: throw Invalid(message: "\(field.rawValue) is yes or no")
             }
+        default:
+            return .text(text)
+        }
+    }
+
+    /// A detail a photo has, an orientation or a kind of file.
+    private static func attribute(_ text: String, for field: LibraryQuery.Field) throws(Invalid) -> LibraryQuery.Value {
+        let lowered = text.lowercased()
+        switch field {
         case .has:
             guard let detail = LibraryQuery.Detail(rawValue: lowered) else {
                 throw Invalid(message: "has is gps, keywords, caption, title, xmp, creator, copyright or location")
@@ -375,8 +416,7 @@ enum LibraryQueryValues {
                 throw Invalid(message: "ext is raw, jpeg, heic, tiff, png or an extension such as cr3")
             }
             return .text(ext)
-        case .keyword, .camera, .lens, .folder, .name, .collection, .title, .caption, .creator, .copyright,
-             .sublocation, .city, .state, .country, .countryCode:
+        default:
             return .text(text)
         }
     }

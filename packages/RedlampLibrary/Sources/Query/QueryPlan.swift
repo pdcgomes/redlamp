@@ -147,29 +147,11 @@ indirect enum QueryPlan: Sendable, Hashable {
         store: ColumnStore, vocabulary: QueryVocabulary, today: Int, moments: MomentScope,
     ) -> QueryPlan {
         if let range = QueryRanges.range(field, comparison, value, today: today) {
-            guard !range.isEmpty else { return .nothing }
-            switch field {
-            case .rating:
-                let accepted = (range.lowerBound ..< range.upperBound).reduce(UInt32(0)) { $0 | 1 << UInt32($1) }
-                return .leaf(.packed(shift: 0, mask: 0x7, accepted: accepted))
-            case .iso: return .leaf(.iso(range))
-            case .aperture: return .leaf(.aperture(range))
-            case .focal: return .leaf(.focal(range))
-            case .shutter: return .leaf(.shutter(range))
-            case .megapixels: return .leaf(.megapixels(range))
-            case .aspect: return .leaf(.aspect(range))
-            default: return .leaf(.captured(range))
-            }
+            return compile(field, within: range)
         }
         switch (field, value) {
         case let (.trait, .trait(trait)):
-            switch trait {
-            case .unpickedMoment: return .leaf(.rows(.unpickedMoments(moments)))
-            case .damaged: return .leaf(.rows(.damaged))
-            default:
-                guard let query = trait.query else { return .nothing }
-                return compile(query, store: store, vocabulary: vocabulary, today: today, moments: moments)
-            }
+            return compile(trait: trait, store: store, vocabulary: vocabulary, today: today, moments: moments)
         case let (.flag, .flag(flag)):
             return .leaf(.packed(
                 shift: Packed.flagShift,
@@ -182,14 +164,6 @@ indirect enum QueryPlan: Sendable, Hashable {
         case let (.label, .text(name)):
             let custom = codes(.customLabel, store.customLabelNames.codes(named: name))
             return XMPLabelNames.label(named: name).map { any([labelled($0), custom]) } ?? custom
-        case let (.creator, .text(text)):
-            return codes(.creator, store.creatorNames.codes(containing: text))
-        case let (.copyright, .text(text)):
-            return codes(.copyright, store.copyrightNames.codes(containing: text))
-        case let (.sublocation, .text(text)), let (.city, .text(text)), let (.state, .text(text)),
-             let (.country, .text(text)), let (.countryCode, .text(text)):
-            guard let part = PlaceCodes.Part(field) else { return .nothing }
-            return codes(.place, store.placeNames.places(where: part, contains: text))
         case let (.marked, .bool(yes)):
             return yes ? .leaf(.bit(Packed.marked)) : .not(.leaf(.bit(Packed.marked)))
         case let (.edited, .bool(yes)):
@@ -198,43 +172,95 @@ indirect enum QueryPlan: Sendable, Hashable {
             let state: PhotoRecord.State = field == .missing ? .missing : field == .offline ? .offline : .unreadable
             let leaf = QueryPlan.leaf(.state(UInt8(state.rawValue)))
             return yes ? leaf : .not(leaf)
-        case let (.keyword, .text(text)):
-            let ids = vocabulary.ids(in: .keywords, matching: text)
-            return ids.isEmpty ? .nothing : .leaf(.rows(.keywords(ids)))
-        case let (.collection, .text(text)):
-            let ids = vocabulary.ids(in: .collections, matching: text)
-            return ids.isEmpty ? .nothing : .leaf(.rows(.collections(ids)))
-        case let (.camera, .text(text)):
-            return cameras(vocabulary.ids(in: .cameras, matching: text), store)
-        case let (.lens, .text(text)):
-            return lenses(vocabulary.ids(in: .lenses, matching: text), store)
-        case let (.folder, .text(text)):
-            return folders(vocabulary.ids(in: .folders, matching: text))
-        case let (.name, .text(text)):
-            return .leaf(.rows(.match(QueryText.match(text, in: .name))))
-        case let (.title, .text(text)):
-            return .leaf(.rows(.match(QueryText.match(text, in: .title))))
-        case let (.caption, .text(text)):
-            return .leaf(.rows(.match(QueryText.match(text, in: .caption))))
         case let (.ext, .kind(kind)):
             return .leaf(.kinds(1 << UInt64(kind.rawValue)))
         case let (.orientation, .orientation(orientation)):
             return .leaf(.orientations(1 << (orientation?.code ?? 0)))
-        case let (.ext, .text(ext)):
-            return .leaf(.rows(.match(QueryText.match("." + ext, in: .name))))
         case let (.has, .detail(detail)):
-            let details: ColumnStore.Details
-            switch detail {
-            case .gps: details = .location
-            case .keywords: details = .keywords
-            case .caption: details = .caption
-            case .title: details = .title
-            case .xmp: details = .xmp
-            case .creator: return .leaf(.present(.creator))
-            case .copyright: return .leaf(.present(.copyright))
-            case .location: return .leaf(.present(.place))
-            }
-            return .leaf(.bit(Packed.details(details)))
+            return compile(detail: detail)
+        case let (_, .text(text)):
+            return compile(field, matching: text, store: store, vocabulary: vocabulary)
+        default:
+            return .nothing
+        }
+    }
+
+    /// A numeric field, or the capture time, within `range`.
+    private static func compile(_ field: LibraryQuery.Field, within range: Range<Int64>) -> QueryPlan {
+        guard !range.isEmpty else { return .nothing }
+        switch field {
+        case .rating:
+            let accepted = (range.lowerBound ..< range.upperBound).reduce(UInt32(0)) { $0 | 1 << UInt32($1) }
+            return .leaf(.packed(shift: 0, mask: 0x7, accepted: accepted))
+        case .iso: return .leaf(.iso(range))
+        case .aperture: return .leaf(.aperture(range))
+        case .focal: return .leaf(.focal(range))
+        case .shutter: return .leaf(.shutter(range))
+        case .megapixels: return .leaf(.megapixels(range))
+        case .aspect: return .leaf(.aspect(range))
+        default: return .leaf(.captured(range))
+        }
+    }
+
+    private static func compile(
+        trait: LibraryQuery.Trait, store: ColumnStore, vocabulary: QueryVocabulary, today: Int, moments: MomentScope,
+    ) -> QueryPlan {
+        switch trait {
+        case .unpickedMoment: return .leaf(.rows(.unpickedMoments(moments)))
+        case .damaged: return .leaf(.rows(.damaged))
+        default:
+            guard let query = trait.query else { return .nothing }
+            return compile(query, store: store, vocabulary: vocabulary, today: today, moments: moments)
+        }
+    }
+
+    private static func compile(detail: LibraryQuery.Detail) -> QueryPlan {
+        let details: ColumnStore.Details
+        switch detail {
+        case .gps: details = .location
+        case .keywords: details = .keywords
+        case .caption: details = .caption
+        case .title: details = .title
+        case .xmp: details = .xmp
+        case .creator: return .leaf(.present(.creator))
+        case .copyright: return .leaf(.present(.copyright))
+        case .location: return .leaf(.present(.place))
+        }
+        return .leaf(.bit(Packed.details(details)))
+    }
+
+    /// A field compared with text: the names, words and places that hold it.
+    private static func compile(
+        _ field: LibraryQuery.Field, matching text: String, store: ColumnStore, vocabulary: QueryVocabulary,
+    ) -> QueryPlan {
+        switch field {
+        case .creator:
+            return codes(.creator, store.creatorNames.codes(containing: text))
+        case .copyright:
+            return codes(.copyright, store.copyrightNames.codes(containing: text))
+        case .sublocation, .city, .state, .country, .countryCode:
+            guard let part = PlaceCodes.Part(field) else { return .nothing }
+            return codes(.place, store.placeNames.places(where: part, contains: text))
+        case .keyword:
+            let ids = vocabulary.ids(in: .keywords, matching: text)
+            return ids.isEmpty ? .nothing : .leaf(.rows(.keywords(ids)))
+        case .collection:
+            let ids = vocabulary.ids(in: .collections, matching: text)
+            return ids.isEmpty ? .nothing : .leaf(.rows(.collections(ids)))
+        case .camera:
+            return cameras(vocabulary.ids(in: .cameras, matching: text), store)
+        case .lens:
+            return lenses(vocabulary.ids(in: .lenses, matching: text), store)
+        case .folder:
+            return folders(vocabulary.ids(in: .folders, matching: text))
+        case .name:
+            return .leaf(.rows(.match(QueryText.match(text, in: .name))))
+        case .title:
+            return .leaf(.rows(.match(QueryText.match(text, in: .title))))
+        case .caption:
+            return .leaf(.rows(.match(QueryText.match(text, in: .caption))))
+        case .ext:
+            return .leaf(.rows(.match(QueryText.match("." + text, in: .name))))
         default:
             return .nothing
         }
@@ -476,23 +502,39 @@ extension ColumnStore {
             let table = Self.table(ids.map(Int.init))
             Self.fill(&words, folders) { Self.lookUp(table, Int($0)) }
         case let .codes(column, table):
-            switch column {
-            case .creator: Self.fill(&words, creators) { Self.lookUp(table, Int($0)) }
-            case .copyright: Self.fill(&words, copyrights) { Self.lookUp(table, Int($0)) }
-            case .customLabel: Self.fill(&words, customLabels) { Self.lookUp(table, Int($0)) }
-            case .place: Self.fill(&words, places) { Self.lookUp(table, Int($0)) }
-            }
+            fill(&words, column, codes: table)
         case let .present(column):
-            switch column {
-            case .creator: Self.fill(&words, creators) { $0 == 0 ? 0 : 1 }
-            case .copyright: Self.fill(&words, copyrights) { $0 == 0 ? 0 : 1 }
-            case .customLabel: Self.fill(&words, customLabels) { $0 == 0 ? 0 : 1 }
-            case .place: Self.fill(&words, places) { $0 == 0 ? 0 : 1 }
-            }
+            fill(&words, present: column)
         case let .rows(set):
             return sets[set] ?? RowBits(rows: rowCount)
         }
         return RowBits(words: words)
+    }
+
+    /// Each word of `words` from 64 rows of the column of names `column`, a bit for each whose code is in `table`.
+    @inline(__always)
+    private func fill(
+        _ words: inout ContiguousArray<UInt64>,
+        _ column: QueryPlan.CodeColumn,
+        codes table: ContiguousArray<UInt64>,
+    ) {
+        switch column {
+        case .creator: Self.fill(&words, creators) { Self.lookUp(table, Int($0)) }
+        case .copyright: Self.fill(&words, copyrights) { Self.lookUp(table, Int($0)) }
+        case .customLabel: Self.fill(&words, customLabels) { Self.lookUp(table, Int($0)) }
+        case .place: Self.fill(&words, places) { Self.lookUp(table, Int($0)) }
+        }
+    }
+
+    /// Each word of `words` from 64 rows of the column of names `column`, a bit for each with a name.
+    @inline(__always)
+    private func fill(_ words: inout ContiguousArray<UInt64>, present column: QueryPlan.CodeColumn) {
+        switch column {
+        case .creator: Self.fill(&words, creators) { $0 == 0 ? 0 : 1 }
+        case .copyright: Self.fill(&words, copyrights) { $0 == 0 ? 0 : 1 }
+        case .customLabel: Self.fill(&words, customLabels) { $0 == 0 ? 0 : 1 }
+        case .place: Self.fill(&words, places) { $0 == 0 ? 0 : 1 }
+        }
     }
 
     /// Each word of `words` from 64 rows of `column`, a bit for each as `test` gives it.

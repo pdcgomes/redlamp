@@ -91,17 +91,7 @@ struct QuerySQL: Sendable, Hashable {
             _ field: LibraryQuery.Field, _ comparison: LibraryQuery.Comparison, _ value: LibraryQuery.Value,
         ) -> String {
             if let range = QueryRanges.range(field, comparison, value, today: today) {
-                let expression = switch field {
-                case .rating: ColumnEncoding.ratingSQL
-                case .iso: ColumnEncoding.isoSQL
-                case .aperture: ColumnEncoding.apertureSQL
-                case .focal: ColumnEncoding.focalSQL
-                case .shutter: ColumnEncoding.shutterSQL
-                case .megapixels: ColumnEncoding.megapixelsSQL
-                case .aspect: ColumnEncoding.aspectSQL
-                default: ColumnEncoding.capturedSQL
-                }
-                return range.isEmpty ? "0" : "(\(expression) BETWEEN \(range.lowerBound) AND \(range.upperBound - 1))"
+                return Self.predicate(field, within: range)
             }
             switch (field, value) {
             case let (.flag, .flag(flag)):
@@ -113,12 +103,6 @@ struct QuerySQL: Sendable, Hashable {
                 let custom = "redlamp_named(p.custom_label, \(bind(name)))"
                 guard let colour = XMPLabelNames.label(named: name) else { return custom }
                 return "((\(ColumnEncoding.labelSQL) = \(PhotoRecord.code(for: colour))) OR \(custom))"
-            case let (.creator, .text(text)), let (.copyright, .text(text)):
-                return "redlamp_contains(p.\(field.rawValue), \(bind(text)))"
-            case let (.sublocation, .text(text)), let (.city, .text(text)), let (.state, .text(text)),
-                 let (.country, .text(text)), let (.countryCode, .text(text)):
-                guard let part = PlaceCodes.Part(field) else { return "0" }
-                return "redlamp_contains(p.\(part.column), \(bind(text)))"
             case let (.marked, .bool(yes)):
                 return yes ? "(p.marked != 0)" : "(p.marked = 0)"
             case let (.edited, .bool(yes)):
@@ -126,51 +110,85 @@ struct QuerySQL: Sendable, Hashable {
             case let (.missing, .bool(yes)), let (.offline, .bool(yes)), let (.unreadable, .bool(yes)):
                 let state: PhotoRecord.State = field == .missing ? .missing : field == .offline ? .offline : .unreadable
                 return "((\(ColumnEncoding.stateSQL) & \(state.rawValue)) \(yes ? "!=" : "=") 0)"
-            case let (.keyword, .text(text)):
+            case let (.ext, .kind(kind)):
+                return "(\(ColumnEncoding.kindSQL) = \(kind.rawValue))"
+            case let (.orientation, .orientation(orientation)):
+                return "(\(ColumnEncoding.orientationSQL) = \(orientation?.code ?? 0))"
+            case let (.trait, .trait(trait)):
+                // `is:unpicked-moment` and `is:damaged` need the column store: the engine waits for it rather
+                // than ask SQL.
+                return trait.query.map { predicate($0) } ?? "0"
+            case let (.has, .detail(detail)):
+                return Self.predicate(detail: detail)
+            case let (_, .text(text)):
+                return predicate(field, matching: text)
+            default:
+                return "0"
+            }
+        }
+
+        /// A numeric field, or the capture time, within `range`.
+        private static func predicate(_ field: LibraryQuery.Field, within range: Range<Int64>) -> String {
+            let expression = switch field {
+            case .rating: ColumnEncoding.ratingSQL
+            case .iso: ColumnEncoding.isoSQL
+            case .aperture: ColumnEncoding.apertureSQL
+            case .focal: ColumnEncoding.focalSQL
+            case .shutter: ColumnEncoding.shutterSQL
+            case .megapixels: ColumnEncoding.megapixelsSQL
+            case .aspect: ColumnEncoding.aspectSQL
+            default: ColumnEncoding.capturedSQL
+            }
+            return range.isEmpty ? "0" : "(\(expression) BETWEEN \(range.lowerBound) AND \(range.upperBound - 1))"
+        }
+
+        private static func predicate(detail: LibraryQuery.Detail) -> String {
+            switch detail {
+            case .gps: ColumnEncoding.locationSQL
+            case .keywords: ColumnEncoding.keywordsSQL
+            case .caption: ColumnEncoding.captionSQL
+            case .title: ColumnEncoding.titleSQL
+            case .xmp: ColumnEncoding.xmpSQL
+            case .creator: ColumnEncoding.presentSQL("p.creator")
+            case .copyright: ColumnEncoding.presentSQL("p.copyright")
+            case .location:
+                "(" + PlaceCodes.Part.allCases.map { ColumnEncoding.presentSQL("p." + $0.column) }
+                    .joined(separator: " OR ") + ")"
+            }
+        }
+
+        /// A field compared with text: the names, words and places that hold it.
+        private mutating func predicate(_ field: LibraryQuery.Field, matching text: String) -> String {
+            switch field {
+            case .creator, .copyright:
+                return "redlamp_contains(p.\(field.rawValue), \(bind(text)))"
+            case .sublocation, .city, .state, .country, .countryCode:
+                guard let part = PlaceCodes.Part(field) else { return "0" }
+                return "redlamp_contains(p.\(part.column), \(bind(text)))"
+            case .keyword:
                 var tests = ["redlamp_keyword(k.path, \(bind(text)))"]
                 for owner in synonyms.owners(of: text) {
                     tests.append("redlamp_within(k.path, \(bind(owner)))")
                 }
                 return "p.id IN (SELECT pk.photo FROM photo_keywords pk JOIN keywords k ON k.id = pk.keyword"
                     + " WHERE " + tests.joined(separator: " OR ") + ")"
-            case let (.camera, .text(text)):
+            case .camera:
                 return Self.named("camera", "cameras", bind(text))
-            case let (.lens, .text(text)):
+            case .lens:
                 return Self.named("lens", "lenses", bind(text))
-            case let (.folder, .text(text)):
+            case .folder:
                 return "p.folder IN (SELECT id FROM folders WHERE redlamp_contains(path, \(bind(text))))"
-            case let (.name, .text(text)):
+            case .name:
                 return textMatch(QueryText.match(text, in: .name))
-            case let (.title, .text(text)):
+            case .title:
                 return textMatch(QueryText.match(text, in: .title))
-            case let (.caption, .text(text)):
+            case .caption:
                 return textMatch(QueryText.match(text, in: .caption))
-            case let (.ext, .kind(kind)):
-                return "(\(ColumnEncoding.kindSQL) = \(kind.rawValue))"
-            case let (.orientation, .orientation(orientation)):
-                return "(\(ColumnEncoding.orientationSQL) = \(orientation?.code ?? 0))"
-            case let (.ext, .text(ext)):
-                return textMatch(QueryText.match("." + ext, in: .name))
-            case let (.collection, .text(text)):
+            case .ext:
+                return textMatch(QueryText.match("." + text, in: .name))
+            case .collection:
                 return "p.id IN (SELECT cp.photo FROM collection_photos cp JOIN collections c ON c.id = cp.collection"
                     + " WHERE c.path IS NOT NULL AND redlamp_keyword(c.path, \(bind(text))))"
-            case let (.trait, .trait(trait)):
-                // `is:unpicked-moment` and `is:damaged` need the column store: the engine waits for it rather
-                // than ask SQL.
-                return trait.query.map { predicate($0) } ?? "0"
-            case let (.has, .detail(detail)):
-                return switch detail {
-                case .gps: ColumnEncoding.locationSQL
-                case .keywords: ColumnEncoding.keywordsSQL
-                case .caption: ColumnEncoding.captionSQL
-                case .title: ColumnEncoding.titleSQL
-                case .xmp: ColumnEncoding.xmpSQL
-                case .creator: ColumnEncoding.presentSQL("p.creator")
-                case .copyright: ColumnEncoding.presentSQL("p.copyright")
-                case .location:
-                    "(" + PlaceCodes.Part.allCases.map { ColumnEncoding.presentSQL("p." + $0.column) }
-                        .joined(separator: " OR ") + ")"
-                }
             default:
                 return "0"
             }
