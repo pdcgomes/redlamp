@@ -135,15 +135,22 @@ final class MoveEditsSheetController: NSViewController {
         return label
     }
 
+    /// Sets only what changed: the progress comes ten times a second while the sheet's wrapping labels would be laid
+    /// out again for each.
     private func update() {
-        heading.stringValue = model.heading
-        count.stringValue = model.count
-        kept.stringValue = model.kept
-        goingTo.stringValue = model.goingTo
-        what.stringValue = model.what
-        status.stringValue = model.status
-        status.textColor = model.statusIsProblem ? .systemRed : .secondaryLabelColor
-        status.isHidden = model.status.isEmpty
+        for (field, text) in [
+            (heading, model.heading), (count, model.count), (kept, model.kept), (goingTo, model.goingTo),
+            (what, model.what), (status, model.status),
+        ] where field.stringValue != text {
+            field.stringValue = text
+        }
+        let color: NSColor = model.statusIsProblem ? .systemRed : .secondaryLabelColor
+        if status.textColor != color {
+            status.textColor = color
+        }
+        if status.isHidden != model.status.isEmpty {
+            status.isHidden = model.status.isEmpty
+        }
         if case let .moving(shown) = model.phase, shown.total > 0 {
             progress.isHidden = false
             progress.doubleValue = Double(shown.done) / Double(shown.total)
@@ -151,7 +158,10 @@ final class MoveEditsSheetController: NSViewController {
             progress.isHidden = !model.isMoving
             progress.doubleValue = 0
         }
-        cancel.title = model.isOver ? "Close" : "Cancel"
+        let title = model.isOver ? "Close" : "Cancel"
+        if cancel.title != title {
+            cancel.title = title
+        }
         cancel.isEnabled = !(model.isPuttingBack || model.control.isCancelled)
         move.isHidden = model.isOver
         move.isEnabled = model.canMove
