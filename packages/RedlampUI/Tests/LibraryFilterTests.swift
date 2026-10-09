@@ -563,7 +563,7 @@ extension LibraryFilterTests {
         try await filtered(model, "camera:X-T5 rating:4")
         // The bar follows the offer a turn after the filter has it.
         try await eventually { filters.removal != nil && !button.isHidden }
-        try click("library.filter.removal", in: window)
+        try await click("library.filter.removal", in: window)
         try await listed(model)
         #expect(filters.filter.text == "camera:X-T5" && Set(names(model)) == ["IMG_0001.JPG", "IMG_0002.JPG"])
         try await eventually { button.isHidden }
@@ -601,7 +601,7 @@ extension LibraryFilterTests {
         #expect(button.frame.maxX <= removal.frame.minX, "beside the removal's")
         #expect(button.accessibilityLabel() == "Did you mean Lisboa? 1 photo")
 
-        try click("library.filter.suggestion", in: window)
+        try await click("library.filter.suggestion", in: window)
         try await listed(model)
         #expect(filters.filter.text == "Lisboa" && names(model) == ["IMG_0001.JPG"], "the word replaced")
         try await eventually { button.isHidden }

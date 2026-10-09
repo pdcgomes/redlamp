@@ -107,29 +107,30 @@ extension LibraryFilterTests {
         defer { window.contentViewController = nil }
         model.perform(.toggleFilterBar)
         try await eventually { filters.columns[0]?.values.contains { $0.name == "png" } == true }
-        try await eventually {
-            window.contentView?.layoutSubtreeIfNeeded()
-            return Self.view("library.filter.column.0.value.png", in: window.contentView) != nil
-        }
 
-        try click("library.filter.column.0.value.png", in: window)
+        try await click("library.filter.column.0.value.png", in: window)
         try await listed(model)
         #expect(filters.filter.text == "ext:png" && names(model) == ["IMG_0004.PNG"])
-        try click("library.filter.column.0.value.jpeg", in: window, modifiers: .command)
+        try await click("library.filter.column.0.value.jpeg", in: window, modifiers: .command)
         try await listed(model)
         #expect(filters.filter.text.contains("jpeg") && filters.filter.text.contains("png"))
         #expect(model.items.count == 5)
-        try click("library.filter.column.0.all", in: window)
+        try await click("library.filter.column.0.all", in: window)
         try await listed(model)
         #expect(filters.filter.text.isEmpty && !model.library.isFiltered)
     }
 
-    /// Presses and releases the mouse on the view under `identifier`'s middle, as the e2e driver does.
-    func click(_ identifier: String, in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) throws {
-        window.contentView?.layoutSubtreeIfNeeded()
-        let view = try #require(Self.view(identifier, in: window.contentView), "\(identifier) on screen")
-        let location = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
-        let hit = try #require(window.contentView?.superview?.hitTest(location))
+    /// Presses and releases the mouse on the view under `identifier`'s middle, as the e2e driver does, once a click
+    /// there reaches what takes it (`clickable`). A press that reached another view could start that view's own
+    /// tracking loop (a pop-up's menu, a text selection, the grid's rubber band), which would hold the test waiting
+    /// for a release that only comes after the press returns.
+    func click(_ identifier: String, in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) async throws {
+        var target: (hit: NSView, location: NSPoint)?
+        try await eventually {
+            target = Self.clickable(identifier, in: window)
+            return target != nil
+        }
+        let (hit, location) = try #require(target, "\(identifier) on screen, where a click reaches it")
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try #require(NSEvent.mouseEvent(
                 with: type, location: location, modifierFlags: modifiers,
@@ -142,6 +143,21 @@ extension LibraryFilterTests {
                 hit.mouseUp(with: event)
             }
         }
+    }
+
+    /// The view a click on the middle of `identifier`'s view reaches, and where in the window, when it's inside what
+    /// takes that click: the table the view is a row of, or the view itself. The middle mustn't be scrolled out of
+    /// sight.
+    static func clickable(_ identifier: String, in window: NSWindow) -> (hit: NSView, location: NSPoint)? {
+        window.contentView?.layoutSubtreeIfNeeded()
+        guard let view = Self.view(identifier, in: window.contentView) else { return nil }
+        let middle = NSPoint(x: view.bounds.midX, y: view.bounds.midY)
+        guard view.visibleRect.contains(middle) else { return nil }
+        let location = view.convert(middle, to: nil)
+        let taker = sequence(first: view, next: \.superview).first { $0 is NSTableView } ?? view
+        guard let hit = window.contentView?.superview?.hitTest(location),
+              hit === taker || hit.isDescendant(of: taker) else { return nil }
+        return (hit, location)
     }
 
     @Test func `a term being typed is completed where it is, its field's values or a field`() {
