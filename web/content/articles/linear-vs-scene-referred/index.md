@@ -63,8 +63,6 @@ Screen light proportional to scene light up to white, with no curve bending it. 
 
 ## What would fix it
 
-Two changes, and neither is a change of encoding.
-
 **A scene-referred mode fixes the shape.** It's a rendering with no tone curve and no look: screen light equals scene light up to white. In the figure above, the curve becomes the diagonal, and once exposure is anchored, a metered 18% grey reads L* 49.5. Its exports can keep an ordinary curve, sRGB or a reference space for archive masters: their numbers aren't linear, but the light they describe is the scene's.
 
 **Tying exposure to each camera's metering fixes the position.** Redlamp scales each sensor's clip point to 1.0, and cameras put a metered 18% grey roughly 3.3 to 3.7 stops below clip, depending on how each maker calibrates ISO. Redlamp only adds a baseline exposure for DNG files, which carry one; other raws get none. So Exposure 0 means a different grey on each camera, which would explain exports coming out slightly dark. Anchoring slides the line along; it doesn't straighten it.
