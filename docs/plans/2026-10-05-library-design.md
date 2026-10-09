@@ -823,7 +823,7 @@ With the copy rule, every stack found at a million in 64.9 to 67.0 ms (median of
 | Frames during Open All and Close All, p99 | 7.60 ms | 6.82 ms | 8.3 ms |
 | Scrolling, p99 | 1.51 ms | 2.79 ms | 8.3 ms |
 
-The 2007 folder's p95 for one stack opened went over at this load (its median 1.27 to 1.34 ms at 21 to 31). Each toggle had rebuilt the whole menu bar, as SwiftUI re-asks every item when anything the menus observe changes: the observed outline now holds only what a toggle doesn't change, so anything added to it that does brings the rebuild back. The filmstrip reloads its data on a toggle rather than running an animated batch update, and the grid tiles once.
+The 2007 folder's p95 for one stack opened went over at this load (its median 1.27 to 1.34 ms at 21 to 31). Each toggle had rebuilt the whole menu bar, as SwiftUI re-asks every item when anything the menus observe changes: the observed outline now holds only what a toggle doesn't change, so anything added to it that does brings the rebuild back. The filmstrip reloads its data on a toggle rather than running an animated batch update, and the grid tiles once. A reload lays the strip out at once (3a34d883): left to the next layout, a photo arriving in the same turn was counted twice by the batch update that followed, which raised 'attempt to delete item 0 from section 0 which only contains 0 items' and quit the app.
 
 ### Keywords (LIB-21)
 
