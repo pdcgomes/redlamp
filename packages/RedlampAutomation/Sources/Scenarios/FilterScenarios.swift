@@ -77,6 +77,14 @@
             }
         }
 
+        /// `scratch` out of Folders and off the disk, and the run's folder shown again, as the scenarios after find it.
+        func removeScratch(_ scratch: SourcesScratch) {
+            scratch.remove(self)
+            let photos = photos
+            try? main { $0.showFolder(photos) }
+            try? wait("the run's folder again", timeout: 20) { $0.folder == photos && !$0.library.isListing }
+        }
+
         /// The filter cleared, the bar hidden, the folder's own order, and Develop again.
         func resetFilter() throws {
             try main { model in
@@ -120,7 +128,7 @@
     }
 
     enum FilterScenarios {
-        static let all: [Scenario] = [text, columns, sources, empty, suggestion, moments, momentsPerformance]
+        static let all: [Scenario] = [text, columns, sources, empty, suggestion, moments, momentsPerformance, damaged]
 
         private static let raws: Set<String> = ["arw", "raf", "cr3", "nef", "dng", "orf", "pef", "rw2", "3fr"]
 
@@ -475,6 +483,50 @@
                 }
             }
             return names
+        }
+    }
+
+    extension FilterScenarios {
+        static let damaged = Scenario(
+            "library.filter-damaged",
+            "is:damaged, completed with Tab in the filter bar's text or chosen with the Attribute section's Damaged "
+                + "button, shows the folder's damaged files, as Library Health lists them",
+            claims: [.feature("library.filter")],
+        ) { app in
+            let scratch = try SourcesScratch(app, photos: ["A.jpg", "B.jpg"], empty: ["Empty.jpg"])
+            defer { app.removeScratch(scratch) }
+            try scratch.index(app)
+            defer { try? app.resetFilter() }
+            try app.main { $0.libraryFilters?.setFilter(LibraryFilter()) }
+            if try !app.main({ $0.libraryFilters?.isBarShown ?? false }) {
+                try app.press(.toggleFilterBar)
+            }
+            try app.wait("the filter bar's text to take the keyboard") { _ in
+                (Views.editorWindow?.firstResponder as? NSTextView)?.delegate is NSTextField
+            }
+            try app.typeQuery("is:dam")
+            try app.wait("the damaged files offered, with the folder's one") { model in
+                model.libraryFilters?.completions.first.map { $0.text == "is:damaged " && $0.count == 1 } == true
+            }
+            try app.pressInWindow(KeyCombo(.tab))
+            try app.wait("Tab to take it, and the empty file alone", timeout: 20) { model in
+                model.libraryFilters?.filter.text == "is:damaged " && model.items.map(\.name) == ["Empty.jpg"]
+            }
+            app.covered(.feature("library.filter"), via: .key)
+
+            try app.clickView("library.filter.attribute", modifiers: .shift)
+            try app.wait("the Attribute section") { model in
+                model.libraryFilters?.filter.sections.contains(.attribute) == true
+            }
+            try app.clickView("library.filter.damaged")
+            try app.wait("its Damaged button to take the term out") { model in
+                model.libraryFilters?.filter.text.isEmpty == true && model.items.count == 3
+            }
+            try app.clickView("library.filter.damaged")
+            try app.wait("and to put it back") { model in
+                model.libraryFilters?.filter.text == "is:damaged" && model.items.map(\.name) == ["Empty.jpg"]
+            }
+            app.covered(.feature("library.filter"), via: .mouse)
         }
     }
 #endif

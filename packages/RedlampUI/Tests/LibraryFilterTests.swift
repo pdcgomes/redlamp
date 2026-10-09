@@ -424,11 +424,11 @@ struct LibraryFilterTests {
         #expect(completion.detail == "Trait · 1", "the folder's photos it finds, with the folder's setting")
         filters.endCompletion()
 
-        filters.toggleUnpickedMoments()
+        filters.toggle(.unpickedMoment)
         try await listed(model)
         #expect(filters.filter.text.isEmpty && model.items.count == 7 && !filters.attributes.unpickedMoments)
         filters.setText("rating>=1 OR flag:pick")
-        filters.toggleUnpickedMoments()
+        filters.toggle(.unpickedMoment)
         try await listed(model)
         #expect(filters.filter.text == "(rating>=1 OR flag:pick) is:unpicked-moment" && model.items.isEmpty)
         #expect(filters.attributes.unpickedMoments)
@@ -436,6 +436,61 @@ struct LibraryFilterTests {
         #expect(!filters.attributes.unpickedMoments, "a trait among others is the text's")
         filters.clear()
         model.setLooseness(0)
+    }
+
+    @Test func `the damaged files are a term of the text, the Attribute section and completion alike`() async throws {
+        defer { cleanUp() }
+        let earlier = Date().addingTimeInterval(-600)
+        try write(Photo(path: "Cut.JPG"), shade: 9)
+        let cut = root.appending(path: "Cut.JPG")
+        try Data(contentsOf: cut).dropLast(40).write(to: cut)
+        let empty = root.appending(path: "Empty.JPG")
+        try Data().write(to: empty)
+        for url in [cut, empty] {
+            try FileManager.default.setAttributes([.modificationDate: earlier], ofItemAtPath: url.path)
+        }
+        let (model, _) = try await open()
+        let filters = try #require(model.libraryFilters)
+        model.showLibrary(.grid)
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentViewController = ModuleViews.make(model: model, theme: ThemeSettings())
+        window.setContentSize(NSSize(width: 1600, height: 1000))
+        defer { window.contentViewController = nil }
+
+        try await filtered(model, "is:damaged")
+        #expect(Set(names(model)) == ["Cut.JPG", "Empty.JPG"])
+        #expect(filters.attributes.damaged && filters.listed?.total == 7)
+        filters.complete("dama", cursor: 4)
+        try await eventually { filters.completions.first?.kind == "Trait" }
+        let completion = try #require(filters.completions.first)
+        #expect(completion.text == "is:damaged " && completion.title == "Damaged Files")
+        #expect(completion.detail == "Trait · 2", "the folder's damaged files")
+        filters.endCompletion()
+
+        filters.show(.attribute, adding: true)
+        model.perform(.toggleFilterBar)
+        let bar = try #require(Self.find(LibraryFilterBarView.self, in: window.contentView))
+        let row = try #require(Self.find(FilterAttributeRow.self, in: bar))
+        try await eventually { !bar.isHidden && !row.isHidden }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let button = try #require(Self.view("library.filter.damaged", in: row))
+        #expect(button.accessibilityValue() as? String == "on")
+        let outside = row.subviews.filter { !($0 is NSTextField) && !row.bounds.contains($0.frame) }
+        #expect(outside.isEmpty, "every button in the Attribute section's \(row.bounds): \(outside.map(\.frame))")
+        model.perform(.toggleFilterBar)
+
+        filters.toggle(.damaged)
+        try await listed(model)
+        #expect(filters.filter.text.isEmpty && model.items.count == 7 && !filters.attributes.damaged)
+        filters.setText("rating>=1 OR flag:pick")
+        filters.toggle(.damaged)
+        try await listed(model)
+        #expect(filters.filter.text == "(rating>=1 OR flag:pick) is:damaged" && model.items.isEmpty)
+        #expect(filters.attributes.damaged && !filters.attributes.unpickedMoments)
+        filters.clear()
     }
 
     @Test func `a filter that finds nothing offers to take out the term in its way, as a button in the bar`(

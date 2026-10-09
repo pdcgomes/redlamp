@@ -4,8 +4,9 @@ import RedlampDocument
 import RedlampLibrary
 
 /// The filter bar's Attribute section, as Lightroom Classic's: flags, the rating with its comparison,
-/// colour labels, edited or not, kinds of file, marked photos, missing and offline ones, and the moments
-/// without a pick (LIB-41). Each button sets its field's filter in the query, which the text shows.
+/// colour labels, edited or not, kinds of file, marked photos, missing, offline and damaged ones (LIB-40),
+/// and the moments without a pick (LIB-41). Each button sets its field's filter in the query, which the
+/// text shows.
 final class FilterAttributeRow: NSView {
     private let model: EditorModel
     private var tracker: Tracker?
@@ -20,6 +21,10 @@ final class FilterAttributeRow: NSView {
     private let marked: FilterToggle
     private let missing: FilterToggle
     private let offline: FilterToggle
+    private let damaged = FilterToggle(
+        title: "Damaged", identifier: "library.filter.damaged",
+        tip: "Damaged files, as Library Health lists them: those that can't be read, are empty or end early",
+    )
     private let unpicked = FilterToggle(
         symbol: "flag.slash", identifier: "library.filter.unpicked-moments", tip: "Only Moments without a Pick",
     )
@@ -78,7 +83,8 @@ final class FilterAttributeRow: NSView {
         marked.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.marked) }
         missing.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.missing) }
         offline.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.offline) }
-        unpicked.onPress = { [weak self] _ in self?.model.libraryFilters?.toggleUnpickedMoments() }
+        damaged.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.damaged) }
+        unpicked.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.unpickedMoment) }
         comparison.set(
             [("≥", 0), ("≤", 1), ("=", 2)], chosen: 0,
         )
@@ -88,7 +94,7 @@ final class FilterAttributeRow: NSView {
             (filterLabel("Label"), FilterAttributes.LabelChoice.all.compactMap { labels[$0] }),
             (filterLabel("Edit"), [edited, unedited]),
             (filterLabel("Kind"), FilterAttributes.offeredKinds.compactMap { kinds[$0] }),
-            (filterLabel("Status"), [marked, missing, offline]),
+            (filterLabel("Status"), [marked, missing, offline, damaged]),
             (filterLabel("Moment"), [unpicked]),
         ]
         for group in groups {
@@ -159,6 +165,7 @@ final class FilterAttributeRow: NSView {
         marked.isOn = attributes.marked
         missing.isOn = attributes.missing
         offline.isOn = attributes.offline
+        damaged.isOn = attributes.damaged
         unpicked.isOn = attributes.unpickedMoments
     }
 
