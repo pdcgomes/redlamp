@@ -23,6 +23,18 @@ private struct ImageIOFiles: FileInspecting {
                 .flatMap(ImageProperties.init)
         }
     }
+
+    func haldImage(of _: URL) -> HaldImage? {
+        nil
+    }
+
+    func embeddedMattes(in _: URL) -> Set<EmbeddedMatte> {
+        []
+    }
+
+    func embeddedMatte(_: EmbeddedMatte, in _: URL) -> EmbeddedMatteImage? {
+        nil
+    }
 }
 
 /// What exports carry of a photo's own (LIB-22, LIB-21): its keywords as `Keywords.json` says each is
