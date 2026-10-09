@@ -61,8 +61,16 @@ struct RootRemovalBenchTests {
         defer { try? FileManager.default.removeItem(at: work) }
         let url = work.appending(path: "Index.sqlite")
         try FileManager.default.copyItem(at: Self.master, to: url)
-        let index = try await LibraryIndex.open(at: url)
+        var limits = IndexCheckpoints.Limits()
+        if let threshold = ProcessInfo.processInfo.environment["REDLAMP_ROOT_REMOVAL_BENCH_THRESHOLD"]
+            .flatMap(Int.init) {
+            limits.threshold = threshold
+        }
+        let index = try await LibraryIndex.offCaller { [limits] in
+            try LibraryIndex(url: url, readers: 4, migrations: LibraryIndex.migrations, logLimits: limits)
+        }
         defer { index.closeAndWait() }
+        Self.report("checkpoints every \(limits.threshold) pages")
         let tops = try await Self.split(index)
         if ProcessInfo.processInfo.environment["REDLAMP_ROOT_REMOVAL_BENCH_RECORDS"] == "1" {
             // Every photo with a finding, a full hash and an XMP merge record, which the sweep takes with it.
@@ -76,6 +84,10 @@ struct RootRemovalBenchTests {
             }
             Self.report("every photo has a finding, a hash and an XMP merge record")
         }
+        // The copy's text index as FTS5's automerge left it, merged as the index now keeps it.
+        let merging = ContinuousClock.now
+        await index.mergeText()
+        Self.report("the text index merged as it opened in \(Self.milliseconds(ContinuousClock.now - merging))")
         let clients = Self.fixture + "/Clients"
         let kept = tops.filter { $0 != clients }
         let engine = QueryEngine(index: index)
@@ -101,19 +113,28 @@ struct RootRemovalBenchTests {
 
         // The sweep, with another write asked for every 20 ms meanwhile: none waits longer than a batch. Its wait is
         // until its transaction starts on the writer's queue, then until its caller has its result.
+        // Each wait is kept with the log as the write found it (its pages, those copied) and left it: a log that
+        // started again at the write had its header synced in its commit.
         let waits = Mutex<[Duration]>([])
         let returns = Mutex<[Duration]>([])
+        let slow = Mutex<[(wait: Duration, back: Duration, asked: (Int, Int), began: (Int, Int), after: Int)]>([])
         let sweeping = Mutex(true)
         let writing = Task.detached {
             while sweeping.withLock({ $0 }) {
                 let asked = ContinuousClock.now
+                let log = (index.logPages, index.logPagesCopied)
                 let began = try? await index.write { writer in
                     try writer.setSetting("1", for: "bench.write")
-                    return ContinuousClock.now
+                    return (ContinuousClock.now, index.logPages, index.logPagesCopied)
                 }
                 let returned = ContinuousClock.now - asked
-                waits.withLock { $0.append((began ?? .now) - asked) }
+                let wait = (began?.0 ?? .now) - asked
+                waits.withLock { $0.append(wait) }
                 returns.withLock { $0.append(returned) }
+                if wait > .milliseconds(33.3) || returned > .milliseconds(33.3) {
+                    let found = (began?.1 ?? -1, began?.2 ?? -1)
+                    slow.withLock { $0.append((wait, returned, log, found, index.logPages)) }
+                }
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }
@@ -152,6 +173,13 @@ struct RootRemovalBenchTests {
         with its caller in p99 \(Self.milliseconds(back)), at most \(Self.milliseconds(backMost)); the log at most \
         \(logPages) pages after a batch; the text index merged after the batches in \(Self.milliseconds(merged))
         """)
+        for write in slow.withLock({ $0.sorted { max($0.wait, $0.back) > max($1.wait, $1.back) } }).prefix(8) {
+            Self.report("""
+            a slow write: waited \(Self.milliseconds(write.wait)), back in \(Self.milliseconds(write.back)); the log \
+            \(write.asked.0) pages (\(write.asked.1) copied) as it was asked for, \(write.began.0) (\(write.began.1) \
+            copied) as it began, \(write.after) after it
+            """)
+        }
         Self.report("""
         \(removal.photos.count) photos in \(removal.folders.count) folders, from the removal: marked by \
         \(Self.milliseconds(marked)), out of the store by \(Self.milliseconds(stored)), of the list of every photo \

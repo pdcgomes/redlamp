@@ -4,21 +4,28 @@ import SQLite3
 import Synchronization
 
 /// The write-ahead log's checkpoints, on a connection of their own (LIB-05). SQLite runs one in the writer's commit
-/// once the log passes 1,000 pages, and Apple's SQLite flushes the drive's cache twice in each
-/// (`checkpoint_fullfsync`): 100 ms and more on an external disk while other work writes to it, which every write
-/// waiting for the writer waited for too. The writer's commits now only count the log's pages; this connection copies
-/// them into the database as each 1,000 come, without waiting for the writer or the readers, keeping those flushes.
+/// once the log passes 1,000 pages, and Apple's SQLite syncs the log and then the database in each, with
+/// `F_BARRIERFSYNC` (`checkpoint_fullfsync`): 100 ms and more on an external disk while other work writes to it, which
+/// every write waiting for the writer waited for too. The writer's commits now only count the log's pages; this
+/// connection copies them into the database as each `threshold` come, without waiting for the writer or the readers,
+/// keeping those syncs.
+///
+/// macOS holds the writes to a file while it's synced (`fsync`, `F_BARRIERFSYNC` and `F_FULLFSYNC` alike, and not
+/// those to other files), so a commit that comes while a checkpoint syncs the log waits for the sync to end; and the
+/// log has to be synced before its pages are copied, so the copies never reach the disk before the pages they're
+/// copied from. Checkpoints a quarter as far apart as SQLite's keep each sync of the log to the few pages written
+/// since the last.
 ///
 /// The log starts again from its beginning at the first write after a checkpoint has copied all of it. A writer that
-/// never pauses leaves no time for one to, and outruns the checkpoints, whose flushes then hold up a commit that comes
+/// never pauses leaves no time for one to, and outruns the checkpoints, whose syncs then hold up a commit that comes
 /// meanwhile for as long as they take: the root sweep waits between its writes while the checkpoints are `pacing`
 /// pages behind, and for the log to be copied whole once it holds `settling` (`settle`); once the log holds `limit`
 /// pages a write waits for a checkpoint before it starts, as every write did each 1,000 pages before.
 final class IndexCheckpoints: @unchecked Sendable {
     /// When checkpoints run and are waited for, in the log's pages.
     struct Limits: Sendable, Hashable {
-        /// Pages written to the log since it was last checkpointed that ask for a checkpoint: SQLite's own.
-        var threshold = 1000
+        /// Pages written to the log since it was last checkpointed that ask for a checkpoint: 1 MB.
+        var threshold = 256
         /// Pages not yet copied from which `settle` waits for the checkpoints: 8 MB.
         var pacing = 2048
         /// Pages in the log from which `settle` waits for the log to be copied whole: 32 MB.

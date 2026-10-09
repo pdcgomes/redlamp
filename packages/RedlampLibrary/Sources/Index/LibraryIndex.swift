@@ -281,6 +281,11 @@ public final class LibraryIndex: Sendable {
         checkpoints.copied
     }
 
+    /// When the write-ahead log is checkpointed, and checkpoints are waited for.
+    var checkpointLimits: IndexCheckpoints.Limits {
+        checkpoints.limits
+    }
+
     /// How many reads can run at once.
     var readerCount: Int {
         readers.count

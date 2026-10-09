@@ -94,7 +94,28 @@ struct IndexCheckpointTests {
         #expect(pages.max() ?? .max < 300 + 2 * Self.longestWrite(pages), "\(pages)")
     }
 
-    @Test func `the log is checkpointed as each 1,000 pages come, without a write waiting`() async throws {
+    @Test func `the log is checkpointed a megabyte at a time, so a sync of it that a commit waits for is short`(
+    ) async throws {
+        // macOS holds a commit's writes to the log while a checkpoint syncs it: each sync takes the pages written
+        // since the last, 256 of them, not SQLite's 1,000.
+        let (index, folder) = try await Self.open(.init())
+        defer {
+            index.closeAndWait()
+            try? FileManager.default.removeItem(at: folder)
+        }
+        #expect(index.checkpointLimits.threshold == 256)
+        // The log starts again only once a checkpoint has copied it whole.
+        var (largest, restarted) = (0, false)
+        while !restarted, largest < 1000 {
+            let pages = try await Self.write(transactions: 1, to: index)[0]
+            restarted = pages < largest
+            largest = max(largest, pages)
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(restarted, "the log reached \(largest) pages before a checkpoint copied it")
+    }
+
+    @Test func `the log is checkpointed as each threshold's pages come, without a write waiting`() async throws {
         let (index, folder) = try await Self.open(.init(threshold: 100, settling: 100_000, limit: 100_000))
         defer {
             index.closeAndWait()
