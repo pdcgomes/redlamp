@@ -47,6 +47,10 @@ struct SidecarMetadataTests {
             "stack", PhotoMetadata(stack: PhotoStack(id: stackID, top: true)),
             .object(["id": .string(stackID.uuidString), "top": .bool(true)]),
         ),
+        (
+            "stack", PhotoMetadata(stack: PhotoStack(id: stackID, position: 3)),
+            .object(["id": .string(stackID.uuidString), "position": .number(3)]),
+        ),
         ("captureShift", PhotoMetadata(captureShift: -18000), .number(-18000)),
         ("captureOffset", PhotoMetadata(captureOffset: 19800), .number(19800)),
     ]

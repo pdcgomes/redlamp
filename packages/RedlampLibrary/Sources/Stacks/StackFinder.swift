@@ -148,7 +148,8 @@ public enum StackFinder {
     }
 
     /// The manual stacks `choices` make of `store`'s photos, each with two frames or more, and their
-    /// IDs: the frame chosen for the top first, else the earliest, then the others by capture time.
+    /// IDs: the frame chosen for the top first, else the first, then the others by their places, those
+    /// without one after them by capture time.
     private static func manualStacks(_ choices: StackChoices, pairs: Table, store: ColumnStore) -> (Table, [UUID]) {
         guard !choices.isEmpty else { return (Table(), []) }
         var pairOf: [Int64: Int] = [:]
@@ -157,21 +158,23 @@ public enum StackFinder {
                 pairOf[photo] = pair
             }
         }
-        var frames: [UUID: [(top: Int64, shown: Bool)]] = [:]
+        var frames: [UUID: [(top: Int64, shown: Bool, position: Int)]] = [:]
         for (photo, choice) in choices.choices.sorted(by: { $0.key < $1.key }) {
             guard let id = choice.id, store.contains(photo) else { continue }
             let frame = pairOf[photo].map { Array(pairs.members[pairs.range(of: $0)]) } ?? [photo]
             guard let decision = frame.lazy.compactMap({ choices[$0] }).first, decision.id == id,
                   frames[id]?.contains(where: { $0.top == frame[0] }) != true
             else { continue }
-            frames[id, default: []].append((frame[0], decision.top))
+            frames[id, default: []].append((frame[0], decision.top, decision.position ?? .max))
         }
         func captured(_ photo: Int64) -> Int64 {
             store.row(of: photo).map { store.captured[$0] } ?? .min
         }
         var stacks: [(id: UUID, photos: [Int64])] = []
         for (id, members) in frames where members.count > 1 {
-            var ordered = members.sorted { (captured($0.top), $0.top) < (captured($1.top), $1.top) }
+            var ordered = members.sorted {
+                ($0.position, captured($0.top), $0.top) < ($1.position, captured($1.top), $1.top)
+            }
             if let shown = ordered.firstIndex(where: \.shown) {
                 ordered.insert(ordered.remove(at: shown), at: 0)
             }

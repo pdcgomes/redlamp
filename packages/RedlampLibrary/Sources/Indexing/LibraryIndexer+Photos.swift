@@ -414,7 +414,9 @@ extension LibraryIndexer.Run {
     /// What only the `.redlamp` holds, in the photo's row: the mark and its stack.
     static func place(_ metadata: PhotoMetadata, in record: inout PhotoRecord) {
         record.marked = metadata.mark
-        record.stack = metadata.stack.flatMap { $0.id == nil && !$0.top ? nil : PhotoStack(id: $0.id, top: $0.top) }
+        record.stack = metadata.stack.flatMap { stack in
+            stack.id == nil && !stack.top ? nil : PhotoStack(id: stack.id, top: stack.top, position: stack.position)
+        }
     }
 
     /// The fields a photo's row shows, but its keywords.

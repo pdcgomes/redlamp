@@ -240,7 +240,7 @@ struct StackedListTests {
         #expect(Array(selection.photos(in: updated)) == ["raw1", "jpeg1", "pairRaw", "pairJPEG"].map(id))
         #expect(selection.active == id("raw1"))
 
-        choices.unstack([id("raw1")], in: updated.stacks)
+        choices.remove([id("raw1")], in: updated.stacks)
         let unstacked = Array(updated)
         (updated, diff) = updated.updated(stacks: library.find(choices), selection: &selection)
         #expect(Array(updated) == [id("raw0"), id("raw2"), raw, id("raw1"), id("between"), id("pairRaw"), id("far")])

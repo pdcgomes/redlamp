@@ -155,6 +155,40 @@ struct SyntheticIndexPhotos {
     }
 }
 
+extension LibraryIndex {
+    /// Runs `body` on the index at `url` opened at the version `migrations` make, as that version's build filled and
+    /// read it: the columns of `photos` this build's writer and readers name that later versions add are there while
+    /// `body` runs, and gone again before the index closes, so opening it at this version migrates it as it would.
+    static func withOlder<T: Sendable>(
+        at url: URL, migrations: [Migration], _ body: (LibraryIndex) async throws -> T,
+    ) async throws -> T {
+        let index = try await open(at: url, migrations: migrations)
+        let added = try await index.write { writer in
+            let present = try Set(writer.database.prepare("SELECT name FROM pragma_table_info('photos')").map {
+                $0.string(at: 0) ?? ""
+            })
+            let added = IndexColumns.photoFields.filter { !present.contains($0) }
+            for column in added {
+                try writer.database.execute("ALTER TABLE photos ADD COLUMN \(column)")
+            }
+            return added
+        }
+        do {
+            let result = try await body(index)
+            try await index.write { writer in
+                for column in added {
+                    try writer.database.execute("ALTER TABLE photos DROP COLUMN \(column)")
+                }
+            }
+            await index.close()
+            return result
+        } catch {
+            await index.close()
+            throw error
+        }
+    }
+}
+
 /// A gate a closure on another thread waits at, so a test decides when it goes on.
 final class IndexGate: Sendable {
     private let semaphore = DispatchSemaphore(value: 0)

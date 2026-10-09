@@ -19,8 +19,9 @@ public struct Stack: Sendable, Hashable {
 
     public let kind: Kind
     /// The top photo, then the others: a pair's raw, JPEG and HEIC; a focus suggestion's in name
-    /// order; the others' by capture time. A raw and its JPEG are one photo in a burst, a
-    /// suggestion or a manual stack, which holds the raw.
+    /// order; a manual stack's in the order they were put in, else by capture time, as a burst's
+    /// are. A raw and its JPEG are one photo in a burst, a suggestion or a manual stack, which
+    /// holds the raw.
     public let photos: [Int64]
     /// A manual stack's ID, which each of its photos keeps.
     public let id: UUID?

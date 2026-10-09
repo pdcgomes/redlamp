@@ -64,7 +64,11 @@ struct HandCodedTypeTests {
             country: "Portugal", state: "Lisboa", city: "Lisbon", sublocation: "Graça", countryCode: "PT",
         )
         metadata.collections = ["Clients/Acme/Selects"]
-        metadata.stack = PhotoStack(id: UUID(uuidString: "6F1C2A4E-8B1D-4C3A-9E57-1B2D3C4E5F60"), top: true)
+        metadata.stack = PhotoStack(
+            id: UUID(uuidString: "6F1C2A4E-8B1D-4C3A-9E57-1B2D3C4E5F60"),
+            top: true,
+            position: 0,
+        )
         metadata.captureShift = -18000
         metadata.captureOffset = -18000
         try check(metadata)

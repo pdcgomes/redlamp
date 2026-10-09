@@ -7,7 +7,7 @@ extension LibraryIndex {
     /// The schema's steps in order: the first makes version 1 from an empty database.
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
-        migrateToVersion6, migrateToVersion7, migrateToVersion8,
+        migrateToVersion6, migrateToVersion7, migrateToVersion8, migrateToVersion9,
     ]
 
     /// The version of the schema this build makes and opens.
@@ -46,6 +46,10 @@ extension LibraryIndex {
 
     static func migrateToVersion8(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion8)
+    }
+
+    static func migrateToVersion9(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion9)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -221,5 +225,12 @@ extension LibraryIndex {
     /// 150,000 with sidecars.
     static let schemaVersion8 = """
     CREATE INDEX IF NOT EXISTS photos_sidecars ON photos (folder) WHERE sidecar_modified IS NOT NULL;
+    """
+
+    /// A photo's place in its manual stack (LIB-28), as its sidecar's `stack.position` holds it once the stack's photos
+    /// have been put in an order, so a stack keeps its order however the index is built. Adding the column rewrites no
+    /// row.
+    static let schemaVersion9 = """
+    ALTER TABLE photos ADD COLUMN stack_position INTEGER;         -- from 0 at the top
     """
 }

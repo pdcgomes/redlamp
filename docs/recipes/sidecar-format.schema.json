@@ -921,6 +921,11 @@
         "top": {
           "const": true,
           "description": "Shown for its stack: the one id names, or without an id the burst it's in. Written only when true."
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Its place in the stack id names, from 0 at the top, once the stack's photos have been put in an order. Written only when they have."
         }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }

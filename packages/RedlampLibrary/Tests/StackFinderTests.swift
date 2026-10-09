@@ -228,10 +228,10 @@ struct StackFinderTests {
         #expect(stacks.photos(.manual) == [[raw, other, burst[1]]])
         #expect(choices[raw] == .init(id: id, top: true) && choices[other] == .init(id: id))
 
-        choices.unstack([other], in: stacks)
+        choices.remove([other], in: stacks)
         stacks = library.find(choices)
         #expect(stacks.photos(.manual) == [[raw, burst[1]]])
-        choices.unstack([raw], in: stacks)
+        choices.remove([raw], in: stacks)
         stacks = library.find(choices)
         #expect(stacks.photos(.manual).isEmpty)
         #expect(stacks.photos(.burst) == [[burst[0], burst[2], burst[3]]], "a photo left alone stays out of bursts")
@@ -239,7 +239,7 @@ struct StackFinderTests {
         #expect(choices.reset([burst[1]], in: stacks) == [burst[1]])
         stacks = library.find(choices)
         #expect(stacks.photos(.burst) == [burst])
-        choices.unstack(burst[1 ... 2], in: stacks)
+        choices.remove(burst[1 ... 2], in: stacks)
         #expect(library.find(choices).photos(.burst) == [[burst[0], burst[3]]])
     }
 
@@ -264,13 +264,17 @@ struct StackFinderTests {
         let folder = try #require(try await sandbox.addFolders(["Shoot"])["Shoot"])
         let ids = try await sandbox.upsert((7 ... 10).map { PhotoRecord(folder: folder, name: "IMG_\($0).JPG") })
         let id = UUID()
-        let choices = StackChoices([ids[0]: .init(id: id, top: true), ids[1]: .init(id: id), ids[2]: .init(top: true)])
+        let choices = StackChoices([
+            ids[0]: .init(id: id, top: true, position: 0), ids[1]: .init(id: id, position: 1), ids[2]: .init(top: true),
+        ])
         try await sandbox.index.write { try choices.save(ids, in: $0) }
         #expect(try await sandbox.index.read { try StackChoices($0) } == choices)
         let row = try await sandbox.index.read { try $0.photo(id: ids[1]) }
-        #expect(row?.stack == PhotoStack(id: id))
+        #expect(row?.stack == PhotoStack(id: id, position: 1))
         try await sandbox.index.write { try StackChoices().save([ids[0], ids[2]], in: $0) }
-        #expect(try await sandbox.index.read { try StackChoices($0) } == StackChoices([ids[1]: .init(id: id)]))
+        #expect(
+            try await sandbox.index.read { try StackChoices($0) } == StackChoices([ids[1]: .init(id: id, position: 1)]),
+        )
         let decoded = try JSONDecoder().decode(
             StackChoices.Choice.self, from: Data("{\"id\":\"\(id.uuidString.lowercased())\"}".utf8),
         )

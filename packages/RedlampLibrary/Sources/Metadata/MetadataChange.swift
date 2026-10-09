@@ -100,12 +100,24 @@ public enum MetadataChange: Sendable, Hashable {
 }
 
 /// A change to manual stacks (LIB-28), made as one batch with Undo: each photo's sidecar keeps its place.
+/// Each is planned against the stacks as they are when its turn comes (`StackChoices` describes them).
 public enum StackChange: Sendable, Hashable {
     /// Stacks the photos by hand, with their pairs' others, taking them out of any stack they were in;
     /// `top` is shown for the stack, else the one taken first.
     case stack([Int64], top: Int64? = nil)
-    /// Takes the photos and their pairs' others out of their stacks: each stands alone, in no burst.
+    /// Takes apart the bursts and manual stacks holding the photos: each of their photos stands alone,
+    /// in no burst.
     case unstack([Int64])
+    /// Takes the photos and their pairs' others out of their stacks, the stacks' others staying stacked.
+    case remove([Int64])
+    /// Splits the burst or manual stack holding the photo before it.
+    case split(before: Int64)
+    /// Moves the photo, with its pair's others, `by` places down its burst or manual stack, up when it's
+    /// negative, counting only the frames of the photos `among` holds when it's given.
+    case move(Int64, by: Int, among: Set<Int64>? = nil)
+    /// Moves the photos, with their pairs' others, to the second's place in the burst or manual stack holding
+    /// them all.
+    case place([Int64], at: Int64)
     /// Shows the photo for the burst or manual stack holding it.
     case top(Int64)
     /// Forgets what was decided for the photos, which are stacked again as they're found.
@@ -149,6 +161,20 @@ public extension LibraryMetadata {
             ("Stack \(Self.count(ids.count))", choices.stack(ids, top: top, in: stacks))
         case let .unstack(ids):
             ("Unstack \(Self.count(ids.count))", choices.unstack(ids, in: stacks))
+        case let .remove(ids):
+            (
+                "Remove \(Self.count(ids.count)) from \(ids.count == 1 ? "its stack" : "their stacks")",
+                choices.remove(ids, in: stacks),
+            )
+        case let .split(id):
+            ("Split a stack", choices.split(before: id, in: stacks))
+        case let .move(id, offset, shown):
+            (
+                "Move a photo \(offset < 0 ? "up" : "down") its stack",
+                choices.move(id, by: offset, among: shown, in: stacks),
+            )
+        case let .place(ids, target):
+            ("Move \(Self.count(ids.count)) in their stack", choices.place(ids, at: target, in: stacks))
         case let .top(id):
             ("Show a photo for its stack", choices.setTop(id, in: stacks))
         case let .reset(ids):

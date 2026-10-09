@@ -37,8 +37,12 @@ struct IndexTextMigrationTests {
     /// An index at version 6: synthetic photos, a third with a keyword, and the accented ones, their
     /// text in `photo_text` as version 6's writer put it there, unfolded.
     private func makeVersion6() async throws -> (ids: [Int64], accented: [Int64]) {
-        let index = try await LibraryIndex.open(at: url, migrations: Array(LibraryIndex.migrations.prefix(6)))
-        defer { index.closeAndWait() }
+        try await LibraryIndex.withOlder(at: url, migrations: Array(LibraryIndex.migrations.prefix(6))) { index in
+            try await Self.fillVersion6(index)
+        }
+    }
+
+    private static func fillVersion6(_ index: LibraryIndex) async throws -> (ids: [Int64], accented: [Int64]) {
         let (ids, accented) = try await index.write { writer in
             let volume = try writer.upsertVolume(VolumeRecord(uuid: "MIGRATION", kind: .ssd))
             let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
@@ -85,16 +89,19 @@ struct IndexTextMigrationTests {
     ) async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let (ids, accented) = try await makeVersion6()
-        let old = try await LibraryIndex.open(at: url, migrations: Array(LibraryIndex.migrations.prefix(6)))
-        let searches = try await Self.searches(of: old, ids)
-        let before = try await old.read { reader in
-            try Set(searches.keys).sorted()
-                .map { id in try searches[id, default: []].map { try reader.photoIDs(matching: $0) } }
+        let (searches, before, foundBefore) = try await LibraryIndex.withOlder(
+            at: url, migrations: Array(LibraryIndex.migrations.prefix(6)),
+        ) { old in
+            let searches = try await Self.searches(of: old, ids)
+            let before = try await old.read { reader in
+                try Set(searches.keys).sorted()
+                    .map { id in try searches[id, default: []].map { try reader.photoIDs(matching: $0) } }
+            }
+            let foundBefore = try await old.read { reader in
+                try Self.accented.map { _, found in try found.map { try reader.photoIDs(matching: $0) } }
+            }
+            return (searches, before, foundBefore)
         }
-        let foundBefore = try await old.read { reader in
-            try Self.accented.map { _, found in try found.map { try reader.photoIDs(matching: $0) } }
-        }
-        await old.close()
         let noneBefore = foundBefore.joined().allSatisfy(\.isEmpty)
         #expect(noneBefore, "version 6 finds none of them: \(foundBefore)")
 

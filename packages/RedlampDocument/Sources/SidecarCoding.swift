@@ -117,18 +117,19 @@ extension PhotoLocation: Codable {
 
 extension PhotoStack: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, top
+        case id, top, position
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id)
         top = try container.decodeIfPresent(Bool.self, forKey: .top) ?? false
+        position = try container.decodeIfPresent(Int.self, forKey: .position).map { max($0, 0) }
         unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
             .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
 
-    /// Leaves out `top` when it's false, as the sidecar leaves out defaults.
+    /// Leaves out `top` when it's false and `position` when there's none, as the sidecar leaves out defaults.
     public func encode(to encoder: Encoder) throws {
         var unknown = encoder.container(keyedBy: DynamicCodingKey.self)
         try unknown.encode(unknownFields)
@@ -137,5 +138,6 @@ extension PhotoStack: Codable {
         if top {
             try container.encode(true, forKey: .top)
         }
+        try container.encodeIfPresent(position, forKey: .position)
     }
 }

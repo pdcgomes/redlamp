@@ -63,12 +63,16 @@ public struct PhotoStack: Sendable, Hashable {
     public var id: UUID?
     /// It's shown for its stack: the manual stack `id` names, or else its burst.
     public var top: Bool
+    /// Its place in the manual stack, from 0 at the top, once the stack's photos have been put in an order;
+    /// nil while they're in capture order after the top.
+    public var position: Int?
     /// Fields written by a newer Redlamp, written back unchanged.
     public var unknownFields: [String: JSONValue] = [:]
 
-    public init(id: UUID? = nil, top: Bool = false) {
+    public init(id: UUID? = nil, top: Bool = false, position: Int? = nil) {
         self.id = id
         self.top = top
+        self.position = position
     }
 }
 

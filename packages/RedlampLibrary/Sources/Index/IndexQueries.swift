@@ -277,7 +277,7 @@ enum IndexColumns {
         "lens", "iso", "aperture", "shutter", "focal", "width", "height", "orientation", "latitude", "longitude",
         "rating", "flag", "label", "marked", "edited", "sidecar_modified", "xmp_modified", "title", "caption", "state",
         "indexed", "custom_label", "creator", "copyright", "sublocation", "city", "province", "country", "country_code",
-        "stack", "stack_top", "other_fields", "xmp_signature", "camera_captured", "camera_offset",
+        "stack", "stack_top", "other_fields", "xmp_signature", "camera_captured", "camera_offset", "stack_position",
     ]
 
     static func photo(prefix: String) -> String {
@@ -341,7 +341,7 @@ extension PhotoRecord {
                 country: row.string(at: 38),
                 countryCode: row.string(at: 39),
             ),
-            stack: Self.storedStack(id: row.string(at: 40), top: row.bool(at: 41)),
+            stack: Self.storedStack(id: row.string(at: 40), top: row.bool(at: 41), position: row.optionalInt(at: 46)),
             otherFields: Self.fields(code: row.int(at: 42)), xmpSignature: row.optionalInt64(at: 43),
             cameraCaptured: date(44), cameraOffset: row.optionalInt(at: 45),
         )
@@ -358,8 +358,8 @@ extension PhotoRecord {
     }
 
     /// The stack of its columns; nil when the photo is in none and isn't shown for its burst.
-    static func storedStack(id: String?, top: Bool) -> PhotoStack? {
+    static func storedStack(id: String?, top: Bool, position: Int? = nil) -> PhotoStack? {
         let id = id.flatMap(UUID.init(uuidString:))
-        return id == nil && !top ? nil : PhotoStack(id: id, top: top)
+        return id == nil && !top ? nil : PhotoStack(id: id, top: top, position: id == nil ? nil : position)
     }
 }

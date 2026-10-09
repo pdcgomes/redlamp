@@ -56,17 +56,19 @@ struct SidecarCountTests {
             .appending(path: "redlamp-sidecar-count-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appending(path: "Index.sqlite")
-        let older = try await LibraryIndex.open(at: url, migrations: Array(LibraryIndex.migrations.prefix(7)))
-        let (root, folder) = try await older.write { writer in
-            let volume = try writer.upsertVolume(VolumeRecord(uuid: "TEST-VOLUME", kind: .ssd))
-            let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
-            return try (root, writer.upsertFolder(FolderRecord(root: root, path: "/Volumes/Test/Photos/Shoot")))
-        }
-        var photo = PhotoRecord(folder: folder, name: "A.JPG")
-        photo.sidecarModified = Date(timeIntervalSince1970: 1_800_000_000)
-        let photos = [photo, PhotoRecord(folder: folder, name: "B.JPG")]
-        try await older.write { try $0.upsertPhotos(photos) }
-        await older.close()
+        let root = try await LibraryIndex
+            .withOlder(at: url, migrations: Array(LibraryIndex.migrations.prefix(7))) { older in
+                let (root, folder) = try await older.write { writer in
+                    let volume = try writer.upsertVolume(VolumeRecord(uuid: "TEST-VOLUME", kind: .ssd))
+                    let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
+                    return try (root, writer.upsertFolder(FolderRecord(root: root, path: "/Volumes/Test/Photos/Shoot")))
+                }
+                var photo = PhotoRecord(folder: folder, name: "A.JPG")
+                photo.sidecarModified = Date(timeIntervalSince1970: 1_800_000_000)
+                let photos = [photo, PhotoRecord(folder: folder, name: "B.JPG")]
+                try await older.write { try $0.upsertPhotos(photos) }
+                return root
+            }
 
         let index = try await LibraryIndex.open(at: url)
         defer { index.closeAndWait() }
