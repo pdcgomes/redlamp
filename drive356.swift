@@ -21,6 +21,7 @@ var opening = "key"
 var attempts = 3
 var firstWait = 15.0
 var screenChoice = "main"
+var fullScreen = false
 do {
     var it = CommandLine.arguments.dropFirst().makeIterator()
     while let a = it.next() {
@@ -32,6 +33,7 @@ do {
         case "--attempts": attempts = Int(it.next() ?? "") ?? attempts
         case "--first-wait": firstWait = Double(it.next() ?? "") ?? firstWait
         case "--screen": screenChoice = it.next() ?? screenChoice
+        case "--fullscreen": fullScreen = true
         default: break
         }
     }
@@ -249,6 +251,22 @@ if screenChoice == "external", let external = displays.filter({ $0.0 != CGMainDi
 }
 frontmost(pid)
 Thread.sleep(forTimeInterval: 1)
+if fullScreen {
+    let app = AXUIElementCreateApplication(pid)
+    var v: CFTypeRef?
+    if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &v) == .success, let ws = v as? [AXUIElement],
+       let editor = ws.first(where: { axString($0, kAXTitleAttribute)?.hasPrefix(photoName) == true }) {
+        let r = AXUIElementSetAttributeValue(editor, "AXFullScreen" as CFString, kCFBooleanTrue)
+        log("full screen via AX: \(r.rawValue)")
+        if r != .success { key(3, [.maskControl, .maskCommand]) }
+        Thread.sleep(forTimeInterval: 3)
+        var fs: CFTypeRef?
+        AXUIElementCopyAttributeValue(editor, "AXFullScreen" as CFString, &fs)
+        log("full screen now: \(String(describing: fs)), editor at \(axFrame(editor).map { "\($0)" } ?? "?")")
+    }
+    frontmost(pid)
+    Thread.sleep(forTimeInterval: 1)
+}
 
 // MARK: Open the dialog
 

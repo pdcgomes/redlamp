@@ -1,8 +1,7 @@
 #!/bin/bash
-# Round 3: the reporter's setup. Export to starts on a previous destination, Edited, on an exFAT
-# volume with the photo, as theirs does; then the same with two more displays, a 2x main one and
-# a 1x one beside it with the editor on it, as their Mac has. The 0.2.7 release (drive356) and
-# the copy of the dialog (repro356).
+# Round 4: the reporter's setup (a previous destination, Edited, on an exFAT volume with the
+# photo) in full screen, in Stage Manager, and with a 2x main display and the editor on a 1x one.
+# The 0.2.7 release (drive356) and the copy of the dialog (repro356).
 set -u
 cd "$(dirname "$0")"
 OUT="$PWD/out"
@@ -28,11 +27,12 @@ previous=$(printf '{"destinationFolder":"file://%s/Edited/"}' "$PHOTOS" | xxd -p
 defaults write "$BUNDLE_ID" exportPrevious -data "$previous"
 defaults read "$BUNDLE_ID" exportPrevious | head -c 300; echo
 
-drive() { # <label> <screen>
-  local dir="$OUT/$1"
+drive() { # <label> <screen> [more arguments]
+  local dir="$OUT/$1" screen=$2
+  shift 2
   mkdir -p "$dir"
-  echo "::group::$1"
-  perl -e 'alarm shift; exec @ARGV' 240 bin/drive356 --app "$APP" --photo "$PHOTOS/P1117458.RW2" --open key --screen "$2" --out "$dir" >"$dir/log.txt" 2>&1
+  echo "::group::$dir"
+  perl -e 'alarm shift; exec @ARGV' 240 bin/drive356 --app "$APP" --photo "$PHOTOS/P1117458.RW2" --open key --screen "$screen" --out "$dir" "$@" >"$dir/log.txt" 2>&1
   echo "exit $?" >>"$dir/log.txt"
   cut -c1-600 "$dir/log.txt"
   echo "::endgroup::"
@@ -61,30 +61,39 @@ EOF
   echo "$app/Contents/MacOS/repro356"
 }
 
-copy() { # <label> <variant> <screen>
-  local dir="$OUT/$1"
+copy() { # <label> <variant> <screen> [more arguments]
+  local dir="$OUT/$1" label=$1 variant=$2 screen=$3
+  shift 3
   mkdir -p "$dir"
-  echo "::group::$1"
-  perl -e 'alarm shift; exec @ARGV' 200 "$(make_bundle "$1" "app.redlamp.repro356.$1" bin/repro356)" --variant "$2" --open key --screen "$3" --photos "$PHOTOS" --out "$dir" >"$dir/log.txt" 2>&1
-  grep -E "launched|screens|editor goes|setter|NSOpenPanel|runModal|panel visible|RESULT|SUMMARY|FAIL|refusing|mapping" "$dir/log.txt" | cut -c1-400 | head -60
+  echo "::group::$label"
+  perl -e 'alarm shift; exec @ARGV' 200 "$(make_bundle "$label" "app.redlamp.repro356.$label" bin/repro356)" --variant "$variant" --open key --screen "$screen" --photos "$PHOTOS" --out "$dir" "$@" >"$dir/log.txt" 2>&1
+  grep -E "launched|screens|editor goes|full screen|setter|NSOpenPanel|runModal|panel visible|RESULT|SUMMARY|FAIL|refusing|mapping" "$dir/log.txt" | cut -c1-400 | head -60
   echo "::endgroup::"
   grep -h "SUMMARY\|FAIL" "$dir/log.txt" | sed "s/^/$1: /" >>"$OUT/summary.txt" || true
   sleep 2
 }
 
-drive app-edited-1display main
+drive app-fullscreen main --fullscreen
+copy copy-v027-fullscreen v027 main --fullscreen
+
+defaults write com.apple.WindowManager GloballyEnabled -bool true
+killall WindowManager 2>/dev/null
+sleep 4
+echo "Stage Manager: $(defaults read com.apple.WindowManager GloballyEnabled)"
+drive app-stagemanager main
+copy copy-v027-stagemanager v027 main
+defaults write com.apple.WindowManager GloballyEnabled -bool false
+killall WindowManager 2>/dev/null
+sleep 4
 
 bin/vdisplay 1512x982@2 3440x1440@1 >"$OUT/vdisplay.txt" 2>&1 &
 VD=$!
 sleep 8
 cat "$OUT/vdisplay.txt"
 system_profiler SPDisplaysDataType | sed -n '1,60p' >"$OUT/displays.txt"
-
+drive app-external external
+drive app-external-fullscreen external --fullscreen
 copy copy-v027-external v027 external
-copy copy-v026-external v026 external
-drive app-edited-external external
-drive app-edited-main2x main
-copy copy-v027-main2x v027 main
 
 kill $VD
 log show --start "$START" --info --style compact \

@@ -23,6 +23,7 @@ nonisolated(unsafe) var shots = true
 nonisolated(unsafe) var firstWait = 12.0
 nonisolated(unsafe) var laterWait = 8.0
 nonisolated(unsafe) var screenChoice = "main"
+nonisolated(unsafe) var fullScreen = false
 
 func parseArguments() {
     var it = CommandLine.arguments.dropFirst().makeIterator()
@@ -38,6 +39,7 @@ func parseArguments() {
         case "--first-wait": firstWait = Double(it.next() ?? "") ?? firstWait
         case "--photos": photosOverride = it.next()
         case "--screen": screenChoice = it.next() ?? screenChoice
+        case "--fullscreen": fullScreen = true
         default: break
         }
     }
@@ -466,6 +468,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSToolbarDelegate {
         editor.makeKeyAndOrderFront(nil)
         editorWindow = editor
         NSApp.activate(ignoringOtherApps: true)
+        if fullScreen {
+            editor.collectionBehavior.insert(.fullScreenPrimary)
+            editor.toggleFullScreen(nil)
+            log("full screen requested")
+        }
         if variant == "warm" {
             let t = Date()
             _ = NSOpenPanel()
@@ -822,7 +829,8 @@ func openDialog() -> Bool {
 }
 
 func drive() {
-    Thread.sleep(forTimeInterval: 2)
+    Thread.sleep(forTimeInterval: fullScreen ? 5 : 2)
+    if fullScreen { log("editor full screen: \(onMain { editorWindow?.styleMask.contains(.fullScreen) ?? false } ?? false)") }
     logWindows("start")
     guard openDialog() else {
         log("FAIL: the dialog didn't open")

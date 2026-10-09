@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
             CGVirtualDisplay *display = [[CGVirtualDisplay alloc] initWithDescriptor:d];
             CGVirtualDisplaySettings *s = [CGVirtualDisplaySettings new];
             s.hiDPI = scale > 1;
-            s.modes = @[ [[CGVirtualDisplayMode alloc] initWithWidth:w height:h refreshRate:60] ];
+            s.modes = @[ [[CGVirtualDisplayMode alloc] initWithWidth:w * scale height:h * scale refreshRate:60] ];
             BOOL ok = [display applySettings:s];
             printf("virtual display %u: %ux%u@%u applied %d\n", display.displayID, w, h, scale, ok);
             if (display) [displays addObject:display];
