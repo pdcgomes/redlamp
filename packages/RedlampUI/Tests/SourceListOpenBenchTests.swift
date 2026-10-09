@@ -5,8 +5,9 @@ import Testing
 @testable import RedlampUI
 
 /// All Photographs opened at a million photos, as the grid shows it (LIB-10): how long until its first change reaches
-/// the main thread, and where that time goes: LibraryLive's list, the list's rows read and mapped to photos, and the
-/// change it hands over. Skipped unless `REDLAMP_SOURCE_LIST_BENCH=1` (`TEST_RUNNER_REDLAMP_SOURCE_LIST_BENCH=1`
+/// the main thread, and where that time goes: LibraryLive's list, and the change a large source hands over, with the
+/// rows of its first screens; and, for comparison, what reading every row and mapping it to a photo took when the
+/// change carried them all. Skipped unless `REDLAMP_SOURCE_LIST_BENCH=1` (`TEST_RUNNER_REDLAMP_SOURCE_LIST_BENCH=1`
 /// through xcodebuild) and lib-1m's index is on this Mac.
 @MainActor
 struct SourceListOpenBenchTests {
@@ -128,30 +129,43 @@ struct SourceListOpenBenchTests {
                 #expect(count == 1_000_000)
             }
             started = clock.now
-            var mapping = LibrarySourceList.Mapping()
-            try await mapping.take(update, index: core.index)
+            var every = LibrarySourceList.Mapping(largestRead: .max)
+            try await every.take(update, index: core.index)
             let read = clock.now - started
-            // The change handed over.
             started = clock.now
-            let change = mapping.change(handing: mapping.ids, of: .allPhotographs)
+            let whole = every.change(handing: every.ids, of: .allPhotographs)
             let made = clock.now - started
+            #expect(whole.items.count == 1_000_000)
+            // As a large source: the list alone, and its first screens' rows.
+            started = clock.now
+            var large = LibrarySourceList.Mapping()
+            try await large.take(update, index: core.index)
+            let change = large.change(handing: large.ids, of: .allPhotographs, whole: true)
+            let handed = clock.now - started
+            started = clock.now
+            let first = try await LibrarySourceList.Mapping.read(
+                Array(change.list.ids.prefix(LibrarySourceList.firstRead)), folders: [:], index: core.index,
+            )
+            let firstRows = clock.now - started
             updates.close()
-            #expect(change.items.count == 1_000_000)
+            #expect(change.list.count == 1_000_000 && change.items.isEmpty && change.read != nil)
+            #expect(first.parts.reduce(0) { $0 + $1.count } == LibrarySourceList.firstRead)
             print("""
-            SOURCE-LIST-OPEN run \(run): \(change.items.count) photos; LibraryLive's list \
-            \(Self.milliseconds(listed)), rows read into photos a row at a time \(Self.milliseconds(byRow)), in one \
-            pass \(Self.milliseconds(alone)), their fields alone on three readers \(Self.milliseconds(bare[0])) and \
-            four \(Self.milliseconds(bare[1])), read and kept by the mapping \(Self.milliseconds(read)), change made \
-            \(Self.milliseconds(made)); load \(Self.load)
+            SOURCE-LIST-OPEN run \(run): \(change.list.count) photos; LibraryLive's list \
+            \(Self.milliseconds(listed)), the large source's change \(Self.milliseconds(handed)), its first \
+            \(LibrarySourceList.firstRead) rows \(Self.milliseconds(firstRows)); every row read into photos a row at a \
+            time \(Self.milliseconds(byRow)), in one pass \(Self.milliseconds(alone)), their fields alone on three \
+            readers \(Self.milliseconds(bare[0])) and four \(Self.milliseconds(bare[1])), read and kept by the mapping \
+            \(Self.milliseconds(read)), its change made \(Self.milliseconds(made)); load \(Self.load)
             """)
-            withExtendedLifetime((rows, mapping, change)) {}
+            withExtendedLifetime((rows, every, whole, first)) {}
         }
 
         // The whole of it, to the change's arrival on the main thread.
         let arrived = Mutex<(count: Int, at: ContinuousClock.Instant)?>(nil)
         let started = clock.now
         let list = LibrarySourceList(core: core, source: .allPhotographs) { change in
-            arrived.withLock { $0 = (change.items.count, clock.now) }
+            arrived.withLock { $0 = (change.list.count, clock.now) }
         }
         for _ in 0 ..< 12000 where arrived.withLock({ $0 == nil }) {
             try await Task.sleep(for: .milliseconds(10))

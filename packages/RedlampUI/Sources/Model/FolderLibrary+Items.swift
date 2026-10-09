@@ -1,5 +1,6 @@
 import Foundation
 import RedlampDocument
+import RedlampLibrary
 
 /// The photos shown, in order (`FolderLibrary.items`): every one's row, as a folder lists them or a small source's
 /// list reads them; or, for a large source shown from the library, the photos' IDs and the rows read so far, the
@@ -307,45 +308,83 @@ extension FolderLibrary {
         }
         items.read(fresh)
         var paths = fromLibrary.sourcePaths ?? PhotoPaths()
-        for (id, item) in fresh {
+        for (id, _) in fresh {
             fromLibrary.sourceKeys[id] = rows.keys[id]
-            paths.insert(id, folder: item.folderPath, name: item.name)
+        }
+        // The read's own paths, made off the main thread, unless a change brought some of its rows meanwhile.
+        if fresh.count == rows.items.count {
+            paths.merge(rows.paths)
+        } else {
+            for (id, item) in fresh {
+                paths.insert(id, folder: item.folderPath, name: item.name)
+            }
         }
         fromLibrary.sourcePaths = paths
         publish(LibraryDiff(read: IndexSet(rows: fresh.compactMap { shown.index(of: $0.id) })))
     }
 
-    /// Lets go of rows of a large source so that `coming` more stay within `keptRows`: those furthest from the rows
-    /// on screen first, never the active photo's.
+    /// Lets go of rows of a large source so that `coming` more stay within `keptRows`: the rows nearest those on
+    /// screen stay, three quarters of `keptRows` at most, and always the active photo's. When most go (after an
+    /// action read a large selection's), those that stay are kept afresh, and the rest freed off the main thread.
     func letGo(making coming: Int = 0) {
         let read = items.rowsRead
         guard read.count + coming > Self.keptRows else { return }
         let shown = photoList
-        let screens = Array(fromLibrary.rows.onScreen.values)
-        func distance(_ id: Int64) -> Int {
-            guard let place = shown.index(of: id) else { return .max }
-            var nearest = Int.max
+        let keeping = max(Self.keptRows * 3 / 4 - coming, 0)
+        var kept = Set<Int64>()
+        if let active = activePhoto, read[active] != nil {
+            kept.insert(active)
+        }
+        // Out from each view's rows, a row a side at a time.
+        let screens = fromLibrary.rows.onScreen.values.map { $0.clamped(to: 0 ..< shown.count) }
+        for screen in screens {
+            for place in screen where kept.count < keeping && read[shown[place]] != nil {
+                kept.insert(shown[place])
+            }
+        }
+        var distance = 1
+        while kept.count < keeping, screens.contains(where: { $0.lowerBound - distance >= 0
+                || $0.upperBound - 1 + distance < shown.count
+        }) {
             for screen in screens {
-                let away = screen.contains(place) ? 0 : place < screen.lowerBound
-                    ? screen.lowerBound - place : place - screen.upperBound + 1
-                nearest = min(nearest, away)
+                for place in [screen.lowerBound - distance, screen.upperBound - 1 + distance]
+                    where shown.indices.contains(place) && kept.count < keeping && read[shown[place]] != nil {
+                    kept.insert(shown[place])
+                }
             }
-            return nearest
+            distance += 1
         }
-        let active = activePhoto
-        let ranked = read.keys.filter { $0 != active }.map { ($0, distance($0)) }.sorted { $0.1 > $1.1 }
-        let leaving = ranked.prefix(max(read.count + coming - Self.keptRows * 3 / 4, 0)).map(\.0)
+        let leaving = read.keys.filter { !kept.contains($0) }
         guard !leaving.isEmpty else { return }
-        var paths = fromLibrary.sourcePaths ?? PhotoPaths()
-        for id in leaving {
-            if let item = read[id] {
-                paths.remove(at: item.url)
+        guard leaving.count > kept.count else {
+            var paths = fromLibrary.sourcePaths ?? PhotoPaths()
+            for id in leaving {
+                if let item = read[id] {
+                    paths.remove(at: item.url)
+                }
+                fromLibrary.sourceKeys[id] = nil
             }
-            fromLibrary.sourceKeys[id] = nil
+            fromLibrary.sourcePaths = paths
+            items.forget(leaving)
+            fromLibrary.sourceList?.release(leaving)
+            return
         }
+        var rows: [Int64: LibraryItem] = [:]
+        var keys: [Int64: ContentKey] = [:]
+        var paths = PhotoPaths()
+        for id in kept {
+            guard let item = read[id] else { continue }
+            rows[id] = item
+            keys[id] = fromLibrary.sourceKeys[id]
+            paths.insert(id, folder: item.folderPath, name: item.name)
+        }
+        let freed = (items, fromLibrary.sourceKeys, fromLibrary.sourcePaths)
+        items = LibraryItems(ids: photoIDs, read: rows)
+        fromLibrary.sourceKeys = keys
         fromLibrary.sourcePaths = paths
-        items.forget(leaving)
-        fromLibrary.sourceList?.release(leaving)
+        fromLibrary.sourceList?.release([], all: true)
+        fromLibrary.sourceList?.hold(kept.union(fromLibrary.rows.asked))
+        scheduler.submit(.background) { withExtendedLifetime(freed) {} }
     }
 
     /// The list a large source's rows are read from, for reading them off the main thread; nil for photos whose rows

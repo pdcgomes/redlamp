@@ -79,8 +79,9 @@ final class LibrarySourceList: Sendable {
     /// the filmstrip and the grid take faster than as many rows.
     static let largestDiff = 32
 
-    /// Sources with more photos than this are large, by default: none yet.
-    static let largestRead = Int.max
+    /// Sources with more photos than this are large, by default: reading and mapping as many rows takes about a
+    /// sixth of a second.
+    static let largestRead = 50000
 
     /// The rows read with a large source's first change, of its first photos: the screens the grid and the
     /// filmstrip open on, and the thumbnails warmed (`LibrarySources.warmedAsShown`).

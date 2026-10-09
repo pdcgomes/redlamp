@@ -68,7 +68,7 @@ struct SourceListRemovalBenchTests {
         let delivered = Delivered()
         let clock = ContinuousClock()
         let list = LibrarySourceList(core: core, source: .allPhotographs) { change in
-            delivered.changes.withLock { $0.append((change.items.count, clock.now, change.took.list)) }
+            delivered.changes.withLock { $0.append((change.list.count, clock.now, change.took.list)) }
         }
         for _ in 0 ..< 6000 where delivered.changes.withLock({ $0.isEmpty }) {
             try await Task.sleep(for: .milliseconds(10))

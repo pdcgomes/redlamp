@@ -317,11 +317,16 @@
                 in: box,
                 (query + " folder:Clients").trimmingCharacters(in: .whitespaces),
             )
-            try app.main { _ in _ = box.editor?.librarySources.show(source) }
+            let opening = Date()
+            try app.main { _ in
+                box.watchOpening(holding, since: opening)
+                _ = box.editor?.librarySources.show(source)
+            }
             try app.wait("\(name) shown", timeout: 900) { _ in
                 guard let editor = box.editor else { return false }
                 return !editor.librarySources.isListing && editor.items.count == holding
             }
+            let opened = try app.main { _ in box.openedAt } ?? Date().timeIntervalSince(opening) * 1000
             let left = holding - inClients
 
             let views = try MainThread.run { () -> MainThreadMonitorBox in
@@ -358,6 +363,7 @@
             }
             let store = box.storeLeft ?? .infinity
             let swept = box.swept ?? .infinity
+            app.record("e2e-remove-folder-\(metric)-opened", opened)
             app.record("e2e-remove-folder-\(metric)-store", store)
             app.record("e2e-remove-folder-\(metric)-shown", shown)
             app.record("e2e-remove-folder-\(metric)-counted", counted)
@@ -374,7 +380,8 @@
             }
             app.recorder.write("note", [
                 "remove-folder-\(metric)": "\(box.removing.formatted()) of \(total.formatted()) photos, \(name) "
-                    + "shown (\(holding.formatted()), \(inClients.formatted()) of them in Clients): out of the store "
+                    + "shown (\(holding.formatted()) in \(String(format: "%.0f", opened)) ms, "
+                    + "\(inClients.formatted()) of them in Clients): out of the store "
                     + "and searches in \(String(format: "%.0f", store)) ms, of \(name) in "
                     + "\(String(format: "%.0f", shown)) ms, of the Library panel's counts in "
                     + "\(String(format: "%.0f", counted)) ms, main thread \(turns(viewing)), Folders' own call "
@@ -462,6 +469,18 @@
 
         /// How long `remove` held the main thread, in milliseconds.
         private(set) var removingTook: Double?
+        /// Milliseconds from asking for the source until its photos were all shown.
+        private(set) var openedAt: Double?
+        private var opening: LibraryObservation?
+
+        /// Notes when the photos shown first come to `count`.
+        func watchOpening(_ count: Int, since started: Date) {
+            guard let library else { return }
+            opening = library.observe { [weak self, weak library] _ in
+                guard let self, openedAt == nil, library?.count == count else { return }
+                openedAt = Date().timeIntervalSince(started) * 1000
+            }
+        }
 
         func remove(_ folder: URL) {
             guard let library, let root = library.root(containing: folder) else { return }
