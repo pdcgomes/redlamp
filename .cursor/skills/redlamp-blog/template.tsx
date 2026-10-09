@@ -28,7 +28,7 @@ import type { SetCanvasState } from "cursor/canvas";
 
 type Stage = "idea" | "promised" | "collecting" | "facts ready" | "drafting" | "draft";
 type ShareState = "draft" | "scheduled" | "unconfirmed" | "posted" | "skipped";
-type PostedState = "posted" | "scheduled" | "unconfirmed" | "drafted" | "listed" | "couldn't post";
+type PostedState = "posted" | "scheduled" | "unconfirmed" | "drafted" | "listed" | "on hold" | "couldn't post";
 
 interface NeedsYouItem {
   id: string;
@@ -227,6 +227,7 @@ const POSTED_TONE: Record<PostedState, Tone> = {
   listed: "good",
   scheduled: "active",
   unconfirmed: "waiting",
+  "on hold": "waiting",
   drafted: "quiet",
   "couldn't post": "bad",
 };
