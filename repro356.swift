@@ -35,6 +35,7 @@ func parseArguments() {
         case "--dry": dry = true
         case "--no-shots": shots = false
         case "--first-wait": firstWait = Double(it.next() ?? "") ?? firstWait
+        case "--photos": photosOverride = it.next()
         default: break
         }
     }
@@ -42,7 +43,8 @@ func parseArguments() {
     try? FileManager.default.createDirectory(at: editedFolder, withIntermediateDirectories: true)
 }
 
-var photoFolder: URL { URL(fileURLWithPath: outDir).appendingPathComponent("Photos", isDirectory: true) }
+nonisolated(unsafe) var photosOverride: String?
+var photoFolder: URL { URL(fileURLWithPath: photosOverride ?? outDir + "/Photos", isDirectory: true) }
 var editedFolder: URL { photoFolder.appendingPathComponent("Edited", isDirectory: true) }
 
 // MARK: - Logging and shared state
