@@ -23,12 +23,13 @@ public enum PhotoSource: Sendable, Hashable {
     /// The photos of these IDs the library has: an import's (LIB-23, LIB-27), whose folders may hold others.
     case photos(Set<Int64>)
 
-    /// Whether it holds photos that can't be read, which other sources leave out (LIB-40).
+    /// Whether it holds photos that can't be read, which other sources leave out (LIB-40). A collection
+    /// leaves them out itself, keeping those a smart collection's query finds.
     var findsUnreadable: Bool {
         switch self {
         case let .query(query): query.findsUnreadable
         case let .health(check): check.findsUnreadable
-        case .keptAnyway: true
+        case .keptAnyway, .collection: true
         default: false
         }
     }
@@ -41,12 +42,15 @@ extension QueryEngine {
         of source: PhotoSource, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
         unreadable: Bool = false,
     ) async throws -> RowBits {
-        let rows = try await allRows(of: source, in: store, vocabulary: vocabulary, generation: generation)
+        let rows = try await allRows(
+            of: source, in: store, vocabulary: vocabulary, generation: generation, unreadable: unreadable,
+        )
         return unreadable || source.findsUnreadable ? rows : store.readable(rows)
     }
 
     private func allRows(
         of source: PhotoSource, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
+        unreadable: Bool,
     ) async throws -> RowBits {
         switch source {
         case .allPhotographs:
@@ -57,7 +61,9 @@ extension QueryEngine {
         case let .query(query):
             return try await matches(for: query.searchable, in: store, vocabulary: vocabulary, generation: generation)
         case let .collection(path):
-            let plan = QueryPlan(collection: path, store: store, vocabulary: vocabulary, today: today)
+            let plan = QueryPlan(
+                collection: path, store: store, vocabulary: vocabulary, today: today, unreadable: unreadable,
+            )
             return try await rows(for: plan, in: store, vocabulary: vocabulary, generation: generation)
         case let .health(check):
             return try await store.rows(withIDs: healthFindings(check, in: store, generation: generation).photos)

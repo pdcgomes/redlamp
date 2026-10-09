@@ -198,8 +198,11 @@ struct QueryFilterBarTests {
         #expect(pano.first == QueryCompletion(field: .trait, value: "panorama", count: 2))
         #expect(pano.first?.term == "is:panorama")
         let light = await engine.completions("l", field: .trait)
-        #expect(light.map(\.value) == ["low-light", "long-exposure", "no-location", "high-resolution"])
-        #expect(light.map(\.count) == [2, 1, 6, 2], "names starting, the shorter first, then words, then inside a word")
+        #expect(light.map(\.value) == ["low-light", "long-exposure", "no-location", "damaged", "high-resolution"])
+        #expect(
+            light.map(\.count) == [2, 1, 6, 0, 2],
+            "names starting, the shorter first, then words, then inside a word: Damaged Files' and unreadable's",
+        )
         let studio = PhotoSource.folder(Self.folder("2024/Studio"), includingSubfolders: false)
         let inStudio = await engine.completions("res", field: .trait, in: studio)
         #expect(inStudio.map(\.term) == ["is:high-resolution"] && inStudio.first?.count == 1)

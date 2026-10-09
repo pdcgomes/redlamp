@@ -480,12 +480,17 @@ extension QueryVocabulary {
 }
 
 extension NameTable {
-    /// The colour labels, the traits by title and by word, and the orientations.
+    /// The colour labels, the traits by title, by word and by their synonyms, and the orientations.
     static let fixed = NameTable(
         ColorLabel.allCases.map { RankedName(.label, $0.rawValue) }
-            + LibraryQuery.Trait.allCases.map { RankedName(.trait, $0.rawValue, name: $0.title, others: [$0.rawValue]) }
+            + LibraryQuery.Trait.allCases.map(traitName)
             + PhotoOrientation.allCases.map { RankedName(.orientation, $0.rawValue) },
     )
+
+    /// A trait's name: its title, and its word and synonyms beside it.
+    private static func traitName(_ trait: LibraryQuery.Trait) -> RankedName {
+        RankedName(.trait, trait.rawValue, name: trait.title, others: [trait.rawValue] + trait.synonyms)
+    }
 
     /// The names `store`'s columns hold that completion offers: custom labels, and places' parts.
     init(storeNames store: ColumnStore) {

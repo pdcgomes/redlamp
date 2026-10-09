@@ -55,6 +55,8 @@ indirect enum QueryPlan: Sendable, Hashable {
         case collections([Int64])
         /// The photos in moments without a pick (LIB-41).
         case unpickedMoments(MomentScope)
+        /// The photos Library Health's Damaged Files check lists (LIB-40).
+        case damaged
     }
 
     /// `query` against `store`: nil is every photo. `moments` are the photos `is:unpicked-moment`
@@ -69,15 +71,22 @@ indirect enum QueryPlan: Sendable, Hashable {
     }
 
     /// The photos of the collection at `path`, or of every collection inside it, smart collections'
-    /// queries included, each finding the library's moments at the default setting.
-    init(collection path: CollectionPath, store: ColumnStore, vocabulary: QueryVocabulary, today: Int) {
+    /// queries included, each finding the library's moments at the default setting. Photos that can't be
+    /// read are left out (LIB-40) unless `unreadable` asks for them; a smart collection whose query finds
+    /// them keeps them.
+    init(
+        collection path: CollectionPath, store: ColumnStore, vocabulary: QueryVocabulary, today: Int,
+        unreadable: Bool = false,
+    ) {
+        let readable = unreadable ? QueryPlan.all : .not(.leaf(.state(UInt8(PhotoRecord.State.unreadable.rawValue))))
         let ids = vocabulary.names.collections.compactMap { id, text in
             CollectionPath(text)?.isWithin(path) == true ? id : nil
         }
-        var plans: [QueryPlan] = ids.isEmpty ? [] : [.leaf(.rows(.collections(ids.sorted())))]
+        var plans: [QueryPlan] = ids.isEmpty ? [] : [Self.every([.leaf(.rows(.collections(ids.sorted()))), readable])]
         for smart in vocabulary.smartCollections() where smart.path.isWithin(path) {
-            plans.append(smart.query.map {
-                QueryPlan($0.searchable, store: store, vocabulary: vocabulary, today: today)
+            plans.append(smart.query.map { query in
+                let plan = QueryPlan(query.searchable, store: store, vocabulary: vocabulary, today: today)
+                return query.findsUnreadable ? plan : Self.every([plan, readable])
             } ?? .nothing)
         }
         self = Self.any(plans)
@@ -154,8 +163,13 @@ indirect enum QueryPlan: Sendable, Hashable {
         }
         switch (field, value) {
         case let (.trait, .trait(trait)):
-            guard let query = trait.query else { return .leaf(.rows(.unpickedMoments(moments))) }
-            return compile(query, store: store, vocabulary: vocabulary, today: today, moments: moments)
+            switch trait {
+            case .unpickedMoment: return .leaf(.rows(.unpickedMoments(moments)))
+            case .damaged: return .leaf(.rows(.damaged))
+            default:
+                guard let query = trait.query else { return .nothing }
+                return compile(query, store: store, vocabulary: vocabulary, today: today, moments: moments)
+            }
         case let (.flag, .flag(flag)):
             return .leaf(.packed(
                 shift: Packed.flagShift,

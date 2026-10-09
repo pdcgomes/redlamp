@@ -91,7 +91,8 @@ enum LibraryCommand {
                found and how long it took. --collection searches a collection, a set or a smart collection
                instead of the whole library, and <query> may then be left out. is:unpicked-moment finds the
                photos in moments without a pick, the moments found as groups finds them, with --tighter or
-               --looser. --limit prints only the first <n>; --json prints JSON.
+               --looser. is:damaged finds the files health lists as damaged files, those it can't read among
+               them. --limit prints only the first <n>; --json prints JSON.
       stats    prints what the index at <path> holds: its photos and folders, its roots and where each keeps
                its sidecars, its volumes and which are offline, how many photos are edited, rated, picked,
                rejected and labelled, and the sizes of the index and of the store beside it. --json prints JSON.

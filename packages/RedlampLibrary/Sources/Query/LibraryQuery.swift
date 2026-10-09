@@ -167,7 +167,7 @@ public indirect enum LibraryQuery: Sendable, Hashable {
 
     /// A trait (LIB-06): a name for a query over the index's fields, written `is:` and its name, and
     /// offered as the filter bar completes what's typed; or, for `unpicked-moment`, for photos found
-    /// from their moments (LIB-41).
+    /// from their moments (LIB-41), and for `damaged`, for those Library Health finds (LIB-40).
     public enum Trait: String, Sendable, Hashable, CaseIterable {
         /// A second or more: `shutter>=1`.
         case longExposure = "long-exposure"
@@ -184,6 +184,10 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         /// the library's for a search, and the library's at the default setting for a smart
         /// collection's query or another source's own.
         case unpickedMoment = "unpicked-moment"
+        /// A file Library Health's Damaged Files check lists (`HealthCheck.damaged`): one that can't be
+        /// read, is empty, starts as no image does or ends early, but not one still being written or kept
+        /// anyway. Those that can't be read are found too, which lists otherwise leave out.
+        case damaged
 
         /// Its name as the filter bar shows it.
         public var title: String {
@@ -194,11 +198,17 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .lowLight: "Low Light"
             case .noLocation: "No Location"
             case .unpickedMoment: "Moments without a Pick"
+            case .damaged: "Damaged Files"
             }
         }
 
+        /// Other words completion finds it by, besides its name and title.
+        var synonyms: [String] {
+            self == .damaged ? ["unreadable"] : []
+        }
+
         /// The query it stands for; nil for `unpicked-moment`, which depends on the other photos of
-        /// its moment.
+        /// its moment, and for `damaged`, which Library Health's check finds.
         public var query: LibraryQuery? {
             switch self {
             case .longExposure: .filter(Filter(.shutter, .greaterOrEqual, [.number(1)]))
@@ -206,7 +216,7 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .highResolution: .filter(Filter(.megapixels, .greaterOrEqual, [.number(40)]))
             case .lowLight: .filter(Filter(.iso, .greaterOrEqual, [.number(3200)]))
             case .noLocation: .not(.filter(Filter(.has, .equal, [.detail(.gps)])))
-            case .unpickedMoment: nil
+            case .unpickedMoment, .damaged: nil
             }
         }
     }
@@ -238,19 +248,48 @@ public extension LibraryQuery {
         }
     }
 
-    /// Whether its photos include those that can't be read, which lists otherwise leave out (LIB-40).
+    /// Whether its photos include those that can't be read, which lists otherwise leave out (LIB-40): it
+    /// names `unreadable`, or keeps photos with `is:damaged`.
     var findsUnreadable: Bool {
-        mentions(.unreadable)
+        mentions(.unreadable) || keeps(.damaged)
     }
 
     /// Whether it has `is:unpicked-moment`, whose photos depend on the photos it filters and the
     /// Tighter–Looser setting it's run with (LIB-41).
     var findsMoments: Bool {
+        has(.unpickedMoment)
+    }
+
+    /// Whether `trait` is anywhere in it.
+    func has(_ trait: Trait) -> Bool {
         switch self {
         case .all, .text: false
-        case let .filter(filter): filter.field == .trait && filter.values.contains(.trait(.unpickedMoment))
-        case let .not(query): query.findsMoments
-        case let .and(queries), let .or(queries): queries.contains { $0.findsMoments }
+        case let .filter(filter): filter.field == .trait && filter.values.contains(.trait(trait))
+        case let .not(query): query.has(trait)
+        case let .and(queries), let .or(queries): queries.contains { $0.has(trait) }
+        }
+    }
+}
+
+extension LibraryQuery {
+    /// Whether it needs the column store, which SQL can't stand in for: it has `is:unpicked-moment` or
+    /// `is:damaged`.
+    var needsStore: Bool {
+        has(.unpickedMoment) || has(.damaged)
+    }
+
+    /// Whether `trait` keeps photos in it: under no `-` or `!=`, or under two.
+    private func keeps(_ trait: Trait, negated: Bool = false) -> Bool {
+        switch self {
+        case .all, .text:
+            false
+        case let .filter(filter):
+            filter.field == .trait && filter.values.contains(.trait(trait))
+                && (filter.comparison == .notEqual) == negated
+        case let .not(query):
+            query.keeps(trait, negated: !negated)
+        case let .and(queries), let .or(queries):
+            queries.contains { $0.keeps(trait, negated: negated) }
         }
     }
 }

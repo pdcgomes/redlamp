@@ -520,13 +520,13 @@ public final class QueryEngine: Sendable {
         return stream
     }
 
-    /// `moments` are the photos and setting `is:unpicked-moment` finds moments with, which SQL can't: a
-    /// query with it waits for the store.
+    /// `moments` are the photos and setting `is:unpicked-moment` finds moments with, which SQL can't, as
+    /// it can't find `is:damaged`'s photos: a query with either waits for the store.
     private func find(
         _ query: LibraryQuery?, sort: QuerySort, pageSize: Int, moments: MomentScope,
         yield: @escaping @Sendable (QueryResult) -> Void,
     ) async throws {
-        if query?.findsMoments == true, await loadedSnapshot() == nil {
+        if query?.needsStore == true, await loadedSnapshot() == nil {
             try await load()
         }
         if snapshot().map({ !$0.0.keepsOrder(sort.key) }) == true {
@@ -680,6 +680,8 @@ public final class QueryEngine: Sendable {
             let photos = try await rows(of: scope.source, in: store, vocabulary: vocabulary, generation: generation)
             try Task.checkCancellation()
             return store.unpickedMoments(of: photos, setting: scope.setting)
+        case .damaged:
+            return try await store.rows(withIDs: healthFindings(.damaged, in: store, generation: generation).photos)
         }
     }
 
