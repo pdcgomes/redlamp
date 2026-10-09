@@ -231,31 +231,7 @@ final class LibrarySourceList: Sendable {
                 indexIDs.reserveCapacity(count)
             }
             for photo in read.parts.joined() {
-                let url = photo.item.url
-                if fresh {
-                    items[photo.id] = photo.item
-                    // Photos not handed over before differ from none handed over.
-                    if handed != nil {
-                        touched.insert(photo.id)
-                    }
-                    keys[url] = photo.key
-                    indexIDs[url] = photo.id
-                    continue
-                }
-                if let old = items[photo.id]?.url, old != url {
-                    forget(old)
-                }
-                if items[photo.id] != photo.item {
-                    items[photo.id] = photo.item
-                    touched.insert(photo.id)
-                }
-                // Written only when they differ: the main thread holds the last change's, which a write copies.
-                if keys[url] != photo.key {
-                    keys[url] = photo.key
-                }
-                if indexIDs[url] != photo.id {
-                    indexIDs[url] = photo.id
-                }
+                keep(photo, fresh: fresh)
             }
             if !stepped, !fresh {
                 let kept = Set(ids)
@@ -272,124 +248,39 @@ final class LibrarySourceList: Sendable {
             inStep = true
         }
 
+        /// Keeps `photo` as it was read; when none of the source's photos were kept before (`fresh`), without looking
+        /// for what it was.
+        private mutating func keep(_ photo: Read, fresh: Bool) {
+            let url = photo.item.url
+            if fresh {
+                items[photo.id] = photo.item
+                // Photos not handed over before differ from none handed over.
+                if handed != nil {
+                    touched.insert(photo.id)
+                }
+                keys[url] = photo.key
+                indexIDs[url] = photo.id
+                return
+            }
+            if let old = items[photo.id]?.url, old != url {
+                forget(old)
+            }
+            if items[photo.id] != photo.item {
+                items[photo.id] = photo.item
+                touched.insert(photo.id)
+            }
+            // Written only when they differ: the main thread holds the last change's, which a write copies.
+            if keys[url] != photo.key {
+                keys[url] = photo.key
+            }
+            if indexIDs[url] != photo.id {
+                indexIDs[url] = photo.id
+            }
+        }
+
         private mutating func forget(_ url: URL) {
             keys.removeValue(forKey: url)
             indexIDs.removeValue(forKey: url)
-        }
-
-        /// A photo of the source as the grid shows it, at its folder, and its content key.
-        struct Read: Sendable {
-            var id: Int64
-            var item: LibraryItem
-            var key: ContentKey?
-        }
-
-        /// The columns of a photo's row the grid shows, those `LibraryFolderList.Mapping.item` takes, with its folder,
-        /// name and content key, in the order `read(_:folder:)` reads them.
-        static let shown = """
-        id, folder, name, size, modified, sidecar_modified, edited, rating, flag, label, custom_label, marked, \
-        other_fields, content_key
-        """
-
-        /// Photos are read in one pass over their IDs' range from this many, while the range holds at most `spread`
-        /// times as many photos as are read.
-        static let passFrom = 1024
-        static let spread: Int64 = 16
-        /// The pass's parts read at once: of the index's four readers, one is left for searches and counts.
-        static let partsAtOnce = 3
-
-        /// Photos `ids` as the grid shows them, from their rows, in parts, with the paths of the folders read for them,
-        /// those `known` lacks at least. Many photos close together in ID are read in one pass over their range, in ID
-        /// order, after every folder's path, a part of `part` IDs at a time on each of `partsAtOnce` readers, so a read
-        /// asked for meanwhile waits for one part at most: a row read by its ID costs a lookup each, 16 s in all for a
-        /// million photos.
-        static func read(
-            _ ids: [Int64], folders known: [Int64: String], index: LibraryIndex, part: Int64 = 1 << 15,
-        ) async throws -> (parts: [[Read]], folders: [Int64: String]) {
-            guard ids.count >= passFrom, let low = ids.min(), let high = ids.max(),
-                  high - low < Int64(ids.count) * spread
-            else {
-                return try await index.read { reader in
-                    let statement = try reader.database.cached("SELECT \(shown) FROM photos WHERE id = ?")
-                    var photos: [Read] = []
-                    photos.reserveCapacity(ids.count)
-                    var folders: [Int64: String] = [:]
-                    for id in ids {
-                        try statement.bind(id, at: 1)
-                        try statement.forEachRow { row in
-                            let folder = row.int64(at: 1)
-                            if known[folder] == nil, folders[folder] == nil {
-                                folders[folder] = try reader.folder(id: folder)?.path
-                            }
-                            if let path = known[folder] ?? folders[folder] {
-                                photos.append(Self.read(row, folder: path))
-                            }
-                        }
-                    }
-                    return ([photos], folders)
-                }
-            }
-            let folders = try await index.read { reader in
-                var paths: [Int64: String] = [:]
-                try reader.database.cached("SELECT id, path FROM folders").forEachRow { row in
-                    paths[row.int64(at: 0)] = row.string(at: 1)
-                }
-                return paths
-            }
-            var wanted = [UInt64](repeating: 0, count: Int((high - low) >> 6) + 1)
-            for id in ids {
-                wanted[Int(id - low) >> 6] |= 1 << UInt64((id - low) & 63)
-            }
-            let (chosen, size) = (wanted, max(part, 1))
-            @Sendable func reading(from start: Int64) async throws -> [Read] {
-                try await index.read { reader in
-                    let statement = try reader.database.cached("SELECT \(shown) FROM photos WHERE id BETWEEN ? AND ?")
-                    try statement.bind(start, at: 1)
-                    try statement.bind(min(start + size - 1, high), at: 2)
-                    var found: [Read] = []
-                    try statement.forEachRow { row in
-                        let bit = row.int64(at: 0) - low
-                        guard chosen[Int(bit >> 6)] & 1 << UInt64(bit & 63) != 0, let path = folders[row.int64(at: 1)]
-                        else { return }
-                        found.append(Self.read(row, folder: path))
-                    }
-                    return found
-                }
-            }
-            var starts = stride(from: low, through: high, by: Int(size)).makeIterator()
-            let read = try await withThrowingTaskGroup(of: [Read].self) { group in
-                for _ in 0 ..< partsAtOnce {
-                    if let start = starts.next() {
-                        group.addTask { try await reading(from: start) }
-                    }
-                }
-                var parts: [[Read]] = []
-                while let found = try await group.next() {
-                    parts.append(found)
-                    if let start = starts.next() {
-                        group.addTask { try await reading(from: start) }
-                    }
-                }
-                return parts
-            }
-            return (read, folders)
-        }
-
-        /// The photo of `row`, read with `shown`'s columns, as the grid shows it in the folder at `folder`.
-        private static func read(_ row: SQLiteStatement, folder: String) -> Read {
-            let photo = PhotoRecord(
-                id: row.int64(at: 0), folder: row.int64(at: 1), name: row.string(at: 2) ?? "", size: row.int64(at: 3),
-                modified: Date(timeIntervalSince1970: row.double(at: 4)), contentKey: row.data(at: 13),
-                rating: row.int(at: 7), flag: PhotoRecord.flag(code: row.int(at: 8)),
-                label: PhotoRecord.label(code: row.int(at: 9)), marked: row.bool(at: 11), edited: row.bool(at: 6),
-                sidecarModified: row.optionalDouble(at: 5).map(Date.init(timeIntervalSince1970:)),
-                customLabel: row.string(at: 10), otherFields: PhotoRecord.fields(code: row.int(at: 12)),
-            )
-            let url = URL(fileURLWithPath: (folder == "/" ? "" : folder) + "/" + photo.name, isDirectory: false)
-            return Read(
-                id: photo.id, item: LibraryFolderList.Mapping.item(photo, url: url, folder: folder),
-                key: photo.contentKey.flatMap(ContentKey.init(data:)),
-            )
         }
 
         /// The change handing over the photos `ids` names, in its order, against those handed over before.
@@ -445,5 +336,124 @@ final class LibrarySourceList: Sendable {
             touched = []
             return change
         }
+    }
+}
+
+extension LibrarySourceList {
+    /// A photo of the source as the grid shows it, at its folder, and its content key, as its row is read.
+    struct Read: Sendable {
+        var id: Int64
+        var item: LibraryItem
+        var key: ContentKey?
+    }
+}
+
+extension LibrarySourceList.Mapping {
+    /// The columns of a photo's row the grid shows, those `LibraryFolderList.Mapping.item` takes, with its folder,
+    /// name and content key, in the order `read(_:folder:)` reads them.
+    static let shown = """
+    id, folder, name, size, modified, sidecar_modified, edited, rating, flag, label, custom_label, marked, \
+    other_fields, content_key
+    """
+
+    /// Photos are read in one pass over their IDs' range from this many, while the range holds at most `spread`
+    /// times as many photos as are read.
+    static let passFrom = 1024
+    static let spread: Int64 = 16
+    /// The pass's parts read at once: of the index's four readers, one is left for searches and counts.
+    static let partsAtOnce = 3
+
+    /// Photos `ids` as the grid shows them, from their rows, in parts, with the paths of the folders read for them,
+    /// those `known` lacks at least. Many photos close together in ID are read in one pass over their range, in ID
+    /// order, after every folder's path, a part of `part` IDs at a time on each of `partsAtOnce` readers, so a read
+    /// asked for meanwhile waits for one part at most: a row read by its ID costs a lookup each, 16 s in all for a
+    /// million photos.
+    static func read(
+        _ ids: [Int64], folders known: [Int64: String], index: LibraryIndex, part: Int64 = 1 << 15,
+    ) async throws -> (parts: [[LibrarySourceList.Read]], folders: [Int64: String]) {
+        guard ids.count >= passFrom, let low = ids.min(), let high = ids.max(),
+              high - low < Int64(ids.count) * spread
+        else {
+            return try await index.read { reader in
+                let statement = try reader.database.cached("SELECT \(shown) FROM photos WHERE id = ?")
+                var photos: [LibrarySourceList.Read] = []
+                photos.reserveCapacity(ids.count)
+                var folders: [Int64: String] = [:]
+                for id in ids {
+                    try statement.bind(id, at: 1)
+                    try statement.forEachRow { row in
+                        let folder = row.int64(at: 1)
+                        if known[folder] == nil, folders[folder] == nil {
+                            folders[folder] = try reader.folder(id: folder)?.path
+                        }
+                        if let path = known[folder] ?? folders[folder] {
+                            photos.append(Self.read(row, folder: path))
+                        }
+                    }
+                }
+                return ([photos], folders)
+            }
+        }
+        let folders = try await index.read { reader in
+            var paths: [Int64: String] = [:]
+            try reader.database.cached("SELECT id, path FROM folders").forEachRow { row in
+                paths[row.int64(at: 0)] = row.string(at: 1)
+            }
+            return paths
+        }
+        var wanted = [UInt64](repeating: 0, count: Int((high - low) >> 6) + 1)
+        for id in ids {
+            wanted[Int(id - low) >> 6] |= 1 << UInt64((id - low) & 63)
+        }
+        let (chosen, size) = (wanted, max(part, 1))
+        @Sendable func reading(from start: Int64) async throws -> [LibrarySourceList.Read] {
+            try await index.read { reader in
+                let statement = try reader.database.cached("SELECT \(shown) FROM photos WHERE id BETWEEN ? AND ?")
+                try statement.bind(start, at: 1)
+                try statement.bind(min(start + size - 1, high), at: 2)
+                var found: [LibrarySourceList.Read] = []
+                try statement.forEachRow { row in
+                    let bit = row.int64(at: 0) - low
+                    guard chosen[Int(bit >> 6)] & 1 << UInt64(bit & 63) != 0, let path = folders[row.int64(at: 1)]
+                    else { return }
+                    found.append(Self.read(row, folder: path))
+                }
+                return found
+            }
+        }
+        var starts = stride(from: low, through: high, by: Int(size)).makeIterator()
+        let read = try await withThrowingTaskGroup(of: [LibrarySourceList.Read].self) { group in
+            for _ in 0 ..< partsAtOnce {
+                if let start = starts.next() {
+                    group.addTask { try await reading(from: start) }
+                }
+            }
+            var parts: [[LibrarySourceList.Read]] = []
+            while let found = try await group.next() {
+                parts.append(found)
+                if let start = starts.next() {
+                    group.addTask { try await reading(from: start) }
+                }
+            }
+            return parts
+        }
+        return (read, folders)
+    }
+
+    /// The photo of `row`, read with `shown`'s columns, as the grid shows it in the folder at `folder`.
+    private static func read(_ row: SQLiteStatement, folder: String) -> LibrarySourceList.Read {
+        let photo = PhotoRecord(
+            id: row.int64(at: 0), folder: row.int64(at: 1), name: row.string(at: 2) ?? "", size: row.int64(at: 3),
+            modified: Date(timeIntervalSince1970: row.double(at: 4)), contentKey: row.data(at: 13),
+            rating: row.int(at: 7), flag: PhotoRecord.flag(code: row.int(at: 8)),
+            label: PhotoRecord.label(code: row.int(at: 9)), marked: row.bool(at: 11), edited: row.bool(at: 6),
+            sidecarModified: row.optionalDouble(at: 5).map(Date.init(timeIntervalSince1970:)),
+            customLabel: row.string(at: 10), otherFields: PhotoRecord.fields(code: row.int(at: 12)),
+        )
+        let url = URL(fileURLWithPath: (folder == "/" ? "" : folder) + "/" + photo.name, isDirectory: false)
+        return LibrarySourceList.Read(
+            id: photo.id, item: LibraryFolderList.Mapping.item(photo, url: url, folder: folder),
+            key: photo.contentKey.flatMap(ContentKey.init(data:)),
+        )
     }
 }

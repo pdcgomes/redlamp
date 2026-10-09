@@ -126,9 +126,9 @@ struct LibrarySourceListTests {
             return (items, keys)
         }
         // In parts of 100 IDs, more than are read at once.
-        let pass: [LibrarySourceList.Mapping.Read] = try await LibrarySourceList.Mapping
+        let pass: [LibrarySourceList.Read] = try await LibrarySourceList.Mapping
             .read(ids, folders: [:], index: index, part: 100).parts.joined().sorted { $0.id < $1.id }
-        let few: [LibrarySourceList.Mapping.Read] = try await Array(LibrarySourceList.Mapping
+        let few: [LibrarySourceList.Read] = try await Array(LibrarySourceList.Mapping
             .read(Array(ids.prefix(10)), folders: [:], index: index).parts.joined())
         await index.close()
         #expect(pass.map(\.item) == items)
