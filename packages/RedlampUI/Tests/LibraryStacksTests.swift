@@ -365,6 +365,84 @@ struct LibraryStacksTests {
         )
     }
 
+    @Test func `the stacks are found again when Undo or Redo takes back or makes a stack's change, not another kind's`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, _, _, window) = try await open()
+        defer { window.contentView = nil }
+        let (first, second) = try (id(model, "S01.JPG"), id(model, "S02.JPG"))
+        func top() -> Int64? {
+            model.gridStacks.list?.stacks.stack(containing: first)?.top
+        }
+        /// Until every change asked for is made, and the stackings they started are done.
+        func settled() async throws {
+            while let tail = model.cullingTail {
+                await tail.value
+                if model.cullingTail == tail {
+                    break
+                }
+            }
+            await model.libraryPanels.written()
+            var made = -1
+            while made != model.gridStacks.stackingsMade {
+                made = model.gridStacks.stackingsMade
+                try await Task.sleep(for: LibraryStacks.quietPause + .milliseconds(300))
+            }
+        }
+        /// Whether `action`, Undo or Redo, finds the stacks again within 0.7 s: a stacking made meanwhile. Badges'
+        /// changes find them again only after a second's quiet.
+        func restacks(_ action: ShortcutAction) async throws -> Bool {
+            let made = model.gridStacks.stackingsMade
+            #expect(model.perform(action))
+            try await Task.sleep(for: .milliseconds(700))
+            return model.gridStacks.stackingsMade > made
+        }
+        func stack() throws {
+            try model.clickInGrid(url(model, "S01.JPG"))
+            try model.clickInGrid(url(model, "S02.JPG"), toggling: true)
+            #expect(model.perform(.stackPhotos))
+        }
+        func rate(_ name: String) throws {
+            try model.clickInGrid(url(model, name))
+            #expect(model.perform(.rating3))
+        }
+
+        // A stack, then a rating: ⌘Z takes back the rating, then the stack.
+        try stack()
+        try await eventually(seconds: 20) { top() == second }
+        try rate("S03.JPG")
+        try await settled()
+        #expect(model.libraryUndoKind == .culling)
+        #expect(try await !restacks(.undo), "⌘Z of the rating, the panels' last step a stack's")
+        try await settled()
+        #expect(model.libraryUndoKind == .panels)
+        _ = try await restacks(.undo)
+        try await eventually(seconds: 20) { top() == nil }
+        #expect(top() == nil, "⌘Z of the stack found the stacks again")
+        try await settled()
+
+        // A rating, then a stack, both taken back: ⇧⌘Z makes the rating again, then the stack.
+        try rate("S04.JPG")
+        try stack()
+        try await eventually(seconds: 20) { top() == second }
+        try await settled()
+        #expect(model.perform(.undo))
+        try await eventually(seconds: 20) { top() == nil }
+        try await settled()
+        #expect(model.perform(.undo))
+        try await settled()
+        #expect(model.libraryRedoKind == .culling && model.libraryPanels.redoSteps.last?.changes
+            .contains(where: \.isStacks)
+            == true)
+        #expect(try await !restacks(.redo), "⇧⌘Z of the rating, the panels' last step taken back a stack's")
+        try await settled()
+        #expect(model.libraryRedoKind == .panels)
+        _ = try await restacks(.redo)
+        try await eventually(seconds: 20) { top() == second }
+        #expect(top() == second, "⇧⌘Z of the stack found them again")
+        await model.libraryPanels.written()
+    }
+
     @Test func `stacking, unstacking and a stack's top are changes Undo takes back, the grid following`() async throws {
         defer { cleanUp() }
         let (model, grid, _, window) = try await open()

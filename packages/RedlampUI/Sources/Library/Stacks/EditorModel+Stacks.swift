@@ -296,12 +296,12 @@ public extension EditorModel {
             deselectOtherPhotos()
             coverClosedStacks()
         case .undo where module == .library:
-            if libraryPanels.undoSteps.last?.changes.contains(where: \.isStacks) == true {
+            if libraryUndoKind == .panels, libraryPanels.undoSteps.last?.changes.contains(where: \.isStacks) == true {
                 restackAfterPanels()
             }
             return nil
         case .redo where module == .library:
-            if libraryPanels.redoSteps.last?.changes.contains(where: \.isStacks) == true {
+            if libraryRedoKind == .panels, libraryPanels.redoSteps.last?.changes.contains(where: \.isStacks) == true {
                 restackAfterPanels()
             }
             return nil
