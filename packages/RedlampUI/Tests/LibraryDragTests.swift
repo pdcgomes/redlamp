@@ -59,6 +59,29 @@ struct LibraryDragTests {
         #expect(sandbox.files(in: "Picked").isEmpty)
     }
 
+    @Test func `⌘Z takes a drop's move back the moment its batch is done, in the turn the actions come back`(
+    ) async throws {
+        let sandbox = DragSandbox()
+        defer { sandbox.close() }
+        try await sandbox.open(photos: ["A.JPG", "B.JPG"], folders: ["Picked"])
+        let model = try #require(sandbox.model)
+        try sandbox.click("A.JPG")
+        try sandbox.press("A.JPG")
+        try sandbox.drag(
+            from: sandbox.cell("A.JPG"),
+            to: sandbox.middle(of: "folders." + sandbox.folder("Picked").path),
+        )
+        // Turn by turn on the main actor, as a key could come between any two of them.
+        let deadline = ContinuousClock.now + .seconds(15)
+        while model.fileSteps.undo.last?.batch == nil, ContinuousClock.now < deadline {
+            await Task.yield()
+        }
+        try #require(model.fileSteps.undo.last?.batch != nil, "the move's batch is done")
+        #expect(model.canPerform(.undo) && model.perform(.undo), "⌘Z is there in the turn the move is done")
+        await model.filesMade()
+        #expect(sandbox.files() == ["A.JPG", "B.JPG", "Picked"] && sandbox.files(in: "Picked").isEmpty)
+    }
+
     @Test func `a photo that isn't selected is dragged alone, and a click on a selected photo selects it alone`(
     ) async throws {
         let sandbox = DragSandbox()

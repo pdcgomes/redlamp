@@ -49,17 +49,22 @@ extension EditorModel {
     }
 
     /// Moves the photos dropped on `folder` there, the batch's progress in the grid's toolbar, and says in an alert
-    /// why it didn't happen.
+    /// why it didn't happen. Actions come back in the move's own turn, as its batch ends, so ⌘Z is there the moment
+    /// the move is done, before anything asked for after it.
     func drop(_ photos: DraggedPhotos, onFolder folder: URL) async {
         let urls = await photos.urls()
         let shown = moveProgress
         shown.title = "Moving to \(folder.lastPathComponent)"
         shown.progress = nil
         isModalDialogOpen = true
-        let error = await movePhotos(urls, to: folder) { shown.progress = $0 }
-        shown.title = nil
-        shown.progress = nil
-        isModalDialogOpen = false
+        let done: @MainActor () -> Void = { [weak self] in
+            guard shown.title != nil else { return }
+            shown.title = nil
+            shown.progress = nil
+            self?.isModalDialogOpen = false
+        }
+        let error = await movePhotos(urls, to: folder, progress: { shown.progress = $0 }, done: done)
+        done()
         guard let error, let window = EditorWindowController.frontWindow else { return }
         let alert = NSAlert()
         alert.messageText = "The photos weren't moved to \(folder.lastPathComponent)"
@@ -68,11 +73,12 @@ extension EditorModel {
     }
 
     /// Moves the photos at `urls`, with their pairs, into `folder` as one batch with Undo, `progress` hearing of its
-    /// steps: Move to Folder's batch, for photos given rather than the selection. Why it didn't happen, or nil once
-    /// it has.
+    /// steps and `done` called in its turn once the batch has run: Move to Folder's batch, for photos given rather
+    /// than the selection. Why it didn't happen, or nil once it has.
     @discardableResult
     func movePhotos(
         _ urls: [URL], to folder: URL, progress: (@MainActor @Sendable (FileProgress) -> Void)? = nil,
+        done: (@MainActor () -> Void)? = nil,
     ) async -> String? {
         guard let service = library.service, let core = service.core, service.isReady else {
             return "The library isn't open"
@@ -104,7 +110,9 @@ extension EditorModel {
         let relay = FileProgressRelay { progress?($0) }
         push(step)
         let run = await fileSteps.make { [self] in
-            await perform(step, undoing: false) { await service.move(ids, to: folder) { relay.send($0) } }
+            let run = await perform(step, undoing: false) { await service.move(ids, to: folder) { relay.send($0) } }
+            done?()
+            return run
         }
         if let error = run.error {
             activity.record(.error, "\(step.title) wasn't done: \(error)")
