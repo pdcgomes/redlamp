@@ -122,7 +122,15 @@ struct FolderRemovalTests {
         try NSApplication.shared.sendAction(#require(item.action), to: item.target, from: item)
         #expect(model.library.roots.map(\.url) == [sandbox.root])
         try await sandbox.counts { $0.count(of: .allPhotographs) == 1 }
-        #expect(model.librarySources.count(of: .allPhotographs) == 1)
+        let service = try #require(sandbox.service)
+        let (roots, removing) = try await #require(service.core).index.read { reader in
+            try (reader.roots().map(\.path), reader.removedRoots().count)
+        }
+        let found = try await Self.ids("", service).count
+        #expect(
+            model.librarySources.count(of: .allPhotographs) == 1,
+            "the index's roots \(roots), \(removing) being taken out; the query engine finds \(found)",
+        )
     }
 
     @Test(.measuresSpeed)
