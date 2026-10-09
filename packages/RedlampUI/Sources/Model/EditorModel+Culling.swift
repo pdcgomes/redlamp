@@ -77,19 +77,27 @@ public extension EditorModel {
         case .autoAdvance: true
         case .undo where module == .library: canUndoCulling
         case .redo where module == .library: canRedoCulling
-        default: CullingChange(action) == nil ? nil : (opening ?? selection) != nil
+        default: CullingChange(action) == nil ? nil : canCull
         }
+    }
+
+    /// Whether a culling change reaches a photo now: in Library one listed, the selection's or the active one; in
+    /// Develop the active photo, or the one opening.
+    private var canCull: Bool {
+        guard module == .library else { return (opening ?? selection) != nil }
+        return library.count > 0 && (!photoSelection.isEmpty || selection.flatMap(library.index(of:)) != nil)
     }
 
     /// Makes `change`: in Library on the selection, in Develop on the active photo, or the one opening;
     /// `advance` then makes the photo after them active, in the grid's order (`GridOrder`): past closed groups,
-    /// and from cell to cell among stacks.
+    /// and from cell to cell among stacks. False when it reaches no photo: in Library, none listed.
     @discardableResult
     func cull(_ change: CullingChange, advance: Bool = false) -> Bool {
         guard let active = opening ?? selection else { return false }
         var culled: [Int64] = []
         if module == .library {
             let rows = selectedRows
+            guard !rows.isEmpty else { return false }
             if advance {
                 let ids = library.photoIDs
                 culled = rows.compactMap { ids.indices.contains($0) ? ids[$0] : nil }
