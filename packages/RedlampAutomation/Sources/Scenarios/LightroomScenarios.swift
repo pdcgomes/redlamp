@@ -73,6 +73,9 @@
                 return model.libraryPanels.keywordList?.keywords[KeywordPath("Places \(tag)/Lisbon")!]?.photos == 1
             }
 
+            try app.wait("Undo Import", timeout: 30) { _ in
+                LightroomWindowController.current?.button("lightroom.undo")?.enabled == true
+            }
             try app.clickInLightroomWindow("lightroom.undo")
             try app.wait("the import taken back", timeout: 120) { _ in
                 LightroomWindowController.current?.isUndone == true

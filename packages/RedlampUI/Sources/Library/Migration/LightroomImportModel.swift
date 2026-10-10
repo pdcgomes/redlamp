@@ -84,16 +84,20 @@ final class LightroomImportModel {
         replan()
     }
 
-    private func replan() {
+    /// Reads the catalog, unless it's read already, and works out the plan again; `quietly`, after an import or its
+    /// Undo, the window keeps saying what was done while the report follows the library.
+    private func replan(quietly: Bool = false) {
         guard let url = catalogURL else { return }
         guard let core else {
             problem = "The library isn't open yet"
             changed()
             return
         }
-        phase = .reading
-        problem = nil
-        changed()
+        if !quietly {
+            phase = .reading
+            problem = nil
+            changed()
+        }
         let moved = moved
         let known = catalog?.url == url ? catalog : nil
         work = Task { [weak self] in
@@ -108,11 +112,18 @@ final class LightroomImportModel {
                     return .failure(error)
                 }
             }.value
-            self?.read(result)
+            self?.read(result, quietly: quietly)
         }
     }
 
-    private func read(_ result: Result<(LightroomCatalog, LightroomPlan), any Error>) {
+    private func read(_ result: Result<(LightroomCatalog, LightroomPlan), any Error>, quietly: Bool) {
+        if quietly {
+            guard case let .success((catalog, plan)) = result, !isBusy else { return }
+            self.catalog = catalog
+            self.plan = plan
+            changed()
+            return
+        }
         switch result {
         case let .success((catalog, plan)):
             self.catalog = catalog
@@ -282,7 +293,7 @@ final class LightroomImportModel {
         Task {
             await readLastImport()
             if !stoppedBeforeImport, catalogURL != nil {
-                replan()
+                replan(quietly: true)
             }
         }
         changed()
@@ -327,7 +338,7 @@ final class LightroomImportModel {
         Task {
             await readLastImport()
             if catalogURL != nil {
-                replan()
+                replan(quietly: true)
             }
         }
         changed()
