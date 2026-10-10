@@ -372,6 +372,16 @@ def tick(velocity=1.0):
     return np.sin(2 * np.pi * 3900 * t) * np.exp(-t / 0.004) * velocity
 
 
+def key(velocity=1.0, up=False):
+    """A keyboard key: the keycap's clack as it bottoms out over the low thock of the board, or, `up`,
+    the lighter click as it springs back."""
+    t = times(0.12)
+    clack = bandpass(rng.standard_normal(len(t)), 3200 if up else 2400, octaves=1.4) * np.exp(-t / 0.0025)
+    tone = np.sin(2 * np.pi * (1500 if up else 1100) * t) * np.exp(-t / 0.006)
+    thock = 0.0 if up else np.sin(2 * np.pi * 190 * t) * np.exp(-t / 0.022) * 0.9
+    return (clack * 0.8 + tone * 0.35 + thock) * np.clip(t / 0.0004, 0, 1) * velocity * (0.45 if up else 0.7)
+
+
 def crackle(seconds, density, level):
     """Sparks of static: tiny bright grains at `density(t)` a second and `level(t)` loud, stereo."""
     n = int(round(seconds * SR))

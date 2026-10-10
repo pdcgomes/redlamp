@@ -45,12 +45,23 @@ Every video follows one cue sheet, `video/src/features/cues.json`: 100 BPM at 30
 | 8 | 16.8 s | The card holds. The picture and the sound fade out from 17.4 s; a feed that loops the video starts again on the hook. |
 
 - **Picture:** pixelkit, as the Redlamp architecture series uses it: a dark navy background, bitmap capitals, one accent per meaning. The editor is drawn in neutral greys, as the app is. The only red is the lamp's light and the editor's own red mask overlay.
-- **Grid:** 216 × 384 logical pixels at ×5 (or 180 × 320 at ×6, settled with test frames).
+- **Grid:** 216 × 384 logical pixels at ×5.
 - **Safe zones:** nothing to read in the top 260 px, the bottom 480 px, or the right-hand 160 px between 700 and 1600 px down, where TikTok and Instagram put their own controls.
 - **Header:** a strip with Redlamp's safelight mark and the feature: REDLAMP · SUBJECT MASK.
 - **Values on screen** are the real edit's own: the pixel sliders move to the values the real result was made with, so the two match.
 - **Covers:** the first frame, which carries the hook. Its words sit inside the middle 3:4 of the frame, which Instagram's profile grid shows.
 - **The real results** are Redlamp's own renders of the owner's photos, from the `redlamp` CLI, or captures of the app from `scripts/capture-promo.sh`. What each episode needs, and what already exists, is listed under [Real results](#real-results).
+
+### How a video is built
+
+E01 set the template, and every episode is built the same way in `video/`:
+
+- **The board**, `scripts/features/boards/<episode>.py`, draws the video with the shared pieces in `scripts/features/world.py`. Its `frame(c, beat, hook)` draws any moment from the beat, and its `sounds()` lists each sound on screen as a beat, a kind and a pan, both timed on the cue sheet. The storyboard's eight panels are moments of `frame()`.
+- **The real result**, through `scripts/features/results.py`, is rendered by the `redlamp` CLI (`$REDLAMP_CLI`, or `build/cli/redlamp`) from the owner's sidecar beside the raw: AFTER with his edit, BEFORE with its crop alone, and each step of a drag with the sliders moved so far, so the pixel photo changes as the real one does. Renders are kept in `public/features/<episode>/results/` and made again only when something that went into them changes.
+- **The frames**, `npm run features-frames -- --episode e01`: every frame drawn by pixelkit at 216 × 384, or at 1080 × 1920 while the real photo is on screen, where it shows at full resolution through the ordered dither that resolves it out of the pixel photo. A picture that comes out the same as another is written once, and `frames.json` lists each hook's frames.
+- **The score**, `npm run features-score -- --episode e01`: the theme in the chosen arrangement with the episode's sounds on their frames, with `score.json` for the storyboard sheet and a cue sheet of every sound for `scripts/score-report.py`.
+- **The composition**, `FeatureVideo` in Remotion Studio's Features folder, plays them, with `episode`, `hook` and `guides` props.
+- **The render**, `npm run features -- --episode e01 [--hook a] [--draft]`, writes `~/src/redlamp-social/renders/<the post's file>` and its cover, once the owner has approved the cut. A draft is half the size, named `…-draft.mp4`.
 
 ## Sound
 
@@ -59,6 +70,7 @@ One theme for the series: a hummable two-bar motif, catchy but not aggressive (t
 - **Palette:** a soft pulse lead, a triangle bass, felt piano chords with sevenths and ninths, and half-time drums (a kick on beat 1, a soft snare on beat 3). There are no supersaws, claps or hard crashes.
 - **Sync:** every click, key and slider move on screen has its sound on the same frame. The sound comes from the cue sheet, as the picture does.
 - **Sketches:** three 8-bar arrangements of the same motif for the owner to choose from, written by `video/scripts/features-theme.py` into `video/public/features/`: `theme-chip.wav` (chip voices), `theme-felt.wav` (the pulse lead over felt piano, the lean) and `theme-strings.wav` (piano and strings with a chip bell).
+- **Each video's score** is the chosen arrangement, felt until the owner picks, with the video's own clicks, ticks and keys on the frames their pictures land on (`video/scripts/features-score.py`).
 - **Mastering:** each video is mastered to −14 LUFS integrated with a true peak at or under −1 dBFS.
 - **Audio name:** on both platforms, "Redlamp theme".
 
@@ -364,13 +376,13 @@ Each group of four is approved by the Friday before it starts: 23 October, 6 Nov
 
 ## Real results
 
-Every result is a photo the owner took, rendered by Redlamp at full resolution with the `redlamp` CLI and cropped to 9:16 (1080 × 1920), so it is the best-looking picture in the video. A window capture is used only where the app itself is the result (E04 and E06), taken at full size with `scripts/capture-promo.sh` and shown, not cropped from. Captures and README images already in the repository stand in on the storyboards until the owner's photos arrive.
+Every result is a photo the owner took, rendered by Redlamp with the `redlamp` CLI and shown at full resolution where the pixel photo was, so it is the best-looking picture in the video. A window capture is used only where the app itself is the result (E04 and E06), taken at full size with `scripts/capture-promo.sh` and shown, not cropped from. Captures and README images already in the repository stand in on the storyboards until the owner's photos arrive.
 
 The owner's photos go in `~/src/redlamp-social/photos/`, outside the repository, where agents can read them (they can't read `~/Pictures` or `~/Downloads`). Each one keeps its Redlamp sidecar if it has an edit, so the result is his edit.
 
 | Video | Photo | Result |
 | --- | --- | --- |
-| E01 Free | The cosplayer with orange hair (`DSC02372.jpg`) | Before and after |
+| E01 Free | The cosplayer with orange hair: the raw, `DSC02372.ARW`, and his edit in Redlamp beside it | Before (the raw with the edit's crop alone) and after (the edit), and every step of the drags. Until his edit is saved, a stand-in: his JPEG's crop, found by matching it against the whole frame, with Exposure +1.00, Highlights −40, Shadows −60 and Vibrance +30 |
 | E02 Subject mask | The owner's son at a colour run (`IMG_3557.jpg`) | The background darkened with an inverted Subject mask, before and after |
 | E03 Film looks | The street-food cook at the grill (`DSC03230 (2).jpg`) | The photo in Portra 400, Tri-X 400, CineStill 800T, Velvia 50 and HP5 Plus |
 | E04 Lightroom shortcuts | The man in the green shirt (`DSC03301 (2).jpg`) for the black-and-white step, and a capture of the app | The app window, then its shortcut list |
@@ -382,6 +394,16 @@ The owner's photos go in `~/src/redlamp-social/photos/`, outside the repository,
 | E10 Focus stacking | The snail on a leaf (`DSC00983.jpg`) as the subject; the real result needs a focus-bracketed series | One frame against the merged stack |
 
 The photos are the owner's JPEGs, 1365 × 2048 from a Sony α7R V and 1536 × 2048 from an iPhone, all portrait, so they crop to 9:16 without losing much. The raws and their Redlamp edits would give the sharpest results and keep "raw photo editor" literally true; the JPEGs work until then. The watch (`DSC00959.jpg`), the leaf with a drop (`DSC00973.jpg`) and the man on the motorbike (`DSC03213.jpg`) are spare. The dancer can still replace any of these.
+
+## Review notes
+
+### E01, 10 October 2026
+
+The first cut, for the owner's review in Studio, with hook A or B, the felt arrangement and the stand-in edit.
+
+- **Picture:** every frame was drawn with no warning from the kit or the safe zones (179 pictures for 576 frames, both hooks), and stills with the `guides` prop show every word clear of the apps' zones in each bar. Captions are 70 px tall. The hook's seven words are on screen for 2.4 s, under the 2.6 s the checklist's rule of thumb asks for; DOWNLOAD FREE / REDLAMP.APP stays 3.6 s. The storyboard sheet (`out/features/e01-storyboard.jpg`) shows every cue's frame over the score's level.
+- **Sound:** −14.0 LUFS integrated and a true peak of −1.8 dBFS by ffmpeg. The result's bar is the loudest (−11.9 LUFS), the first the quietest (−19.3). Sub 13% and mids 60% of the energy. Above 2.5 kHz, each of the 21 sounds on screen lands within 1 ms of its beat; the score report's broadband check flags four of the quiet ticks, because the piano's notes rise faster in the whole band. In the encoded draft the audio is 0 ms from the score.
+- **Not checked:** how it plays at full speed and size, and how the ticks and the key sit in the mix on a phone. Those are for the owner's viewing in Studio.
 
 ## For the owner to decide
 

@@ -22,6 +22,9 @@
     "pixelkit": "node scripts/pixelkit.mjs",
     "pixelkit-frames": "python3 scripts/pixelkit-frames.py --hooks",
     "pixelkit-score": "python3 scripts/pixelkit-score.py",
+    "features": "node scripts/features.mjs",
+    "features-frames": "python3 scripts/features-frames.py",
+    "features-score": "python3 scripts/features-score.py",
     "review": "node scripts/review.mjs",
     "storyboard": "node scripts/storyboard.mjs",
     "typecheck": "tsc --noEmit"

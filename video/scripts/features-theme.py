@@ -221,7 +221,7 @@ def ui(fx):
 # ---------------------------------------------------------------- the arrangements
 
 
-def chip():
+def chip(sounds=ui):
     start(31)
     room = s.reverb(1.6, 0.42, 0.015)
     drums, low, pulse2, lead, fx = (s.Bus(TOTAL + 4) for _ in range(5))
@@ -259,7 +259,7 @@ def chip():
         lead.add(at(beat), s.pulse(note + 12, beats * BEAT * 0.9, 0.6, duty=0.125, vibrato=0.12, warmth=3000),
                  gain=0.14, pan_to=-0.2, wet=0.4)
     develop(fx, room)
-    ui(fx)
+    sounds(fx)
 
     pump = s.sidechain(TOTAL + 4, kicks, depth=0.35, release=0.15)
     low.duck(1 - 0.4 * (1 - pump))
@@ -267,7 +267,7 @@ def chip():
     return [drums, low, pulse2, lead, fx], dict(room=room, wet=0.6, presence=3.0)
 
 
-def felt():
+def felt(sounds=ui):
     start(37)
     room = s.reverb(2.2, 0.55, 0.02)
     drums, keys, lead, fx = (s.Bus(TOTAL + 4) for _ in range(4))
@@ -289,14 +289,14 @@ def felt():
     sing(lead, 0.5)
     fx.add(at(cue["hook"]), s.lowpass(s.crackle(TOTAL + 1, lambda t: 14, lambda t: 0.6), 7500), gain=0.035, wet=0.4)
     develop(fx, room)
-    ui(fx)
+    sounds(fx)
 
     pump = s.sidechain(TOTAL + 4, kicks, depth=0.35, release=0.18)
     keys.duck(1 - 0.15 * (1 - pump))
     return [drums, keys, lead, fx], dict(room=room, wet=0.7, presence=3.0)
 
 
-def strings():
+def strings(sounds=ui):
     start(41)
     room = s.reverb(3.0, 0.7, 0.025)
     drums, low, bows, keys, fx = (s.Bus(TOTAL + 4) for _ in range(5))
@@ -335,7 +335,7 @@ def strings():
     for beat, note, beats in HEADS:
         fx.add(at(beat), s.blip(note + 12, 0.7, 0.07, duty=0.5), gain=0.1, pan_to=0.35, wet=0.4)
     develop(fx, room)
-    ui(fx)
+    sounds(fx)
 
     pump = s.sidechain(TOTAL + 4, kicks, depth=0.4, release=0.2)
     low.duck(1 - 0.4 * (1 - pump))
@@ -343,7 +343,8 @@ def strings():
     return [drums, low, bows, keys, fx], dict(room=room, wet=0.7, presence=3.0)
 
 
-# Each arrangement returns its buses and how they're mastered.
+# Each arrangement returns its buses and how they're mastered. `sounds` puts a video's own sounds on its
+# effects bus; the sketches have ui's in their place.
 ARRANGEMENTS = {"chip": chip, "felt": felt, "strings": strings}
 
 if __name__ == "__main__":

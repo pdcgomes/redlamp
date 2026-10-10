@@ -1,5 +1,6 @@
 import { type CalculateMetadataFunction, Composition, Folder, Still } from "remotion";
 import { durationOf, Explainer, type ExplainerProps } from "./Explainer";
+import { FEATURE_VIDEO_FRAMES, FeatureVideo, type FeatureVideoProps, withFrames } from "./features/FeatureVideo";
 import { loadManifest } from "./introducing/assets";
 import { durationOf as filmDuration, Introducing, type IntroducingProps } from "./introducing/Introducing";
 import { stories } from "./introducing/Posters";
@@ -22,6 +23,7 @@ export function RemotionRoot() {
   const social: ExplainerProps = { cut: "social", musicSrc: null };
   const star: StarPromoProps = { hook: "charging", stars: 25, musicSrc: "star/score.wav", guides: false };
   const pixelkit: PixelkitPromoProps = { hook: DEFAULT_HOOK, musicSrc: "pixelkit/score.wav" };
+  const feature: FeatureVideoProps = { episode: "e01", hook: "a", guides: false, manifest: null };
   return (
     <>
       <Composition
@@ -116,6 +118,18 @@ export function RemotionRoot() {
           width={1920}
           height={1080}
           defaultProps={pixelkit}
+        />
+      </Folder>
+      <Folder name="Features">
+        <Composition
+          id="FeatureVideo"
+          component={FeatureVideo}
+          durationInFrames={FEATURE_VIDEO_FRAMES}
+          fps={FPS}
+          width={1080}
+          height={1920}
+          defaultProps={feature}
+          calculateMetadata={withFrames}
         />
       </Folder>
       <Folder name="Review">

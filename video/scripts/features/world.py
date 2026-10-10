@@ -42,8 +42,14 @@ FONTS["large"]._cache.pop(",", None)
 # ---------------------------------------------------------------- the grid
 
 W, H, SCALE = 216, 384, 5
-BPM = 100
-BAR = 4 * 60 / BPM
+# Every video's timings, in beats from the first frame (src/features/cues.json), read by the frames,
+# the score and the composition alike.
+SHEET = json.loads((VIDEO / "src/features/cues.json").read_text())
+CUE = SHEET["cues"]
+BPM, FPS = SHEET["bpm"], SHEET["fps"]
+BAR = SHEET["beatsPerBar"] * 60 / BPM
+PER_BEAT = 60 / BPM * FPS
+FRAMES = round(SHEET["bars"] * SHEET["beatsPerBar"] * PER_BEAT)
 
 # Where the apps' own controls sit on a 1080 × 1920 video, in output pixels (x, y, w, h).
 COVERED_PX = {
@@ -581,15 +587,17 @@ class Overlay(NamedTuple):
     image: Image.Image
     pixels: np.ndarray | None = None
     progress: float = 1.0
+    block: int = 1
 
 
-def result_frame(c, ed, real, *, label=REAL_PHOTO, mark=None, progress=1.0):
+def result_frame(c, ed, real, *, label=REAL_PHOTO, mark=None, progress=1.0, block=1):
     """The result: the real photo where the pixel one was, with its label as the caption and an optional
-    BEFORE or AFTER tag. Draw the editor with the pixel photo first. Returns the overlay to render."""
+    BEFORE or AFTER tag. Draw the editor with the pixel photo first. Returns the overlay to render, which
+    reveals the real photo `block` logical pixels at a time."""
     caption(c, label)
     if mark:
         tag(c, ed.photo, mark)
-    return [Overlay(ed.photo, real, ed.pixels, progress)]
+    return [Overlay(ed.photo, real, ed.pixels, progress, block)]
 
 
 def pair(ed, gap=4):
@@ -640,7 +648,7 @@ def render(c, scale=SCALE, overlays=()):
     out = c.img.resize((c.w * scale, c.h * scale), Image.NEAREST)
     for ov in overlays:
         r = ov.rect
-        show = reveal_mask(ov.progress, r.w, r.h)
+        show = reveal_mask(ov.progress, r.w, r.h, block=ov.block)
         if ov.pixels is not None:
             show &= (np.asarray(c.img)[r.y:r.y2, r.x:r.x2] == ov.pixels).all(axis=2)
         mask = Image.fromarray((show * 255).astype(np.uint8)).resize((r.w * scale, r.h * scale), Image.NEAREST)
@@ -712,12 +720,13 @@ def lamp(c, cx, cy, r=19):
     return Rect(int(cx - bezel), int(cy - bezel), 2 * bezel, 2 * bezel)
 
 
-def cta_card(c, end_line, *, cta=True, lamp_y=168):
+def cta_card(c, end_line, *, cta=True, lamp_y=168, light=1.0):
     """The end card: the end line at the top, the lamp lit in the middle, its light warming the page
     around it and falling off into the dark, and DOWNLOAD FREE / REDLAMP.APP under it once `cta` is on,
-    all inside the safe area. It has no header, so the lamp is the picture's one red light."""
-    c.glow(c.w / 2, lamp_y, 120, "#2a0e12", amount=0.9, levels=4)
-    c.glow(c.w / 2, lamp_y, 52, "red.dark", amount=0.35, levels=3)
+    all inside the safe area. It has no header, so the lamp is the picture's one red light. `light`
+    is how far its light has spread, 0 to 1, as it comes on."""
+    c.glow(c.w / 2, lamp_y, 120 * (0.4 + 0.6 * light), "#2a0e12", amount=0.9 * light, levels=4)
+    c.glow(c.w / 2, lamp_y, 52, "red.dark", amount=0.35 * light, levels=3)
     lamp(c, c.w / 2, lamp_y)
     caption(c, end_line)
     if cta:
@@ -730,3 +739,16 @@ def fade(c, p, color="shadow"):
     """The picture fading out through an ordered dither, adding no colours: the share p is gone."""
     if p > 0:
         c.dissolve(min(1.0, p), color)
+
+
+# ---------------------------------------------------------------- motion
+
+def ease(t):
+    """0 to 1 over t from 0 to 1, slow at both ends (smoothstep), held outside it."""
+    t = min(1.0, max(0.0, t))
+    return t * t * (3 - 2 * t)
+
+
+def between(b, start, end):
+    """How far beat b is from `start` to `end`, 0 to 1, held outside them."""
+    return min(1.0, max(0.0, (b - start) / (end - start)))
