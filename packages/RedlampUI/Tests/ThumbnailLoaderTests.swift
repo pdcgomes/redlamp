@@ -190,6 +190,47 @@ struct ThumbnailLoaderTests {
         #expect(loader.cached(item("B.ARW")) == nil)
     }
 
+    @Test func `loaders sharing a scheduler each get the photo they both ask for`() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let busy = DispatchSemaphore(value: 0)
+        let scheduler = WorkScheduler(widths: .init(onScreen: 1, lookAhead: 1, background: 1))
+        let loaders = (0 ..< 2).map { _ in
+            ThumbnailLoader(scheduler: scheduler, packs: ThumbnailPacks(directory: directory)) { url, size in
+                if url.lastPathComponent == "block" {
+                    busy.wait()
+                }
+                return Self.image(width: size, height: size)
+            }
+        }
+        loaders[0].request(item("block")) { _ in }
+        var answered: [Bool] = []
+        for loader in loaders {
+            loader.request(item("A.ARW")) { answered.append($0 != nil) }
+        }
+        busy.signal()
+        try await eventually { answered.count == 2 }
+        #expect(answered == [true, true])
+    }
+
+    @Test func `stopping one loader's warming leaves another's to finish`() async throws {
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let busy = DispatchSemaphore(value: 0)
+        let scheduler = WorkScheduler(
+            widths: .init(onScreen: 1, lookAhead: 1, background: 1), canRunBackground: { true },
+        )
+        let packs = ThumbnailPacks(directory: directory)
+        let loaders = (0 ..< 2).map { _ in
+            ThumbnailLoader(scheduler: scheduler, packs: packs) { _, size in Self.image(width: size, height: size) }
+        }
+        scheduler.submit(.background) { busy.wait() }
+        let photos = (0 ..< 4).map { item("\($0).ARW") }
+        loaders[0].warm(photos)
+        loaders[1].stopWarming()
+        busy.signal()
+        try await eventually { photos.allSatisfy { packs.contains($0.url, size: $0.size, modified: $0.modified) } }
+        #expect(photos.allSatisfy { packs.contains($0.url, size: $0.size, modified: $0.modified) })
+    }
+
     @Test func `warming fills the pack without holding thumbnails in memory`() async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let packs = ThumbnailPacks(directory: directory)

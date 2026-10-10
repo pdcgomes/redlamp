@@ -74,6 +74,9 @@ public final class FolderLibrary {
     @ObservationIgnored public internal(set) var items: [LibraryItem] = []
     @ObservationIgnored var positions: [URL: Int] = [:]
     @ObservationIgnored let scheduler: WorkScheduler
+    /// Starts every key this library gives `scheduler`, which other libraries share (the harness's
+    /// scenes', each test's): a job with another's key would replace it, or be cancelled with it.
+    @ObservationIgnored let keyPrefix = "library \(UUID().uuidString) "
     @ObservationIgnored let defaults: UserDefaults?
     @ObservationIgnored private let store = SidecarStore()
     @ObservationIgnored var generation = 0
@@ -267,7 +270,7 @@ public final class FolderLibrary {
     // MARK: - Badges
 
     private func probeKeyPrefix(_ generation: Int) -> String {
-        "probe:\(generation):"
+        keyPrefix + "probe:\(generation):"
     }
 
     /// Reads the badges of the photos in `rows` with a local sidecar, a batch per job, in order.

@@ -97,7 +97,8 @@ public final class WorkScheduler: Sendable {
     // MARK: - Submitting
 
     /// Queues `work`. A key names the job for `promote` and `cancel`; a new job with the key of
-    /// one still waiting replaces it.
+    /// one still waiting replaces it, whoever queued it, so an owner that can have several
+    /// instances starts its keys with one of each instance's own.
     @discardableResult
     public func submit(
         _ lane: Lane, key: String? = nil, onCancel: (@Sendable () -> Void)? = nil,

@@ -98,6 +98,35 @@ struct FolderLibraryTests {
         #expect(diffs.count == count, "an unchanged row isn't republished")
     }
 
+    @Test func `libraries sharing a scheduler each look for their own focus stacks`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let scheduler = WorkScheduler(
+            widths: .init(onScreen: 1, lookAhead: 1, background: 1), canRunBackground: { true },
+        )
+        // Both libraries' detections wait behind this until both have asked for one.
+        let busy = DispatchSemaphore(value: 0)
+        scheduler.submit(.background) { busy.wait() }
+        var libraries: [FolderLibrary] = []
+        var readers: [ThreadRecordingFiles] = []
+        for name in ["A", "B"] {
+            let photos = folder.appending(path: name)
+            try FileManager.default.createDirectory(at: photos, withIntermediateDirectories: true)
+            try Data([1]).write(to: photos.appending(path: "IMG_1.ARW"))
+            let library = FolderLibrary(scheduler: scheduler)
+            let files = ThreadRecordingFiles()
+            library.files = files
+            var opened = false
+            library.open(photos) { _ in opened = true }
+            try await eventually { opened }
+            libraries.append(library)
+            readers.append(files)
+        }
+        busy.signal()
+        try await eventually { readers.allSatisfy { !$0.asked.isEmpty } }
+        #expect(readers.map { $0.asked.map(\.lastPathComponent) } == [["IMG_1.ARW"], ["IMG_1.ARW"]])
+        #expect(libraries.map(\.count) == [1, 1])
+    }
+
     @Test func `a photo opened from outside the folder keeps its rating when saved`() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
         try makeFolder(["IMG_1.ARW"])

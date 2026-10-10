@@ -26,6 +26,9 @@ public final class ThumbnailLoader {
     public var protected: Set<URL> = []
 
     private let scheduler: WorkScheduler
+    /// Starts every key this loader gives `scheduler`, which other loaders share (the harness's
+    /// scenes', each test's): a job with another's key would replace it, or be cancelled with it.
+    private let keyPrefix = "thumbnails \(UUID().uuidString) "
     private let packs: ThumbnailPacks
     private let decode: @Sendable (URL, Int) -> CGImage?
     private var cache: [URL: Entry] = [:]
@@ -117,7 +120,7 @@ public final class ThumbnailLoader {
         waiting[item.url] = [id: completion]
         lanes[item.url] = lane
         let (packs, decode) = (packs, decode)
-        scheduler.submit(lane, key: Self.key(item.url)) {
+        scheduler.submit(lane, key: key(item.url)) {
             let image = Self.load(item, packs: packs, decode: decode)
             Task { @MainActor [weak self] in self?.finish(item, image) }
         }
@@ -156,7 +159,7 @@ public final class ThumbnailLoader {
         if waiting[url]?.isEmpty == true {
             waiting[url] = nil
             lanes[url] = nil
-            scheduler.cancel(Self.key(url))
+            scheduler.cancel(key(url))
         }
         completion(nil)
     }
@@ -165,11 +168,11 @@ public final class ThumbnailLoader {
     public func promote(_ url: URL, to lane: WorkScheduler.Lane) {
         guard let current = lanes[url], lane < current else { return }
         lanes[url] = lane
-        scheduler.promote(Self.key(url), to: lane)
+        scheduler.promote(key(url), to: lane)
     }
 
-    private static func key(_ url: URL) -> String {
-        "thumb:" + url.path
+    private func key(_ url: URL) -> String {
+        keyPrefix + "thumb:" + url.path
     }
 
     private func finish(_ item: LibraryItem, _ image: CGImage?) {
@@ -241,7 +244,7 @@ public final class ThumbnailLoader {
     /// was queued. Nothing is kept in memory.
     public func warm(_ items: [LibraryItem]) {
         warmGeneration += 1
-        scheduler.cancel(prefix: "warm:")
+        scheduler.cancel(prefix: keyPrefix + "warm:")
         warmQueue = items.filter(\.isLocal)
         warmHead = 0
         warming = 0
@@ -270,7 +273,7 @@ public final class ThumbnailLoader {
             warmHead += batch.count
             warming += 1
             scheduler.submit(
-                .background, key: "warm:\(generation):\(warmHead)",
+                .background, key: keyPrefix + "warm:\(generation):\(warmHead)",
                 onCancel: { Task { @MainActor [weak self] in self?.warmed(generation) } },
                 {
                     for item in batch where !packs.contains(item.url, size: item.size, modified: item.modified) {

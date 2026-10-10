@@ -137,7 +137,7 @@ extension FolderLibrary {
     private func relist(_ directory: String) {
         let generation = generation
         let url = URL(fileURLWithPath: directory, isDirectory: true)
-        scheduler.submit(.onScreen, key: "relist:\(generation):\(directory)") {
+        scheduler.submit(.onScreen, key: keyPrefix + "relist:\(generation):\(directory)") {
             let listing = try? FolderScanner.list(url)
             Task { @MainActor [weak self] in
                 guard let self, self.generation == generation else { return }
@@ -254,7 +254,7 @@ extension FolderLibrary {
         let generation = generation
         let snapshot = items
         let cached = stackCache.mapValues(\.signature)
-        scheduler.submit(.background, key: "stacks:\(generation)") {
+        scheduler.submit(.background, key: keyPrefix + "stacks:\(generation)") {
             var groups: [String: [LibraryItem]] = [:]
             for item in snapshot {
                 groups[item.folderPath, default: []].append(item)
@@ -290,7 +290,7 @@ extension FolderLibrary {
         onStacks?(shown.flatMap { stackCache[$0]?.suggestions ?? [] })
         guard let next = remaining.first else { return }
         let files = files
-        scheduler.submit(.background, key: "stacks:\(generation):\(next.directory)") {
+        scheduler.submit(.background, key: keyPrefix + "stacks:\(generation):\(next.directory)") {
             let found = StackDetector.suggestions(in: next.urls, reading: files, concurrently: false)
             Task { @MainActor [weak self] in
                 guard let self, self.generation == generation else { return }

@@ -132,7 +132,7 @@ public extension FolderLibrary {
     func listTree(_ folder: URL, lane: WorkScheduler.Lane = .lookAhead) {
         let path = folder.standardizedFileURL.path
         guard listingTree.insert(path).inserted else { return }
-        scheduler.submit(lane, key: "tree:\(path)") {
+        scheduler.submit(lane, key: keyPrefix + "tree:\(path)") {
             let listing = try? FolderScanner.list(folder)
             Task { @MainActor [weak self] in
                 guard let self else { return }
