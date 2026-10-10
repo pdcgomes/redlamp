@@ -1762,30 +1762,27 @@ shows.
 `docs/manual/figures/`: `masks-panel.html`, `mask-adjustments.html`, `combine.html`,
 `gradients.html`, `luminance-range.html`.
 
-**`masks-panel.html` is now wrong** and must be recaptured from the new panel. It crops
-`docs/images/hero-masks.png` at 1935,350 465×410 and keys eleven callouts; of those, only 2 (Masks
-list), 3 (Eye), 6 (Components) and 8 (Add · Subtract · Intersect) still describe something the new
-panel has in that place. Callout 1 names a Show Overlay checkbox, 4 names "Create New Mask · Presets"
-buttons under the list, 5 puts the More menu there, 7 says "Invert · Delete" on a component row (it is
-now Invert and a menu button), and 9, 10 and 11 put the mask's section, Reset and Amount below the
-components rather than above them.
-
-New callouts the recaptured figure should carry, in the header's order: Masks, New Mask, Presets, the
-overlay switch, Overlay Options, Pins, the … menu; then a row's thumbnail, name, eye and menu button;
-then the mask's name with Invert and Reset, Amount, "Components, applied top to bottom", a component
-row's operation menu and menu button, and the three operation buttons.
+`masks-panel.html` shows the new panel (10 October): it crops `docs/images/masking.png` at 1440,270
+360×350 and keys eleven callouts, top to bottom: New Mask · Mask Presets; Overlay · Pins · More; the
+Masks list; Eye · Menu; the mask's section; Invert · Reset; Amount; Components; a component's
+Invert · Menu; Add · Subtract · Intersect; Feather · Detail. It sits after "Open the Masking tool",
+where it fits on the page.
 
 ### Screenshots in `docs/images`
 
 | File | Pixels | What is visible |
 | --- | --- | --- |
-| `docs/images/masking.png` | 1800 × 991 | The whole window with the **old** panel: Masks title, Show Overlay checked, a two-row list, the Create New Mask button, COMPONENTS with Radial Gradient 1, the Add / Subtract / Intersect buttons, Feather at 70, then the MASK 2 section with Reset, Amount 100 and the local sliders. On the canvas, a radial gradient in the red Color Overlay. Referenced from `README.md:793` |
-| `docs/images/hero-masks.png` | 2400 × 1500 | The whole window with a **Subject** mask on a dancer: the **old** panel's layout, with the full local slider list. Referenced from `README.md:789`, and cropped by `masks-panel.html` and `mask-adjustments.html` |
+| `docs/images/masking.png` | 1800 × 1125 | The whole window with the **new** panel: the header (New Mask, Mask Presets, the overlay, its options, Pins, the … menu), two rows with thumbnails, the MASK 2 section with Invert and Reset, Amount 100, COMPONENTS with Radial Gradient 1, Add / Subtract / Intersect, Feather at 70, Detail and the local sliders. On the canvas, the radial gradient in the red Color Overlay and Mask 1's pin. Referenced from `README.md:793`, and cropped by `masks-panel.html` |
+| `docs/images/hero-masks.png` | 2400 × 1500 | The whole window with a **Subject** mask on a dancer: the **old** panel's layout, with the full local slider list. Referenced from `README.md:789` and the manual's cover, and cropped by `mask-adjustments.html` |
 
-Both show the old panel and will need recapturing (`scripts/capture-hero.sh`) once the editor shows the
-new one. The local-adjustment list in `hero-masks.png` is still correct below the components, so
-`mask-adjustments.html` survives the change **(inferred: it crops the slider list, which is unchanged
-except for Point Color appearing after Curve)**.
+`masking.png` was recaptured on 10 October with the new panel (now 1800 × 1125, by
+`scripts/capture-screenshots.sh`): the Sony sample with a linear and a radial mask, Mask 2 selected,
+its Radial Gradient 1 component, Feather 70, Temp +30 and Exposure +0.90. `hero-masks.png` still
+shows the old panel; it needs `scripts/capture-hero.sh` with the dancer (DSC04439.ARW, in the owner's
+Street folder), and the owner chose on 10 October to leave it for now. The local-adjustment list in
+`hero-masks.png` is still correct below the components, so `mask-adjustments.html` survives
+**(inferred: it crops the slider list, which is unchanged except for Point Color appearing after
+Curve)**; its crop must move if `hero-masks.png` is recaptured with the new panel.
 
 ### Research contact sheets — not app UI, not suitable as manual figures
 
