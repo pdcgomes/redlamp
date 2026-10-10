@@ -76,7 +76,9 @@ struct FoldersPanelTests {
         let (list, window) = showPanel(model)
         defer { window.contentView = nil }
         func highlighted() -> [String] {
-            (0 ..< list.folders.numberOfRows).compactMap { index in
+            // The row views draw the highlight, and a reload makes them again as the list next lays out.
+            list.layoutSubtreeIfNeeded()
+            return (0 ..< list.folders.numberOfRows).compactMap { index in
                 guard (list.folders.rowView(atRow: index, makeIfNecessary: false) as? SidebarRowView)?.isCurrentStep
                     == true, let node = list.folders.item(atRow: index) as? SidebarNode,
                     case let .folder(folder) = node.kind else { return nil }
