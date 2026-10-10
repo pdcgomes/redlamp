@@ -82,11 +82,12 @@ struct LibrarySourceListTests {
         #expect(handed.changes > changes)
     }
 
-    @Test func `photos read in one pass over their rows are those read a row at a time`() async throws {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "source-list-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: folder) }
+    /// An index in `folder` of three folders' photos, the grid's every field set on some, more than are read a row at a
+    /// time; their IDs, and each one's row as the grid shows it, with its content key.
+    private func photosIndex(
+        in folder: URL,
+    ) async throws -> (index: LibraryIndex, ids: [Int64], items: [LibraryItem], keys: [ContentKey?]) {
         let index = try await LibraryIndex.open(at: folder.appending(path: "Index.sqlite"), readers: 2)
-        // Three folders' photos, the grid's every field set on some, more than are read a row at a time.
         let ids = try await index.write { writer -> [Int64] in
             let volume = try writer.upsertVolume(VolumeRecord(uuid: "TEST", name: "Test", kind: .ssd))
             let root = try writer.upsertRoot(RootRecord(volume: volume, path: "/Volumes/Test/Photos"))
@@ -109,7 +110,7 @@ struct LibrarySourceListTests {
                 photo.edited = number % 7 == 0
                 photo.sidecarModified = number % 2 == 0 ? Date(timeIntervalSince1970: 1_700_100_000) : nil
                 photo.customLabel = number % 9 == 0 ? "Hero" : nil
-                photo.otherFields = number % 8 == 0 ? [.rating, .label] : []
+                photo.otherFields = number % 4 == 3 ? [.rating, .label] : []
                 return photo
             }
             return try writer.upsertPhotos(photos)
@@ -125,6 +126,13 @@ struct LibrarySourceListTests {
             }
             return (items, keys)
         }
+        return (index, ids, items, keys)
+    }
+
+    @Test func `photos read in one pass over their rows are those read a row at a time`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "source-list-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (index, ids, items, keys) = try await photosIndex(in: folder)
         // In parts of 100 IDs, more than are read at once.
         let pass: [LibrarySourceList.Read] = try await LibrarySourceList.Mapping
             .read(ids, folders: [:], index: index, part: 100).parts.joined().sorted { $0.id < $1.id }
@@ -134,5 +142,25 @@ struct LibrarySourceListTests {
         #expect(pass.map(\.item) == items)
         #expect(pass.map(\.key) == keys)
         #expect(few.map(\.item) == Array(items.prefix(10)))
+    }
+
+    @Test func `the URLs and badges read for photos whose rows aren't read are what their rows show`() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "source-list-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (index, ids, items, _) = try await photosIndex(in: folder)
+        let rows = LargeListRows(index: index, firstRead: LibrarySourceList.firstRead)
+        // In one pass over their IDs' range, and a row at a time.
+        let (urls, badges) = try await (rows.urls(of: ids), rows.badges(of: ids))
+        let few = Array(ids.prefix(10))
+        let (fewURLs, fewBadges) = try await (rows.urls(of: few), rows.badges(of: few))
+        await index.close()
+        #expect(ids.map { urls[$0] } == items.map(\.url))
+        #expect(ids.map { badges[$0]?.url } == items.map(\.url))
+        #expect(ids.map { badges[$0]?.values } == items.map { CullingValues($0.metadata) })
+        #expect(few.map { fewURLs[$0] } == items.prefix(10).map(\.url))
+        #expect(few.map { fewBadges[$0]?.values } == items.prefix(10).map { CullingValues($0.metadata) })
+        // Photo 27 has no sidecar, and its rating and label are other apps'; photo 9's are Redlamp's.
+        #expect(badges[ids[27]]?.values.rating == 0 && badges[ids[27]]?.values.customLabel == nil)
+        #expect(badges[ids[9]]?.values.rating == 3 && badges[ids[9]]?.values.customLabel == "Hero")
     }
 }

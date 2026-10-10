@@ -435,13 +435,25 @@ extension LibraryFolderList {
             if hasSidecar {
                 item.hasEdits = row.edited
             }
-            let theirs = hasSidecar ? [] : row.otherFields
-            item.metadata = PhotoMetadata(
-                rating: theirs.contains(.rating) ? 0 : row.rating, flag: theirs.contains(.flag) ? nil : row.flag,
-                label: theirs.contains(.label) ? nil : row.label,
-                customLabel: theirs.contains(.label) ? nil : row.customLabel, mark: row.marked,
+            item.metadata = metadata(
+                rating: row.rating, flag: row.flag, label: row.label, customLabel: row.customLabel, marked: row.marked,
+                otherFields: row.otherFields, hasSidecar: hasSidecar,
             )
             return item
+        }
+
+        /// The badges `item(_:url:)` shows of a photo the index has with these fields: other apps' (`otherFields`)
+        /// left out until it has a sidecar.
+        static func metadata(
+            rating: Int, flag: PhotoFlag?, label: ColorLabel?, customLabel: String?, marked: Bool,
+            otherFields: Set<XMPField>, hasSidecar: Bool,
+        ) -> PhotoMetadata {
+            let theirs = hasSidecar ? [] : otherFields
+            return PhotoMetadata(
+                rating: theirs.contains(.rating) ? 0 : rating, flag: theirs.contains(.flag) ? nil : flag,
+                label: theirs.contains(.label) ? nil : label, customLabel: theirs.contains(.label) ? nil : customLabel,
+                mark: marked,
+            )
         }
 
         /// `items` in Folders' order: each folder's photos by name, a folder before its subfolders,

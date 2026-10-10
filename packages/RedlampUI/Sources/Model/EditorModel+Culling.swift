@@ -12,6 +12,9 @@ import Synchronization
 ///   for the rest. Redo is the Undo of the Undo where the journal still has it. Undo and Redo take turns with
 ///   the library's other changes in the order they were made (`EditorModel+LibraryUndo`). A photo whose
 ///   sidecar the library can't read or write is reported in the activity log and shown as the library has it.
+/// - **A large source's selection** is taken by its IDs, as the list has them. What culling needs of the photos
+///   whose rows aren't read, their URLs and badges, is read off the main thread (`LargeListRows.badges`), their
+///   rows left unread, and the change is made from it as from rows read.
 /// - **In Develop** each change reaches the active photo, as it always has, and isn't on Library's Undo.
 /// - A toggle (P, X, 6 to 9, a custom label, B) sets its value on every photo it reaches, or takes it off
 ///   them all when every one has it already. `[` and `]` step each photo's own rating.
@@ -94,7 +97,12 @@ public extension EditorModel {
     func cull(_ change: CullingChange, advance: Bool = false) -> Bool {
         guard let active = opening ?? selection else { return false }
         var culled: [Int64] = []
-        if module == .library {
+        if module == .library, library.items.readsOnRequest {
+            let photos = selectedIDs
+            guard !photos.isEmpty else { return false }
+            culled = advance ? photos : []
+            cull(change, photos: photos)
+        } else if module == .library {
             let rows = selectedRows
             guard !rows.isEmpty else { return false }
             if advance {
@@ -118,7 +126,11 @@ public extension EditorModel {
     func cull(_ change: CullingChange, from photo: URL) {
         guard module == .library, let row = library.index(of: photo) else { return }
         let inSelection = library.photoID(of: photo).map(photoSelection.contains) == true || photo == selection
-        cull(change, rows: inSelection ? selectedRows : [row])
+        if inSelection, library.items.readsOnRequest {
+            cull(change, photos: selectedIDs)
+        } else {
+            cull(change, rows: inSelection ? selectedRows : [row])
+        }
         activity.record(.action, change.title)
     }
 
@@ -208,18 +220,46 @@ public extension EditorModel {
     /// Gives the photos of `rows` (places in `items`) what `change` asks for, as one change with Undo: shown
     /// at once, then made in the background. A read-only photo open in Develop is left as it is.
     internal func cull(_ change: CullingChange, rows: [Int]) {
-        // A large source's photos whose rows aren't read are read first, and found again by their IDs.
         let ids = library.photoIDs
-        let unread = rows.filter { ids.indices.contains($0) && library.items.row($0) == nil }.map { ids[$0] }
-        guard unread.isEmpty else {
-            let photos = rows.filter(ids.indices.contains).map { ids[$0] }
-            return library.whenRead(unread) { [weak self] in
-                guard let self else { return }
-                let list = library.photoList
-                cull(change, rows: photos.compactMap(list.index(of:)))
-            }
+        if library.items.readsOnRequest,
+           rows.contains(where: { ids.indices.contains($0) && library.items.row($0) == nil }) {
+            return cullReading(change, photos: rows.filter(ids.indices.contains).map { ids[$0] })
         }
-        guard let step = cullingStep(change, rows: rows) else { return }
+        cull(change, rows: rows, read: [:])
+    }
+
+    /// `change` on a large source's photos `photos`, by their IDs in the list, in order: made at once when their rows
+    /// are read, as `cull(_:rows:)` makes it, else once what culling needs of them is read (`cullReading`).
+    private func cull(_ change: CullingChange, photos: [Int64]) {
+        guard library.hasRead(photos) else { return cullReading(change, photos: photos) }
+        let list = library.photoList
+        cull(change, rows: photos.compactMap(list.index(of:)), read: [:])
+    }
+
+    /// `change` on a large source's photos `photos`, by their IDs in the list, in order, some of whose rows aren't
+    /// read: what culling needs of them, their URLs and badges, is read off the main thread, their rows left unread,
+    /// and each photo still listed then gets it as if its row had been read, a row read meanwhile as it shows. Such
+    /// changes are made in the order they were asked for, each once the one before is shown, and not once another
+    /// source is shown.
+    private func cullReading(_ change: CullingChange, photos: [Int64]) {
+        guard let source = library.rowSource else {
+            let list = library.photoList
+            return cull(change, rows: photos.compactMap(list.index(of:)), read: [:])
+        }
+        let generation = library.generation
+        let previous = cullingReading
+        cullingReading = Task { [weak self] in
+            await previous?.value
+            let read = await (try? source.badges(of: photos)) ?? [:]
+            guard let self, library.generation == generation else { return }
+            let list = library.photoList
+            cull(change, rows: photos.compactMap(list.index(of:)), read: read)
+        }
+    }
+
+    /// `cull(_:rows:)` once what culling needs of the photos whose rows aren't read is in `read`, by their IDs.
+    private func cull(_ change: CullingChange, rows: [Int], read: [Int64: LargeListRows.Badges]) {
+        guard let step = cullingStep(change, rows: rows, read: read) else { return }
         let sequence = cullingQueue.request(step.photos)
         show(step.after, field: change.field, rows: step.rows, photoIDs: step.photoIDs, sequence: sequence)
         step.turn = nextLibraryTurn()
@@ -256,20 +296,40 @@ public extension EditorModel {
     }
 
     /// What `change` makes of the photos of `rows` that it changes, or nil when it changes none. It reads the
-    /// library's photos and lets go of them before they change: holding them would copy them all. Loops rather
-    /// than closures: a closure formed here checks it's on the main actor each time it's called, a photo at a
-    /// time.
-    private func cullingStep(_ change: CullingChange, rows: [Int]) -> CullingStep? {
+    /// library's photos and lets go of them before they change: holding them would copy them all. A large source's
+    /// photo whose row isn't read is as `read` has it, by its ID, with what culling shows of it that the library
+    /// doesn't hold yet, as its row would be once read (`keepCullingShown`); one `read` lacks is left out. Loops
+    /// rather than closures: a closure formed here checks it's on the main actor each time it's called, a photo at
+    /// a time.
+    private func cullingStep(
+        _ change: CullingChange, rows: [Int], read: [Int64: LargeListRows.Badges],
+    ) -> CullingStep? {
         let items = library.items
         let ids = library.photoIDs
         let readOnly = isReadOnly ? selection.flatMap(library.index(of:)) : nil
+        var latest: [Int64: (values: CullingValues, fields: Set<CullingField>)] = [:]
+        if !read.isEmpty, !cullingOverlay.isEmpty {
+            cullingOverlay.expire()
+            latest = cullingOverlay.latest()
+        }
         var shown: [Int] = []
         var current: [CullingValues] = []
         shown.reserveCapacity(rows.count)
         current.reserveCapacity(rows.count)
         for row in rows where items.indices.contains(row) && row != readOnly {
-            shown.append(row)
-            current.append(CullingValues(items[row].metadata))
+            if let item = items.row(row) {
+                shown.append(row)
+                current.append(CullingValues(item.metadata))
+            } else if let badges = read[ids[row]] {
+                var values = badges.values
+                if let shownLater = latest[ids[row]] {
+                    for field in shownLater.fields {
+                        shownLater.values.apply(field, to: &values)
+                    }
+                }
+                shown.append(row)
+                current.append(values)
+            }
         }
         let wanted = change.resolved(current)
         var changed: [Int] = []
@@ -284,9 +344,10 @@ public extension EditorModel {
         after.reserveCapacity(shown.count)
         for place in shown.indices where !wanted[place].matches(current[place], in: change.field) {
             let row = shown[place]
+            guard let url = items.row(row)?.url ?? read[ids[row]]?.url else { continue }
             changed.append(row)
             photoIDs.append(ids[row])
-            photos.append(items[row].url)
+            photos.append(url)
             before.append(current[place])
             after.append(wanted[place])
         }

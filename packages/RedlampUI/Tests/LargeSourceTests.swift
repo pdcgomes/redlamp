@@ -74,35 +74,57 @@ struct LargeSourceTests {
         #expect(library.items.row(39)?.url == active)
     }
 
-    @Test func `culling a large source's whole selection reads its rows first, and Undo takes it back`(
+    @Test func `culling a large source's whole selection takes its IDs, its rows unread, and Undo takes it back`(
     ) async throws {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }
         let diffs = DiffLog()
-        let (model, _, window) = try await open(sandbox, count: 40, diffs: diffs)
+        let (model, grid, window) = try await open(sandbox, count: 40, diffs: diffs)
         defer { window.contentView = nil }
         let library = model.library
         let engine = try #require(sandbox.service?.engine)
-        func rated(_ stars: Int) async throws -> Int {
-            try await engine.list(.allPhotographs, matching: LibraryQuery(parsing: "rating:\(stars)")).count
+        // The grid's cells have their rows, which they read themselves.
+        try await sandbox.eventually { !grid.cells.isEmpty && grid.cells.values.allSatisfy { $0.item != nil } }
+        func found(_ query: String) async throws -> Int {
+            try await engine.list(.allPhotographs, matching: LibraryQuery(parsing: query)).count
+        }
+        func eventually(_ query: String, _ count: Int) async throws {
+            for _ in 0 ..< 400 where try await found(query) != count {
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            #expect(try await found(query) == count, "\(query)")
         }
         model.selectAllPhotos()
+        let read = library.items.rowsRead.count
         #expect(model.selectedCount == 40 && !model.hasReadSelection)
         #expect(model.perform(.rating3))
-        try await sandbox.eventually(seconds: 20) { library.items.rowsRead.count == 40 }
-        #expect(library.items.rowsRead.values.allSatisfy { $0.metadata.rating == 3 }, "every photo shows three stars")
-        for _ in 0 ..< 400 where try await rated(3) != 40 {
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        #expect(try await rated(3) == 40, "the library has three stars on every photo")
+        try await sandbox.eventually { model.cullingUndoCount == 1 }
+        #expect(model.cullingUndo.last?.photos.count == 40, "the change reaches every photo")
+        #expect(library.items.rowsRead.count == read, "no row was read for it")
+        #expect(library.items.rowsRead.values.allSatisfy { $0.metadata.rating == 3 }, "the rows read show three stars")
+        try await eventually("rating:3", 40)
 
-        #expect(model.perform(.undo))
-        for _ in 0 ..< 400 where try await rated(3) != 0 {
-            try await Task.sleep(for: .milliseconds(50))
+        // Each photo's own rating stepped; Pick twice, the second on the first's photos as culling shows them, before
+        // the library holds them, so it takes the flag off again.
+        #expect(model.perform(.increaseRating))
+        #expect(model.perform(.flagPick))
+        #expect(model.perform(.flagPick))
+        try await sandbox.eventually { model.cullingUndoCount == 4 }
+        #expect(model.cullingUndo.map(\.photos.count) == [40, 40, 40, 40])
+        try await eventually("rating:4", 40)
+        try await eventually("flag:pick", 0)
+        await model.cullingTail?.value
+        #expect(library.items.rowsRead.count == read, "no row was read for them")
+        await library.read(library.photoIDs)
+        #expect(library.items.rowsRead.values.allSatisfy { $0.metadata.rating == 4 && $0.metadata.flag == nil })
+
+        for _ in 0 ..< 4 {
+            #expect(model.perform(.undo))
         }
-        #expect(try await rated(3) == 0, "Undo took them all back")
+        try await eventually("rating:0", 40)
+        try await eventually("flag:pick", 0)
         try await sandbox.eventually { library.items.rowsRead.values.allSatisfy { $0.metadata.rating == 0 } }
-        #expect(library.items.rowsRead.values.allSatisfy { $0.metadata.rating == 0 }, "and the rows show it")
+        #expect(library.items.rowsRead.values.allSatisfy { $0.metadata.rating == 0 }, "Undo took them all back")
         await model.cullingTail?.value
     }
 

@@ -655,6 +655,9 @@ public final class EditorModel {
     /// The culling changes being made in the background, one after another.
     @ObservationIgnored let cullingQueue = CullingQueue()
     @ObservationIgnored var cullingTail: Task<Void, Never>?
+    /// A large source's culling changes waiting for what they need of photos whose rows aren't read, one after
+    /// another (`EditorModel.cullReading`).
+    @ObservationIgnored var cullingReading: Task<Void, Never>?
     /// What culling shows that the library's lists may not hold yet.
     @ObservationIgnored var cullingOverlay = CullingOverlay()
     /// Photos' previews, for the Library loupe and for Develop until a photo's render lands.
