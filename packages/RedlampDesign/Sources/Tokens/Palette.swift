@@ -88,14 +88,14 @@ public enum Palette {
         current.editedDot
     }
 
-    /// The Edited chip on a Develop panel's header: the theme's accent on a faint fill of it, a
-    /// status rather than a button, unlike the grey badge.
+    /// The Edited chip on a Develop panel's header: the row's own greys, as its badge, so it
+    /// reads without pulling the eye from the photo.
     public static var editedChipText: NSColor {
-        accent
+        secondaryLabel.nsColor
     }
 
     public static var editedChipFill: NSColor {
-        accent.withAlphaComponent(current.isDark ? 0.2 : 0.14)
+        selection.nsColor
     }
 
     /// A Develop panel's card, a step above the panel background (`PanelSectionView.Style.card`).
