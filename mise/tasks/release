@@ -58,6 +58,22 @@ IDENTITY="${REDLAMP_SIGN_IDENTITY:-$(security find-identity -v -p codesigning \
     | awk -v team="($TEAM_ID)\"" '/"Developer ID Application:/ && index($0, team) { print $2; exit }')}"
 [ -n "$IDENTITY" ] || fail "no Developer ID Application identity for team $TEAM_ID in the keychain"
 
+# A process started by a binary carrying com.apple.provenance tags every file it writes, and Homebrew
+# installs mise with one. The zip leaves the tags out, but the disk image would hold them, and an app
+# dragged from it to /Applications is then refused by Gatekeeper (#333).
+if [ -z "${SKIP_DMG:-}" ]; then
+    PROBE="$(mktemp)"
+    echo probe >"$PROBE"
+    PROBE_ATTRIBUTES="$(xattr "$PROBE" 2>/dev/null || true)"
+    rm -f "$PROBE"
+    if [[ "$PROBE_ATTRIBUTES" == *com.apple.provenance* ]]; then
+        fail "the files this release writes are tagged with com.apple.provenance, so its disk image would carry them (#333).
+       mise's binary usually does it: in a plain shell, run
+         xattr -d com.apple.provenance \"\$(readlink -f \"\$(command -v mise)\")\"
+       and release again (again after each Homebrew update of mise), or set SKIP_DMG=\"<why>\" for the zip alone."
+    fi
+fi
+
 if [ "$DRY_RUN" != 1 ]; then
     git merge-base --is-ancestor "$COMMIT" "$MAIN" \
         || fail "a release builds origin/main or an earlier commit of it; $(git rev-parse --short "$COMMIT") isn't on main"

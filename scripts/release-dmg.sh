@@ -5,11 +5,13 @@
 # runs from the image, or from Downloads, where a zip unpacks. Its window takes its picture and
 # Finder's layout from scripts/dmg (background.tiff and DS_Store; scripts/dmg/layout.sh).
 #
-# The build tags the app's files with com.apple.provenance. A disk image keeps the tags, Finder
+# A process started by a binary carrying com.apple.provenance tags every file it writes (Homebrew's
+# mise has one), so a release's build tags the app's files. A disk image keeps the tags, Finder
 # copies them into /Applications, and Gatekeeper on macOS 26 then refuses the app (#333). Copied
 # into the image, the files kept their tags through ditto --noextattr and xattr -c (0.2.8's run),
-# so the app is unpacked into a read-write image from a zip that holds no attributes, and the
-# compressed image is converted from it block for block, so nothing in it is written again.
+# so the app is unpacked into a read-write image from a zip that holds no attributes, which only
+# helps if this script's own writes aren't tagged (the release task checks before building), and
+# the compressed image is converted from it block for block, so nothing in it is written again.
 #
 #   scripts/release-dmg.sh build/release/Redlamp.app build/release/Redlamp-<version>.dmg
 #
