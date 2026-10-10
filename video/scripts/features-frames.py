@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 The feature videos' pictures (src/features/FeatureVideo.tsx): every frame drawn by pixelkit from the
-series' cue sheet (src/features/cues.json) by the episode's board, scripts/features/boards/<episode>.py,
-whose frame(c, beat, hook) draws any moment of it. A frame is the 216 × 384 canvas, which the
+series' cue sheet (src/features/cues.json): first the opener every video starts with (world.opener),
+then the episode, by its board, scripts/features/boards/<episode>.py, whose frame(c, beat, hook) draws
+any moment of it. A frame is the 216 × 384 canvas, which the
 composition shows five times the size with nearest-neighbour scaling; while a real photo is on screen it
 is the whole 1080 × 1920 frame, with the photo at full resolution through the dither that reveals it
 (world.render). A picture that comes out the same as another is written once, and frames.json lists
@@ -10,10 +11,10 @@ each frame's file for every hook.
 
     python3 scripts/features-frames.py --episode e01              # public/features/e01/frames/, every hook
     python3 scripts/features-frames.py --episode e01 --hook a     # one hook
-    python3 scripts/features-frames.py --episode e01 --only 0,360 # these frames at 1080 × 1920, in /tmp/features-frames/
+    python3 scripts/features-frames.py --episode e01 --only 0,560 # these frames at 1080 × 1920, in /tmp/features-frames/
 
-The hook is on screen only in the first bar, so the other hooks' frames are drawn up to the first step's
-cue and share the rest. Needs Pillow and numpy, and pixelkit at $PIXELKIT or ~/src/pixelartvisuals.
+Frames are numbered from the opener's first. The hook is on screen in the opener and the episode's first
+bar, so the other hooks' frames are drawn up to the first step's cue and share the rest. Needs Pillow and numpy, and pixelkit at $PIXELKIT or ~/src/pixelartvisuals.
 Warnings from the kit's checks and the safe zones are printed once each; fix them all.
 """
 
@@ -42,10 +43,14 @@ def load(key):
 
 
 def draw(board, f, hook):
-    """Frame f with `hook`: the canvas, the image to write (the canvas, or the whole frame when a real
-    photo is on it) and the kit's warnings."""
+    """Frame f with `hook`: the image to write (the canvas, or the whole frame when a real photo is on
+    it) and the kit's warnings."""
     c = w.canvas()
-    overlays = board.frame(c, f / w.PER_BEAT, hook) or []
+    if f < w.OPENER_FRAMES:
+        w.opener(c, f, board.EPISODE["hooks"][hook], board.FEATURE)
+        overlays = []
+    else:
+        overlays = board.frame(c, (f - w.OPENER_FRAMES) / w.PER_BEAT, hook) or []
     image = w.render(c, w.SCALE, overlays) if overlays else c.img
     return image, w.check(c)
 
@@ -78,11 +83,12 @@ def main():
         frames_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = folder / "frames.json"
         manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() and args.hook else {"frames": {}}
-        opening = round(w.CUE["step1"] * w.PER_BEAT)
+        total = w.OPENER_FRAMES + w.FRAMES
+        opening = w.OPENER_FRAMES + round(w.CUE["step1"] * w.PER_BEAT)
         written = {}
         for i, hook in enumerate(hooks):
             names = []
-            for f in range(w.FRAMES):
+            for f in range(total):
                 if i > 0 and f >= opening:
                     names.append(manifest["frames"][hooks[0]][f])
                     continue
@@ -99,14 +105,15 @@ def main():
                     written[name] = True
                 names.append(name)
             manifest["frames"][hook] = names
-        manifest.update({"episode": key, "fps": w.FPS, "frames": manifest["frames"],
+        manifest.update({"episode": key, "fps": w.FPS, "opener": w.OPENER_FRAMES, "frames": manifest["frames"],
                          "standIn": bool(getattr(board, "STANDING_IN", False))})
         manifest_path.write_text(json.dumps(manifest))
         used = {n for names in manifest["frames"].values() for n in names}
         for stale in frames_dir.glob("*.png"):
             if stale.name not in used:
                 stale.unlink()
-        print(f"==> public/features/{key}/frames/: {len(used)} pictures for {w.FRAMES} frames, hooks {', '.join(manifest['frames'])}")
+        print(f"==> public/features/{key}/frames/: {len(used)} pictures for {total} frames (the opener's {w.OPENER_FRAMES} "
+              f"and the episode's {w.FRAMES}), hooks {', '.join(manifest['frames'])}")
     for note in warnings:
         print(f"{key}: warning: {note}")
 

@@ -75,17 +75,17 @@ def read(path):
 def opener(episode):
     """
     The opener's sound: the Introducing short's score under its opening scene (scripts/score.py short),
-    as far below the episode's score as it sits below the rest of the short, and faded out over its
-    last three frames, where the episode's first hit cuts in. Its length is the scene's bars on the
-    film's 72 BPM grid (src/introducing/cuts.json), as FeatureVideo's OPENER is.
+    which the pixel opener is timed to frame for frame, as far below the episode's score as it sits
+    below the rest of the short, and faded out over its last three frames, where the episode's first
+    hit cuts in. Its length is the cue sheet's opener, which has to be the short's opening scene.
     """
     short = w.VIDEO / "public/film/score-short.wav"
     if not short.exists():
         subprocess.run([sys.executable, "scripts/score.py", "short"], cwd=w.VIDEO, check=True)
     cuts = json.loads((w.VIDEO / "src/introducing/cuts.json").read_text())
     scene, bars = cuts["short"][0]
-    assert scene == "safelight", f"the short opens on {scene}, not the safelight"
-    seconds = bars * 4 * 60 / 72
+    assert (scene, bars) == ("safelight", w.OPENER["bars"]), f"the short opens on {bars} bars of {scene}, not the opener's"
+    seconds = w.OPENER_FRAMES / w.FPS
     x = read(short)
     n = int(round(seconds * s.SR))
     head, after = x[:n], x[n:n + len(episode)]

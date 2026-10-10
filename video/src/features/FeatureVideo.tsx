@@ -1,26 +1,22 @@
 import { AbsoluteFill, type CalculateMetadataFunction, getStaticFiles, Html5Audio, Img, interpolate, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
-import { cuts, OVERLAP } from "../introducing/Introducing";
-import { Safelight } from "../introducing/scenes/Safelight";
 import { type CueSheet, grid } from "../kit/grid";
 import { SafeZones } from "../kit/SafeZones";
 import cueSheet from "./cues.json";
 
 /**
- * The feature videos (docs/plans/2026-10-10-feature-videos.md): one Redlamp feature shown in a
- * pixel-art editor and then on the owner's real photo, every picture drawn by pixelkit, after the
- * opener every Redlamp video starts with. scripts/features-frames.py draws an episode's frames into
+ * The feature videos (docs/plans/2026-10-10-feature-videos.md): Redlamp's opener in pixel art, then
+ * one Redlamp feature shown in a pixel-art editor and on the owner's real photo, every picture drawn by
+ * pixelkit. scripts/features-frames.py draws an episode's frames, the opener's first, into
  * public/features/<episode>/frames/ and lists each frame's file in frames.json: the 216 × 384 canvas,
  * shown five times the size with nearest-neighbour scaling, or the whole 1080 × 1920 frame while a
- * real photo is on screen. scripts/features-score.py writes the episode's score beside them.
+ * real photo is on screen. scripts/features-score.py writes the episode's score beside them, and the
+ * opener's sound, Introducing Redlamp's own, in public/features/.
  */
-const g = grid(cueSheet as unknown as CueSheet);
+const sheet = cueSheet as unknown as CueSheet & { opener: { bpm: number; bars: number } };
+const g = grid(sheet);
 
-/**
- * The opener: the Introducing short's opening scene, the safelight warming up and settling into the
- * logo, for as long as the short holds it before the next scene, with the short's own score under it
- * (scripts/features-score.py takes it from scripts/score.py's), so it looks and sounds as it does there.
- */
-export const OPENER = cuts.short[0][1];
+/** The opener's frames: its bars on Introducing Redlamp's grid, at the series' frame rate. */
+export const OPENER = Math.round((sheet.opener.bars * sheet.beatsPerBar * 60 * sheet.fps) / sheet.opener.bpm);
 const OPENER_SCORE = "features/opener.wav";
 
 /** An episode's frames, without the opener. */
@@ -33,6 +29,8 @@ export type FeatureHook = "a" | "b";
 export type FeatureFrames = {
   episode: string;
   fps: number;
+  /** How many of each hook's frames are the opener's, before the episode's first. */
+  opener: number;
   frames: Partial<Record<FeatureHook, string[]>>;
   /** The real result is a stand-in edit until the owner's own is saved beside the raw. */
   standIn?: boolean;
@@ -71,19 +69,16 @@ export function FeatureVideo({ episode, hook, score, opener, guides, manifest }:
   const start = opener ? OPENER : 0;
   return (
     <AbsoluteFill style={{ background: "#000" }}>
-      {opener ? (
+      <Frames episode={episode} hook={hook} manifest={manifest} skip={opener ? 0 : (manifest?.opener ?? 0)} />
+      {opener && has(OPENER_SCORE) ? (
         <Sequence durationInFrames={OPENER} name="Opener">
-          <Safelight length={OPENER + OVERLAP} />
-          {has(OPENER_SCORE) ? (
-            <Html5Audio
-              src={staticFile(OPENER_SCORE)}
-              volume={(f) => interpolate(f, [0, 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })}
-            />
-          ) : null}
+          <Html5Audio
+            src={staticFile(OPENER_SCORE)}
+            volume={(f) => interpolate(f, [0, 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })}
+          />
         </Sequence>
       ) : null}
       <Sequence from={start} name={episode}>
-        <Episode episode={episode} hook={hook} manifest={manifest} />
         {has(`features/${episode}/${score}.wav`) ? (
           <Html5Audio
             src={staticFile(`features/${episode}/${score}.wav`)}
@@ -96,10 +91,11 @@ export function FeatureVideo({ episode, hook, score, opener, guides, manifest }:
   );
 }
 
-function Episode({ episode, hook, manifest }: Pick<FeatureVideoProps, "episode" | "hook" | "manifest">) {
+/** The frames the frames script drew, from the `skip`th: the opener's and the episode's. */
+function Frames({ episode, hook, manifest, skip }: Pick<FeatureVideoProps, "episode" | "hook" | "manifest"> & { skip: number }) {
   const frame = useCurrentFrame();
   const { width } = useVideoConfig();
-  const file = manifest?.frames[hook]?.[frame];
+  const file = manifest?.frames[hook]?.[frame + skip];
   if (!file) {
     return (
       <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", color: "#7c7c7c", font: `500 ${Math.round(width / 36)}px Inter, sans-serif` }}>

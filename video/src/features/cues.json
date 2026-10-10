@@ -15,6 +15,17 @@
     ["A7", 26, 2],
     ["Dm9", 28, 4]
   ],
+  "opener": {
+    "bpm": 72,
+    "bars": 2,
+    "cues": {
+      "hookOut": 4.48,
+      "settle": 5,
+      "subline": 6.04,
+      "free": 6.52,
+      "rise": 7
+    }
+  },
   "cues": {
     "hook": 0,
     "step1": 4,

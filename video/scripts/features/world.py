@@ -29,7 +29,7 @@ REPO = VIDEO.parent
 KIT = Path(os.environ.get("PIXELKIT", Path.home() / "src/pixelartvisuals"))
 sys.path.insert(0, str(KIT / "skill/scripts"))
 
-from pixelkit import FONTS, Canvas, Rect, load_theme, lock  # noqa: E402
+from pixelkit import FONTS, Canvas, Rect, ease_in_out, ease_out, load_theme, lock  # noqa: E402
 
 THEME = load_theme()
 POSTS = json.loads((REPO / "docs/social/posts.json").read_text())
@@ -50,6 +50,11 @@ BPM, FPS = SHEET["bpm"], SHEET["fps"]
 BAR = SHEET["beatsPerBar"] * 60 / BPM
 PER_BEAT = 60 / BPM * FPS
 FRAMES = round(SHEET["bars"] * SHEET["beatsPerBar"] * PER_BEAT)
+# The opener before every episode is timed on Introducing Redlamp's 72 BPM grid, frame for frame with
+# the film's opening scene, so the film's own sound lands on it.
+OPENER = SHEET["opener"]
+OPENER_PER_BEAT = 60 / OPENER["bpm"] * FPS
+OPENER_FRAMES = round(OPENER["bars"] * SHEET["beatsPerBar"] * OPENER_PER_BEAT)
 
 # Where the apps' own controls sit on a 1080 × 1920 video, in output pixels (x, y, w, h).
 COVERED_PX = {
@@ -752,3 +757,125 @@ def ease(t):
 def between(b, start, end):
     """How far beat b is from `start` to `end`, 0 to 1, held outside them."""
     return min(1.0, max(0.0, (b - start) / (end - start)))
+
+
+def develop(c, before, p):
+    """Keeps the share p of what's been drawn since `before` (a copy of the canvas's image), in an 8 × 8
+    ordered dither: how anything comes and goes, since the kit has no alpha."""
+    if p >= 1:
+        return
+    order = bayer(8)[np.arange(c.h)[:, None] % 8, np.arange(c.w)[None, :] % 8]
+    out = np.where((order < max(p, 0.0))[..., None], np.asarray(c.img), np.asarray(before))
+    c.img.paste(Image.fromarray(out.astype(np.uint8)))
+
+
+def appear(c, p, draw):
+    """Draws `draw(c)`, developed in to the share p."""
+    if p <= 0:
+        return
+    before = c.img.copy()
+    draw(c)
+    develop(c, before, p)
+
+
+# ---------------------------------------------------------------- the opener
+
+# Every video opens with Redlamp's opener in pixel art: the looks explainer's intro, which redraws
+# Introducing Redlamp's Safelight scene frame for frame, laid out for the vertical frame. The lamp
+# warms in the dark under the hook, which stands in for the film's first line and goes as the lamp
+# settles into the logo; the brand's two lines come in under it, and the logo rises to become the
+# episode's header. Full-width lines can't sit under the lamp here, where the apps' side buttons are,
+# so the hook stands where the episode's caption does, and is back there when the episode starts.
+
+SHEEN = "#f4c2bb"  # the lens's highlight: soft and off-centre, never white in the middle
+BRAND_LINES = (("A RAW PHOTO EDITOR", "FOR THE MAC."), ("FREE AND OPEN SOURCE.",))
+LAMP_Y, LAMP_R, LOGO_Y = 160, 18, 172
+
+
+def ramp(f, start, length, curve=ease_in_out):
+    """0 to 1 over `length` frames from frame `start`, as the film's ramp() goes."""
+    return curve(min(1.0, max(0.0, (f - start) / max(1, length))))
+
+
+def safelight(c, cx, cy, r, warm):
+    """The app icon's lamp, head-on, as the opener draws it: a steel bezel lit from above left with its
+    three screws, the step down to the glass, and a ruby lens that brightens evenly as it warms,
+    lighter towards the middle but with no bright point in it, and a soft highlight at its top left."""
+    c.sphere(cx, cy, r, "muted", shades=["dim", "muted", "text"])
+    c.circle(cx, cy, r * 0.8, "shadow")
+    for angle in (-90, 30, 150):
+        a = math.radians(angle)
+        c.px(math.floor(cx + math.cos(a) * r * 0.9), math.floor(cy + math.sin(a) * r * 0.9), "shadow")
+    lens = r * 0.72
+    x0, y0, x1, y1 = int(cx - lens) - 1, int(cy - lens) - 1, int(cx + lens) + 2, int(cy + lens) + 2
+    yy, xx = np.mgrid[y0:y1, x0:x1] + 0.5
+    q = np.hypot(xx - cx, yy - cy) / lens
+    inside = q < 1
+    shades = [THEME.rgb(s) for s in ("shadow", "red.dark", "red", "red.light")]
+    # How lit each pixel is: the whole lens by `warm`, its middle a little more, the Fresnel rings a little less.
+    level = warm * (2.0 + 0.9 * (1 - q**2)) - 0.35 * ((np.abs(q - 0.5) < 0.06) | (np.abs(q - 0.8) < 0.05))
+    level = np.clip(level, 0, len(shades) - 1)
+    k = np.floor(level)
+    order = bayer(8)[np.arange(y0, y1)[:, None] % 8, np.arange(x0, x1)[None, :] % 8]
+    k = np.minimum(k + (level - k > order), len(shades) - 1)
+    a = np.asarray(c.img).copy()
+    region = a[y0:y1, x0:x1]
+    region[inside] = np.array(shades, dtype=np.uint8)[k.astype(int)[inside]]
+    c.img.paste(Image.fromarray(a))
+    if warm > 0.35 and r > 12:
+        hx, hy = math.floor(cx - lens * 0.48), math.floor(cy - lens * 0.55)
+        for dx, dy in ((0, 0), (1, 0), (0, 1)):
+            c.px(hx + dx, hy + dy, SHEEN)
+
+
+def header_x(c, feature):
+    """Where header() puts the mark for `feature`."""
+    return (c.w - (9 + 4 + c.measure(f"REDLAMP · {feature}", "large"))) // 2
+
+
+def opener(c, f, hook, feature):
+    """Frame f of the opener, with the hook's lines and the episode's feature for its header. As the
+    film's scene goes: the lamp warms from frame 6 over 120 frames under the hook, which goes from its
+    cue, and settles into the logo's mark from the settle cue; the flat logo lands on the frame after
+    the score's bloom and REDLAMP comes in beside it; then the brand's lines, and from the rise cue the
+    logo rises into the header and gives way to it, the feature's name and all."""
+    cue = {name: beat * OPENER_PER_BEAT for name, beat in OPENER["cues"].items()}
+    lock, up = cue["settle"], cue["rise"]
+    warm = ramp(f, 6, 120)
+    settle = ramp(f, lock, 34)
+    lens = ramp(f, 0, 20) * (1 - ramp(f, lock + 28, 14))
+    flat = ramp(f, lock + 26, 16)
+    words = ramp(f, lock + 14, 30, ease_out)
+    rise = ramp(f, up, 17)
+    lx = (c.w - (24 + c.measure("REDLAMP", "large", 2))) // 2
+    cx = c.w / 2 + (lx + 9 - c.w / 2) * settle
+    cy = LAMP_Y + (LOGO_Y + 8 - LAMP_Y) * settle
+    r = LAMP_R + (8.5 - LAMP_R) * settle
+
+    c.glow(cx, cy, 30 + 62 * warm, "red", amount=0.5 * warm * (1 - 0.35 * settle) * (1 - rise), levels=3)
+    appear(c, 1 - ramp(f, cue["hookOut"], 20), lambda c: caption(c, hook))
+    appear(c, lens, lambda c: safelight(c, cx, cy, r, warm))
+    y = LOGO_Y + 24
+    for k, (cue_name, lines) in enumerate(zip(("subline", "free"), BRAND_LINES)):
+        top = y + k * 26
+
+        def brand(c, lines=lines, top=top):
+            for i, line in enumerate(lines):
+                c.text(c.w // 2, top + 11 * i, line, "text", font="large", align="center")
+
+        appear(c, ramp(f, cue[cue_name], 20) * (1 - rise), brand)
+    if f < up:
+        appear(c, flat, lambda c: c.sprite(lx, LOGO_Y, *LAMP_MARK, scale=2))
+        appear(c, words, lambda c: c.text(lx + 24, LOGO_Y + 1, "REDLAMP", "white", font="large", scale=2))
+        return
+    hx, hy = header_x(c, feature), HEADER.y + 2
+    base = c.img.copy()
+    x, y = round(lx + (hx - lx) * rise), round(LOGO_Y + (hy - LOGO_Y) * rise)
+    c.sprite(x, y, *LAMP_MARK, scale=2)
+    c.text(x + 24, y + 1, "REDLAMP", "white", font="large", scale=2, check=False)
+    swap = between(f, up + 17, up + 23)
+    if swap > 0:
+        big = c.img.copy()
+        c.img.paste(base)
+        header(c, feature)
+        develop(c, big, swap)
