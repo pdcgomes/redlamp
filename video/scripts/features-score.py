@@ -61,6 +61,17 @@ def release(velocity):
     return s.click(velocity)[int(CLICK_UP * s.SR):]
 
 
+def rising(velocity):
+    """Four soft blips climbing G minor a sixteenth apart, an octave over the arpeggio, as a mask's
+    overlay fills."""
+    step = int(round(theme.BEAT / 4 * s.SR))
+    run = [s.blip(note, velocity, 0.07, duty=0.5) for note in (86, 89, 91, 94)]
+    out = np.zeros(step * (len(run) - 1) + len(run[-1]))
+    for i, tone in enumerate(run):
+        out[i * step : i * step + len(tone)] += tone
+    return out
+
+
 # Each kind of sound on screen: what plays, how loud, and how much of it goes to the room.
 SOUNDS = {
     "press": (lambda: press(0.8), 0.2, 0.05),
@@ -69,6 +80,7 @@ SOUNDS = {
     "key": (lambda: s.key(0.9), 0.36, 0.06),
     "key up": (lambda: s.key(0.8, up=True), 0.28, 0.06),
     "flip": (lambda: s.tick(0.7), 0.2, 0.1),
+    "fill": (lambda: rising(0.7), 0.25, 0.2),
 }
 
 

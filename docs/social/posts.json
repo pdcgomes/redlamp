@@ -44,7 +44,7 @@
       "feature": "Select the person in one click with an AI mask that runs on the Mac, invert it to select the background, and darken the background so the subject stands out.",
       "audience": "People who edit now and then, portrait and family photographers, people used to phone filter apps.",
       "source": "README: Masking (AI masks: Subject with Apple Vision's built-in models and nothing to download; Invert, as Lightroom's; Subject edges solved per pixel, which brings back stray hairs; mask presets including Darken Background); Models on demand (every model runs on the Mac; photos are never uploaded).",
-      "stage": "storyboard",
+      "stage": "in review",
       "hooks": {
         "a": [
           "SELECT THE PERSON",
@@ -59,7 +59,7 @@
         "AI MASKS THAT RUN",
         "ON YOUR MAC"
       ],
-      "result": "The pixel photo with the background darkened by an inverted Subject mask, before and after."
+      "result": "The boy's photo in pixel art, before and after, its background darkened by a stop with an inverted Subject mask."
     },
     {
       "id": "e03",
@@ -287,7 +287,7 @@
       "file": "e02-a.mp4",
       "coverMs": 3333,
       "caption": "Select the person in one click, then invert the mask and darken the background so they stand out. Redlamp's AI masks run on your Mac, and your photos are never uploaded. Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development.\n\n#photoediting #portraitphotography #lightroom #rawphoto #macos",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Subject mask. Then a photo editor on a Mac with a photo of a boy in colourful sunglasses, covered in coloured powder. The pointer clicks Subject in the Masks panel, the boy turns red to show he is selected, the mask is inverted to select the background, and an Exposure slider darkens the background while the boy stays as he was. Then the photo fills the frame, before and after. The video ends with Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Subject mask. Then a colourful photo editor with a pixel-art photo of a boy in rainbow sunglasses, his face covered in coloured powder. The pointer clicks Subject in the Masks panel, as a card shows the AI model on the Mac with nothing to download. A red overlay fills the boy from the bottom up to his hair, and a card magnifies the edge of his hair under it. Invert moves the overlay to the background as the mask's thumbnail turns over, then the mask's Exposure slider goes down a stop: the background darkens while the boy stays as he was, and a card shows the background's level falling below his. Then the photo fills the frame, before and after. The video ends with AI masks that run on your Mac, then Download free, redlamp.app."
     },
     {
       "id": "e02-trial",
@@ -301,7 +301,7 @@
       "file": "e02-b.mp4",
       "coverMs": 3333,
       "caption": "Select the person in one click, then invert the mask and darken the background so they stand out. Redlamp's AI masks run on your Mac, and your photos are never uploaded. Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development.\n\n#photoediting #portraitphotography #lightroom #rawphoto #macos",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Subject mask. Then a photo editor on a Mac with a photo of a boy in colourful sunglasses, covered in coloured powder. The pointer clicks Subject in the Masks panel, the boy turns red to show he is selected, the mask is inverted to select the background, and an Exposure slider darkens the background while the boy stays as he was. Then the photo fills the frame, before and after. The video ends with Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Subject mask. Then a colourful photo editor with a pixel-art photo of a boy in rainbow sunglasses, his face covered in coloured powder. The pointer clicks Subject in the Masks panel, as a card shows the AI model on the Mac with nothing to download. A red overlay fills the boy from the bottom up to his hair, and a card magnifies the edge of his hair under it. Invert moves the overlay to the background as the mask's thumbnail turns over, then the mask's Exposure slider goes down a stop: the background darkens while the boy stays as he was, and a card shows the background's level falling below his. Then the photo fills the frame, before and after. The video ends with AI masks that run on your Mac, then Download free, redlamp.app."
     },
     {
       "id": "e03",

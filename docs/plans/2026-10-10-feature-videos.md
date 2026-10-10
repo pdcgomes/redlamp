@@ -126,12 +126,12 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with the photo open; the Masks panel shows SUBJECT, SKY, BACKGROUND and PEOPLE. | SUBJECT MASK (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
-| 2 | 2.4 s | The pointer clicks SUBJECT. | CLICK SUBJECT | The motif starts; a click on the beat. |
-| 3 | 4.8 s | The red overlay covers the boy, hair included; the background stays clear. | HE IS SELECTED, / HAIR INCLUDED | A soft rising blip as the overlay fills. |
-| 4 | 7.2 s | INVERT is clicked; the overlay moves to the background. | INVERT IT FOR / THE BACKGROUND | A click; the drums come in. |
-| 5 | 9.6 s | The mask's EXPOSURE moves down; the background darkens and the boy stands out. | DARKEN THE / BACKGROUND | Slider ticks; the motif's answer. |
-| 6 | 12.0 s | The pixel photo, before, then after at 13.2 s: the background darker, the boy as he was. | BEFORE AND AFTER | The sting. |
+| 1 | 0.0 s | The dashboard: the photo as opened, labelled as its raw (IMG_3557.DNG), in pixel art, its histogram and level, and the Masks panel with SUBJECT, SKY, BACKGROUND and PEOPLE in their accents, and the mask's INVERT and EXPOSURE dim until there is a mask. | SUBJECT MASK (the title, held from the opener) | A deep hit on the first frame, then the arpeggio over a kick muffled as if through a wall. |
+| 2 | 2.4 s | The pointer comes in and clicks SUBJECT on the bar's third beat; the AI MODEL card: DOWNLOAD 0 B, ON YOUR MAC, its chip running from the click. | CLICK SUBJECT | The riff starts; a click on SUBJECT. |
+| 3 | 4.8 s | The red overlay fills up the boy from his shirt to his hair in three sixteenths, the background clear; the EDGE ×3 card magnifies the edge of his hair under it. | SELECTED / ACCURATELY | Four soft blips rising as the overlay fills. |
+| 4 | 7.2 s | INVERT is clicked on the bar's second beat; the overlay moves to the background, and the INVERT card's mask thumbnail turns over from SUBJECT to BACKGROUND. | INVERT IT FOR / THE BACKGROUND | The riff's answer and the full beat; a click on INVERT. |
+| 5 | 9.6 s | The mask's EXPOSURE goes down to −1.00, a step a beat; the background darkens and the boy stands out, and the LEVEL card shows the background's level falling below his. | DARKEN THE / BACKGROUND | A click on the knob and a slider tick a beat; toms fall into the stop. |
+| 6 | 12.0 s | The photo fills the stage as opened, then develops into the edit at 13.2 s: the background a stop darker, the boy as he was. | BEFORE AND AFTER | The drop and the sting; a tick on the flip. |
 | 7 | 14.4 s | The end card. | AI MASKS THAT RUN / ON YOUR MAC, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -424,6 +424,15 @@ The owner found the cut from the opener's sound into the theme too abrupt and as
 ### E01 approved, 10 October 2026
 
 The owner approved E01's cut, in the dashboard look with the synthwave score and the lead-in, as the series' first reel: hook A posts on Tue 27 Oct and hook B goes out as an Instagram trial reel on Thu 29 Oct. Its videos and covers are rendered in `~/src/redlamp-social/renders/` (`e01-a.mp4`, `e01-b.mp4`).
+
+### E02, 10 October 2026
+
+The first cut, in E01's dashboard look with the synthwave score and the lead-in, for the owner's review in Studio, with hook A or B (`boards/e02.py`). The photo is the owner's `IMG_3557.jpg` in pixel art, cropped about the boy to each panel and locked to 32 of its own colours, found by clustering its pixels in Oklab, so the lenses' rainbow and the frame's cyan keep a colour each. The overlay is Apple Vision's Subject mask for the photo, and the darkened background is the mask's Exposure, −1.00, applied to the photo in linear light. Redlamp's Darken Background preset uses −0.50, which barely shows at this size. The owner asked for the photo to be labelled as a raw rather than a JPEG, so it reads IMG_3557.DNG, as his iPhone's raw would be, and for bar 3 to read SELECTED / ACCURATELY in place of HE IS SELECTED, / HAIR INCLUDED (10 October 2026).
+
+- **Picture:** every frame was drawn with no warning from the kit or the safe zones (483 pictures for both hooks' 876 frames, the opener's included), and the storyboard drawn with the covered zones outlined (`--zones`) shows every word clear of them. Each click comes after the words that ask for it, SUBJECT two beats into its bar and INVERT one beat in, where E01's presses land with its words. The cards come up over the park at the photo's left, clear of the boy. The LEVEL card measures the pixel photo: the background's brightness falls from 0.38 to 0.27 while the boy's stays at 0.34.
+- **Sound:** the score measures −13.1 LUFS, and the whole video −14.0 LUFS with a true peak of −1.1 dBFS (drive and pulse −14.0 LUFS and −1.2 dBFS). It climbs from −16.3 LUFS under the hook to −10.8 on the drop, with 20.9% of its energy under 60 Hz. The overlay's fill has a sound of its own, `fill` in `features-score.py`: four blips climbing G minor a sixteenth apart, an octave over the arpeggio, each about −31 dBFS, as loud as a click and 7 to 8 dB under the music in their band. Above 2.5 kHz, 10 of the 11 sounds on screen land within 5 ms of their beats (median −0.5 ms); INVERT's button release reads 21 ms late, under the riff's note, an arpeggio note and a hat on the same eighth. Taken out of the score by subtracting the arrangement without them, all 11 land within 1 ms.
+- **Drafts:** both are 29.2 s (876 frames) and measure −14.1 LUFS with a true peak of −1.5 dBFS by ffmpeg. The episode's score starts exactly 10 s in, by cross-correlating each draft's audio with it.
+- **Not checked:** how it plays at full speed and size, and how the fill's blips sit in the mix on a phone. Those are for the owner's viewing in Studio.
 
 ## For the owner to decide
 
