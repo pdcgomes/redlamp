@@ -101,6 +101,17 @@
         /// What the stall report adds about each phase: what changed in it.
         static var notes: [String] = []
 
+        /// The temporary library and thumbnail packs a run makes, removed as it ends, and by `finish` before
+        /// `--library-perf-quit` quits, which runs no `defer`.
+        static var leftovers: [URL] = []
+
+        static func removeLeftovers() {
+            for url in leftovers {
+                try? FileManager.default.removeItem(at: url)
+            }
+            leftovers = []
+        }
+
         struct Measured {
             var indexing: Duration = .zero
             var ready: Duration = .zero
@@ -195,11 +206,10 @@
             }
             let paths = LibraryPaths(root: kept ?? FileManager.default.temporaryDirectory
                 .appending(path: "library-perf-\(UUID().uuidString)", directoryHint: .isDirectory))
-            defer {
-                if kept == nil {
-                    try? FileManager.default.removeItem(at: paths.root)
-                }
+            if kept == nil {
+                leftovers.append(paths.root)
             }
+            defer { removeLeftovers() }
             let thumbnail: @Sendable (URL, Int) -> CGImage? = { url, size in
                 engine.decodeThumbnail(for: url, maxPixelSize: size)
             }
@@ -215,7 +225,7 @@
 
             let packs = ThumbnailPacks(directory: FileManager.default.temporaryDirectory
                 .appending(path: "library-perf-packs-\(UUID().uuidString)"))
-            defer { try? FileManager.default.removeItem(at: packs.directory) }
+            leftovers.append(packs.directory)
             let loader = ThumbnailLoader(packs: packs) { url, size in engine.decodeThumbnail(
                 for: url,
                 maxPixelSize: size,
@@ -611,6 +621,7 @@
             }
             try? (report + "\n").write(toFile: PerformanceReport.text, atomically: true, encoding: .utf8)
             if LaunchArguments.all.contains("--library-perf-quit") {
+                removeLeftovers()
                 if failed.isEmpty {
                     NSApp.terminate(nil)
                 } else {
