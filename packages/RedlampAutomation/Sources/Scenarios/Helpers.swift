@@ -99,7 +99,15 @@
         func drawArmedGradient(_ kind: MaskKind) throws {
             let before = try main { $0.masks.flatMap(\.components).count }
             if try focus() {
-                try drag(.canvas, from: CGPoint(x: 0.45, y: 0.35), by: CGVector(dx: 60, dy: -80))
+                // Each drag starts somewhere else: one started on the selected mask's handles moves
+                // that mask's gradient instead of drawing.
+                let starts = [
+                    CGPoint(x: 0.45, y: 0.35), CGPoint(x: 0.25, y: 0.7), CGPoint(x: 0.7, y: 0.7), CGPoint(
+                        x: 0.2,
+                        y: 0.25,
+                    ),
+                ]
+                try drag(.canvas, from: starts[before % starts.count], by: CGVector(dx: 60, dy: -80))
                 covered(.mask(kind), via: .mouse)
             } else {
                 try main { model in
