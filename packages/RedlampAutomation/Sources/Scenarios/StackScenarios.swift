@@ -37,19 +37,22 @@
                 }
             try app.settle()
             try app.wait("the stack to be found", timeout: 120) { !$0.stackSuggestions.isEmpty }
-            // Its frames marked in the filmstrip, as VoiceOver reads them, the strip kept up past the 5 s it shows for.
+            // Its frames marked in the filmstrip, as VoiceOver reads them, the strip kept up past the 5 s it shows for,
+            // and every stack open so each frame has its cell: the frames are a burst too.
             let frames = try app.main { model in
                 model.applyDebugCommand("filmstrip", "shown")
+                model.gridStacks.openAll()
                 return model.stackSuggestions.first?.frames.map(\.lastPathComponent) ?? []
             }
             do {
                 defer { try? app.main { $0.applyDebugCommand("filmstrip", "hidden") } }
-                try app.wait("the filmstrip to mark the bracket's frames", timeout: 10) { _ in
-                    guard let window = Views.editorWindow else { return false }
-                    return frames.allSatisfy { name in
-                        Views.accessible("filmstrip.\(name)", in: window)?.accessibilityValue() as? String
-                            == "suggested for a focus stack"
+                let marked = frames.map { "\($0): suggested for a focus stack" }
+                do {
+                    try app.wait("the filmstrip to mark the bracket's frames", timeout: 10) { _ in
+                        filmstripMarks(frames) == marked
                     }
+                } catch {
+                    throw try ScenarioFailure("\(error): \(app.main { _ in filmstripMarks(frames) })")
                 }
             }
             app.covered(.feature("focus-stacking.detection"), via: .model)
@@ -97,6 +100,23 @@
                 }
             try app.openWorking()
             app.covered(.feature("focus-stacking.workspace"), via: .model)
+        }
+
+        /// What the filmstrip's cell for each of `names` says after its name, as VoiceOver reads it, or that it has no
+        /// cell on screen.
+        @MainActor static func filmstripMarks(_ names: [String]) -> [String] {
+            guard let root = Views.editorWindow?.contentView?.superview else { return [] }
+            /// The module not shown, and the filmstrip slid away, are left in place, transparent.
+            func onScreen(_ view: NSView) -> Bool {
+                sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden && $0.alphaValue > 0 }
+            }
+            let cells = Views.all(NSView.self, in: root).filter { $0.accessibilityIdentifier().hasPrefix("filmstrip.") }
+            return names.map { name in
+                guard let cell = cells
+                    .first(where: { $0.accessibilityIdentifier() == "filmstrip.\(name)" && onScreen($0) })
+                else { return "\(name): no cell on screen" }
+                return "\(name): \(cell.accessibilityValue() as? String ?? "unmarked")"
+            }
         }
     }
 
