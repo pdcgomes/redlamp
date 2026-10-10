@@ -107,8 +107,8 @@
         static let copyToFolder = Scenario(
             "library.copy-to-folder",
             "Copy to Folder… in a photo's menu copies the photos selected, with their sidecars, into a folder of the "
-                + "library, the originals staying; a copy whose name is held there is numbered, and ⌘Z moves the copies "
-                + "to the Trash",
+                + "library, the originals staying; a copy whose name is held there is numbered, from the palette and "
+                + "the Photo menu too, and ⌘Z moves the copies to the Trash",
             claims: [.action(.copyToFolder)],
         ) { app in
             let scratch = try DragScratch()
@@ -140,6 +140,20 @@
                     && scratch.files(in: scratch.picked).contains("A 2.jpg.redlamp")
             }
             try app.run("the copies made", timeout: 60) { await $0.filesMade() }
+
+            try app.main { $0.select(b) }
+            try app.wait("B alone") { $0.selectedPhotos == [b] }
+            try app.choose(.copyToFolder)
+            try app.wait("a copy of B beside the first, numbered", timeout: 60) { _ in
+                scratch.files(in: scratch.picked).contains("B 2.jpg")
+            }
+            try app.run("the copy made", timeout: 60) { await $0.filesMade() }
+            try app.press(.undo)
+            try app.run("the Undo", timeout: 60) { await $0.filesMade() }
+            try app.wait("⌘Z to move the menu bar's copy to the Trash", timeout: 30) { _ in
+                !scratch.files(in: scratch.picked).contains("B 2.jpg")
+            }
+
             try app.press(.undo)
             try app.run("the Undo", timeout: 60) { await $0.filesMade() }
             try app.wait("⌘Z to move the numbered copy to the Trash", timeout: 30) { _ in

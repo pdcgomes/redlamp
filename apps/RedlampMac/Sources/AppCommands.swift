@@ -103,6 +103,7 @@ struct AppCommands: Commands {
         item(.listAgain)
         mouseItem(.renamePhotos)
         item(.moveToFolder)
+        item(.copyToFolder)
         Divider()
         item(.addToCollection)
         item(.addToTargetCollection)
