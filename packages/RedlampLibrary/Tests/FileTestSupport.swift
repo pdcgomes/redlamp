@@ -279,6 +279,16 @@ final class WatchedFileSystem: LibraryFileSystem {
         try base.copyItem(at: source, to: destination)
     }
 
+    func copyFile(at source: URL, to destination: URL) throws -> FileDigest {
+        wrote("copy \(source.path)")
+        return try base.copyFile(at: source, to: destination)
+    }
+
+    func cloneItem(at source: URL, to destination: URL) throws {
+        wrote("clone \(source.path)")
+        try base.cloneItem(at: source, to: destination)
+    }
+
     func createDirectory(at url: URL, withIntermediateDirectories intermediates: Bool) throws {
         wrote("mkdir \(url.path)")
         try base.createDirectory(at: url, withIntermediateDirectories: intermediates)

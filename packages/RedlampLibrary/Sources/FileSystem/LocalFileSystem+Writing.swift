@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// The file operations' writes on the Mac's own file system, through its system calls. What they make
@@ -30,6 +31,62 @@ public extension LocalFileSystem {
             throw error
         }
         try Self.synchronize(destination)
+    }
+
+    /// A folder, a link or a file its volume keeps compressed is copied as `copyItem` copies it, then read.
+    func copyFile(at source: URL, to destination: URL) throws -> FileDigest {
+        let input = open(source.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        guard input >= 0 else {
+            guard errno == ELOOP else { throw POSIXError.current }
+            try copyItem(at: source, to: destination)
+            return try FileDigest(of: source, in: self)
+        }
+        defer { close(input) }
+        var info = stat()
+        guard fstat(input, &info) == 0 else { throw POSIXError.current }
+        guard info.st_mode & S_IFMT == S_IFREG, info.st_flags & UInt32(UF_COMPRESSED) == 0 else {
+            try copyItem(at: source, to: destination)
+            return try FileDigest(of: source, in: self)
+        }
+        let path = Self.composed(destination)
+        let output = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
+        guard output >= 0 else { throw POSIXError.current }
+        do {
+            defer { close(output) }
+            let digest = try Self.stream(input, to: output)
+            // Its permissions, dates and extended attributes, once nothing more is written.
+            guard fcopyfile(input, output, nil, copyfile_flags_t(COPYFILE_METADATA)) == 0, fsync(output) == 0 else {
+                throw POSIXError.current
+            }
+            if fcntl(output, F_FULLFSYNC) != 0, ![ENOTSUP, ENOTTY, EINVAL].contains(errno) {
+                throw POSIXError.current
+            }
+            return digest
+        } catch {
+            unlink(path)
+            throw error
+        }
+    }
+
+    /// A folder is made and each thing in it cloned, as copyfile(3) clones folders.
+    func cloneItem(at source: URL, to destination: URL) throws {
+        let (from, to) = (source.path, Self.composed(destination))
+        var info = stat()
+        guard lstat(from, &info) == 0 else { throw POSIXError.current }
+        guard info.st_mode & S_IFMT == S_IFDIR else {
+            guard clonefile(from, to, UInt32(CLONE_NOFOLLOW)) == 0 else { throw POSIXError.current }
+            return
+        }
+        guard mkdir(to, info.st_mode & 0o7777) == 0 else { throw POSIXError.current }
+        do {
+            for name in try FileManager.default.contentsOfDirectory(atPath: from) {
+                try cloneItem(at: source.appending(path: name), to: destination.appending(path: name))
+            }
+            guard copyfile(from, to, nil, copyfile_flags_t(COPYFILE_METADATA)) == 0 else { throw POSIXError.current }
+        } catch {
+            try? FileManager.default.removeItem(atPath: to)
+            throw error
+        }
     }
 
     func createDirectory(at url: URL, withIntermediateDirectories intermediates: Bool) throws {
@@ -67,6 +124,40 @@ public extension LocalFileSystem {
     /// The path in Unicode's composed form.
     static func composed(_ url: URL) -> String {
         url.path.precomposedStringWithCanonicalMapping
+    }
+
+    /// Writes what's left of `input` to `output`, a part at a time, hashing each part; what it read.
+    private static func stream(_ input: Int32, to output: Int32) throws -> FileDigest {
+        var hash = SHA256()
+        var size: Int64 = 0
+        let buffer = UnsafeMutableRawBufferPointer.allocate(byteCount: FileDigest.part, alignment: 16384)
+        defer { buffer.deallocate() }
+        while true {
+            let count = Darwin.read(input, buffer.baseAddress, buffer.count)
+            if count < 0 {
+                guard errno == EINTR else { throw POSIXError.current }
+                continue
+            }
+            if count == 0 {
+                return FileDigest(sha256: Data(hash.finalize()), size: size)
+            }
+            let part = UnsafeRawBufferPointer(rebasing: buffer[..<count])
+            hash.update(bufferPointer: part)
+            try write(part, to: output)
+            size += Int64(count)
+        }
+    }
+
+    private static func write(_ bytes: UnsafeRawBufferPointer, to descriptor: Int32) throws {
+        var written = 0
+        while written < bytes.count {
+            let count = Darwin.write(descriptor, bytes.baseAddress! + written, bytes.count - written)
+            if count < 0 {
+                guard errno == EINTR else { throw POSIXError.current }
+                continue
+            }
+            written += count
+        }
     }
 
     /// Puts a copy's files on the disk: each written out, then the drive asked to flush its cache

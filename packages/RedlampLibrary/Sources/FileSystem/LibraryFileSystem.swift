@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// A file or folder found in a listing, with what the library needs before reading it.
@@ -74,6 +75,14 @@ public protocol LibraryFileSystem: Sendable {
     /// Copies a file, or a folder and everything in it, to `destination`, where nothing may be, with
     /// its dates; it's on the disk when this returns.
     func copyItem(at source: URL, to destination: URL) throws
+    /// Copies a file to `destination`, where nothing may be, with its dates, as `copyItem` does, reading it
+    /// once: each part is hashed as it's written. Returns what it read, to check the copy against.
+    func copyFile(at source: URL, to destination: URL) throws -> FileDigest
+    /// Clones a file, or a folder and everything in it, to `destination`, where nothing may be: a copy on
+    /// its volume that shares the original's blocks until either is written (APFS), with its dates,
+    /// made without reading a byte. `EXDEV` when `destination` is on another volume and `ENOTSUP` when
+    /// the volume can't clone, which only `copyItem` and `copyFile` cross.
+    func cloneItem(at source: URL, to destination: URL) throws
     /// Makes a folder, `EEXIST` when something is there; with `intermediates`, the folders above it
     /// too, and a folder already there is no error.
     func createDirectory(at url: URL, withIntermediateDirectories intermediates: Bool) throws
@@ -93,6 +102,17 @@ public extension LibraryFileSystem {
 
     func copyItem(at _: URL, to _: URL) throws {
         throw POSIXError(.EROFS)
+    }
+
+    /// `copyItem`, then the original read.
+    func copyFile(at source: URL, to destination: URL) throws -> FileDigest {
+        try copyItem(at: source, to: destination)
+        return try FileDigest(of: source, in: self)
+    }
+
+    /// No clones: what's copied is copied byte for byte.
+    func cloneItem(at _: URL, to _: URL) throws {
+        throw POSIXError(.ENOTSUP)
     }
 
     func createDirectory(at _: URL, withIntermediateDirectories _: Bool) throws {
@@ -115,4 +135,33 @@ public extension LibraryFileSystem {
     func exists(_ url: URL) -> Bool {
         (try? attributes(of: url)) != nil
     }
+}
+
+/// A file's bytes as one read gave them: their SHA-256 and how many there were.
+public struct FileDigest: Sendable, Hashable {
+    public var sha256: Data
+    public var size: Int64
+
+    public init(sha256: Data, size: Int64) {
+        self.sha256 = sha256
+        self.size = size
+    }
+
+    /// The file at `url`, read through `fileSystem` a part at a time.
+    public init(of url: URL, in fileSystem: any LibraryFileSystem) throws {
+        var hash = SHA256()
+        var size = 0
+        while true {
+            let data = try fileSystem.read(url, range: size ..< size + Self.part)
+            hash.update(data: data)
+            size += data.count
+            if data.count < Self.part {
+                break
+            }
+        }
+        self.init(sha256: Data(hash.finalize()), size: Int64(size))
+    }
+
+    /// How much is read at a time.
+    static let part = 4 << 20
 }

@@ -63,6 +63,9 @@ struct FileCopyTests {
             let outcome = try await operations.run(batch)
             #expect(outcome.isFinished && outcome.photos == 2 && Set(outcome.photoIDs) == [raw, jpeg])
             #expect(outcome.copiesNotDetached.isEmpty)
+            let writes = try #require(sandbox.fileSystem as? SimulatedFileSystem).writes
+            #expect(writes.contains { $0.hasPrefix("clone ") }, "on their volume the copies are clones")
+            #expect(!writes.contains { $0.hasPrefix("copy ") }, "\(writes)")
 
             let after = sandbox.files()
             for (path, data) in before {
@@ -109,6 +112,39 @@ struct FileCopyTests {
             #expect(try await Set(operations.trashed().map(\.photo.photo.id)) == [copyRaw, copyJPEG])
             #expect(try await operations.entries().map(\.state) == [.undone, .finished])
         }
+    }
+
+    @Test func `photos copied to another volume are copied and checked byte for byte, a bad copy caught before it's in place`(
+    ) async throws {
+        let (sandbox, _) = try await Self.sandbox([
+            .init("Shoot/IMG_0001.ARW", captured: FileSandbox.date(0), sidecar: true, xmp: .stem),
+            .init("Shoot/IMG_0002.ARW", captured: FileSandbox.date(1)),
+        ], folders: ["Other"])
+        defer { sandbox.remove() }
+        let simulated = try #require(sandbox.fileSystem as? SimulatedFileSystem)
+        simulated.mount(sandbox.url("Other"), uuid: "OTHER")
+        let rows = try await sandbox.rows()
+        let ids = ["Shoot/IMG_0001.ARW", "Shoot/IMG_0002.ARW"].compactMap { rows[$0] }
+        let before = sandbox.files()
+        let operations = sandbox.operations()
+
+        simulated.inject(.init(.copy, name: "IMG_0002.ARW", effect: .corruptCopy))
+        do {
+            try await operations.run(operations.planCopy(photos: ids, to: sandbox.url("Other")))
+            Issue.record("a corrupt copy went through")
+        } catch let FileOperationError.failed(path, message) {
+            #expect(path.hasSuffix("IMG_0002.ARW") && message.contains("isn't the same"))
+        }
+        #expect(sandbox.files() == before && sandbox.leftovers().isEmpty, "the batch rolled back, leaving nothing")
+        #expect(try await sandbox.rows() == rows)
+
+        #expect(try await operations.run(operations.planCopy(photos: ids, to: sandbox.url("Other"))).isFinished)
+        for name in ["IMG_0001.ARW", "IMG_0001.xmp", "IMG_0002.ARW"] {
+            #expect(sandbox.files()["Other/" + name] == before["Shoot/" + name], "\(name) is copied byte for byte")
+        }
+        #expect(try await sandbox.sidecar("Other/IMG_0001.ARW")?.metadata?.rating == 3)
+        #expect(!simulated.writes.contains { $0.hasPrefix("clone ") }, "nothing is cloned across volumes")
+        #expect(try await sandbox.rows().count == rows.count + 2)
     }
 
     @Test func `a copy whose name is held gets a number, its pair and sidecars with it, and its original's name`(

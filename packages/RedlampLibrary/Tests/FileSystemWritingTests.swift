@@ -47,6 +47,61 @@ struct FileSystemWritingTests {
         #expect(!local.exists(folder.url.appending(path: "Pack 2")))
     }
 
+    @Test func `a copy read once gives what it read, keeps its date and attributes, and never replaces a file`() throws {
+        let folder = try TemporaryFolder()
+        try folder.write("IMG_0001.ARW", bytes: (4 << 20) + 1234)
+        let local = LocalFileSystem()
+        let photo = folder.url.appending(path: "IMG_0001.ARW")
+        let date = Date(timeIntervalSince1970: 1_600_000_000.25)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: photo.path)
+        photo.withUnsafeFileSystemRepresentation { path in
+            let value = Array("Red".utf8)
+            #expect(setxattr(path, "app.redlamp.test", value, value.count, 0, 0) == 0)
+        }
+        let copy = folder.url.appending(path: "Copy.ARW")
+        let read = try local.copyFile(at: photo, to: copy)
+        #expect(try read == FileDigest(of: photo, in: local) && read.size == (4 << 20) + 1234)
+        #expect(try Data(contentsOf: copy) == Data(contentsOf: photo))
+        #expect(try abs(local.attributes(of: copy).modified.timeIntervalSince(date)) < 1e-3)
+        #expect(copy.withUnsafeFileSystemRepresentation { getxattr($0, "app.redlamp.test", nil, 0, 0, 0) } == 3)
+        #expect(throws: POSIXError(.EEXIST)) { _ = try local.copyFile(at: photo, to: copy) }
+        #expect(try Data(contentsOf: copy) == Data(contentsOf: photo), "the copy there is left as it was")
+    }
+
+    @Test func `a clone is the file or the folder whole, with its date, and never replaces one`() throws {
+        let folder = try TemporaryFolder()
+        try folder.write("Pack/edit.json", bytes: 300)
+        try folder.write("Pack/masks/a.png", bytes: 50)
+        try folder.write("IMG_0001.ARW", bytes: 4000)
+        let local = LocalFileSystem()
+        let photo = folder.url.appending(path: "IMG_0001.ARW")
+        let date = Date(timeIntervalSince1970: 1_600_000_000.25)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: photo.path)
+        let clone = folder.url.appending(path: "Clone.ARW")
+        try local.cloneItem(at: photo, to: clone)
+        #expect(try Data(contentsOf: clone) == Data(contentsOf: photo))
+        #expect(try abs(local.attributes(of: clone).modified.timeIntervalSince(date)) < 1e-3)
+        #expect(try local.attributes(of: clone).fileIdentifier != local.attributes(of: photo).fileIdentifier)
+        #expect(throws: POSIXError(.EEXIST)) { try local.cloneItem(at: photo, to: clone) }
+        try local.cloneItem(at: folder.url.appending(path: "Pack"), to: folder.url.appending(path: "Pack 2"))
+        #expect(try Data(contentsOf: folder.url.appending(path: "Pack 2/masks/a.png")).count == 50)
+        #expect(try Data(contentsOf: folder.url.appending(path: "Pack 2/edit.json")).count == 300)
+        #expect(throws: POSIXError(.EEXIST)) {
+            try local.cloneItem(at: folder.url.appending(path: "Pack"), to: folder.url.appending(path: "Pack 2"))
+        }
+
+        let simulated = SimulatedFileSystem(profile: .ssd)
+        simulated.mount(folder.url.appending(path: "Other"), uuid: "OTHER")
+        #expect(throws: POSIXError(.EXDEV)) {
+            try simulated.cloneItem(at: photo, to: folder.url.appending(path: "Other/IMG_0001.ARW"))
+        }
+        try simulated.cloneItem(at: photo, to: folder.url.appending(path: "Simulated.ARW"))
+        #expect(simulated.writes == ["clone \(photo.path) \(folder.url.appending(path: "Simulated.ARW").path)"])
+        #expect(throws: POSIXError(.ENOTSUP)) {
+            try SimulatedFileSystem(profile: .nas).cloneItem(at: photo, to: folder.url.appending(path: "Share.ARW"))
+        }
+    }
+
     @Test func `simulated writes fail as told, keep their Trash in a folder and cross mounted volumes only by copying`(
     ) throws {
         let folder = try TemporaryFolder()

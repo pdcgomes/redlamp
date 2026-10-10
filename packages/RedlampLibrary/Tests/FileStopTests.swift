@@ -79,7 +79,7 @@ struct FileStopTests {
         let operations = sandbox.operations()
         let batch = try await operations.planCopy(photos: ids, to: sandbox.url("Picked"))
         #expect(batch.steps.map(\.kind) == Array(repeating: .copy, count: 6) + [.detachCopies])
-        let held = hold.hold("copy " + sandbox.url(Self.name(3)).path)
+        let held = hold.hold("clone " + sandbox.url(Self.name(3)).path)
 
         let outcome = try await Self.stop({ try await operations.run(batch) }, at: held)
         #expect(outcome.state == .stopped && outcome.photoIDs == Array(ids.prefix(3)), "the photo in hand finished")

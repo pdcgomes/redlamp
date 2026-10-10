@@ -9,7 +9,7 @@ public extension SimulatedFileSystem {
     /// A write made to fail, as a full disk, a failing cable or a share that refuses it would.
     struct Failure: Sendable, Hashable {
         public enum Operation: String, Sendable, Hashable, CaseIterable {
-            case move, copy, createDirectory, remove, trash
+            case move, copy, clone, createDirectory, remove, trash
         }
 
         public enum Effect: Sendable, Hashable {
@@ -79,6 +79,33 @@ public extension SimulatedFileSystem {
                 Self.corrupt(destination)
             }
             return "copy \(source.path) \(destination.path)"
+        }
+    }
+
+    /// A copy made to fail or come out corrupt (`Failure`) does here as in `copyItem`.
+    func copyFile(at source: URL, to destination: URL) throws -> FileDigest {
+        let size = (try? base.attributes(of: source).size).map(Int.init) ?? 0
+        var digest: FileDigest?
+        try write(.copy, source, bytes: size) { corrupt in
+            digest = try base.copyFile(at: source, to: destination)
+            if corrupt {
+                Self.corrupt(destination)
+            }
+            return "copy \(source.path) \(destination.path)"
+        }
+        guard let digest else { throw POSIXError(.EIO) }
+        return digest
+    }
+
+    /// Network volumes can't clone, and a clone can't cross a mounted volume's edge.
+    func cloneItem(at source: URL, to destination: URL) throws {
+        guard profile.isLocal != false else { throw POSIXError(.ENOTSUP) }
+        guard mount(of: source)?.uuid == mount(of: destination.deletingLastPathComponent())?.uuid else {
+            throw POSIXError(.EXDEV)
+        }
+        try write(.clone, source) {
+            try base.cloneItem(at: source, to: destination)
+            return "clone \(source.path) \(destination.path)"
         }
     }
 

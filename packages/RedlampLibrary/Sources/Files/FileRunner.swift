@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
@@ -309,9 +308,8 @@ extension FileRunner {
     private func copyAcross(_ source: URL, to destination: URL) throws {
         let staging = Self.staging(for: destination)
         try? fileSystem.removeItem(at: staging)
-        try fileSystem.copyItem(at: source, to: staging)
         do {
-            try verify(source, staging)
+            try copyChecked(source, to: staging)
             try fileSystem.moveItem(at: staging, to: destination)
         } catch {
             try? fileSystem.removeItem(at: staging)
@@ -320,9 +318,10 @@ extension FileRunner {
         try fileSystem.removeItem(at: source)
     }
 
-    /// Copies `item` beside `destination` under a hidden name, checks every byte, and puts the copy in place without
-    /// replacing anything; the original stays. A `.redlamp` sidecar is read under file coordination, as
-    /// `SidecarStore` writes it, and one kept on this Mac gets the folders it goes in.
+    /// Copies `item` beside `destination` under a hidden name and puts the copy in place without replacing anything;
+    /// the original stays. On its volume the copy is a clone, which shares the original's blocks and is made whole
+    /// or not at all; on another volume each byte is checked. A `.redlamp` sidecar is read under file coordination,
+    /// as `SidecarStore` writes it, and one kept on this Mac gets the folders it goes in.
     private func copy(_ item: FileItem, to destination: String) throws {
         let (from, to) = (URL(fileURLWithPath: item.source), URL(fileURLWithPath: destination))
         if item.role == .sidecarOnThisMac {
@@ -331,9 +330,10 @@ extension FileRunner {
         let staging = Self.staging(for: to)
         try? fileSystem.removeItem(at: staging)
         let place = { [fileSystem] (source: URL) throws in
-            try fileSystem.copyItem(at: source, to: staging)
             do {
-                try self.verify(source, staging)
+                if try !self.clone(source, to: staging) {
+                    try self.copyChecked(source, to: staging)
+                }
                 try fileSystem.moveItem(at: staging, to: to)
             } catch {
                 try? fileSystem.removeItem(at: staging)
@@ -410,6 +410,32 @@ extension FileRunner {
         destination.deletingLastPathComponent().appending(path: ".\(destination.lastPathComponent).redlamp-copy")
     }
 
+    /// Clones `source` to `copy` on its volume (`LibraryFileSystem.cloneItem`): false, with nothing made, when
+    /// `copy` is on another volume or the volume can't clone.
+    private func clone(_ source: URL, to copy: URL) throws -> Bool {
+        do {
+            try fileSystem.cloneItem(at: source, to: copy)
+            return true
+        } catch let error as POSIXError where error.code == .EXDEV || error.code == .ENOTSUP {
+            return false
+        }
+    }
+
+    /// Copies `source` to `copy`, where nothing is, and checks every byte: a file is read once, hashed as it's
+    /// copied, and the copy read back; a folder's files are each read on both sides.
+    private func copyChecked(_ source: URL, to copy: URL) throws {
+        guard try !fileSystem.attributes(of: source).isDirectory else {
+            try fileSystem.copyItem(at: source, to: copy)
+            return try verify(source, copy)
+        }
+        let read = try fileSystem.copyFile(at: source, to: copy)
+        guard try FileDigest(of: copy, in: fileSystem) == read else {
+            throw FileOperationError.failed(
+                path: source.path, message: "the copy at \(copy.path) isn't the same as the original",
+            )
+        }
+    }
+
     /// Throws unless `copy` holds the same files as `source`, of the same sizes and SHA-256.
     func verify(_ source: URL, _ copy: URL) throws {
         guard try fingerprint(source) == fingerprint(copy) else {
@@ -419,11 +445,12 @@ extension FileRunner {
         }
     }
 
-    /// Each file's size and SHA-256 by its path inside `url`, "" for `url` itself.
-    private func fingerprint(_ url: URL) throws -> [String: Data] {
+    /// Each file's size and SHA-256 by its path inside `url`, "" for `url` itself; each folder's path ends in a
+    /// slash.
+    private func fingerprint(_ url: URL) throws -> [String: FileDigest] {
         let entry = try fileSystem.attributes(of: url)
-        guard entry.isDirectory else { return try ["": digest(url, size: entry.size)] }
-        var found: [String: Data] = [:]
+        guard entry.isDirectory else { return try ["": FileDigest(of: url, in: fileSystem)] }
+        var found: [String: FileDigest] = [:]
         var folders = [(url, "")]
         while let (folder, relative) = folders.popLast() {
             for child in try fileSystem.contentsOfDirectory(at: folder) {
@@ -431,30 +458,13 @@ extension FileRunner {
                 let url = folder.appending(path: child.name)
                 if child.isDirectory {
                     folders.append((url, path))
-                    found[path + "/"] = Data()
+                    found[path + "/"] = FileDigest(sha256: Data(), size: 0)
                 } else {
-                    found[path] = try digest(url, size: child.size)
+                    found[path] = try FileDigest(of: url, in: fileSystem)
                 }
             }
         }
         return found
-    }
-
-    private func digest(_ url: URL, size _: Int64) throws -> Data {
-        var hash = SHA256()
-        let chunk = 4 << 20
-        var offset = 0
-        while true {
-            let data = try fileSystem.read(url, range: offset ..< offset + chunk)
-            hash.update(data: data)
-            offset += data.count
-            if data.count < chunk {
-                break
-            }
-        }
-        var size = Int64(offset).littleEndian
-        hash.update(data: Data(bytes: &size, count: 8))
-        return Data(hash.finalize())
     }
 
     /// Removes the folder if nothing is in it but what Finder keeps there; whether it's gone.
