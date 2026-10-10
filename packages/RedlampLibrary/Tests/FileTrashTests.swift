@@ -208,6 +208,7 @@ struct FileTrashTests {
         row.xmpSignature = 42
         row.cameraCaptured = FileSandbox.date(10)
         row.cameraOffset = -18000
+        row.missingSince = FileSandbox.date(11)
         return row
     }
 

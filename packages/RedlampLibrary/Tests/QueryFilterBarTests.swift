@@ -61,7 +61,8 @@ struct QueryFilterBarTests {
                 let sort = QuerySort(key, ascending: ascending)
                 let ids = try await columns.ids("", sort: sort)
                 #expect(try await sql.ids("", sort: sort) == ids, "\(key) \(ascending)")
-                let expected = key == .size ? Array(1 ... 8) : Array((1 ... 8).reversed())
+                // Photo 4 is missing, which no list has.
+                let expected = key == .size ? [1, 2, 3, 5, 6, 7, 8] : [8, 7, 6, 5, 3, 2, 1]
                 #expect(library.numbers(ids) == (ascending ? expected : expected.reversed()), "\(key) \(ascending)")
             }
         }
@@ -71,9 +72,9 @@ struct QueryFilterBarTests {
         try await library.index
             .write { try $0.database.execute("UPDATE photos SET size = 100000000 WHERE id = \(first)") }
         try await columns.update(photos: [first])
-        #expect(try await library.numbers(columns.ids("", sort: QuerySort(.size))) == [2, 3, 4, 5, 6, 7, 8, 1])
+        #expect(try await library.numbers(columns.ids("", sort: QuerySort(.size))) == [2, 3, 5, 6, 7, 8, 1])
         let list = try await columns.list(.allPhotographs, sort: QuerySort(.modified))
-        #expect(library.numbers(list) == [8, 7, 6, 5, 4, 3, 2, 1])
+        #expect(library.numbers(list) == [8, 7, 6, 5, 3, 2, 1])
     }
 
     @Test func `facets count photos by day, ISO, focal length and aperture`() async throws {

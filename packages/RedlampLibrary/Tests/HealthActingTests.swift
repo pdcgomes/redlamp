@@ -120,19 +120,28 @@ struct HealthActingTests {
         }
         #expect(try await kept() == ([one, two, gone], [one, two, gone]))
 
-        // Gone from its folder: nothing can bring it back.
+        // Gone from its folder: missing, its row keeps them, and Remove leaves them while Undo can put it back.
         try FileManager.default.removeItem(at: sandbox.url("Cards/Gone.jpg"))
         await sandbox.index()
         let health = sandbox.library()
         try await health.run(health.plan(health.findings(.damaged)))
-        #expect(try await health.operations.removeUnrestorable() == 1)
-        #expect(try await kept() == ([one, two], [one, two]), "the Trash journal can bring One and Two back")
+        #expect(try await health.operations.removeUnrestorable() == 0)
+        #expect(
+            try await kept() == ([one, two, gone], [one, two, gone]),
+            "the Trash journal can bring One and Two back",
+        )
+        try await health.engine.updateNames()
+        try await health.run(health.planRemoval([gone], in: health.findings(.missing)))
+        #expect(try await health.operations.removeUnrestorable() == 0)
 
+        try await health.operations.undo()
         try await health.operations.undo()
         try await health.engine.updateNames()
         #expect(try await Set(health.findings(.damaged).photos) == [one, two], "with their health")
+        #expect(try await health.findings(.missing).photos == [gone])
 
         try await health.run(health.plan(health.findings(.damaged)))
+        try await health.run(health.planRemoval([gone], in: health.findings(.missing)))
         try FileManager.default.removeItem(at: sandbox.paths.root.appending(path: "File Operations"))
         try await health.operations.recover()
         #expect(try await kept() == ([], []), "no journal is left to bring them back")

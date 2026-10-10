@@ -3,8 +3,8 @@ import Foundation
 /// Changes a copy of the fixture while its index is closed, in 50 of its folders: in each, a photo
 /// renamed, one added and one deleted, as in the Finder. Then opens the index again and reconciles it
 /// through the simulated volume: how long that takes, that every change is in the index, that each
-/// renamed photo kept its row, and that only the added photos are read. The copy is a clone beside
-/// the fixture, removed afterwards.
+/// renamed photo kept its row and each deleted one is kept as missing (DEC-59), and that only the added
+/// photos are read. The copy is a clone beside the fixture, removed afterwards.
 public struct ReconcileScenario: BenchScenario {
     public let name = "reconcile"
     static let folders = 50
@@ -77,9 +77,12 @@ public struct ReconcileScenario: BenchScenario {
                     counts.renamed += 1
                 }
                 counts.added += try reader.photo(path: folder + changes.added) == nil ? 0 : 1
-                counts.deleted += try reader.photo(path: folder + changes.deleted) == nil ? 1 : 0
+                counts.deleted += try reader.photo(path: folder + changes.deleted)?.state == [.missing] ? 1 : 0
             }
-            return try (counts.renamed, counts.added, counts.deleted, reader.photoCount())
+            return try (
+                counts.renamed, counts.added, counts.deleted,
+                reader.photoCount() - reader.photoCount(withState: .missing),
+            )
         }
         await index.close()
         let count = Double(planned.count)
@@ -97,9 +100,15 @@ public struct ReconcileScenario: BenchScenario {
             ),
             check("renamed", "Renamed photos that kept their rows", renamed, count, "photos"),
             check("added", "Added photos in the index", added, count, "photos"),
-            check("deleted", "Deleted photos gone from the index", deleted, count, "photos"),
+            check("deleted", "Deleted photos kept as missing", deleted, count, "photos"),
             check("read", "Photos read", run.summary.headsRead, count, "photos"),
-            check("photos", "Photos in the index", photos, Double(context.manifest.totals.photos), "photos"),
+            check(
+                "photos",
+                "Photos in the index but missing ones",
+                photos,
+                Double(context.manifest.totals.photos),
+                "photos",
+            ),
         ]
     }
 

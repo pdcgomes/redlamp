@@ -3,9 +3,10 @@ import Testing
 @testable import RedlampLibrary
 
 /// The XMP merge records of photos that leave the index other than by their root's removal (LIB-24): a photo deleted
-/// on disk or moved outside the library takes its record with it as the indexer takes it out; a photo moved to the
-/// Trash keeps its record while a batch of the file journal can put it back, and loses it once the journal lets the
-/// batch go with the photo not back; as a root's sweep does.
+/// on disk or moved outside the library keeps its record while it's missing (DEC-59), and, removed from the library,
+/// while the file journal can put it back; a photo moved to the Trash keeps its record while a batch of the file
+/// journal can put it back, and loses it once the journal lets the batch go with the photo not back; as a root's
+/// sweep does.
 struct XMPRecordSweepTests {
     static func keepRecords(of photos: [Int64], in index: LibraryIndex) async throws {
         try await index.write { writer in
@@ -23,7 +24,7 @@ struct XMPRecordSweepTests {
         try await Set(index.read { try XMPMergeRecord.records(photos, in: $0) }.keys)
     }
 
-    @Test func `a photo deleted on disk or moved out of the library takes its XMP record as it leaves the index`(
+    @Test func `a photo deleted on disk or moved out of the library keeps its XMP record until it's removed for good`(
     ) async throws {
         let sandbox = try await KeywordSandbox.make()
         defer { sandbox.remove() }
@@ -38,7 +39,16 @@ struct XMPRecordSweepTests {
         let outside = try TemporaryFolder()
         try FileManager.default.moveItem(at: sandbox.url("Shoot/B.JPG"), to: outside.url.appending(path: "B.JPG"))
         try await sandbox.indexAll()
+        #expect(try await sandbox.index.read { try $0.missingPhotoIDs() } == [ids[0], ids[1]])
+        #expect(try await Self.records(of: ids, in: sandbox.index) == Set(ids), "kept while they're missing")
+
+        let operations = FileOperations(index: sandbox.index, paths: sandbox.paths)
+        #expect(try await operations.run(operations.planRemoval(ofMissing: [ids[0], ids[1]])).isFinished)
         #expect(try await sandbox.index.read { try $0.photoCount() } == 1)
+        let xmp = LibraryXMP(index: sandbox.index, paths: sandbox.paths)
+        #expect(try await xmp.removeOrphanedRecords() == 0, "kept while Undo can put them back")
+        try FileManager.default.removeItem(at: sandbox.paths.root.appending(path: "File Operations"))
+        #expect(try await xmp.removeOrphanedRecords() == 2)
         #expect(try await Self.records(of: ids, in: sandbox.index) == [ids[2]])
     }
 

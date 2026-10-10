@@ -154,7 +154,7 @@ struct ChangeTrackerTests {
         let summary = await replay.summary(after: Self.isReplayed)
         second.stop()
         #expect(replay.all.count(of: Self.reconciled(.historyGone)) == 0)
-        #expect(summary?.photosMoved == 1 && summary?.photosRemoved == 1 && summary?.photosInserted == 1)
+        #expect(summary?.photosMoved == 1 && summary?.photosMissing == 1 && summary?.photosInserted == 1)
         #expect(summary?.headsRead == 1)
         // Only the folders the history named are listed.
         let listed = Set(counting.counts.listings.keys)
@@ -163,8 +163,9 @@ struct ChangeTrackerTests {
         let after = try await LibraryIndexerTests.rows(sandbox)
         #expect(after[sandbox.path(folders[1] + "/Renamed " + renamed.name)]?.id == before[sandbox.path(renamed.path)]?
             .id)
-        #expect(after[sandbox.path(removed.path)] == nil && after[sandbox.path(folders[3] + "/Added.JPG")] != nil)
-        #expect(after.count == 301)
+        #expect(after[sandbox.path(removed.path)]?.state == [.missing], "kept as missing")
+        #expect(after[sandbox.path(folders[3] + "/Added.JPG")] != nil)
+        #expect(after.count == 302)
     }
 
     @Test func `a replayed history names the folders that changed, and a live event its folder`() async throws {
@@ -206,7 +207,7 @@ struct ChangeTrackerTests {
         try FileManager.default.removeItem(at: sandbox.url(sandbox.fixture.photos(in: picked[1])[0]))
         source.send([(sandbox.path(folders[1]), [])])
         let live = await events.summary(after: { $0 == .changed(volume: key, folders: 1) })
-        #expect(live?.photosRemoved == 1)
+        #expect(live?.photosMissing == 1)
         #expect(Set(counting.counts.listings.keys) == [sandbox.path(folders[1])])
         #expect(try await Self.history(of: key, in: sandbox) { $0?.lastEvent == 1003 }?.lastEvent == 1003)
         #expect(Self.caughtUp(key, in: events.all).count == 1, "a live event doesn't catch it up again")
@@ -255,7 +256,7 @@ struct ChangeTrackerTests {
         let dropped = await events.summary(after: Self.reconciled(.mustScan))
         #expect(try await Self.history(of: key, in: sandbox) { $0?.lastEvent == 1001 }?.lastEvent == 1001)
         tracker.stop()
-        #expect(dropped?.photosRemoved == 1 && counting.counts.listed == folderCount, "\(events.all)")
+        #expect(dropped?.photosMissing == 1 && counting.counts.listed == folderCount, "\(events.all)")
 
         // The volume's history is another than the one recorded against: it's compared again, and the
         // new one recorded.
