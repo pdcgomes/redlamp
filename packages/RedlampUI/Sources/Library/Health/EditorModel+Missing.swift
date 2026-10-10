@@ -20,13 +20,11 @@ public extension EditorModel {
     @discardableResult
     func locateMissingPhoto(_ photo: URL? = nil) -> Bool {
         guard canLocateMissingPhoto, let target = photo ?? selection, let core = library.service?.core,
-              let id = librarySources.indexID(ofShown: target), let findings = healthProposals.findings,
-              case let .missing(folder, _)? = findings.finding(for: id)?.reason
+              let id = librarySources.indexID(ofShown: target)
         else { return false }
         let health = healthProposals.library(core)
-        let name = target.lastPathComponent
         if let answer = LocatePanel.answer {
-            Task { await locate(id, named: name, at: answer, in: findings, health: health) }
+            Task { await locate(id, at: target, as: answer, health: health) }
             return true
         }
         guard let window = EditorWindowController.frontWindow, window.attachedSheet == nil else { return false }
@@ -35,8 +33,8 @@ public extension EditorModel {
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Locate"
-        panel.message = "Choose the file of “\(name)” in the library's folders."
-        panel.directoryURL = Self.nearestFolder(to: URL(fileURLWithPath: folder, isDirectory: true))
+        panel.message = "Choose the file of “\(target.lastPathComponent)” in the library's folders."
+        panel.directoryURL = Self.nearestFolder(to: target.deletingLastPathComponent())
         let delegate = LocatePanel(roots: library.roots.map(\.url))
         panel.delegate = delegate
         isModalDialogOpen = true
@@ -45,7 +43,7 @@ public extension EditorModel {
                 withExtendedLifetime(delegate) {}
                 isModalDialogOpen = false
                 guard response == .OK, let url = panel.url else { return }
-                Task { await locate(id, named: name, at: url, in: findings, health: health) }
+                Task { await locate(id, at: target, as: url, health: health) }
             }
         }
         return true
@@ -55,9 +53,7 @@ public extension EditorModel {
     /// batch, nothing on disk changing, which Library's Undo puts back. False when there's nothing to remove.
     @discardableResult
     func removeMissingPhotos(_ photo: URL? = nil) -> Bool {
-        guard canRemoveMissingPhotos, let core = library.service?.core, let findings = healthProposals.findings else {
-            return false
-        }
+        guard canRemoveMissingPhotos, let core = library.service?.core else { return false }
         let ids: [Int64] = if let photo, photo != selection, let id = librarySources.indexID(ofShown: photo),
                               !photoSelection.contains(id) {
             [id]
@@ -69,7 +65,7 @@ public extension EditorModel {
             guard let self else { return }
             let result = await core.change { () -> Result<FileOutcome, any Error> in
                 do {
-                    return try await .success(health.run(health.planRemoval(ids, in: findings)))
+                    return try await .success(health.run(health.planRemoval(ids, in: health.findings(.missing))))
                 } catch {
                     return .failure(error)
                 }
@@ -104,11 +100,10 @@ extension EditorModel {
         canLocateMissingPhoto
     }
 
-    /// Relinks the missing photo `id` to the file at `url` once Locate… finds it's the photo, with the others found
-    /// beside it when the user says so; otherwise says why it wasn't.
-    private func locate(
-        _ id: Int64, named name: String, at url: URL, in findings: HealthFindings, health: LibraryHealth,
-    ) async {
+    /// Relinks the missing photo `id`, shown at `shown`, where it was, to the file at `url` once Locate… finds it's the
+    /// photo, with the others found beside it when the user says so; otherwise says why it wasn't.
+    private func locate(_ id: Int64, at shown: URL, as url: URL, health: LibraryHealth) async {
+        let name = shown.lastPathComponent
         let location: MissingLocation
         do {
             location = try await health.locate(id, at: url)
@@ -120,21 +115,22 @@ extension EditorModel {
             return locateFailed(name, HealthWords.notRelinked(because: problem, file: url.lastPathComponent))
         }
         var relinks = [photo]
-        if !location.others.isEmpty, await relinksOthers(location.others, beside: url, in: findings) {
+        let from = shown.deletingLastPathComponent().lastPathComponent
+        if !location.others.isEmpty, await relinksOthers(location.others, from: from, beside: url) {
             relinks += location.others
         }
-        relink(relinks, in: findings, health: health)
+        relink(relinks, health: health)
     }
 
     /// Relinks `relinks` as one batch in the library's changes' turn, then has their folders listed again, so each
     /// photo is read from its file; on Undo once it has run.
-    private func relink(_ relinks: [PhotoRelink], in findings: HealthFindings, health: LibraryHealth) {
+    private func relink(_ relinks: [PhotoRelink], health: LibraryHealth) {
         guard let core = library.service?.core else { return }
         healthSteps.enqueue { [weak self] in
             guard let self else { return }
             let result = await core.change { () -> Result<FileOutcome, any Error> in
                 do {
-                    return try await .success(health.run(health.planRelink(relinks, in: findings)))
+                    return try await .success(health.run(health.planRelink(relinks, in: health.findings(.missing))))
                 } catch {
                     return .failure(error)
                 }
@@ -153,17 +149,13 @@ extension EditorModel {
         }
     }
 
-    /// Asks whether to relink `others` too, the missing photos found beside the file at `url`.
-    private func relinksOthers(_ others: [PhotoRelink], beside url: URL, in findings: HealthFindings) async -> Bool {
+    /// Asks whether to relink `others` too, the missing photos of the folder `from` found beside the file at `url`.
+    private func relinksOthers(_ others: [PhotoRelink], from: String, beside url: URL) async -> Bool {
         if let answer = LocatePanel.relinksOthers {
             return answer
         }
         guard let window = EditorWindowController.frontWindow else { return false }
         let names = others.map { ($0.path as NSString).lastPathComponent }
-        let from = others.first.flatMap { findings.finding(for: $0.id) }.flatMap { finding -> String? in
-            guard case let .missing(folder, _) = finding.reason else { return nil }
-            return (folder as NSString).lastPathComponent
-        } ?? ""
         let alert = NSAlert()
         alert.messageText = HealthWords.relinkOthers(others.count)
         alert.informativeText = HealthWords.foundBeside(
