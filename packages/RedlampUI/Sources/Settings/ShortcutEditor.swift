@@ -30,6 +30,9 @@ public final class ShortcutEditor {
         }
     }
 
+    /// The editor Settings shows, for the regression suite.
+    @_spi(Harness) public internal(set) weak static var shown: ShortcutEditor?
+
     @ObservationIgnored public let store: ShortcutKeymap
     public var search = ""
     public private(set) var recording: Recording?

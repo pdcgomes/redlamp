@@ -74,6 +74,14 @@ struct AppCommands: Commands {
             item(.redo)
         }
 
+        // Ahead of the Photo menu's Auto Sync (⇧⌥⌘A): key presses made as the regression driver makes them reach an
+        // earlier item with the key and ⇧ (`MenuBarCollisions`).
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            item(.selectAllPhotos)
+            item(.deselectOtherPhotos)
+        }
+
         // Edit ▸ Find: the command palette, and ⌘F for its sliders.
         CommandGroup(replacing: .textEditing) {
             item(.commandPalette)
@@ -136,7 +144,7 @@ struct AppCommands: Commands {
         item(.virtualCopy)
     }
 
-    /// Focus stacks, stacks, and moving through and selecting the photos.
+    /// Focus stacks, stacks, and moving through the photos.
     @ViewBuilder private var photoStackAndSelectionItems: some View {
         let shown = menu.shown
         item(.mergeFocusStack)
@@ -162,8 +170,6 @@ struct AppCommands: Commands {
         item(.nextPhoto)
         item(.previousGroup)
         item(.nextGroup)
-        item(.selectAllPhotos)
-        item(.deselectOtherPhotos)
     }
 
     /// Ratings, flags, labels, the mark and keywords: in Library on the whole selection, in Develop on the active

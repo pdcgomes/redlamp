@@ -137,6 +137,8 @@ public struct Keymap: Sendable {
         .char("v", command: true): "Paste",
         .char("a", command: true): "Select All",
         .char("f", command: true, control: true): "Enter Full Screen",
+        // AppKit's, for the toolbar's sidebar button.
+        .char("s", option: true, command: true): "Toggle Sidebar",
         .char("`", command: true): "the next window",
         .char("/", shift: true, command: true): "Help",
         .char("3", shift: true, command: true): "a screenshot",

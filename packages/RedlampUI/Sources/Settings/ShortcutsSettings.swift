@@ -67,7 +67,13 @@ struct ShortcutsSettings: View {
         } message: { _ in
             Text("The keys you changed go back to the preset’s.")
         }
-        .onDisappear { editor.cancel() }
+        .onAppear { ShortcutEditor.shown = editor }
+        .onDisappear {
+            editor.cancel()
+            if ShortcutEditor.shown === editor {
+                ShortcutEditor.shown = nil
+            }
+        }
     }
 }
 
