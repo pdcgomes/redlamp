@@ -154,13 +154,21 @@ CREATE TABLE photo_health (photo INTEGER PRIMARY KEY, size INTEGER NOT NULL, mod
   format INTEGER NOT NULL DEFAULT 0, damage INTEGER NOT NULL DEFAULT 0, missing INTEGER, reason TEXT,
   end_unread INTEGER NOT NULL DEFAULT 0, extension TEXT);
 -- version 7 (DEC-52): the text index built again ignoring accents, its text folded by the writer
--- version 8: CREATE INDEX photos_sidecars ON photos (folder) WHERE sidecar_modified IS NOT NULL, for a root's photos with sidecars
--- version 9: ALTER TABLE photos ADD COLUMN stack_position INTEGER, a photo's place in its stack made by hand, from its sidecar
 -- (`redlamp_text`: case, accents and width), since the tokenizer leaves Greek and Cyrillic accents,
 -- ß and ligatures as they are; typed text is folded the same way
 DROP TABLE photo_text;
 CREATE VIRTUAL TABLE photo_text USING fts5(name, keywords, title, caption,
   content='', contentless_delete=1, tokenize='trigram remove_diacritics 1');
+-- version 8 (LIB-11): a root's photos with sidecars, by folder
+CREATE INDEX photos_sidecars ON photos (folder) WHERE sidecar_modified IS NOT NULL;
+-- version 9 (LIB-28): a photo's place in its stack made by hand, from its sidecar
+ALTER TABLE photos ADD COLUMN stack_position INTEGER;        -- from 0 at the top
+-- version 10 (LIB-17): each photo's edit whose render the store holds, with the date its sidecar had when
+-- the edit was read; a row stands for the photo's edit while the photo's row has that date and the renderer
+-- is this build's, so a relaunch shows the render before the sidecar is read again; rows outlive their
+-- photos, as hashes do
+CREATE TABLE photo_edits (photo INTEGER PRIMARY KEY, sidecar_modified REAL NOT NULL, digest BLOB NOT NULL,
+  renderer INTEGER NOT NULL);
 ```
 
 - **Snapshots and integrity.** While the index changes, a snapshot is taken with `VACUUM INTO` at most every 30 minutes, the last three kept (`LibraryPaths.snapshots`). `PRAGMA quick_check` runs in the background lane at launch once a week. A damaged index is replaced by its newest good snapshot and reconciled with the disks (LIB-08); with no snapshot, it's rebuilt.
