@@ -1,9 +1,10 @@
 import AppKit
 import RedlampEngineAPI
 
-/// A slider's numeric readout. With the pointer over it, a faint well and the left-right cursor
-/// show it can be changed: drag to scrub (Shift for fine control), or click to type a value.
-/// Return commits, Escape cancels, and the arrow keys step (Shift for ×10).
+/// A slider's numeric readout, in a well that shows it can be changed: subtle at rest, stronger
+/// with the pointer over it (with the left-right cursor) or while scrubbing, and darker while
+/// it's typed in. Drag to scrub (Shift for fine control), or click to type a value. Return
+/// commits, Escape cancels, and the arrow keys step (Shift for ×10).
 public final class ValueFieldView: LayerDrawnView, NSTextFieldDelegate {
     /// The drag that scrubs across the whole range, in points.
     public static let scrubSpan: CGFloat = 500
@@ -14,8 +15,15 @@ public final class ValueFieldView: LayerDrawnView, NSTextFieldDelegate {
     public static let wellPadding: CGFloat = 4
 
     public var spec: any ValueFieldSpec {
-        didSet { setNeedsContentDisplay() }
+        didSet {
+            widestText = Self.widest(spec)
+            setNeedsContentDisplay()
+        }
     }
+
+    /// The width of the widest number the field shows, its range's ends, so the well holds its
+    /// width as the value changes.
+    private var widestText: CGFloat
 
     public var value: Double {
         didSet {
@@ -73,6 +81,7 @@ public final class ValueFieldView: LayerDrawnView, NSTextFieldDelegate {
     public init(spec: any ValueFieldSpec, value: Double = 0) {
         self.spec = spec
         self.value = value
+        widestText = Self.widest(spec)
         super.init(frame: .zero)
     }
 
@@ -96,22 +105,40 @@ public final class ValueFieldView: LayerDrawnView, NSTextFieldDelegate {
         CGRect(x: 0, y: 0, width: max(bounds.width - trailingInset, 0), height: bounds.height)
     }
 
+    private static func widest(_ spec: any ValueFieldSpec) -> CGFloat {
+        [0.0, 1.0].map { TextLine.width(spec.formatted(spec.value(atPosition: $0)), font: Typography.value) }.max() ?? 0
+    }
+
+    /// The well, ending `wellPadding` beyond the number's right edge.
+    public var wellRect: CGRect {
+        let padding = Self.wellPadding
+        let text = max(widestText, TextLine.width(spec.formatted(value), font: Typography.value))
+        let width = min(text + 2 * padding, bounds.width)
+        let height = min(TextLine.lineHeight(Typography.value) + 4, bounds.height)
+        return PixelGrid.centered(
+            CGSize(width: width, height: height),
+            at: CGPoint(x: min(textRect.maxX + padding, bounds.width) - width / 2, y: bounds.midY),
+            scale: backingScale,
+        )
+    }
+
+    /// The well's colour, or nil for a disabled field, which has none.
+    public var wellColor: RGBA? {
+        guard isEnabled else { return nil }
+        if editor != nil {
+            return Palette.wellFocused
+        }
+        return isHovering || isScrubbing ? Palette.well : Palette.wellRest
+    }
+
     override public func drawContent(in _: CGRect) {
-        guard editor == nil else { return }
         let text = spec.formatted(value)
-        if isEnabled, isHovering || isScrubbing, let context = NSGraphicsContext.current?.cgContext {
-            let padding = Self.wellPadding
-            let width = min(TextLine.width(text, font: Typography.value) + 2 * padding, bounds.width)
-            let height = min(TextLine.lineHeight(Typography.value) + 4, bounds.height)
-            let well = PixelGrid.centered(
-                CGSize(width: width, height: height),
-                at: CGPoint(x: textRect.maxX + padding - width / 2, y: bounds.midY),
-                scale: backingScale,
-            )
-            context.addPath(CGPath(roundedRect: well, cornerWidth: 3, cornerHeight: 3, transform: nil))
-            context.setFillColor(Palette.well.opacity(opacity).cgColor)
+        if let color = wellColor, let context = NSGraphicsContext.current?.cgContext {
+            context.addPath(CGPath(roundedRect: wellRect, cornerWidth: 3, cornerHeight: 3, transform: nil))
+            context.setFillColor(color.opacity(opacity).cgColor)
             context.fillPath()
         }
+        guard editor == nil else { return }
         TextLine.draw(
             text, font: Typography.value, color: Palette.value.opacity(opacity).nsColor,
             in: textRect, alignment: .right, scale: backingScale,

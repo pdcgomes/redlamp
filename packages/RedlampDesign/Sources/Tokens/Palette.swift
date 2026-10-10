@@ -48,6 +48,16 @@ public enum Palette {
         current.well
     }
 
+    /// A value field's well at rest; `well` under the pointer or while scrubbing.
+    public static var wellRest: RGBA {
+        current.wellRest
+    }
+
+    /// A value field's well while it's being typed in, so its focus shows without a ring.
+    public static var wellFocused: RGBA {
+        current.wellFocused
+    }
+
     public static var selection: RGBA {
         current.selection
     }
@@ -160,6 +170,15 @@ public struct PaletteTokens: Sendable, Hashable {
     /// Whether the panels are dark: their background's luminance is below half.
     public var isDark: Bool {
         0.2126 * panelBackground.red + 0.7152 * panelBackground.green + 0.0722 * panelBackground.blue < 0.5
+    }
+
+    public var wellRest: RGBA {
+        well.opacity(0.55)
+    }
+
+    /// Darker than `well`, in dark themes and light.
+    public var wellFocused: RGBA {
+        isDark ? well.mixed(with: RGBA(white: 0), amount: 0.35) : well.opacity(2.2)
     }
 
     /// A step above the panel background: lighter on dark, whiter on light.

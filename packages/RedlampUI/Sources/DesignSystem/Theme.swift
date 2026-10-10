@@ -30,6 +30,14 @@ enum Theme {
         Palette.divider.color
     }
 
+    static var wellRest: Color {
+        Palette.wellRest.color
+    }
+
+    static var wellFocused: Color {
+        Palette.wellFocused.color
+    }
+
     static var well: Color {
         Palette.well.color
     }

@@ -41,6 +41,34 @@ struct ValueFieldScrubTests {
         try field.mouseUp(with: mouse(.leftMouseUp, x: 10 + distance))
     }
 
+    /// The well always shows on an enabled field, darker while typing, and never on a disabled
+    /// one; it holds its width as the value changes, and ends past the number by its padding.
+    @Test func `the well always shows, holds its width, and darkens while typing`() throws {
+        let (field, _) = field(.contrast, value: 0)
+        field.trailingInset = ValueFieldView.wellPadding
+        #expect(field.wellColor == Palette.wellRest)
+        let width = field.wellRect.width
+        #expect(field.wellRect.maxX == field.bounds.maxX)
+        field.value = -100
+        #expect(field.wellRect.width == width, "the well doesn't follow the number's width")
+        field.value = 7
+        #expect(field.wellRect.width == width)
+
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 100, height: 40), styleMask: [.borderless], backing: .buffered,
+            defer: true,
+        )
+        window.contentView = field
+        defer { window.contentView = nil }
+        try field.mouseDown(with: mouse(.leftMouseDown, x: 10))
+        try field.mouseUp(with: mouse(.leftMouseUp, x: 10))
+        #expect(field.wellColor == Palette.wellFocused, "typing")
+        #expect(Palette.wellFocused != Palette.well && Palette.wellFocused != Palette.wellRest)
+
+        field.isEnabled = false
+        #expect(field.wellColor == nil)
+    }
+
     @Test func `a drag scrubs across the range in the scrub span`() throws {
         let (field, recorder) = field(.contrast, value: 0)
         try drag(field, by: ValueFieldView.scrubSpan / 10)

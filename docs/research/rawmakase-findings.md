@@ -174,7 +174,7 @@ RAWmakase competes as Lightroom Classic rebuilt in the open: free, on every desk
 
 **Every control with a value shows it and takes a typed one** (UX-28): a value beside each 3-way Color Grading Luminance slider, each wheel's Hue and Saturation readable and typeable, the tone curve's selected point (Input and Output) and split positions in a readout row, Base Look Amount, mask overlay Opacity, the Refine Edge brush Size, and the four stops of the Luminance and Depth ranges. UI-only values (Opacity, brush Size) take a value field with a spec of their own, so the parameter catalogue, the MCP server and the sidecar schema don't change.
 
-**The number reads as a field, and scrubs** (UX-29): with the pointer over it, a faint well and the left-right cursor; a drag scrubs it in the slider's own scale (mireds for Temp), Shift for fine control as on the track, one History step per drag; a click without movement types, as today. Size S–M for both.
+**The number reads as a field, and scrubs** (UX-29): with the pointer over it, a faint well and the left-right cursor (since 10 October the well always shows, subtle at rest, stronger under the pointer and darker while typing); a drag scrubs it in the slider's own scale (mireds for Temp), Shift for fine control as on the track, one History step per drag; a click without movement types, as today. Size S–M for both.
 
 ### 5.2 LibRaw master for CAM-13 (lesson 2)
 

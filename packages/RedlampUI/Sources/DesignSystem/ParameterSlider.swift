@@ -1,4 +1,5 @@
 import AppKit
+import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
@@ -171,7 +172,7 @@ struct SliderTrack: View {
     }
 }
 
-/// The numeric readout; click to type a value.
+/// The numeric readout, in its well as `ValueFieldView` draws it; click to type a value.
 struct ValueField: View {
     let spec: ParameterSpec
     let value: Double
@@ -179,9 +180,27 @@ struct ValueField: View {
 
     @State private var editing = false
     @State private var text = ""
+    @State private var hovering = false
     @FocusState private var focused: Bool
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
+        let padding = ValueFieldView.wellPadding
+        let widest = [spec.range.lowerBound, spec.range.upperBound, value]
+            .map { TextLine.width(spec.formatted($0), font: Typography.value) }.max() ?? 0
+        field
+            .background(alignment: .trailing) {
+                if isEnabled {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(editing ? Theme.wellFocused : hovering ? Theme.well : Theme.wellRest)
+                        .frame(width: widest + 2 * padding, height: TextLine.lineHeight(Typography.value) + 4)
+                        .offset(x: padding)
+                }
+            }
+            .onHover { hovering = $0 }
+    }
+
+    @ViewBuilder private var field: some View {
         if editing {
             TextField("", text: $text)
                 .textFieldStyle(.plain)
