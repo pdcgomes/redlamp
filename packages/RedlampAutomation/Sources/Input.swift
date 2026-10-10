@@ -588,11 +588,18 @@
         /// it's open. Returns the menu's items, and whether each is checked.
         @discardableResult
         func choose(_ title: String, inMenuOf target: Target) throws -> [(title: String, on: Bool)] {
+            try choose([title], inMenuOf: target)
+        }
+
+        /// Chooses the item at `path` in `target`'s menu, as `choose(_:inMenuOf:)` does: a title,
+        /// or a submenu's and then its item's (["Delete Effect", "Glow"]).
+        @discardableResult
+        func choose(_ path: [String], inMenuOf target: Target) throws -> [(title: String, on: Bool)] {
             let center = CGPoint(x: 0.5, y: 0.5)
             let found = try place(center, on: target)
             let opened = OpenedMenu()
             try main { _ in
-                opened.watch { menu in opened.chose = Menus.chooseByKeys(title, in: menu) }
+                opened.watch { menu in opened.chose = Menus.chooseByKeys(path, in: menu) }
             }
             defer { try? main { _ in opened.stop() } }
             // The menu tracks inside the press, so this doesn't return until it closes.
@@ -601,10 +608,11 @@
             try wait("\(target)'s menu to close") { _ in opened.closed }
             let (items, chose) = try main { _ in (opened.items, opened.chose) }
             guard chose else {
-                let item = items.first { $0.title == title }
+                let title = path.joined(separator: " › ")
+                let item = items.first { $0.title == path.first }
                 throw ScenarioFailure(
-                    item == nil ? "\(target)'s menu has no \(title): \(items.map(\.title))"
-                        : "\(title) is disabled in \(target)'s menu",
+                    item == nil ? "\(target)'s menu has no \(path.first ?? title): \(items.map(\.title))"
+                        : "\(title) is disabled or missing in \(target)'s menu",
                 )
             }
             return items.map { (title: $0.title, on: $0.on) }
@@ -869,17 +877,43 @@
         /// its tracking with the item chosen, as a click on it does: a pop-up menu's tracking runs
         /// nothing else on the main thread. Without the item it closes the menu. Whether it chose.
         static func chooseByKeys(_ title: String, in menu: NSMenu) -> Bool {
-            let items = steps(in: menu)
-            let position = items.firstIndex { $0.title == title }
-            // The menu's tracking reads them from the queue: up to the first item, which arrows
-            // don't wrap past, down to this one, and Return.
-            let keys = position.map { position in
-                Array(repeating: KeyCombo(.up), count: items.count)
-                    + Array(repeating: KeyCombo(.down), count: position) + [KeyCombo(.character("\r"))]
-            } ?? [KeyCombo(.escape)]
-            guard let events = try? keys.map(Keyboard.event) else { return false }
+            chooseByKeys([title], in: menu)
+        }
+
+        /// `chooseByKeys` for the item at `path`: a title, or a submenu's and then its item's.
+        static func chooseByKeys(_ path: [String], in menu: NSMenu) -> Bool {
+            let keys = keys(to: path, in: menu)
+            guard let events = try? (keys ?? [KeyCombo(.escape)]).map(Keyboard.event) else { return false }
             events.forEach { NSApp.postEvent($0, atStart: false) }
-            return position != nil
+            return keys != nil
+        }
+
+        /// The keys that choose the item at `path`, which the menu's tracking reads from the queue:
+        /// in each menu, up to the first item, which arrows don't wrap past, and down to the one
+        /// named; then Right, which opens a submenu at its first item, or Return. Nil when an item
+        /// isn't there.
+        static func keys(to path: [String], in menu: NSMenu) -> [KeyCombo]? {
+            var keys: [KeyCombo] = []
+            var menu = menu
+            for (depth, title) in path.enumerated() {
+                if depth > 0 {
+                    // SwiftUI fills a submenu as it opens.
+                    open(menu)
+                    close(menu)
+                }
+                let items = steps(in: menu)
+                guard let position = items.firstIndex(where: { $0.title == title }) else { return nil }
+                keys += Array(repeating: KeyCombo(.up), count: items.count)
+                    + Array(repeating: KeyCombo(.down), count: position)
+                if depth == path.count - 1 {
+                    keys.append(KeyCombo(.character("\r")))
+                } else {
+                    guard let submenu = items[position].submenu else { return nil }
+                    keys.append(KeyCombo(.right))
+                    menu = submenu
+                }
+            }
+            return path.isEmpty ? nil : keys
         }
 
         /// The items the arrow keys stop on, in order. A section's header (SwiftUI's `Section`

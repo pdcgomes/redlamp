@@ -4,12 +4,12 @@
     @_spi(Harness) import RedlampUI
     import Synchronization
 
-    /// The Masks panel (UX-20 to UX-26) worked through its own controls, as a person works it:
+    /// The Masks panel (UX-20 to UX-27) worked through its own controls, as a person works it:
     /// clicks on its buttons, tiles, rows and checkboxes, choices in its menus, and drags on its
     /// value fields. Hovers aren't among them, since SwiftUI reads them from the real pointer:
     /// `PointerPreviewTests` and `MasksPanelViewTests` cover the previews they start.
     enum MasksPanelScenarios {
-        static let all: [Scenario] = [panel, tools, people, presets, landscape]
+        static let all: [Scenario] = [panel, tools, people, presets, landscape, effects]
 
         static let panel = Scenario(
             "masking.panel",
@@ -415,6 +415,68 @@
             try app.expect(components == 2, "Add made no component: \(why)")
             try app.main { $0.deleteAllMasks() }
             app.covered([.feature("masking.landscape"), .mask(.landscape)], via: .mouse)
+        }
+
+        static let effects = Scenario(
+            "masking.panel-effects",
+            "The Effect menu by its controls: Redlamp's effects on a mask, a slider moved making it Custom, the "
+                + "settings saved as an effect through its name, that effect on another mask, Undo, and Delete Effect",
+            claims: [.feature("masking.local-adjustments")],
+        ) { app in
+            // The masks start from their key: SwiftUI's buttons take no click while the app isn't
+            // active, and the menus this is about do.
+            try app.openMasks()
+            try app.drawGradient(.radial)
+            let first = try app.selectedMask()
+            let menu = Target.identifier("masks.mask.effect")
+
+            // Redlamp's effects set the mask's sliders, each in the last one's place, and the menu
+            // shows the one it has.
+            try app.choose("Dodge", inMenuOf: menu)
+            try app.wait("Dodge") { $0.effectTitle(of: first) == "Dodge" && $0.sliderValue(.localExposure) == 0.35 }
+            try app.choose("Pop Eyes", inMenuOf: menu)
+            try app.wait("Pop Eyes in Dodge's place") { model in
+                model.effectTitle(of: first) == "Pop Eyes" && model.sliderValue(.localExposure) == 0.3
+                    && model.sliderValue(.localClarity) == 20 && model.sliderValue(.localSaturation) == 15
+            }
+
+            // A slider moved makes the settings the mask's own; saved, they're an effect named after
+            // the mask, as the prompt offers.
+            try app.set(.localExposure, 0.5)
+            try app.wait("Custom") { $0.effectTitle(of: first) == "Custom" }
+            let name = try app.main { $0.recipe.mask(first)?.name ?? "" }
+            try app.main { model in
+                for effect in model.userMaskEffects where effect.name == name {
+                    model.deleteMaskEffect(effect.id)
+                }
+            }
+            try app.choose("Save Current Settings as Effect…", inMenuOf: menu)
+            try app.waitForSheet("Save Effect's name")
+            try app.expect(try app.pressInSheet(KeyCombo(.character("\r"))), "Save didn't take Return")
+            try app.waitForNoSheet("Save Effect's name")
+            try app.wait("the settings saved as \(name)") { model in
+                model.userMaskEffects.contains { $0.name == name } && model.effectTitle(of: first) == name
+            }
+
+            // Another of Redlamp's on the first mask, then the saved effect on a new one, and Undo.
+            try app.choose("Burn", inMenuOf: menu)
+            try app.wait("Burn") { $0.effectTitle(of: first) == "Burn" && $0.sliderValue(.localClarity) == 0 }
+            try app.drawGradient(.radial)
+            let second = try app.selectedMask()
+            try app.expect(first != second, "No second mask was made")
+            try app.choose(name, inMenuOf: menu)
+            try app.wait("\(name) on the second mask") { model in
+                model.effectTitle(of: second) == name && model.sliderValue(.localExposure) == 0.5
+                    && model.sliderValue(.localClarity) == 20 && model.sliderValue(.localSaturation) == 15
+            }
+            try app.press(.undo)
+            try app.wait("Undo") { $0.effectTitle(of: second) == "None" && $0.effectTitle(of: first) == "Burn" }
+
+            // Delete Effect lists the user's own.
+            try app.choose(["Delete Effect", name], inMenuOf: menu)
+            try app.wait("\(name) deleted") { model in !model.userMaskEffects.contains { $0.name == name } }
+            try app.main { $0.deleteAllMasks() }
+            app.covered(.feature("masking.local-adjustments"), via: .mouse)
         }
     }
 

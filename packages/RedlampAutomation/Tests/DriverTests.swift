@@ -374,6 +374,34 @@ struct DriverTests {
         #expect(Menus.steps(in: menu).map(\.title) == ["Blue Sky", "Brighten Subject", "Delete Preset"])
     }
 
+    /// The Effect menu's Delete Effect is a submenu of the user's effects.
+    @Test func `the keys reach an item in a submenu: down to the submenu, right into it, down to the item`() {
+        func item(_ title: String) -> NSMenuItem {
+            NSMenuItem(title: title, action: #selector(NSText.selectAll(_:)), keyEquivalent: "")
+        }
+        let menu = NSMenu()
+        let submenu = NSMenu()
+        menu.autoenablesItems = false
+        submenu.autoenablesItems = false
+        for title in ["Glow", "Mask 1"] {
+            submenu.addItem(item(title))
+        }
+        let delete = item("Delete Effect")
+        delete.submenu = submenu
+        for entry in [item("Dodge"), item("Burn"), .separator(), item("Save Current Settings as Effect…"), delete] {
+            menu.addItem(entry)
+        }
+        let (up, down, right) = (KeyCombo(.up), KeyCombo(.down), KeyCombo(.right))
+        let enter = KeyCombo(.character("\r"))
+        #expect(Menus.keys(to: ["Burn"], in: menu) == [up, up, up, up, down, enter])
+        #expect(
+            Menus.keys(to: ["Delete Effect", "Mask 1"], in: menu)
+                == [up, up, up, up, down, down, down, right, up, up, down, enter],
+        )
+        #expect(Menus.keys(to: ["Delete Effect", "Grain"], in: menu) == nil)
+        #expect(Menus.keys(to: ["Dodge", "Glow"], in: menu) == nil, "Dodge has no submenu")
+    }
+
     @Test func `holding a modifier makes the event the app's flags handling reads`() throws {
         let event = try Keyboard.flags(.option)
         #expect(event.type == .flagsChanged)
