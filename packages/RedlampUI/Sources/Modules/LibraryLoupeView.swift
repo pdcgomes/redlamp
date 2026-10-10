@@ -298,7 +298,7 @@ final class LibraryLoupeView: NSView {
 
     /// Where a side `length` long goes in `extent` with the point `focus` along it in the middle: centred
     /// when it's shorter, else never leaving a gap at either end.
-    private static func placed(_ length: CGFloat, in extent: CGFloat, focus: CGFloat) -> CGFloat {
+    static func placed(_ length: CGFloat, in extent: CGFloat, focus: CGFloat) -> CGFloat {
         guard length > extent else { return (extent - length) / 2 }
         return min(max(extent / 2 - focus * length, extent - length), 0)
     }

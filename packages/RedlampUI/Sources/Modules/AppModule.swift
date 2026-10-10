@@ -23,8 +23,8 @@ public enum AppModule: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// What the Library module shows between its panels: the grid, or the active photo large. Compare (C) and
-/// Survey (N) show the loupe until they're built (LIB-16).
+/// What the Library module shows between its panels: the grid (G), the active photo large (E), the select and a
+/// candidate side by side (C), or the photos selected laid out together (N), as Lightroom Classic's Library does.
 public enum LibraryView: String, CaseIterable, Sendable {
-    case grid, loupe
+    case grid, loupe, compare, survey
 }

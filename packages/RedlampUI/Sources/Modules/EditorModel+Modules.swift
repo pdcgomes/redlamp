@@ -14,7 +14,7 @@ public extension EditorModel {
         }
     }
 
-    /// G, E, C and N: the Library module, showing the grid or the loupe.
+    /// G, E, C and N: the Library module, showing the grid, the loupe, Compare or Survey.
     func showLibrary(_ view: LibraryView) {
         libraryView = view
         showModule(.library)
@@ -41,9 +41,13 @@ public extension EditorModel {
             guard previousModule != nil else { return false }
             showPreviousModule()
         case .gridView: showLibrary(.grid)
-        case .loupeView, .compareView, .surveyView:
+        case .loupeView:
             guard selection != nil else { return false }
             showLibrary(.loupe)
+        case .compareView where module == .library && libraryView == .compare:
+            return selection != nil
+        case .compareView: return showCompare()
+        case .surveyView: return showSurvey()
         default: return nil
         }
         return true

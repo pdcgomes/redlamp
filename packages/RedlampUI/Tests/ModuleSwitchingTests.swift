@@ -23,8 +23,7 @@ struct ModuleSwitchingTests {
         for action in [ShortcutAction.libraryModule, .developModule, .previousModule] {
             #expect(action.isMenuShortcut && action.combos.first?.keyboardShortcut != nil, "\(action) has no item key")
         }
-        #expect(ShortcutAction.compareView.title.contains("Loupe for Now"))
-        #expect(ShortcutAction.surveyView.title.contains("Loupe for Now"))
+        #expect(ShortcutAction.compareView.title == "Compare" && ShortcutAction.surveyView.title == "Survey")
         #expect(ShortcutAction.allCases.filter { $0.category == .modules }.count == 7)
     }
 
@@ -41,9 +40,9 @@ struct ModuleSwitchingTests {
         #expect(model.perform(.loupeView))
         #expect(model.libraryView == .loupe)
         #expect(model.perform(.gridView) && model.libraryView == .grid)
-        for action in [ShortcutAction.compareView, .surveyView] {
+        for (action, view) in [(ShortcutAction.compareView, LibraryView.compare), (.surveyView, .survey)] {
             #expect(model.perform(action))
-            #expect(model.libraryView == .loupe, "\(action.title) shows the loupe until LIB-16")
+            #expect(model.libraryView == view, "\(action.title) shows \(view)")
             #expect(model.perform(.cancel) && model.libraryView == .grid, "Esc goes back to the grid")
         }
         model.activeTool = .crop

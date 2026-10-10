@@ -2,13 +2,15 @@ import AppKit
 import RedlampDesign
 import SwiftUI
 
-/// The Library module's middle: the grid or the loupe between the panels, the Library toolbar under them,
-/// and the filmstrip docked beneath, the same filmstrip Develop floats, with the same photos, selection and
-/// place. Built once with the window and kept; G, E, C and N show the grid or the loupe. While Develop is
-/// shown it's transparent and its parts follow nothing (`isInShownModule`).
+/// The Library module's middle: the grid, the loupe, Compare or Survey between the panels, the Library toolbar
+/// under them, and the filmstrip docked beneath, the same filmstrip Develop floats, with the same photos,
+/// selection and place. Built once with the window and kept; G, E, C and N show one of the four. While Develop
+/// is shown it's transparent and its parts follow nothing (`isInShownModule`).
 final class LibraryModuleView: NSView {
     let grid: LibraryGridView
     let loupe: LibraryLoupeView
+    let compare: LibraryCompareView
+    let survey: LibrarySurveyView
     let toolbar: LibraryToolbarView
     /// The filter bar above the grid (LIB-18), shown by `\`.
     let filterBar: LibraryFilterBarView
@@ -29,6 +31,13 @@ final class LibraryModuleView: NSView {
         self.model = model
         grid = LibraryGridView(model: model)
         loupe = LibraryLoupeView(model: model)
+        let images = GridThumbnails(
+            scheduler: model.library.scheduler, packs: model.thumbnailLoader.packs, budget: 96 << 20,
+            store: { [weak library = model.library] in library?.storeThumbnail(for: $0) }, renders: model.editRenders,
+            decode: model.thumbnailLoader.decode,
+        )
+        compare = LibraryCompareView(model: model, images: images)
+        survey = LibrarySurveyView(model: model, images: images)
         toolbar = LibraryToolbarView(model: model)
         filterBar = LibraryFilterBarView(model: model)
         let hosting = NSHostingView(rootView: LibraryFilmstrip(model: model, theme: theme).focusEffectDisabled())
@@ -39,7 +48,7 @@ final class LibraryModuleView: NSView {
         layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
         let stage = safeAreaLayoutGuide
         let inset = PanelMetrics.inset
-        for view in [grid, loupe, toolbar, filmstrip, filterBar] as [NSView] {
+        for view in [grid, loupe, compare, survey, toolbar, filmstrip, filterBar] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -60,7 +69,7 @@ final class LibraryModuleView: NSView {
             filterBar.topAnchor.constraint(equalTo: stage.topAnchor),
             filterHeight,
         ]
-        for view in [grid, loupe] as [NSView] {
+        for view in [grid, loupe, compare, survey] as [NSView] {
             constraints += [
                 view.leadingAnchor.constraint(equalTo: stage.leadingAnchor),
                 view.trailingAnchor.constraint(equalTo: stage.trailingAnchor),
@@ -141,8 +150,11 @@ final class LibraryModuleView: NSView {
 
     private func updateParts() {
         let view = model.libraryView
-        for (part, visible) in [(grid, view == .grid), (loupe, view == .loupe), (filmstrip, showsFilmstrip)] as
-            [(NSView, Bool)] where part.isHidden == visible {
+        let parts: [(NSView, Bool)] = [
+            (grid, view == .grid), (loupe, view == .loupe), (compare, view == .compare), (survey, view == .survey),
+            (filmstrip, showsFilmstrip),
+        ]
+        for (part, visible) in parts where part.isHidden == visible {
             part.isHidden = !visible
         }
     }
@@ -162,13 +174,14 @@ final class LibraryModuleView: NSView {
         }
     }
 
-    /// Takes the keyboard as the module is shown: the grid's, or the window's in the loupe, where the
-    /// arrow keys go to the previous and next photo.
+    /// Takes the keyboard as the module is shown: the grid's, Compare's or Survey's, for the keys they handle
+    /// themselves, or the window's in the loupe, where the arrow keys go to the previous and next photo.
     func takeFocus() {
-        if model.libraryView == .grid {
-            grid.takeFocus()
-        } else {
-            window?.makeFirstResponder(self)
+        switch model.libraryView {
+        case .grid: grid.takeFocus()
+        case .loupe: window?.makeFirstResponder(self)
+        case .compare: window?.makeFirstResponder(compare)
+        case .survey: window?.makeFirstResponder(survey)
         }
     }
 
