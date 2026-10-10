@@ -6,12 +6,12 @@ extension ShortcutAction {
     var isDevelopOnly: Bool {
         switch self {
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout, .zoomIn, .zoomOut, .clipping,
-             .rawClipping, .colorAssessment, .infoOverlay,
+             .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
              .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail, .panelLens,
              .panelTransform, .panelEffects, .panelCalibration,
              .resetAll, .autoTone, .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector,
-             .newSnapshot, .newPreset, .virtualCopy, .previousSetting, .nextSetting, .increaseSetting,
-             .decreaseSetting, .findAdjustment,
+             .calibrateFromTarget, .newSnapshot, .newPreset, .virtualCopy, .previousSetting, .nextSetting,
+             .increaseSetting, .decreaseSetting, .findAdjustment,
              .cropAspectLock, .rotateLeft, .rotateRight,
              .brushMask, .linearMask, .radialMask, .colorRangeMask, .luminanceRangeMask, .depthRangeMask,
              .maskOverlay, .maskOverlayColor, .maskPins, .deleteMask:
