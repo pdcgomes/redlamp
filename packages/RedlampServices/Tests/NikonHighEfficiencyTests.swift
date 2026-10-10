@@ -28,6 +28,22 @@ struct NikonHighEfficiencyTests {
         #expect(!NikonHighEfficiency.isHighEfficiency(Data([0x49, 0x49, 0x2A, 0x00])))
     }
 
+    @Test func `an HE image from a verified body opens once LibRaw's HE decoder takes it`() {
+        for model in ["Z 9", "Z 8", "Z f", "Z6_3", "Z5_2", "Z50_2"] {
+            #expect(!NikonHighEfficiency.refuses(model: model, decoder: "nikon_he_load_raw()", unsupported: false))
+        }
+    }
+
+    @Test func `it is refused when LibRaw's HE decoder is the unsupported stub or isn't the one chosen`() {
+        #expect(NikonHighEfficiency.refuses(model: "Z5_2", decoder: "nikon_he_load_raw()", unsupported: true))
+        #expect(NikonHighEfficiency.refuses(model: "Z5_2", decoder: "nikon_load_raw()", unsupported: false))
+    }
+
+    @Test func `it is refused from a body whose files haven't been verified`() {
+        #expect(NikonHighEfficiency.refuses(model: "ZR", decoder: "nikon_he_load_raw()", unsupported: false))
+        #expect(NikonHighEfficiency.refuses(model: nil, decoder: "nikon_he_load_raw()", unsupported: false))
+    }
+
     @Test func `the refusal says the format isn't supported yet and names its tracker row`() {
         let refusal = NikonHighEfficiency.refusal
         #expect(refusal.localizedDescription == "Nikon's High Efficiency raw files (HE and HE*) aren't supported yet.")

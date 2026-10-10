@@ -557,6 +557,72 @@
       0.6871
     ]
   },
+  "Nikon_Z-6III_HE-star.NEF" : {
+    "asShotMultipliers" : [
+      1.9219,
+      1,
+      1.6211
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 2672,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z6_3",
+    "orientation" : 0,
+    "sampleChecksum" : "30416b70611a5c6d",
+    "whiteLevel" : 16383,
+    "width" : 4000,
+    "xyzToCamera" : [
+      1.1206,
+      -0.4286,
+      -0.0941,
+      -0.4879,
+      1.2847,
+      0.2251,
+      -0.0745,
+      0.1654,
+      0.7374
+    ]
+  },
+  "Nikon_Z-6III_HE.NEF" : {
+    "asShotMultipliers" : [
+      1.8965,
+      1,
+      1.5898
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 2672,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z6_3",
+    "orientation" : 0,
+    "sampleChecksum" : "8fc5ff80c46d7eb4",
+    "whiteLevel" : 16383,
+    "width" : 4000,
+    "xyzToCamera" : [
+      1.1206,
+      -0.4286,
+      -0.0941,
+      -0.4879,
+      1.2847,
+      0.2251,
+      -0.0745,
+      0.1654,
+      0.7374
+    ]
+  },
   "Nikon_Z-8.NEF" : {
     "asShotMultipliers" : [
       1.9082,
@@ -588,6 +654,204 @@
       -0.021,
       0.1061,
       0.7282
+    ]
+  },
+  "Nikon_Z-8_HE-star.NEF" : {
+    "asShotMultipliers" : [
+      1.8848,
+      1,
+      1.5762
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 5520,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z 8",
+    "orientation" : 0,
+    "sampleChecksum" : "7624ff2fa0702484",
+    "whiteLevel" : 16383,
+    "width" : 8280,
+    "xyzToCamera" : [
+      1.1423,
+      -0.4564,
+      -0.1123,
+      -0.4816,
+      1.2895,
+      0.2119,
+      -0.021,
+      0.1061,
+      0.7282
+    ]
+  },
+  "Nikon_Z-8_HE.NEF" : {
+    "asShotMultipliers" : [
+      1.9824,
+      1,
+      1.4336
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 5520,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z 8",
+    "orientation" : 0,
+    "sampleChecksum" : "5fb1095b3271f93e",
+    "whiteLevel" : 16383,
+    "width" : 8280,
+    "xyzToCamera" : [
+      1.1423,
+      -0.4564,
+      -0.1123,
+      -0.4816,
+      1.2895,
+      0.2119,
+      -0.021,
+      0.1061,
+      0.7282
+    ]
+  },
+  "Nikon_Z-9_HE-star.NEF" : {
+    "asShotMultipliers" : [
+      1.7051,
+      1,
+      1.5469
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 5520,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z 9",
+    "orientation" : 0,
+    "sampleChecksum" : "fa90c9e030b17cbf",
+    "whiteLevel" : 16383,
+    "width" : 8280,
+    "xyzToCamera" : [
+      1.3389,
+      -0.6049,
+      -0.1441,
+      -0.4544,
+      1.2757,
+      0.1969,
+      0.0229,
+      0.0498,
+      0.739
+    ]
+  },
+  "Nikon_Z-9_HE.NEF" : {
+    "asShotMultipliers" : [
+      1.7051,
+      1,
+      1.5449
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 5520,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z 9",
+    "orientation" : 0,
+    "sampleChecksum" : "8bf222f53a5c024c",
+    "whiteLevel" : 16383,
+    "width" : 8280,
+    "xyzToCamera" : [
+      1.3389,
+      -0.6049,
+      -0.1441,
+      -0.4544,
+      1.2757,
+      0.1969,
+      0.0229,
+      0.0498,
+      0.739
+    ]
+  },
+  "Nikon_Z-f_HE-star.NEF" : {
+    "asShotMultipliers" : [
+      1.8535,
+      1,
+      1.2129
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 4040,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z f",
+    "orientation" : 0,
+    "sampleChecksum" : "d15601868e6e9800",
+    "whiteLevel" : 16383,
+    "width" : 6064,
+    "xyzToCamera" : [
+      1.1607,
+      -0.4491,
+      -0.0977,
+      -0.4522,
+      1.246,
+      0.2304,
+      -0.0458,
+      0.1519,
+      0.7616
+    ]
+  },
+  "Nikon_Z-f_HE.NEF" : {
+    "asShotMultipliers" : [
+      1.832,
+      1,
+      1.2617
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 4040,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z f",
+    "orientation" : 0,
+    "sampleChecksum" : "2dcad6ffcdea95c6",
+    "whiteLevel" : 16383,
+    "width" : 6064,
+    "xyzToCamera" : [
+      1.1607,
+      -0.4491,
+      -0.0977,
+      -0.4522,
+      1.246,
+      0.2304,
+      -0.0458,
+      0.1519,
+      0.7616
     ]
   },
   "OM-System_OM-1-Mark-II.orf" : {

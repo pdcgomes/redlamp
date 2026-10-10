@@ -2,7 +2,7 @@
   "version": 1,
   "description": "The camera coverage set: one CC0 sample per main camera maker and format from raw.pixls.us, beside the development samples in tests/fixtures/raw. `mise run fixtures` downloads them into tests/fixtures/cameras (never committed) and checks each file's SHA-256; the decode regression suite and the camera colour goldens check every one.",
   "gaps": [
-    "Nikon's High Efficiency NEFs (HE and HE*, from the Z 8, Z 9, Z 6III, Z f, Z5 II and Z50 II) can't be decoded: LibRaw 0.22 reads only standard compression. They are refused as not supported yet (CAM-12).",
+    "Nikon's High Efficiency NEFs (HE and HE*) decode through Redlamp's LibRaw (CAM-12, CAM-30), whose bench checks all 28 CC0 files of the six bodies that write them. The Z5 II's and Z50 II's aren't in this set: LibRaw has no colour matrix for either body (CAM-21). Bodies without a verified sample, such as the ZR, are refused.",
     "Sony's 15-bit YCbCr ARWs (the A1 II's, the RX1R III's, the FX2's) render with a magenta cast (CAM-21).",
     "No CC0 samples of the Leica M11, SL3 or Q3, or of iPhones after the 12 Pro.",
     "Sigma's Foveon X3F files, GoPro's GPR and JPEG XL mosaic DNGs aren't supported."
@@ -236,6 +236,94 @@
       "url": "https://raw.pixls.us/getfile.php/7823/nice/DJI%20-%20FC4382%20-%2016bit%20%284%3A3%29.DNG",
       "sha256": "f33ddaf2a7fa70b395abced251faccea11100d2ab7e54ae0a6adbff043d72027",
       "megabytes": 14.2,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-9_HE.NEF",
+      "camera": "Nikon Z 9",
+      "mode": "8bit 8bit compressed (3:2)",
+      "covers": "High Efficiency (HE) NEF, decoded by Redlamp's LibRaw (CAM-12, CAM-30)",
+      "url": "https://raw.pixls.us/getfile.php/5148/nice/Nikon%20-%20Z%209%20-%208bit%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "be91bac25573adf7ec6320a542105d87b4fb9c956d7b620ec90d57ac2ae6c3f0",
+      "megabytes": 23.69,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-9_HE-star.NEF",
+      "camera": "Nikon Z 9",
+      "mode": "8bit 8bit compressed (3:2)",
+      "covers": "High Efficiency* (HE*) NEF",
+      "url": "https://raw.pixls.us/getfile.php/5147/nice/Nikon%20-%20Z%209%20-%208bit%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "e113deb305d84153b26251ce259d1f839be1f36b048cbe83a4548cbda806c0f5",
+      "megabytes": 33.94,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-8_HE.NEF",
+      "camera": "Nikon Z 8",
+      "mode": "8bit 8bit compressed (3:2)",
+      "covers": "High Efficiency (HE) NEF",
+      "url": "https://raw.pixls.us/getfile.php/6616/nice/Nikon%20-%20Z%208%20-%208bit%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "82df041542b8d328738443bb5ff3373b396e406ecc8cbe7dc3b35252790c53e7",
+      "megabytes": 23.25,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-8_HE-star.NEF",
+      "camera": "Nikon Z 8",
+      "mode": "8bit 8bit compressed (3:2)",
+      "covers": "High Efficiency* (HE*) NEF",
+      "url": "https://raw.pixls.us/getfile.php/6618/nice/Nikon%20-%20Z%208%20-%208bit%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "ea8b093cd11c946c5eeb501b775859e8e617ce1d79577abc41b233c339e4004c",
+      "megabytes": 34.09,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-f_HE.NEF",
+      "camera": "Nikon Z f",
+      "mode": "8bit 8bit lossy compressed (3:2)",
+      "covers": "High Efficiency (HE) NEF",
+      "url": "https://raw.pixls.us/getfile.php/6887/nice/Nikon%20-%20Z%20f%20-%208bit%208bit%20lossy%20compressed%20%283%3A2%29.NEF",
+      "sha256": "98d6ca8e6c98048ca7ffed68ccaeda7b2b9f03807f0d320d97d5678db21748c2",
+      "megabytes": 12.84,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-f_HE-star.NEF",
+      "camera": "Nikon Z f",
+      "mode": "8bit 8bit lossy compressed (3:2)",
+      "covers": "High Efficiency* (HE*) NEF",
+      "url": "https://raw.pixls.us/getfile.php/6886/nice/Nikon%20-%20Z%20f%20-%208bit%208bit%20lossy%20compressed%20%283%3A2%29.NEF",
+      "sha256": "c888f109dc420e359853a2ce768d8a6274b8ba0109b2f5cb6e0c982981d5a624",
+      "megabytes": 18.72,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-6III_HE.NEF",
+      "camera": "Nikon Z 6III",
+      "mode": "8bit compressed (3:2)",
+      "covers": "High Efficiency (HE) NEF, DX crop",
+      "url": "https://raw.pixls.us/getfile.php/7810/nice/Nikon%20-%20Z6_3%20-%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "a8fa2cacadcf9dc85475ebcf37fcc32614072bc155e39d01491cb9e293c1343d",
+      "megabytes": 6.22,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z-6III_HE-star.NEF",
+      "camera": "Nikon Z 6III",
+      "mode": "8bit compressed (3:2)",
+      "covers": "High Efficiency* (HE*) NEF, DX crop",
+      "url": "https://raw.pixls.us/getfile.php/7814/nice/Nikon%20-%20Z6_3%20-%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "1c7be7b9081fcbd8bb75b28a8432531fae4dc56acda6b7f41a32625fb2555600",
+      "megabytes": 8.74,
       "license": "CC0-1.0",
       "source": "raw.pixls.us"
     }

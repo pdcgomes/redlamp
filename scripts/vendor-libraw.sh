@@ -50,9 +50,12 @@ if [[ "$ACTUAL_SHA" != "$SHA256" ]]; then
     exit 1
 fi
 
+# Into LibRaw-<version> whatever the archive's top directory is called: the fork's
+# unpacks to redlamp-libraw-<sha>. scripts/camera-list.py reads the source there.
 SRC="$CACHE/LibRaw-$VERSION"
 rm -rf "$SRC"
-tar -xzf "$TARBALL" -C "$CACHE"
+mkdir -p "$SRC"
+tar -xzf "$TARBALL" -C "$SRC" --strip-components=1
 
 # The authoritative object list is LIB_OBJECTS in LibRaw's own Makefile.dist.
 SOURCES=()
@@ -82,11 +85,14 @@ rm -rf "$HEADERS"
 mkdir -p "$HEADERS/LibRaw"
 cp "$SRC"/libraw/*.h "$HEADERS/LibRaw/"
 cp "$SHIM" "$HEADERS/LibRaw/"
-# A commit between releases reports the last release's number, so the pin says which one it is.
+# A commit between releases reports the last release's number, so the pin says which one it
+# is, and the repository it came from (LibRaw/LibRaw, or Redlamp's fork).
+SOURCE="$(sed -E 's#^https://github.com/([^/]+/[^/]+)/.*#\1#' <<<"$URL")"
 cat > "$HEADERS/LibRaw/redlamp_libraw_pin.h" <<EOF
 #ifndef REDLAMP_LIBRAW_PIN_H
 #define REDLAMP_LIBRAW_PIN_H
 static inline const char *rl_libraw_pin(void) { return "$VERSION"; }
+static inline const char *rl_libraw_source(void) { return "$SOURCE"; }
 #endif
 EOF
 cat > "$HEADERS/LibRaw/module.modulemap" <<'EOF'

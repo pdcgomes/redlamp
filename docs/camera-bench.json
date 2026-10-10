@@ -2,8 +2,8 @@
  "format": 1,
  "description": "The camera bench's evidence per camera mode (docs/camera-bench.md), written by scripts/camera-bench.py.",
  "thresholds": "DEC-28 (proposed)",
- "decoder": "LibRaw 7bfffe2efa508da00c0d8af299c37cd426a4528d",
- "generated": "2026-10-09",
+ "decoder": "LibRaw 4abfcd2ab82f2211b1f7e7c3cd83974c87e0d812",
+ "generated": "2026-10-10",
  "modes": [
   {
    "key": "Apple|iPhone10,1 back camera|lossless_dng_load_raw|16|4032x3024",
@@ -28859,13 +28859,106 @@
    ]
   },
   {
+   "key": "Nikon|Z 8|nikon_he_load_raw|14|8280x5520",
+   "camera": "Nikon Z 8",
+   "label": "14-bit nikon_he NEF, 8280 × 5520",
+   "tier": "verified",
+   "verified": true,
+   "contributors": 1,
+   "photos": 2,
+   "conditions": [
+    "baseISO",
+    "clippedHighlights"
+   ],
+   "needs": [
+    "highISO",
+    "portrait",
+    "warmLight"
+   ],
+   "answers": {},
+   "checks": {
+    "decode.black": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    }
+   },
+   "problems": [],
+   "decoders": [
+    "LibRaw 0.22.2-Release"
+   ],
+   "redlamp": [
+    "development"
+   ]
+  },
+  {
    "key": "Nikon|Z 9|nikon_he_load_raw|14|8280x5520",
    "camera": "Nikon Z 9",
    "label": "14-bit nikon_he NEF, 8280 × 5520",
-   "tier": "unconfirmed",
-   "verified": false,
+   "tier": "verified",
+   "verified": true,
    "contributors": 1,
-   "photos": 1,
+   "photos": 2,
    "conditions": [
     "baseISO"
    ],
@@ -28877,21 +28970,73 @@
    ],
    "answers": {},
    "checks": {
-    "decode.opens": {
-     "pass": 0,
+    "decode.black": {
+     "pass": 2,
      "warn": 0,
-     "fail": 1
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
     }
    },
-   "problems": [
-    {
-     "check": "decode.opens",
-     "summary": "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.",
-     "tracker": "CAM-12",
-     "contributors": 1,
-     "photos": 1
-    }
-   ],
+   "problems": [],
    "decoders": [
     "LibRaw 0.22.2-Release"
    ],
@@ -28903,10 +29048,10 @@
    "key": "Nikon|Z f|nikon_he_load_raw|14|6064x4040",
    "camera": "Nikon Z f",
    "label": "14-bit nikon_he NEF, 6064 × 4040",
-   "tier": "unconfirmed",
-   "verified": false,
+   "tier": "verified",
+   "verified": true,
    "contributors": 1,
-   "photos": 1,
+   "photos": 2,
    "conditions": [],
    "needs": [
     "baseISO",
@@ -28917,21 +29062,73 @@
    ],
    "answers": {},
    "checks": {
-    "decode.opens": {
-     "pass": 0,
+    "decode.black": {
+     "pass": 2,
      "warn": 0,
-     "fail": 1
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 0,
+     "warn": 2,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
     }
    },
-   "problems": [
-    {
-     "check": "decode.opens",
-     "summary": "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.",
-     "tracker": "CAM-12",
-     "contributors": 1,
-     "photos": 1
-    }
-   ],
+   "problems": [],
    "decoders": [
     "LibRaw 0.22.2-Release"
    ],
@@ -29033,7 +29230,7 @@
    "tier": "unconfirmed",
    "verified": false,
    "contributors": 1,
-   "photos": 1,
+   "photos": 2,
    "conditions": [
     "baseISO"
    ],
@@ -29045,19 +29242,79 @@
    ],
    "answers": {},
    "checks": {
-    "decode.opens": {
+    "decode.black": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
      "pass": 0,
      "warn": 0,
-     "fail": 1
+     "fail": 2
+    },
+    "decode.edges": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
     }
    },
    "problems": [
     {
-     "check": "decode.opens",
-     "summary": "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.",
-     "tracker": "CAM-12",
+     "check": "decode.colour",
+     "summary": "The camera has no colour matrix, so its colours can't be right.",
+     "tracker": null,
      "contributors": 1,
-     "photos": 1
+     "photos": 2
     }
    ],
    "decoders": [
@@ -29074,7 +29331,7 @@
    "tier": "unconfirmed",
    "verified": false,
    "contributors": 1,
-   "photos": 1,
+   "photos": 2,
    "conditions": [
     "baseISO"
    ],
@@ -29086,19 +29343,74 @@
    ],
    "answers": {},
    "checks": {
-    "decode.opens": {
+    "decode.black": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
      "pass": 0,
      "warn": 0,
-     "fail": 1
+     "fail": 2
+    },
+    "decode.edges": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
     }
    },
    "problems": [
     {
-     "check": "decode.opens",
-     "summary": "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.",
-     "tracker": "CAM-12",
+     "check": "decode.colour",
+     "summary": "The camera has no colour matrix, so its colours can't be right.",
+     "tracker": null,
      "contributors": 1,
-     "photos": 1
+     "photos": 2
     }
    ],
    "decoders": [
@@ -29112,10 +29424,10 @@
    "key": "Nikon|Z6_3|nikon_he_load_raw|14|4000x2672",
    "camera": "Nikon Z6_3",
    "label": "14-bit nikon_he NEF, 4000 × 2672",
-   "tier": "unconfirmed",
-   "verified": false,
+   "tier": "verified",
+   "verified": true,
    "contributors": 1,
-   "photos": 1,
+   "photos": 2,
    "conditions": [
     "baseISO"
    ],
@@ -29127,21 +29439,68 @@
    ],
    "answers": {},
    "checks": {
-    "decode.opens": {
-     "pass": 0,
+    "decode.black": {
+     "pass": 2,
      "warn": 0,
-     "fail": 1
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 2,
+     "warn": 0,
+     "fail": 0
     }
    },
-   "problems": [
-    {
-     "check": "decode.opens",
-     "summary": "Nikon's High Efficiency NEFs (HE and HE*) don't open yet: LibRaw 0.22 can't read them.",
-     "tracker": "CAM-12",
-     "contributors": 1,
-     "photos": 1
-    }
-   ],
+   "problems": [],
    "decoders": [
     "LibRaw 0.22.2-Release"
    ],
@@ -54929,99 +55288,6 @@
    ]
   },
   {
-   "key": "Sony|ILCE-7M5|sony_arw6_load_raw|14|4640x3088",
-   "camera": "Sony ILCE-7M5",
-   "label": "14-bit sony_arw6 ARW, 4640 × 3088",
-   "tier": "working",
-   "verified": false,
-   "contributors": 1,
-   "photos": 1,
-   "conditions": [
-    "baseISO"
-   ],
-   "needs": [
-    "highISO",
-    "portrait",
-    "clippedHighlights",
-    "warmLight"
-   ],
-   "answers": {},
-   "checks": {
-    "decode.black": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "decode.colour": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "decode.edges": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "decode.opens": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "decode.white": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.cast": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.colour": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.exposure": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.framing": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.highlights": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.orientation": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "preview.structure": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    },
-    "render.default": {
-     "pass": 1,
-     "warn": 0,
-     "fail": 0
-    }
-   },
-   "problems": [],
-   "decoders": [
-    "LibRaw 0.22.0-Release (7bfffe2)"
-   ],
-   "redlamp": [
-    "development"
-   ]
-  },
-  {
    "key": "Sony|ILCE-7R|sony_arw2_load_raw|14|7362x4920",
    "camera": "Sony ILCE-7R",
    "label": "14-bit compressed ARW, 7362 × 4920",
@@ -59304,6 +59570,99 @@
    "problems": [],
    "decoders": [
     "LibRaw 0.22.2-Release"
+   ],
+   "redlamp": [
+    "development"
+   ]
+  },
+  {
+   "key": "Sony|ILCE-7M5|sony_arw6_load_raw|14|4640x3088",
+   "camera": "Sony ILCE-7M5",
+   "label": "14-bit sony_arw6 ARW, 4640 × 3088",
+   "tier": "working",
+   "verified": false,
+   "contributors": 1,
+   "photos": 1,
+   "conditions": [
+    "baseISO"
+   ],
+   "needs": [
+    "highISO",
+    "portrait",
+    "clippedHighlights",
+    "warmLight"
+   ],
+   "answers": {},
+   "checks": {
+    "decode.black": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.colour": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.edges": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.opens": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "decode.white": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.cast": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.colour": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.exposure": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.framing": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.highlights": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.orientation": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "preview.structure": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    },
+    "render.default": {
+     "pass": 1,
+     "warn": 0,
+     "fail": 0
+    }
+   },
+   "problems": [],
+   "decoders": [
+    "LibRaw 0.22.0-Release (7bfffe2)"
    ],
    "redlamp": [
     "development"
