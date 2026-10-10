@@ -74,7 +74,8 @@ struct SmartRulesTests {
         rules[[1, 0]] = nil
         #expect(try rules.text() == "camera:3 label:red", "a group of one is that one")
         #expect(SmartRules.Comparison.offered(for: .text) == [.contains, .doesNotContain])
-        #expect(SmartRules.fields.count == LibraryQuery.Field.allCases.count + 1)
+        #expect(SmartRules.fields.count == LibraryQuery.Field.allCases.count, "free text, and every field but missing")
+        #expect(!SmartRules.fields.contains(.filter(.missing)))
     }
 
     @Test func `a smart collection saved from the editor finds its photos, and edited, renamed, finds others`(

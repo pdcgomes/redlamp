@@ -162,7 +162,10 @@ struct FolderCountsTests {
         #expect(library.photoCount(of: root) == 6)
         #expect(library.photoCount(of: folder("Year/B")) == 3)
         #expect(library.photoCount(of: folder("Year/A")) == 2)
-        #expect(library.photoCount(of: folder("Year/A/New")) == nil, "a folder gone from the index isn't counted")
+        #expect(
+            library.photoCount(of: folder("Year/A/New")) == 0,
+            "a folder gone from the disk counts its missing photo as none",
+        )
         library.setIncludesSubfolders(false)
         #expect(library.photoCount(of: folder("Year/B")) == 0)
     }
