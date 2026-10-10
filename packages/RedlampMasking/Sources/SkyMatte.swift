@@ -13,7 +13,8 @@ import simd
 /// backing (Smith and Blinn, 1996), the colours spread by pull-push (Gortler et al., 1996).
 /// Solved: an uncertain band around the coarse edge; sky-coloured pixels further into
 /// the foreground that connect to the sky (a crown the coarse mask cut out whole); and, inside
-/// the coarse sky, pixels clearly not sky (twigs and wires the model never saw). Where the two
+/// the coarse sky, pixels clearly not sky (twigs and wires the model never saw). The rest of the
+/// coarse foreground keeps the coarse mask's sky only as far as its colour allows. Where the two
 /// colours are too close to tell apart, the coarse mask stays.
 ///
 /// Prototyped as `research/prototypes/masking/sky_matte.py`. On the edge benchmark
@@ -101,10 +102,15 @@ public enum SkyMatte {
             // The edge pixels of sky taken back from the foreground are mostly branch, so not
             // likely themselves, but they touch sky that is: they take their own coverage too.
             let edged = RemovalRegion.dilated(accepted, width: width, height: height, radius: Self.edgeReach)
+            // Coarse foreground not taken back keeps the coarse mask's sky only as far as its colour
+            // allows: a soft coarse mask leaves a few percent over foreground near the sky, which a
+            // sky edit would darken, and the colour can lower that but never raise it.
             Parallel.fill(&result) { index in
                 let intrusion = regions.inside[index] && refined[index] < 0.75 && confidence[index] > 0.5
-                return regions.near[index] || (regions.far[index] && edged[index]) || intrusion
-                    ? refined[index] : mask[index]
+                if regions.near[index] || (regions.far[index] && edged[index]) || intrusion {
+                    return refined[index]
+                }
+                return mask[index] <= 0.5 ? min(mask[index], refined[index]) : mask[index]
             }
             // The next pass learns the colours from what this one found: the foreground's only from
             // pixels clear of any that hold some sky. The nearest to an edge hold a little, and would
@@ -183,7 +189,7 @@ public enum SkyMatte {
                     nonisolated(unsafe) let offLineOut = offLineBuffer
                     DispatchQueue.concurrentPerform(iterations: height) { y in
                         for index in y * width ..< (y + 1) * width
-                            where regions.near[index] || regions.far[index] || regions.inside[index] {
+                            where regions.near[index] || regions.far[index] || mask[index] > 0 {
                             let f = front.at(index)
                             let difference = behind.at(index) - f
                             let span = simd_length_squared(difference)

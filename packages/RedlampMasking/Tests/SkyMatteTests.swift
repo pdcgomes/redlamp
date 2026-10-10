@@ -129,6 +129,23 @@ struct SkyMatteTests {
         #expect(abs(bias) < 0.015, "pixels mostly trunk come out \(bias) off in sky, over \(errors.count)")
     }
 
+    /// A soft coarse mask leaves a few percent of sky over the ground, which a sky edit would
+    /// darken. Far from the edge, dark ground loses it; ground the colour of the sky, which the
+    /// colour can't tell from it, keeps it.
+    @Test func `the coarse mask's few percent of sky leave dark ground but stay on ground like the sky`() throws {
+        let (width, height, horizon) = (400, 300, 100)
+        let photo = try image(width: width, height: height) { x, y in
+            y < horizon || x >= 200 ? Self.sky : Self.bark
+        }
+        let coarse = GrayMask(width: width / 4, height: height / 4, pixels: (0 ..< width * height / 16).map {
+            $0 / (width / 4) < horizon / 4 ? 255 : 10
+        })
+        let matte = SkyMatte.refine(coarse, image: photo)
+        #expect(matte[100, 280] == 0, "dark ground far below the sky: \(matte[100, 280])")
+        #expect(matte[300, 280] == 10, "ground like the sky: \(matte[300, 280])")
+        #expect(matte[100, 20] == 255 && matte[300, 20] == 255, "the sky: \(matte[100, 20]), \(matte[300, 20])")
+    }
+
     /// A foreground the colour of the sky can't be told from it: the coarse mask stays.
     @Test func `where sky and foreground look alike, the coarse mask stays`() throws {
         let width = 200

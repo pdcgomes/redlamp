@@ -17,8 +17,12 @@ percent sky. SkyMatte now learns it only from pixels more than 2 px from any the
 more than 0.15 sky, and leaves coverage from 0.12 to 0.88 where the colour puts it (`interior-dead1`).
 Also counting sky the colour sees but the pass didn't take back (`interior-dead1-r`) recovers more
 sky between dense twigs but takes snow under an overcast sky for sky on the evaluation set. The
-coarse mask's few percent of sky kept over foreground beyond the band (`floor`) darkens dark
-foreground under a sky edit, but zeroing it loses sky in dense crowns.
+coarse mask's few percent of sky kept over foreground beyond the band darkens dark foreground
+under a sky edit; zeroing it (`floor`) loses sky in dense crowns, so SkyMatte now keeps it only as
+far as the colour allows (`interior-dead1-floorc`). What sky is still left out (`missed`) is mostly
+the X-S20 plate's vignetted sides, which the coarse mask left out and whose colour the sky
+estimate carries in from brighter sky; the true sky colour (`oracle-sky`) would take the halo
+from 2.10 to 1.99 dE.
 
     .venv/bin/python sky_coverage.py check                the port against the CLI's masks
     .venv/bin/python sky_coverage.py diagnose             where the bias comes from, per scene
@@ -254,7 +258,7 @@ def connected(region, seeds):
 
 
 def refine(rgb, coarse, solid_rule="today", remap_kind="linear", passes=2, keep=None, levels=7, distance=2, unsure=0.15,
-           fallback=0.01, decide_kind=None, touched_by="result", floor=False):
+           fallback=0.01, decide_kind=None, touched_by="result", floor=False, true_sky=None):
     """SkyMatte.refine. `keep`, if given, collects each pass's colours and solve. Coverage is
     written with `remap_kind`; what's sky, foreground and taken back is decided on
     `decide_kind`'s scale (the same, unless given)."""
@@ -270,10 +274,14 @@ def refine(rgb, coarse, solid_rule="today", remap_kind="linear", passes=2, keep=
         return mask, parts
     seeds = mask > 0.5
     solved_region = near | far | inside
+    if floor == "colour":
+        # The coarse foreground beyond the reach is solved too, wherever the coarse mask has some
+        # sky there.
+        solved_region = solved_region | (mask > 0)
     result = mask
     scale = None
     for _ in range(passes):
-        behind = sky_colour(linear, sky)
+        behind = sky_colour(linear, sky) if true_sky is None else true_sky
         front = foreground_colour(linear, behind, sky, solid, levels, scale)
         if front is None:
             return mask, parts
@@ -291,12 +299,18 @@ def refine(rgb, coarse, solid_rule="today", remap_kind="linear", passes=2, keep=
         chosen = near | (far & edged) | intrusion
         # `floor`: the coarse foreground not taken back is foreground, not the few percent of
         # sky a soft coarse mask leaves over it.
-        kept = np.where(mask > 0.5, mask, 0) if floor else mask
+        if floor == "colour":
+            # Coarse foreground not taken back keeps the coarse mask only where its colour isn't
+            # sure it's foreground: the colour can lower it there, never raise it.
+            kept = np.where(mask <= 0.5, np.minimum(mask, refined), mask)
+        else:
+            kept = np.where(mask > 0.5, mask, 0) if floor else mask
         output = np.where(chosen, written, kept)
         result = np.where(chosen, refined, kept)
         if keep is not None:
             keep.append({"behind": behind, "front": front, "projected": projected, "confidence": confidence,
-                         "result": result, "solid": solid, "sky": sky})
+                         "result": result, "solid": solid, "sky": sky, "refined": refined, "off_line": off_line,
+                         "accepted": accepted})
         sky = ((result > 0.97) & (confidence > 0.5)) | ((mask > 0.9) & ~near & (result > 0.9))
         solid = (result < 0.03) & ((confidence > 0.5) | ~(near | far))
         if solid_rule in ("interior", "weighted"):
@@ -378,6 +392,33 @@ def diagnose(name="today"):
         print(line, flush=True)
 
 
+def missed(name="interior-dead1"):
+    """Per scene: the sure sky (truth at least 0.98) left out (under 0.5), by region, and what
+    keeps it out where it is in the reach: no sky seen by the models (coarse 0), or colours that
+    fail the walled-in test (refined over 0.9, sure of the colours, near the line); and the
+    coverage left on pure foreground (truth at most 0.02) beyond the band."""
+    print(f"{'scene':28s} {'missed':>7s} {'near':>6s} {'far':>6s} {'other':>6s} | far: {'coarse0':>7s} {'colourOK':>8s} {'both':>6s} | floor far {'other':>6s}")
+    for scene in scenes():
+        rgb, coarse, truth, thin = scene_inputs(scene)
+        keep = []
+        result, parts = refine(rgb, coarse, keep=keep, **VARIANTS[name])
+        k = keep[-1]
+        near, far, inside, mask = parts["near"], parts["far"], parts["inside"], parts["mask"]
+        other = ~(near | far | inside)
+        sure_sky = truth >= 0.98
+        lost = sure_sky & (result < 0.5)
+        n = max(sure_sky.sum(), 1)
+        lost_far = lost & far
+        colour_ok = (k["refined"] > 0.9) & (k["confidence"] > 0.9) & (k["off_line"] < WALLED_OFF_LINE)
+        prior = mask > WALLED_PRIOR
+        m = max(lost_far.sum(), 1)
+        pure = truth <= 0.02
+        print(f"{scene:28s} {lost.sum() / n:7.4f} {(lost & near).sum() / n:6.4f} {lost_far.sum() / n:6.4f} {(lost & other).sum() / n:6.4f} |"
+              f" {(lost_far & ~prior).sum() / m:7.2f} {(lost_far & colour_ok).sum() / m:8.2f} {(lost_far & colour_ok & ~prior).sum() / m:6.2f} |"
+              f" {result[pure & far].mean() if (pure & far).any() else 0:9.4f} {result[pure & other].mean() if (pure & other).any() else 0:6.4f}",
+              flush=True)
+
+
 VARIANTS = {
     "today": {},
     "interior": {"solid_rule": "interior"},
@@ -397,6 +438,9 @@ VARIANTS = {
     "interior-dead1-r": {"solid_rule": "interior", "remap_kind": "dead", "touched_by": "refined"},
     "interior-dead1-r-floor": {"solid_rule": "interior", "remap_kind": "dead", "touched_by": "refined", "floor": True},
     "floor": {"floor": True},
+    "interior-dead1-floorc": {"solid_rule": "interior", "remap_kind": "dead", "floor": "colour"},
+    "interior-dead1-floor": {"solid_rule": "interior", "remap_kind": "dead", "floor": True},
+    "oracle-sky": {"solid_rule": "interior", "remap_kind": "dead", "true_sky": True},
 }
 
 
@@ -409,7 +453,8 @@ def variants(names):
         rows[name] = {}
         for scene in scenes():
             rgb, coarse, truth, thin = scene_inputs(scene)
-            result, parts = refine(rgb, coarse, **options)
+            given = {**options, "true_sky": truth_colours(scene)[0]} if options.get("true_sky") else options
+            result, parts = refine(rgb, coarse, **given)
             Image.fromarray(np.round(np.clip(result, 0, 1) * 255).astype(np.uint8)).save(out / f"{scene}-stored.png")
             rows[name][scene] = coverage_scores(np.round(result * 255) / 255, truth, thin, parts["near"])
             s = rows[name][scene]
@@ -548,6 +593,8 @@ if __name__ == "__main__":
         check()
     elif command == ["diagnose"]:
         diagnose(*sys.argv[2:3])
+    elif command == ["missed"]:
+        missed(*sys.argv[2:3])
     elif command == ["variants"]:
         variants(sys.argv[2:] or list(VARIANTS))
     elif command == ["halo"]:
