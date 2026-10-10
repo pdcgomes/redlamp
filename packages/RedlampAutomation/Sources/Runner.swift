@@ -147,6 +147,9 @@
             } catch {
                 status = "failed"
                 message = "\(error)"
+                if let why = Displays.whyClicksWontArrive {
+                    message += " (\(why), when clicks on SwiftUI's buttons don't arrive)"
+                }
             }
             let seconds = Date().timeIntervalSince(started)
             let summary = try? MainThread.run { () -> MainThreadMonitor.Summary? in

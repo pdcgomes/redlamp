@@ -48,6 +48,8 @@
                     // A modal session or a menu's tracking runs the main thread in a mode of its own.
                     "runLoopMode": RunLoop.current.currentMode?.rawValue ?? "none",
                     "screens": NSScreen.screens.map { "\($0.localizedName) \(Views.describe($0.frame))" },
+                    "displaysAsleep": Displays.allAsleep,
+                    "screenLocked": Displays.screenLocked,
                 ],
                 "windows": NSApp.windows.filter(\.isVisible).map(window),
                 "develop": [

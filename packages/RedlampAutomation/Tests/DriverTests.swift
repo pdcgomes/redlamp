@@ -249,7 +249,11 @@ struct DriverTests {
     /// The Masks panel's controls are SwiftUI's, hosted in AppKit, and the run doesn't take the
     /// app's focus: a tap finds each by the identifier behind it and reaches it in a window that
     /// isn't key. SwiftUI's gestures (a row's tap) need a key window, as the canvas's do.
-    @Test func `a tap reaches SwiftUI's buttons, checkbox and menu in a window that isn't key`() async throws {
+    @Test(.enabled(
+        if: Displays.whyClicksWontArrive == nil,
+        "No click reaches SwiftUI while the displays are asleep or the screen is locked",
+    ))
+    func `a tap reaches SwiftUI's buttons, checkbox and menu in a window that isn't key`() async throws {
         let state = TapState()
         let window = NSWindow(
             contentRect: CGRect(x: 200, y: 200, width: 320, height: 200), styleMask: [.titled], backing: .buffered,
@@ -309,7 +313,11 @@ struct DriverTests {
 
     /// The Masks panel's picker opens in a popover, which takes no clicks until it has finished
     /// opening, though its window is up: the driver finds it from then.
-    @Test func `a tap reaches a SwiftUI button in a popover once it has opened`() async throws {
+    @Test(.enabled(
+        if: Displays.whyClicksWontArrive == nil,
+        "No click reaches SwiftUI while the displays are asleep or the screen is locked",
+    ))
+    func `a tap reaches a SwiftUI button in a popover once it has opened`() async throws {
         Views.watchPopovers()
         let state = TapState()
         let window = NSWindow(

@@ -56,6 +56,16 @@ def log(message: str) -> None:
     print(f"==> {message}", flush=True)
 
 
+def screen_locked() -> bool:
+    """Whether the console session's screen is locked, as the IORegistry's console users say."""
+    try:
+        out = subprocess.run(["ioreg", "-n", "Root", "-d1", "-a"], capture_output=True, timeout=10).stdout
+        users = plistlib.loads(out).get("IOConsoleUsers", [])
+    except (subprocess.SubprocessError, plistlib.InvalidFileException, ValueError):
+        return False
+    return any(user.get("CGSSessionScreenIsLocked") for user in users)
+
+
 def run(command: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(command, check=True, text=True, **kwargs)
 
@@ -917,6 +927,12 @@ def main() -> int:
     started = dt.datetime.now().astimezone()
     run_dir = args.out or ROOT / "build/e2e" / f"{sha}-{started:%Y%m%d-%H%M%S}"
     run_dir.mkdir(parents=True, exist_ok=False)
+    # A click on a SwiftUI button doesn't arrive while every display is asleep or the screen is locked:
+    # keep the displays awake for the whole run, as the capture scripts do.
+    subprocess.Popen(["caffeinate", "-u", "-d", "-w", str(os.getpid())])
+    if screen_locked():
+        log("The screen is locked: clicks on SwiftUI's buttons won't arrive until it's unlocked, "
+            "so the scenarios that make them will fail")
     tier = args.tier
     if tier == "performance":
         args.validation = False
