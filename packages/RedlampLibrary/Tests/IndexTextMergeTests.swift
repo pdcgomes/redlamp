@@ -1,10 +1,12 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import RedlampLibrary
 
 /// The text index's merges (LIB-05): no commit merges it, FTS5's automerge being off for every writer; the merges
 /// follow the writes, a step at a time, until nothing is left to merge; and a writer writing text without pausing
-/// waits for them while a level is crowded with segments (`IndexTextMerges`).
+/// waits for them while a level is crowded with segments (`IndexTextMerges`), what each transaction left taken in the
+/// order the transactions ran.
 struct IndexTextMergeTests {
     /// `count` transactions of `photos` photos each in a folder of their own, named after `name`; their IDs.
     static func write(
@@ -82,6 +84,44 @@ struct IndexTextMergeTests {
         // Without the waits the first level fills towards the 16 at which FTS5 merges it whole in a commit.
         let unbounded = try await run(crowded: .max)
         #expect(unbounded.max() ?? 0 >= 8, "\(unbounded)")
+    }
+
+    /// Whether a write waiting for the merges has returned.
+    private final class Returned: Sendable {
+        let value = Mutex(false)
+    }
+
+    @Test func `what a step left is taken only if no later transaction's has been, so a write waits on its own segment`(
+    ) async throws {
+        let merges = IndexTextMerges(limits: IndexTextMerges.Limits(crowded: 6))
+        func first(_ segments: Int, merging: Int = 0) -> TextIndexStructure {
+            TextIndexStructure(levels: [.init(segments: segments, merging: merging)])
+        }
+        #expect(merges.begin(), "the merges start")
+        // A step runs on the writer's queue, then a write whose segment crowds the first level, and the write's caller
+        // comes back before the step's: what the step left is older than the write's.
+        let (step, write) = (merges.numbered(), merges.numbered())
+        let wrote = merges.wrote(first(6, merging: 4), number: write)
+        #expect(!wrote.start && wrote.wait)
+        let returned = Returned()
+        let waiting = Task {
+            await merges.caughtUp()
+            returned.value.withLock { $0 = true }
+        }
+        #expect(merges.stepped(16, leaving: first(5, merging: 4), number: step), "the merge under way goes on")
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!returned.value.withLock { $0 }, "the write still waits for its own segment to be merged")
+        let merged = TextIndexStructure(levels: [.init(segments: 2, merging: 0), .init(segments: 1, merging: 0)])
+        #expect(merges.stepped(16, leaving: merged, number: merges.numbered()))
+        await waiting.value
+        #expect(returned.value.withLock { $0 }, "the next step's leaves no level crowded")
+
+        // The merges' last step found nothing to merge, before a write whose caller came back first: they go on.
+        let (last, next) = (merges.numbered(), merges.numbered())
+        #expect(!merges.wrote(first(3), number: next).start, "the merges are running")
+        #expect(merges.stepped(0, leaving: first(2), number: last), "the write's text may be left to merge")
+        #expect(!merges.stepped(0, leaving: first(3), number: merges.numbered()), "nothing left to merge")
+        await merges.finished()
     }
 
     @Test func `the structure is read as FTS5 writes it, levels and segments being merged`() async throws {

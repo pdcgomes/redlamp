@@ -32,8 +32,13 @@ final class IndexTextMerges: Sendable {
     private struct State {
         var running = false
         var closed = false
-        /// A level of the text index holds `limits.crowded` segments, as the last write or step left it.
+        /// A level of the text index holds `limits.crowded` segments, as the latest write or step on the writer's
+        /// queue left it.
         var crowded = false
+        /// The transactions numbered as they ran on the writer's queue (`numbered()`), and the one `crowded` was
+        /// taken from.
+        var numbered: UInt64 = 0
+        var taken: UInt64 = 0
         /// Writes waiting for no level to be crowded.
         var waiting: [CheckedContinuation<Void, Never>] = []
         /// Callers waiting for nothing to be left to merge.
@@ -51,15 +56,29 @@ final class IndexTextMerges: Sendable {
         structure?.levels.contains { $0.segments >= limits.crowded } ?? false
     }
 
-    /// After a transaction that wrote the text index, leaving `structure`: whether the merges should start, which the
-    /// caller does, and whether it should wait for them (`caughtUp`). They don't start while they're running, or when
-    /// they don't follow writes.
-    func wrote(_ structure: TextIndexStructure?) -> (start: Bool, wait: Bool) {
+    /// A number for the transaction running on the writer's queue now, higher than any before it. A write's caller and
+    /// a step's come back in no set order, and what a transaction left of the text index is taken only when no
+    /// transaction after it has been: a step's caller coming back after a later write's would say the levels are
+    /// clear while the write's segment crowds one.
+    func numbered() -> UInt64 {
+        state.withLock { state in
+            state.numbered += 1
+            return state.numbered
+        }
+    }
+
+    /// After transaction `number`, which wrote the text index, leaving `structure`: whether the merges should start,
+    /// which the caller does, and whether it should wait for them (`caughtUp`). They don't start while they're
+    /// running, or when they don't follow writes.
+    func wrote(_ structure: TextIndexStructure?, number: UInt64) -> (start: Bool, wait: Bool) {
         guard limits.following else { return (false, false) }
         let crowded = isCrowded(structure)
         return state.withLock { state in
             guard !state.closed else { return (false, false) }
-            state.crowded = crowded
+            if number > state.taken {
+                state.taken = number
+                state.crowded = crowded
+            }
             let start = !state.running
             state.running = true
             return (start, crowded)
@@ -103,13 +122,19 @@ final class IndexTextMerges: Sendable {
         }
     }
 
-    /// After a step that merged `pages`, 0 when nothing was left to merge and nil when it failed, leaving `structure`:
-    /// whether to take another.
-    func stepped(_ pages: Int?, leaving structure: TextIndexStructure?) -> Bool {
+    /// After a step, transaction `number`, that merged `pages`, 0 when nothing was left to merge, leaving `structure`,
+    /// or that failed (`pages` and `number` nil): whether to take another. A step a later transaction's report has
+    /// overtaken says nothing of the structure, and one that found nothing to merge goes on, since that transaction
+    /// may have written text.
+    func stepped(_ pages: Int?, leaving structure: TextIndexStructure?, number: UInt64?) -> Bool {
         let crowded = isCrowded(structure)
         let (again, resumed) = state.withLock { state -> (Bool, [CheckedContinuation<Void, Never>]) in
-            state.crowded = crowded
-            if pages ?? 0 == 0 || state.closed {
+            let overtaken = number.map { $0 < state.taken } ?? true
+            if !overtaken, let number {
+                state.taken = number
+                state.crowded = crowded
+            }
+            if pages == nil || pages == 0 && !overtaken || state.closed {
                 state.running = false
             }
             var resumed: [CheckedContinuation<Void, Never>] = []

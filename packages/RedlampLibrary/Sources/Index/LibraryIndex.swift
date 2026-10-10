@@ -124,7 +124,7 @@ public final class LibraryIndex: Sendable {
     /// and returns once none of its levels is crowded with segments (`IndexTextMerges`).
     @discardableResult
     public func write<T: Sendable>(_ body: @escaping @Sendable (Writer) throws -> T) async throws -> T {
-        let result = try await writer.run { [journal, marks, checkpoints] database -> Written<T> in
+        let result = try await writer.run { [journal, marks, checkpoints, merges] database -> Written<T> in
             checkpoints.copyIfFull()
             var staged: IndexGeneration?
             var gave = false
@@ -148,6 +148,7 @@ public final class LibraryIndex: Sendable {
                 return Written(
                     result: result, changed: staged != nil, gaveIDs: gave && marks.ahead, wroteText: wroteText,
                     structure: wroteText ? (try? Reader(database: database).textStructure()) : nil,
+                    number: wroteText ? merges.numbered() : 0,
                 )
             } catch {
                 if let staged {
@@ -163,7 +164,7 @@ public final class LibraryIndex: Sendable {
             settleIDsLater()
         }
         if result.wroteText {
-            let (start, wait) = merges.wrote(result.structure)
+            let (start, wait) = merges.wrote(result.structure, number: result.number)
             if start {
                 startMerging()
             }
@@ -180,8 +181,10 @@ public final class LibraryIndex: Sendable {
         var changed: Bool
         var gaveIDs: Bool
         var wroteText: Bool
-        /// The text index's segments after it, when it wrote any text.
+        /// The text index's segments after it, when it wrote any text, and its number on the writer's queue
+        /// (`IndexTextMerges.numbered`).
         var structure: TextIndexStructure?
+        var number: UInt64
     }
 
     /// Merges the text index a step at a time on the writer's queue, each step after the writes asked for
@@ -191,11 +194,13 @@ public final class LibraryIndex: Sendable {
         let limits = merges.limits
         Task.detached(priority: .utility) { [weak self] in
             while let index = self {
-                let step = try? await index.writer.run { [checkpoints = index.checkpoints] database in
+                let (checkpoints, merges) = (index.checkpoints, index.merges)
+                let step = try? await index.writer.run { database in
                     checkpoints.copyIfFull()
-                    return try Self.mergeStep(database, limits)
+                    let (pages, structure) = try Self.mergeStep(database, limits)
+                    return (pages: pages, structure: structure, number: merges.numbered())
                 }
-                guard index.merges.stepped(step?.pages, leaving: step?.structure) else { return }
+                guard merges.stepped(step?.pages, leaving: step?.structure, number: step?.number) else { return }
                 await index.checkpoints.settle()
             }
         }
