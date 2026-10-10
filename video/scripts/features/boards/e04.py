@@ -153,7 +153,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A soft chord and a gentle hit on frame 0."),
+    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, crop, "R  CROP", "A key click; each key plays a note of the motif."),
     w.Panel(3, 4.8, brush, "K  BRUSH", "A key click and the motif's next note."),
     w.Panel(4, 7.2, before_after, "\\  BEFORE / AFTER",

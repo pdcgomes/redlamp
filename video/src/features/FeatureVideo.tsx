@@ -30,6 +30,11 @@ export type FeatureVideoProps = {
   /** An episode in docs/social/posts.json, such as e01. */
   episode: string;
   hook: FeatureHook;
+  /**
+   * The score in public/features/<episode>/ that plays, without .wav: score, the arrangement chosen for
+   * the cut, or score-<arrangement> (score-drive, score-pulse) to compare them against the picture.
+   */
+  score: string;
   /** The apps' safe zones over the frame, for review in Studio; never in a cut. */
   guides: boolean;
   /** Read from public/features/<episode>/frames.json by withFrames. */
@@ -45,11 +50,11 @@ export const withFrames: CalculateMetadataFunction<FeatureVideoProps> = async ({
   }
 };
 
-export function FeatureVideo({ episode, hook, guides, manifest }: FeatureVideoProps) {
+export function FeatureVideo({ episode, hook, score: scoreName, guides, manifest }: FeatureVideoProps) {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const file = manifest?.frames[hook]?.[frame];
-  const score = `features/${episode}/score.wav`;
+  const score = `features/${episode}/${scoreName}.wav`;
   const music = getStaticFiles().some((f) => f.name === score);
   return (
     <AbsoluteFill style={{ background: "#000" }}>

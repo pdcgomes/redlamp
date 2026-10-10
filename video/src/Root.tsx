@@ -23,7 +23,7 @@ export function RemotionRoot() {
   const social: ExplainerProps = { cut: "social", musicSrc: null };
   const star: StarPromoProps = { hook: "charging", stars: 25, musicSrc: "star/score.wav", guides: false };
   const pixelkit: PixelkitPromoProps = { hook: DEFAULT_HOOK, musicSrc: "pixelkit/score.wav" };
-  const feature: FeatureVideoProps = { episode: "e01", hook: "a", guides: false, manifest: null };
+  const feature: FeatureVideoProps = { episode: "e01", hook: "a", score: "score", guides: false, manifest: null };
   return (
     <>
       <Composition

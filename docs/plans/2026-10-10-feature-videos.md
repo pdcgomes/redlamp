@@ -65,13 +65,13 @@ E01 set the template, and every episode is built the same way in `video/`:
 
 ## Sound
 
-One theme for the series: a hummable two-bar motif, catchy but not aggressive (the owner, 10 October 2026), arranged differently in each video. Every video has the same sting on the real result (the motif's opening over struck glass) and the same ending, so the series sounds like one thing.
+One theme for the series, in the same shape in every video so the series sounds like one thing: a two-bar riff in D minor that moves from the first frame and builds to the real result, the drop at 12.0 s, with the same sting on the drop (the riff's head over struck glass) and the same ending. The owner asked for a catchy motif that isn't aggressive, then turned down the first theme, a sweet tune in F major on a soft square lead over felt piano in half time, as cheesy and short of energy (both 10 October 2026).
 
-- **Palette:** a soft pulse lead, a triangle bass, felt piano chords with sevenths and ninths, and half-time drums (a kick on beat 1, a soft snare on beat 3). There are no supersaws, claps or hard crashes.
+- **Shape:** under the hook, sixteenths and a beat held back; the riff from the first step; the full beat from the third; a roll and a riser through the fourth, the rhythm stopping half a beat before the drop while the riser and the hit's own reverb swell on into it; the drop, the loudest bar; the closing phrase from the end line, through A7 to D minor on the last hit; and the last chord dying away as the picture fades.
+- **Arrangements:** two for the owner to choose between against the picture, in `video/scripts/features-theme.py`. Drive is electronic: a four-on-the-floor kick, a rolling bass that opens through the build, offbeat chord stabs and an arpeggio from the drop, and the riff on two detuned saws. Pulse is cinematic, after the star promo: spiccato strings, a ticking watch, taiko, a film snare, a Shepard tone into the drop and the trailer's low brass on it. Drive is the lean. Their sketches are `video/public/features/theme-drive.wav` and `theme-pulse.wav`.
 - **Sync:** every click, key and slider move on screen has its sound on the same frame. The sound comes from the cue sheet, as the picture does.
-- **Sketches:** three 8-bar arrangements of the same motif for the owner to choose from, written by `video/scripts/features-theme.py` into `video/public/features/`: `theme-chip.wav` (chip voices), `theme-felt.wav` (the pulse lead over felt piano, the lean) and `theme-strings.wav` (piano and strings with a chip bell).
-- **Each video's score** is the chosen arrangement, felt until the owner picks, with the video's own clicks, ticks and keys on the frames their pictures land on (`video/scripts/features-score.py`).
-- **Mastering:** each video is mastered to −14 LUFS integrated with a true peak at or under −1 dBFS.
+- **Each video's score** is the chosen arrangement, drive until the owner picks, with the video's own clicks, ticks and keys on the frames their pictures land on (`video/scripts/features-score.py`). It writes every arrangement, and the composition's `score` prop plays any of them, so they can be compared in Studio.
+- **Mastering:** each video is mastered to −14 LUFS integrated with a true peak at or under −1 dBFS, with no more than about a quarter of its energy under 60 Hz, which phones don't play.
 - **Audio name:** on both platforms, "Redlamp theme".
 
 ## The episodes
@@ -95,7 +95,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a raw photo open, its sliders at zero. | A FREE RAW PHOTO / EDITOR FOR MAC | A soft chord and a gentle hit on the first frame. |
+| 1 | 0.0 s | The editor with a raw photo open, its sliders at zero. | A FREE RAW PHOTO / EDITOR FOR MAC | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer drags EXPOSURE to the edit's value; the photo brightens. | NO SUBSCRIPTION | The motif starts; a slider tick on each beat of the drag. |
 | 3 | 4.8 s | HIGHLIGHTS and SHADOWS move to the edit's values. | NO CLOUD | The motif; ticks. |
 | 4 | 7.2 s | VIBRANCE moves to the edit's value; the photo gains colour. | OPEN SOURCE | The motif's answer; the drums come in. |
@@ -122,7 +122,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with the photo open; the Masks panel shows SUBJECT, SKY, BACKGROUND and PEOPLE. | SELECT THE PERSON / IN ONE CLICK | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor with the photo open; the Masks panel shows SUBJECT, SKY, BACKGROUND and PEOPLE. | SELECT THE PERSON / IN ONE CLICK | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer clicks SUBJECT. | CLICK SUBJECT | The motif starts; a click on the beat. |
 | 3 | 4.8 s | The red overlay covers the boy, hair included; the background stays clear. | HE IS SELECTED, / HAIR INCLUDED | A soft rising blip as the overlay fills. |
 | 4 | 7.2 s | INVERT is clicked; the overlay moves to the background. | INVERT IT FOR / THE BACKGROUND | A click; the drums come in. |
@@ -148,7 +148,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a photo open and the Base Look list showing film names. | LOOKS OF 30 REAL / FILM STOCKS | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor with a photo open and the Base Look list showing film names. | LOOKS OF 30 REAL / FILM STOCKS | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | A datasheet's characteristic curve draws itself on a chart. | BUILT FROM EACH / FILM'S DATASHEET | The motif starts; a soft tone rising with the curve. |
 | 3 | 4.8 s | PORTRA 400 is chosen; the photo warms. | PORTRA 400 | A blip as the look applies. |
 | 4 | 7.2 s | TRI-X 400, then CINESTILL 800T two beats later. | TRI-X 400, then CINESTILL 800T | A blip for each; the drums come in. |
@@ -174,7 +174,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor, with a keyboard under it. | SAME SHORTCUTS / AS LIGHTROOM | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor, with a keyboard under it. | SAME SHORTCUTS / AS LIGHTROOM | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | R is pressed; the crop frame appears. | R  CROP | A key click; each key plays a note of the motif. |
 | 3 | 4.8 s | K is pressed; the brush ring appears. | K  BRUSH | A key click and the motif's next note. |
 | 4 | 7.2 s | Backslash is pressed; the photo shows before, then after. | \  BEFORE / AFTER | A key click; the drums come in. |
@@ -200,7 +200,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with the Recipes panel open, and three .XMP files beside it. | BRING YOUR / LIGHTROOM PRESETS | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor with the Recipes panel open, and three .XMP files beside it. | BRING YOUR / LIGHTROOM PRESETS | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer drags the files onto the Recipes panel. | DROP IN .XMP / PRESETS | The motif starts; a soft drop sound on the beat. |
 | 3 | 4.8 s | The import report: settings marked EXACT, APPROXIMATE and NOT AT ALL. | IT SHOWS WHAT / CAME ACROSS | A tick for each row. |
 | 4 | 7.2 s | A .CUBE file is dropped and joins the list. | .CUBE AND .3DL / LUTS TOO | A drop sound; the drums come in. |
@@ -226,7 +226,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with an empty filmstrip and the Folders panel's + button. | NO IMPORT STEP. / OPEN A FOLDER. | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor with an empty filmstrip and the Folders panel's + button. | NO IMPORT STEP. / OPEN A FOLDER. | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer clicks +; a folder is added. | ADD A FOLDER | The motif starts; a click on the beat. |
 | 3 | 4.8 s | The filmstrip fills at once, with a readout: 50,000 PHOTOS · 0.2 S. | 50,000 PHOTOS / LISTED IN 0.2 S | A quick run of soft ticks as the thumbnails arrive. |
 | 4 | 7.2 s | A file list: after an edit, IMG_1234.ARW.REDLAMP appears next to IMG_1234.ARW. | EDITS SAVED NEXT / TO THE PHOTO | A soft click; the drums come in. |
@@ -252,7 +252,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a photo open, the EXPOSURE slider, and a readout: RENDER 1.8 MS. | A SLIDER CHANGE / RENDERS IN 1.8 MS | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor with a photo open, the EXPOSURE slider, and a readout: RENDER 1.8 MS. | A SLIDER CHANGE / RENDERS IN 1.8 MS | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer drags EXPOSURE up to +1.00; the photo follows on each beat. | DRAG A SLIDER | The motif starts; a slider tick a beat. |
 | 3 | 4.8 s | The drag comes back down to −0.50; the readout stays at 1.8 MS. | 1.8 MS PER CHANGE | Ticks. |
 | 4 | 7.2 s | A raw opens from the filmstrip, with a readout: OPEN 0.16 S. | A 24 MP RAW OPENS / IN 0.16 S | A click; the drums come in. |
@@ -278,7 +278,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a Fujifilm raw open and the Recipes panel's camera recipes listed. | CAMERA-STYLE / RECIPES, BUILT IN | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor with a Fujifilm raw open and the Recipes panel's camera recipes listed. | CAMERA-STYLE / RECIPES, BUILT IN | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer moves over CHROME STREET; the photo previews it. | HOVER TO PREVIEW | The motif starts; a soft tick as the preview changes. |
 | 3 | 4.8 s | The pointer moves over BRIGHT SLIDE, then CINEMA TEAL, two more of the camera recipes; the preview follows. | ONE RECIPE / AT A TIME | A tick for each. |
 | 4 | 7.2 s | CHROME STREET is clicked. | CLICK TO APPLY | A click; the drums come in. |
@@ -304,7 +304,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a street photo crossed by power lines, and the Remove panel's FIND field. | FIND AND REMOVE / POWER LINES | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor with a street photo crossed by power lines, and the Remove panel's FIND field. | FIND AND REMOVE / POWER LINES | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | POWER LINES is typed into FIND. | TYPE WHAT TO / REMOVE | The motif starts; key clicks on the beats. |
 | 3 | 4.8 s | Each power line is outlined; a count reads 4 FOUND. | REDLAMP FINDS / EACH ONE | A blip for each outline. |
 | 4 | 7.2 s | The pointer clicks REMOVE ALL; the lines go, one a beat. | REMOVE ALL | A click, then a soft sound a line; the drums come in. |
@@ -330,7 +330,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a filmstrip of 25 near-identical close-ups of a flower. | FOCUS STACKING, / BUILT IN | A soft chord and a gentle hit. |
+| 1 | 0.0 s | The editor with a filmstrip of 25 near-identical close-ups of a flower. | FOCUS STACKING, / BUILT IN | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | A banner slides in: FOCUS STACK DETECTED · 25 FRAMES · MERGE. | IT FINDS THE / STACK FOR YOU | The motif starts; a soft chime with the banner. |
 | 3 | 4.8 s | The pointer clicks MERGE. | CLICK MERGE | A click on the beat. |
 | 4 | 7.2 s | Frames, each sharp in a different band, combine into one, a band a beat. | ONE SHARP PHOTO | A soft blip a band; the drums come in. |
@@ -399,16 +399,17 @@ The photos are the owner's JPEGs, 1365 × 2048 from a Sony α7R V and 1536 × 20
 
 ### E01, 10 October 2026
 
-The first cut, for the owner's review in Studio, with hook A or B, the felt arrangement and the stand-in edit.
+The first cut, for the owner's review in Studio, with hook A or B and the stand-in edit. The owner turned down its felt score as cheesy and short of energy; the second cut has the new theme, in drive and in pulse.
 
 - **Picture:** every frame was drawn with no warning from the kit or the safe zones (179 pictures for 576 frames, both hooks), and stills with the `guides` prop show every word clear of the apps' zones in each bar. Captions are 70 px tall. The hook's seven words are on screen for 2.4 s, under the 2.6 s the checklist's rule of thumb asks for; DOWNLOAD FREE / REDLAMP.APP stays 3.6 s. The storyboard sheet (`out/features/e01-storyboard.jpg`) shows every cue's frame over the score's level.
-- **Sound:** −14.0 LUFS integrated and a true peak of −1.8 dBFS by ffmpeg. The result's bar is the loudest (−11.9 LUFS), the first the quietest (−19.3). Sub 13% and mids 60% of the energy. Above 2.5 kHz, each of the 21 sounds on screen lands within 1 ms of its beat; the score report's broadband check flags four of the quiet ticks, because the piano's notes rise faster in the whole band. In the encoded draft the audio is 0 ms from the score.
+- **Sound, first cut (felt):** −14.0 LUFS integrated and a true peak of −1.8 dBFS by ffmpeg; the result's bar the loudest (−11.9 LUFS).
+- **Sound, second cut:** by ffmpeg, drive measures −14.0 LUFS with a true peak of −1.2 dBFS, and pulse −13.9 LUFS and −1.1 dBFS. Both climb to the drop, the loudest bar: drive from −18.8 LUFS under the hook to −12.0 on the drop, pulse from −20.8 to −11.2. Under 60 Hz sits 23% of drive's energy and 22% of pulse's, with 33% and 22% in the mids. Above 2.5 kHz the presses, ticks, keys and the flip land within 5 ms of their beats; two button releases are covered by a hat or the watch's tick on the same sixteenth. In both drafts the audio is 0 ms from the score.
 - **Not checked:** how it plays at full speed and size, and how the ticks and the key sit in the mix on a phone. Those are for the owner's viewing in Studio.
 
 ## For the owner to decide
 
 - The hook each video leads with. A is the default, and B is tested as a trial reel.
-- The theme: chip, felt or strings.
+- The theme's arrangement: drive or pulse.
 - Whether "Lightroom" may appear on screen (E04 a, b, c, d and e, E05 a and c, E01 e, E10 d) as well as in the captions, never with Adobe's logo or interface. Whether film stock names may appear on screen (E03), with the README's trademark line in the caption. Whether "Fujifilm-style" may appear on screen (E08 b).
 - The photos for the results above, in `~/src/redlamp-social/photos/`: the dancer's raw and its edit first, since four videos use it.
 

@@ -153,7 +153,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A soft chord and a gentle hit on frame 0."),
+    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, hover, "HOVER TO PREVIEW", "The motif starts; a soft tick as the preview changes."),
     w.Panel(3, 4.8, another, "ONE RECIPE / AT A TIME",
             "A tick for each: Bright Slide on beat 1 (drawn), Cinema Teal on beat 3."),

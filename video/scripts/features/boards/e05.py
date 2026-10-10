@@ -171,7 +171,7 @@ def held(c):
 
 PANELS = [
     w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]),
-            "A soft chord and a gentle hit on frame 0; the theme's intro."),
+            "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, drop, "DROP IN .XMP / PRESETS", "The motif starts; a soft drop sound on the beat."),
     w.Panel(3, 4.8, report, "IT SHOWS WHAT / CAME ACROSS", "A tick for each row of the report, one a beat."),
     w.Panel(4, 7.2, lut, ".CUBE AND .3DL / LUTS TOO", "A drop sound as the LUT joins the list; the drums come in."),

@@ -171,7 +171,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A soft chord and a gentle hit on frame 0."),
+    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, datasheet, "BUILT FROM EACH / FILM'S DATASHEET",
             "The motif starts; a soft tone rising with the curve as it draws."),
     w.Panel(3, 4.8, portra, "PORTRA 400", "A blip as the look applies."),

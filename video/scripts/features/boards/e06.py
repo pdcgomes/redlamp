@@ -126,7 +126,7 @@ def held(c):
 
 PANELS = [
     w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]),
-            "A soft chord and a gentle hit on frame 0; the theme's intro."),
+            "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, add, "ADD A FOLDER", "The motif starts; a click on the beat."),
     w.Panel(3, 4.8, listed, "50,000 PHOTOS / LISTED IN 0.2 S",
             "A quick run of soft ticks as the thumbnails arrive."),

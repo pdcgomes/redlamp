@@ -237,6 +237,18 @@ def lead(note, length, velocity=1.0, vibrato=True):
     return tone * envelope(len(t), 0.004, 0.18, 0.62, 0.1, hold=length) * velocity * 0.45
 
 
+def saw_lead(note, length, velocity=1.0, cutoff=2200, detune=7):
+    """A dark lead, stereo: two saws a few cents apart through a low-pass that opens a little at each
+    note and settles below `cutoff`, held for `length` seconds."""
+    n = int(round((length + 0.15) * SR))
+    t = np.arange(n) / SR
+    opening = cutoff * (0.7 + 0.7 * np.exp(-t / 0.07))
+    out = np.zeros((n, 2))
+    for i, cents in enumerate((-detune, detune)):
+        out += pan(harmonics(hz(note) * 2 ** (cents / 1200), n, SAW[:48], cutoff=opening), (-0.3, 0.3)[i])
+    return out * envelope(n, 0.005, 0.22, 0.7, 0.12, hold=length)[:, None] * velocity * 0.35
+
+
 def supersaw(notes, seconds, voices=7, spread=22, cutoff=4200, attack=0.02, release=0.25):
     """A wide pad of detuned saws for each note, stereo."""
     n = int(round((seconds + release) * SR))

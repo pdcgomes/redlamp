@@ -6,6 +6,7 @@
 //   npm run features -- --episode=e01            every hook the episode posts with
 //   npm run features -- --episode=e01 --hook=b   one hook
 //   npm run features -- --episode=e01 --draft    half size, for a quick look on a phone (…-draft.mp4)
+//   npm run features -- --episode=e01 --draft --score=score-pulse   another arrangement (…-pulse-draft.mp4)
 //   npm run features -- --episode=e01 --fresh    draw the frames and write the score again first
 
 import { execFileSync } from "node:child_process";
@@ -25,6 +26,7 @@ const option = (name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(nam
 const episode = option("episode")?.toLowerCase();
 const draft = args.includes("--draft");
 const fresh = args.includes("--fresh");
+const score = option("score") ?? "score";
 const schedule = JSON.parse(readFileSync(path.join(root, "../docs/social/posts.json"), "utf8"));
 const known = schedule.episodes.map((e) => e.id);
 if (!episode || !known.includes(episode)) {
@@ -49,6 +51,10 @@ for (const post of chosen) {
     process.exit(1);
   }
 }
+if (!existsSync(path.join(root, `public/features/${episode}/${score}.wav`))) {
+  console.error(`error: public/features/${episode}/${score}.wav doesn't exist; scripts/features-score.py writes score.wav and score-<arrangement>.wav`);
+  process.exit(1);
+}
 if (manifest.standIn) console.warn(`note: ${episode}'s real result is a stand-in edit until the owner's own is saved beside the raw`);
 
 // Remotion fetches the frames and the score from its own server on localhost; keep that off the
@@ -58,8 +64,9 @@ env.NO_PROXY = env.no_proxy = ["localhost", "127.0.0.1", "::1", env.NO_PROXY].fi
 const remotion = (...a) => execFileSync("npx", ["remotion", ...a], { cwd: root, stdio: "inherit", env });
 mkdirSync(out, { recursive: true });
 for (const post of chosen) {
-  const props = JSON.stringify({ episode, hook: post.hook, guides: false });
-  const name = post.file.replace(/\.mp4$/, draft ? "-draft" : "");
+  const props = JSON.stringify({ episode, hook: post.hook, score, guides: false });
+  const variant = score === "score" ? "" : `-${score.replace(/^score-/, "")}`;
+  const name = post.file.replace(/\.mp4$/, `${variant}${draft ? "-draft" : ""}`);
   const scale = draft ? ["--scale=0.5"] : [];
   // CRF 16, limited-range BT.709 4:2:0, as the studio's other promos.
   const video = path.join(out, `${name}.mp4`);

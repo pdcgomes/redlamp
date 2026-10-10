@@ -183,7 +183,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A soft chord and a gentle hit on frame 0."),
+    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, click, "CLICK SUBJECT", "The motif starts; a click on the beat."),
     w.Panel(3, 4.8, selected, "HE IS SELECTED, / HAIR INCLUDED", "A soft rising blip as the overlay fills."),
     w.Panel(4, 7.2, invert, "INVERT IT FOR / THE BACKGROUND", "A click; the drums come in."),

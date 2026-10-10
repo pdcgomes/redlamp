@@ -313,7 +313,7 @@ def result_panel(c, progress=1.0):
 
 PANELS = [
     w.Panel(1, 0.0, at(0), " / ".join(EPISODE["hooks"]["a"]),
-            "A soft chord and a gentle hit on frame 0. The pointer comes in from the right from 1.2 s."),
+            "A deep hit on frame 0, then sixteenths under a beat held back. The pointer comes in from the right from 1.2 s."),
     w.Panel(2, 2.4, at(s1 + 3.2), "NO SUBSCRIPTION",
             "The motif starts; a click as Exposure's knob is pressed, then a tick on each beat of the drag."),
     w.Panel(3, 4.8, at(s2 + 3.1), "NO CLOUD",

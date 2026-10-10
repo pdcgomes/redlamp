@@ -155,7 +155,7 @@ def held(c):
 
 PANELS = [
     w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]),
-            "A soft chord and a gentle hit on frame 0; the theme's intro."),
+            "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, up, "DRAG A SLIDER", "The motif starts; a slider tick a beat as Exposure climbs to +1.00."),
     w.Panel(3, 4.8, down, "1.8 MS PER CHANGE", "Ticks on the beats as Exposure comes back to -0.50."),
     w.Panel(4, 7.2, open_raw, "A 24 MP RAW OPENS / IN 0.16 S", "A click on the thumbnail; the drums come in."),

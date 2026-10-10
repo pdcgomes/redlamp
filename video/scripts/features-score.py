@@ -5,13 +5,15 @@ A feature video's score (src/features/FeatureVideo.tsx): the series' theme in on
 sounds come from the episode's board (scripts/features/boards/<episode>.py, sounds()), which times them
 on the series' cue sheet as it times the picture.
 
-    python3 scripts/features-score.py --episode e01                    # public/features/e01/score.wav
-    python3 scripts/features-score.py --episode e01 --arrangement chip
+    python3 scripts/features-score.py --episode e01                     # public/features/e01/score.wav
+    python3 scripts/features-score.py --episode e01 --arrangement pulse
 
-The arrangement is felt until the owner picks one (docs/plans/2026-10-10-feature-videos.md, Sound).
-Beside the score it writes score.json, its level at every frame for the storyboard sheet, and
-cues.json, the cue sheet with every sound on screen added as a cue, for scripts/score-report.py.
-Needs numpy, Pillow and pixelkit (the boards draw with it).
+It writes every arrangement as score-<arrangement>.wav, so they can be compared against the picture
+(the composition's `score` prop), and the chosen one as score.wav, which the cut plays: drive until
+the owner picks (docs/plans/2026-10-10-feature-videos.md, Sound). Beside them it writes score.json,
+the chosen score's level at every frame for the storyboard sheet, and cues.json, the cue sheet with
+every sound on screen added as a cue, for scripts/score-report.py. Needs numpy, Pillow and pixelkit
+(the boards draw with it).
 """
 
 import argparse
@@ -51,12 +53,12 @@ def release(velocity):
 
 # Each kind of sound on screen: what plays, how loud, and how much of it goes to the room.
 SOUNDS = {
-    "press": (lambda: press(0.8), 0.16, 0.05),
-    "release": (lambda: release(0.8), 0.12, 0.05),
-    "tick": (lambda: s.tick(0.6), 0.13, 0.08),
-    "key": (lambda: s.key(0.9), 0.3, 0.06),
-    "key up": (lambda: s.key(0.8, up=True), 0.24, 0.06),
-    "flip": (lambda: s.tick(0.7), 0.16, 0.1),
+    "press": (lambda: press(0.8), 0.2, 0.05),
+    "release": (lambda: release(0.8), 0.15, 0.05),
+    "tick": (lambda: s.tick(0.6), 0.16, 0.08),
+    "key": (lambda: s.key(0.9), 0.36, 0.06),
+    "key up": (lambda: s.key(0.8, up=True), 0.28, 0.06),
+    "flip": (lambda: s.tick(0.7), 0.2, 0.1),
 }
 
 
@@ -74,7 +76,7 @@ def on_screen(events):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode", required=True)
-    parser.add_argument("--arrangement", default="felt", choices=list(theme.ARRANGEMENTS))
+    parser.add_argument("--arrangement", default="drive", choices=list(theme.ARRANGEMENTS))
     args = parser.parse_args()
     key = args.episode.lower()
     board = load(w.VIDEO / f"scripts/features/boards/{key}.py", f"board_{key}")
@@ -85,11 +87,16 @@ def main():
     if unknown:
         sys.exit(f"{key} has sounds this script can't play: {', '.join(unknown)}")
 
-    buses, mastering = theme.ARRANGEMENTS[args.arrangement](sounds=on_screen(events))
-    # The last 1.6 s fade out with the picture, as the last chord dies away.
-    mix = s.master(buses, seconds=theme.TOTAL, target=-14.0, ceiling=-1.0, fade=1.6, **mastering)
     out = w.VIDEO / "public/features" / key
     out.mkdir(parents=True, exist_ok=True)
+    for name, arrange in theme.ARRANGEMENTS.items():
+        buses, mastering = arrange(sounds=on_screen(events))
+        # The last 1.6 s fade out with the picture, as the last chord dies away.
+        each = s.master(buses, seconds=theme.TOTAL, target=-14.0, ceiling=-1.0, fade=1.6, **mastering)
+        s.write(out / f"score-{name}.wav", each)
+        print(f"    score-{name}.wav: {s.loudness(each):.1f} LUFS, true peak {s.true_peak(each):.1f} dBFS")
+        if name == args.arrangement:
+            mix = each
     s.write(out / "score.wav", mix)
 
     per = s.SR // w.FPS
