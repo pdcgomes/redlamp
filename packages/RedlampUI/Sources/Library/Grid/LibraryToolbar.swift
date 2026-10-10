@@ -277,9 +277,10 @@ final class LibraryToolbarView: NSView, NSTextFieldDelegate {
         movingStop.isEnabled = shown.canStop
         if let title = shown.title {
             let progress = shown.progress
-            let text = shown.isStopping ? "\(title): stopping after the photo in hand…" : progress
-                .map { "\(title): \(RenameModel.count($0.done)) of \(RenameModel.count($0.total)) steps" }
-                ?? "\(title)…"
+            let text = shown.isStopping ? "\(title): stopping after the photo in hand…" : progress.map { progress in
+                let steps = "\(RenameModel.count(progress.done)) of \(RenameModel.count(progress.total)) steps"
+                return progress.isRollingBack ? "\(title): putting back, \(steps)" : "\(title): \(steps)"
+            } ?? "\(title)…"
             if moving.stringValue != text {
                 moving.stringValue = text
             }

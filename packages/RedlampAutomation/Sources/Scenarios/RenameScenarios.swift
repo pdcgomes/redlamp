@@ -398,14 +398,16 @@
             try app.wait("the names to follow the template", timeout: 30) { model in
                 model.renameSheetTemplate == "Trip-{sequence:4:folder}" && model.renameSheetFollows
             }
-            // From Rename to the batch made, its progress on screen; the sheet's closing is AppKit's.
+            // From Rename to the batch made, its progress on screen, and the sheet closed: AppKit animates it away in a
+            // run loop of its own, which the turn that closes it holds.
             let made = try app.main { $0.fileUndoCount }
             let renaming = try watching("rename") {
                 try app.clickInSheet("rename.rename")
                 try app.wait("the rename to be asked for", timeout: 900) { $0.fileUndoCount > made }
                 try app.run("the rename to be made", timeout: 900) { await $0.filesMade() }
+                try app.waitForNoSheet("Rename Photos", timeout: 60)
+                app.pause(0.5)
             }
-            try app.waitForNoSheet("Rename Photos", timeout: 60)
             try app.expect(
                 scratch.photos(in: scratch.thousand).allSatisfy { $0.hasPrefix("Trip-") },
                 "Not every photo renamed",
@@ -431,9 +433,12 @@
                 try app.explainingFiles(since: mark) {
                     try app.wait("the move to be asked for", timeout: 900) { $0.fileUndoCount > moves }
                     try app.run("the photos moved", timeout: 900) { await $0.filesMade() }
+                    try app.wait("the move's progress gone from the toolbar", timeout: 60) { model in
+                        model.moveProgress.title == nil && !model.isModalDialogOpen
+                    }
                 }
+                app.pause(0.5)
             }
-            try app.waitForNoSheet("the move's progress", timeout: 60)
             try app.expect(
                 scratch.photos(in: scratch.moved).count == RenamePerformanceScratch.renamed, "Not every photo moved",
             )

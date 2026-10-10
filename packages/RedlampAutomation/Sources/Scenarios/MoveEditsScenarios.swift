@@ -191,9 +191,12 @@
                         +
                         "to the root looked through: \(MenuPerformanceScenarios.describe(app.menuRebuilds(since: mark)))",
                 )
+                // Until the sheet has closed: AppKit animates it away in a run loop of its own, which the turn that
+                // closes it holds.
                 let phase = try app.watchingMainThread(name) {
                     try app.clickInSheet("moveEdits.move")
                     try app.waitForNoSheet("Move Edits and Metadata", timeout: 900)
+                    app.pause(0.5)
                 }
                 phases.append((name, phase))
             }

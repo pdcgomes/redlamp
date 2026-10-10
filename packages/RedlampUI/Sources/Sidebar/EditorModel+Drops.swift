@@ -99,11 +99,24 @@ extension EditorModel {
         }
     }
 
-    /// Moves or copies the photos dropped on `folder` there, the batch's progress and Stop in the grid's toolbar,
-    /// and says in an alert why it didn't happen. Actions come back in the batch's own turn, as it ends, so ⌘Z is
-    /// there the moment it's done, before anything asked for after it.
+    /// Moves or copies the photos dropped on `folder` there, as `showingPlace` runs it.
     func drop(_ photos: DraggedPhotos, onFolder folder: URL, copying: Bool) async {
         let urls = await photos.urls()
+        await showingPlace(in: folder, copying: copying) { progress, done, stop in
+            await self.place(urls, in: folder, copying: copying, progress: progress, done: done, stop: stop)
+        }
+    }
+
+    /// Runs `place`, a move or copy into `folder`, with the batch's progress and Stop in the grid's toolbar and the
+    /// editor's other actions held, and says in an alert why it didn't happen. Actions come back in the batch's own
+    /// turn, as it ends, so ⌘Z is there the moment it's done, before anything asked for after it.
+    func showingPlace(
+        in folder: URL, copying: Bool,
+        _ place: (
+            _ progress: @escaping @MainActor @Sendable (FileProgress) -> Void, _ done: @escaping @MainActor () -> Void,
+            _ stop: FileStop,
+        ) async -> String?,
+    ) async {
         let stop = FileStop()
         let shown = moveProgress
         let token = shown.begin("\(copying ? "Copying" : "Moving") to \(folder.lastPathComponent)", stop: stop)
@@ -113,9 +126,7 @@ extension EditorModel {
                 self?.isModalDialogOpen = false
             }
         }
-        let error = await place(
-            urls, in: folder, copying: copying, progress: { shown.show($0, for: token) }, done: done, stop: stop,
-        )
+        let error = await place({ shown.show($0, for: token) }, done, stop)
         done()
         guard let error, let window = EditorWindowController.frontWindow else { return }
         let alert = NSAlert()
