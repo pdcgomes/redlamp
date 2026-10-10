@@ -31,19 +31,28 @@
             var scrolledEmbedded = 0
         }
 
-        /// Edited photos' renders after a relaunch (LIB-17): every edited photo of the fixture rendered and stored
-        /// with the grid shown, then, `count` times, the library closed as quitting does and opened again in a new
-        /// editor with the grid in a window, and the folder holding the most rendered photos opened in it: at once, as
-        /// a launch restores its folder before the library is open, or once the library is open, by turns. For each:
-        /// how long after the launch every photo on the grid's first screen whose render is stored shows it rather
-        /// than its embedded preview, how many showed their embedded preview first, and, scrolling the grid end to
-        /// end in 8 s, how many such photos were seen showing their embedded preview.
+        /// Edited photos' renders after a relaunch (LIB-17): the folder holding the most edited photos opened with the
+        /// grid shown, and its edits rendered and stored, for 15 minutes at most; then, `count` times, the library
+        /// closed as quitting does and opened again in a new editor with the grid in a window, and the folder opened in
+        /// it: at once, as a launch restores its folder before the library is open, or once the library is open, by
+        /// turns. For each: how long after the launch every photo on the grid's first screen whose render is stored
+        /// shows it rather than its embedded preview, how many showed their embedded preview first, and, scrolling the
+        /// grid end to end in 8 s, how many such photos were seen showing their embedded preview.
         static func relaunch(_ session: inout Session, count: Int = 4) async {
-            phase("rendering every edit before relaunching")
             let renders = session.model.editRenders
+            let byFolder = Dictionary(grouping: session.model.items.filter(renders.renders), by: \.folderPath)
+            let folder = byFolder.max { ($0.value.count, $1.key) < ($1.value.count, $0.key) }
+                .map { URL(fileURLWithPath: $0.key, isDirectory: true) } ?? session.fixture
+            phase("rendering the edits of \(folder.lastPathComponent) before relaunching")
             renders.makeEngine = { try? RedlampEngine(decoder: DecodeServiceClient(), lensProfiles: .user) }
-            let edited = session.model.items.filter(renders.renders)
             await renders.renderAgain()
+            let opening = ContinuousClock.now
+            session.library.open(folder)
+            while session.library.isListing || session.library.count == 0,
+                  ContinuousClock.now - opening < .seconds(30) {
+                try? await Task.sleep(for: .milliseconds(1))
+            }
+            let edited = session.model.items.filter(renders.renders)
             renders.isRunning = true
             let window = NSWindow(
                 contentRect: CGRect(x: 0, y: 0, width: 1100, height: 800), styleMask: [.borderless],
@@ -52,25 +61,19 @@
             window.contentView = LibraryGridViews.make(model: session.model)
             window.orderBack(nil)
             let rendering = ContinuousClock.now
-            var stored = Set<String>()
-            while ContinuousClock.now - rendering < .seconds(900) {
-                let states = edited.map { item in session.library.item(for: item.url).flatMap(renders.isRendered) }
-                if !states.contains(where: { $0 == nil }) {
-                    stored = Set(zip(edited, states).compactMap { $1 == true ? $0.url.path : nil })
-                    break
-                }
+            var states: [Bool?] = []
+            repeat {
+                states = edited.map { item in session.library.item(for: item.url).flatMap(renders.isRendered) }
+                guard states.contains(where: { $0 == nil }) else { break }
                 try? await Task.sleep(for: .milliseconds(100))
-            }
+            } while ContinuousClock.now - rendering < .seconds(900)
             renders.isRunning = false
             renders.letEngineGo()
-            let byFolder = Dictionary(grouping: stored) { ($0 as NSString).deletingLastPathComponent }
-            let folder = byFolder.max { $0.value.count < $1.value.count }
-                .map { URL(fileURLWithPath: $0.key, isDirectory: true) } ?? session.fixture
+            let stored = Set(zip(edited, states).compactMap { $1 == true ? $0.url.path : nil })
             session.lines.append(String(
-                format: "Relaunching with the edits rendered: %d of the %d edited photos rendered and stored in %.1f s; "
-                    + "%@ opened, which holds %d of them",
-                stored.count, edited.count, seconds(ContinuousClock.now - rendering), folder.lastPathComponent,
-                byFolder[folder.path]?.count ?? 0,
+                format: "Relaunching with the edits rendered: %@ opened, which holds the most edited photos, %d of "
+                    + "its %d rendered and stored in %.1f s",
+                folder.lastPathComponent, stored.count, edited.count, seconds(ContinuousClock.now - rendering),
             ))
 
             var runs: [Relaunched] = []
