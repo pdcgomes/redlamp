@@ -311,8 +311,21 @@ def prepare(commit: str, level: str) -> None:
         if (CHECKOUT / item).exists() and not (SRC / item).exists():
             (SRC / item).parent.mkdir(parents=True, exist_ok=True)
             subprocess.run(["cp", "-cR", str(CHECKOUT / item), str(SRC / item)], check=True)
+    # The camera samples the commit's own list names stay, since its fetch would download them again.
+    samples = SRC / "tests/decode/samples.json"
+    listed = {SRC / "tests/fixtures/cameras" / sample["file"]
+              for sample in json.loads(samples.read_text())["samples"]} if samples.exists() else set()
     for item in FIXTURES:
         source = CHECKOUT / item
+        # Git leaves ignored files, so samples another commit's run fetched (a branch adding
+        # cameras) would stay, and be tested against a commit without their golden records.
+        held = SRC / item
+        for path in sorted(held.rglob("*"), reverse=True) if held.is_dir() else []:
+            if not (source / path.relative_to(held)).exists() and path not in listed:
+                if path.is_dir():
+                    path.rmdir()
+                else:
+                    path.unlink()
         for path in sorted(source.rglob("*")) if source.is_dir() else []:
             target = SRC / item / path.relative_to(source)
             # Not partial downloads, or sidecars written by opening a sample, which CI never has.
