@@ -67,6 +67,56 @@ struct LibraryDragTests {
         #expect(sandbox.files(in: "Picked").isEmpty)
     }
 
+    @Test func `Folders keeps its rows while many photos are renamed, moved and taken back, their counts changing in place`(
+    ) async throws {
+        let sandbox = DragSandbox()
+        defer { sandbox.close() }
+        let names = (1 ... 40).map { String(format: "P%02d.JPG", $0) }
+        try await sandbox.open(photos: names, folders: ["Picked"])
+        let model = try #require(sandbox.model)
+        let library = model.library
+        let list = try #require(sandbox.first(FolderOutlineView.self))
+        let (shown, reloaded, changes) = (list.rootsShown, list.rowsReloaded, list.treeChanges)
+        /// Whether Picked's row comes to show `count`, the folders listed and counted again, as change tracking
+        /// has them after a batch.
+        func picked(_ count: Int) async throws -> Bool {
+            let deadline = ContinuousClock.now + .seconds(30)
+            while ContinuousClock.now < deadline {
+                for folder in [sandbox.root, sandbox.folder("Picked")] {
+                    library.listTree(folder)
+                }
+                library.countFolders()
+                await library.countedFolders()
+                try await Task.sleep(for: .milliseconds(50))
+                if list.count(of: "Picked") == count {
+                    return true
+                }
+            }
+            return false
+        }
+
+        model.selectAllPhotos()
+        let sheet = try #require(model.renameSheet(presets: NamingPresetStore(url: nil)))
+        await sheet.start()
+        sheet.setText("Trip-{sequence:3}")
+        await sheet.namesFollow()
+        #expect(await model.rename(sheet) == nil)
+        await model.filesMade()
+        #expect(sandbox.files().count { $0.hasPrefix("Trip-") && $0.hasSuffix(".JPG") } == names.count)
+        #expect(model.perform(.undo))
+        await model.filesMade()
+        #expect(sandbox.files() == names + ["Picked"])
+        #expect(await model.movePhotos(names.map(sandbox.photo), to: sandbox.folder("Picked")) == nil)
+        await model.filesMade()
+        #expect(try await picked(names.count), "Picked counts the photos moved in")
+        #expect(model.perform(.undo))
+        await model.filesMade()
+        #expect(try await picked(0), "and none once they're back")
+        #expect(sandbox.files() == names + ["Picked"])
+        #expect(list.rootsShown == shown, "Folders keeps its rows")
+        #expect(list.treeChanges > changes && list.rowsReloaded == reloaded, "the folders' counts change in place")
+    }
+
     @Test func `⌘Z takes a drop's move back the moment its batch is done, in the turn the actions come back`(
     ) async throws {
         let sandbox = DragSandbox()
@@ -493,5 +543,17 @@ struct LibraryDragTests {
         try await Task.sleep(for: .milliseconds(200))
         await panels.written()
         #expect(panels.undoCount == changes && sandbox.keywords("A.JPG").isEmpty && sandbox.keywords("B.JPG").isEmpty)
+    }
+}
+
+extension FolderOutlineView {
+    /// The count the row of the folder named `name` shows; nil while it shows none.
+    func count(of name: String) -> Int? {
+        (0 ..< numberOfRows).lazy.compactMap { row -> FolderRow? in
+            guard let node = self.item(atRow: row) as? SidebarNode, case let .folder(folder) = node.kind else {
+                return nil
+            }
+            return folder
+        }.first { $0.name == name }?.count
     }
 }

@@ -8,7 +8,9 @@ import RedlampDocument
 /// folder kept for the list's life, so a folder with thousands of subfolders costs a screenful:
 /// only rows on screen get views, and only folders on screen are listed. A listing that changes a
 /// folder's subfolders reloads that row and its children, and a count that changes (from a listing,
-/// or the library's counts) that row alone; only the roots changing reloads the list.
+/// or the library's counts) shows in that row alone; the listings that arrive in one turn are taken
+/// together, so a batch moving thousands of photos changes counts in place. Only the roots changing
+/// what they show reloads the list.
 ///
 /// Recently Trashed follows the folders while the library is open (LIB-26), with its count, and shown
 /// empty, a line under it saying what it holds. Photos dragged from the grid onto a folder move there
@@ -29,6 +31,10 @@ final class FolderOutlineView: SidebarOutlineView {
     private var treeObservation: LibraryObservation?
     private var countsObservation: LibraryObservation?
     private var openPath: String?
+    /// What the roots' rows show, as they were last made.
+    private var shownRoots: ShownRoots?
+    /// Folders listed again since the last turn, waiting to be shown together.
+    private var listed: Set<String> = []
 
     /// The rows at the top: the roots, or a line saying how to add one, then Recently Trashed's.
     private var topNodes: [SidebarNode] {
@@ -73,7 +79,7 @@ final class FolderOutlineView: SidebarOutlineView {
                 available: library.canShowRecentlyTrashed,
             )
         }
-        treeObservation = library.observeTree { [weak self] paths in self?.treeChanged(paths) }
+        treeObservation = library.observeTree { [weak self] paths in self?.listedAgain(paths) }
         countsObservation = library.observeCounts { [weak self] paths in self?.countsChanged(paths) }
     }
 
@@ -86,6 +92,8 @@ final class FolderOutlineView: SidebarOutlineView {
         trashTracker = nil
         treeObservation = nil
         countsObservation = nil
+        shownRoots = nil
+        listed = []
     }
 
     // MARK: - Rows
@@ -117,10 +125,35 @@ final class FolderOutlineView: SidebarOutlineView {
         return node
     }
 
+    /// The roots' rows made again, unless they'd show the folders they show, as when a root's bookmark is made
+    /// again. Their counts and subfolders come as they're counted and listed (`countsChanged`, `treeChanged`), which
+    /// compare what they find with what the rows show, so the rows are left as they are.
     private func showRoots(_ roots: [WorkingFolder], missing: Set<UUID>) {
+        let shown = ShownRoots(
+            ids: roots.map(\.id), paths: roots.map(\.path), missing: missing,
+            includesSubfolders: library.includesSubfolders,
+        )
+        guard shown != shownRoots else { return }
+        shownRoots = shown
         rootsShown += 1
         rootNodes = roots.map { node(for: $0.url, root: $0, missing: missing.contains($0.id)) }
         reloadTop()
+    }
+
+    /// `item`'s row as `updated` has it, shown by its cell, if it has one, without making it again.
+    private func refresh(_ item: SidebarNode, _ updated: FolderRow) {
+        item.kind = .folder(updated)
+        let index = row(forItem: item)
+        if index >= 0, let cell = view(atColumn: 0, row: index, makeIfNecessary: false) as? SidebarCellView {
+            cell.refreshFolder(updated)
+        }
+    }
+
+    private struct ShownRoots: Equatable {
+        var ids: [UUID]
+        var paths: [String]
+        var missing: Set<UUID>
+        var includesSubfolders: Bool
     }
 
     /// How many times the roots were listed again, for the tests.
@@ -167,23 +200,37 @@ final class FolderOutlineView: SidebarOutlineView {
         }
     }
 
+    /// Folders listed again, shown with the others listed in the same turn.
+    private func listedAgain(_ paths: Set<String>) {
+        let waiting = !listed.isEmpty
+        listed.formUnion(paths)
+        guard !waiting else { return }
+        Task { @MainActor [weak self] in
+            guard let self, !listed.isEmpty else { return }
+            let paths = listed
+            listed = []
+            treeChanged(paths)
+        }
+    }
+
     /// Folders listed again: their rows (and, when open, their subfolders) reload, nothing else; a row whose
-    /// subfolders are as it shows them shows its count in place, as photos moving in and out change only that.
+    /// subfolders are as it shows them shows its count in place, as photos moving in and out change only that,
+    /// and the column keeps its layout.
     private func treeChanged(_ paths: Set<String>) {
+        treeChanges += 1
+        var reloaded = false
         isReloading = true
         for path in paths {
             guard let item = nodes[path], case let .folder(old) = item.kind, row(forItem: item) >= 0 else { continue }
             let updated = row(for: old.url, root: old.root, missing: old.isMissing)
-            item.kind = .folder(updated)
             let subfolders = library.node(for: old.url)?.subfolders ?? []
             let expanded = isItemExpanded(item)
             if updated.hasSubfolders == old.hasSubfolders, !expanded || shownSubfolders[path] == subfolders {
-                let index = row(forItem: item)
-                if let cell = view(atColumn: 0, row: index, makeIfNecessary: false) as? SidebarCellView {
-                    cell.refreshFolder(updated)
-                }
+                refresh(item, updated)
                 continue
             }
+            item.kind = .folder(updated)
+            reloaded = true
             if expanded {
                 reloadItem(item, reloadChildren: true)
                 expandRemembered(children(of: item))
@@ -192,10 +239,16 @@ final class FolderOutlineView: SidebarOutlineView {
                 expandRemembered([item])
             }
         }
-        refreshHighlights()
         isReloading = false
+        guard reloaded else { return }
+        rowsReloaded += 1
+        refreshHighlights()
         invalidateColumnLayout()
     }
+
+    /// How many times folders listed again were shown, and of those how many reloaded rows, for the tests.
+    private(set) var treeChanges = 0
+    private(set) var rowsReloaded = 0
 
     /// The library counted folders again: the rows on screen whose counts changed show them in place,
     /// without being made again; the others show them when they're next made.
@@ -205,11 +258,8 @@ final class FolderOutlineView: SidebarOutlineView {
         for item in changed {
             guard case let .folder(old) = item.kind else { continue }
             let updated = row(for: old.url, root: old.root, missing: old.isMissing)
-            guard updated != old else { continue }
-            item.kind = .folder(updated)
-            let index = row(forItem: item)
-            if index >= 0, let cell = view(atColumn: 0, row: index, makeIfNecessary: false) as? SidebarCellView {
-                cell.refreshFolder(updated)
+            if updated != old {
+                refresh(item, updated)
             }
         }
     }
