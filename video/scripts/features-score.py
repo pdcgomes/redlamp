@@ -82,6 +82,40 @@ def rising(velocity):
     return out
 
 
+def plotted(velocity):
+    """Seven soft blips an eighth apart, an octave over the arpeggio, rising as E03's datasheet curve
+    rises while it draws, its flat toe and then its straight line: D, D, E, F sharp, A, B and D, the
+    notes of E03's Bm11 under it."""
+    step = int(round(theme.BEAT / 2 * s.SR))
+    run = [s.blip(note, velocity, 0.07, duty=0.5) for note in (86, 86, 88, 90, 93, 95, 98)]
+    out = np.zeros(step * (len(run) - 1) + len(run[-1]))
+    for i, tone in enumerate(run):
+        out[i * step : i * step + len(tone)] += tone
+    return out
+
+
+def applied(velocity):
+    """A soft blip as a film look applies: E, then B a thirty-second note later, notes every chord under
+    E03's picks has."""
+    late = int(round(theme.BEAT / 8 * s.SR))
+    first, second = s.blip(88, velocity, 0.06, duty=0.5), s.blip(95, velocity * 0.8, 0.09, duty=0.5)
+    out = np.zeros(late + len(second))
+    out[: len(first)] += first
+    out[late:] += second
+    return out
+
+
+def swept(velocity):
+    """Five soft blips a sixteenth apart, climbing E minor's ninth chord from E to F sharp and panned from
+    the left to the right, as E03's five looks develop across the photo."""
+    step = int(round(theme.BEAT / 4 * s.SR))
+    run = [s.blip(note, velocity, 0.07, duty=0.5) for note in (88, 91, 95, 98, 102)]
+    out = np.zeros((step * (len(run) - 1) + len(run[-1]), 2))
+    for i, tone in enumerate(run):
+        out[i * step : i * step + len(tone)] += s.pan(tone, -0.6 + 0.3 * i)
+    return out
+
+
 # Each kind of sound on screen: what plays, how loud, and how much of it goes to the room.
 SOUNDS = {
     "press": (lambda: press(0.8), 0.2, 0.05),
@@ -91,6 +125,9 @@ SOUNDS = {
     "key up": (lambda: s.key(0.8, up=True), 0.28, 0.06),
     "flip": (lambda: s.tick(0.7), 0.2, 0.1),
     "fill": (lambda: rising(0.7), 0.25, 0.2),
+    "plot": (lambda: plotted(0.7), 0.26, 0.25),
+    "look": (lambda: applied(0.7), 0.24, 0.2),
+    "looks": (lambda: swept(0.7), 0.32, 0.25),
 }
 
 

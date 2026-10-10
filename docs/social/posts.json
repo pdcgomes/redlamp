@@ -67,7 +67,7 @@
       "feature": "36 film looks from 30 real film stocks, built from each film's datasheet.",
       "audience": "People who use film filters and presets, film photographers.",
       "source": "README: Film simulations (36 looks from 30 stocks, built from the manufacturers' datasheets); Lightroom comparison, film stock simulations (Beyond).",
-      "stage": "storyboard",
+      "stage": "in review",
       "hooks": {
         "a": [
           "LOOKS OF 30 REAL",
@@ -82,15 +82,15 @@
         "36 FILM LOOKS",
         "FROM 30 STOCKS"
       ],
-      "result": "The pixel photo in five film looks, one a beat."
+      "result": "The cook's photo in pixel art, as opened and then in five film looks side by side, each one Redlamp's own render."
     },
     {
       "id": "e04",
       "title": "Lightroom shortcuts",
       "feature": "Lightroom Classic's keyboard shortcuts, panel order and slider names.",
       "audience": "Lightroom users, especially those who edit from the keyboard.",
-      "source": "README: Goals 1; Workspace (Lightroom Classic's keyboard shortcuts, 98 actions on 96 key bindings); Keyboard shortcuts.",
-      "stage": "storyboard",
+      "source": "README: Goals 1; Workspace (Lightroom Classic's keyboard shortcuts, 186 actions on 135 key bindings); Keyboard shortcuts.",
+      "stage": "in review",
       "hooks": {
         "a": [
           "SAME SHORTCUTS",
@@ -105,7 +105,7 @@
         "FAMILIAR LAYOUT",
         "AND SHORTCUTS"
       ],
-      "result": "The editor's panels in Lightroom's order, then its list of 98 shortcuts, as dashboard panels."
+      "result": "The man in the green shirt in pixel art, in black and white, beside the editor's panels in Lightroom's order, then its list of 135 shortcuts, as dashboard panels."
     },
     {
       "id": "e05",
@@ -182,7 +182,7 @@
       "feature": "Camera-style recipes built from Fujifilm-style recipe cards: hover to preview one on your photo, click to apply it, then set its amount.",
       "audience": "Fujifilm shooters and people who follow film recipes.",
       "source": "README: Workspace, Recipes (39 bundled recipes, including camera-style ones built from Fujifilm-style recipe cards; hover to preview, click to apply, adjust the Amount); Screenshots (Chrome Street on a Fujifilm X-T3 RAF); Lightroom comparison, camera recipe cards (Lightroom: No). The card editor itself is only in the Recipe Lab, so the video doesn't show typing a card.",
-      "stage": "storyboard",
+      "stage": "in review",
       "hooks": {
         "a": [
           "CAMERA-STYLE",
@@ -197,7 +197,7 @@
         "CAMERA RECIPES",
         "FOR YOUR RAWS"
       ],
-      "result": "The Chrome Street recipe on the pixel photo, before and after."
+      "result": "The photo of plush toys and a bag of yerba mate in pixel art, before and after the Chrome Street recipe at Amount 70: the yellow plush mutes and the bag's blue deepens."
     },
     {
       "id": "e09",
@@ -251,7 +251,7 @@
       "feature": "Every action and Develop slider from the keyboard: Command-K opens the command palette, a few letters find a setting, and Return turns it into a slider bar over the photo that the arrow keys step, with the next slider a key away and a value typed in.",
       "audience": "Lightroom users who edit from the keyboard, and people who use a command palette in other apps.",
       "source": "README: Workspace, Command palette (every action with its shortcut, every Develop slider and the pickers, from the keyboard; on a slider, a slider bar over the photo, stepped with the arrow keys, up and down for the next slider, a value or x+0.3 typed in, a run of presses one history step); Lightroom comparison, Command palette (Lightroom: No; Redlamp: Done).",
-      "stage": "storyboard",
+      "stage": "building",
       "hooks": {
         "a": [
           "EVERY SLIDER",
@@ -338,7 +338,7 @@
       "file": "e03-a.mp4",
       "coverMs": 3333,
       "caption": "Film looks of 30 real film stocks, such as Portra 400, Tri-X 400 and CineStill 800T, built from each film's datasheet. There are 36 looks in all. Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Kodak, Portra, Tri-X, Velvia, HP5 and CineStill are trademarks of their owners. Redlamp isn't affiliated with them.\n\n#filmlook #filmphotography #portra400 #photoediting #macos",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Film looks. Then a photo editor on a Mac. A film datasheet's curve draws itself, then the photo changes on each beat as the film look changes: Portra 400, Tri-X 400, CineStill 800T, Velvia 50 and HP5 Plus. Then the photo fills the frame in each look. The video ends with Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Film looks. Then a colourful photo editor with a pixel-art photo of a street-food cook in an orange apron under warm lamps, and a Base Look list of film names, each with its icon. A card draws a film datasheet's curves as the words Built from each film's datasheet appear. The pointer picks Portra 400, Tri-X 400, CineStill 800T, Velvia 50 and HP5 Plus in turn, and the photo changes into each look, in colour or in black and white, as the card draws that film's own curves. Then the photo fills the frame as it was opened, and the five looks develop across it side by side. The video ends with 36 film looks from 30 stocks, then Download free, redlamp.app."
     },
     {
       "id": "e03-trial",
@@ -352,7 +352,7 @@
       "file": "e03-b.mp4",
       "coverMs": 3333,
       "caption": "Film looks of 30 real film stocks, such as Portra 400, Tri-X 400 and CineStill 800T, built from each film's datasheet. There are 36 looks in all. Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Kodak, Portra, Tri-X, Velvia, HP5 and CineStill are trademarks of their owners. Redlamp isn't affiliated with them.\n\n#filmlook #filmphotography #portra400 #photoediting #macos",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Film looks. Then a photo editor on a Mac. A film datasheet's curve draws itself, then the photo changes on each beat as the film look changes: Portra 400, Tri-X 400, CineStill 800T, Velvia 50 and HP5 Plus. Then the photo fills the frame in each look. The video ends with Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Film looks. Then a colourful photo editor with a pixel-art photo of a street-food cook in an orange apron under warm lamps, and a Base Look list of film names, each with its icon. A card draws a film datasheet's curves as the words Built from each film's datasheet appear. The pointer picks Portra 400, Tri-X 400, CineStill 800T, Velvia 50 and HP5 Plus in turn, and the photo changes into each look, in colour or in black and white, as the card draws that film's own curves. Then the photo fills the frame as it was opened, and the five looks develop across it side by side. The video ends with 36 film looks from 30 stocks, then Download free, redlamp.app."
     },
     {
       "id": "e04",
@@ -366,7 +366,7 @@
       "file": "e04-a.mp4",
       "coverMs": 3333,
       "caption": "Redlamp uses Lightroom Classic's keyboard shortcuts, panel order and slider names, so you can start editing without relearning anything. Redlamp is a free raw photo editor for Mac. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Redlamp isn't affiliated with Adobe.\n\n#lightroom #lightroomclassic #photoediting #macos #photography",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Lightroom shortcuts. Then a photo editor on a Mac and a keyboard. Keys are pressed one a beat, each labelled: R for crop, K for brush, backslash for before and after, V for black and white, and the editor responds to each. Then the editor's panels appear in Lightroom's order, then its list of 98 shortcuts. The video ends with Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Lightroom shortcuts. Then a colourful photo editor with a pixel-art photo of a grey-haired man in profile in a green shirt, and a keyboard panel with four keys. The keys go down one a bar, each labelled: R brings up the crop frame, K the brush's ring, backslash shows the photo before and after, and V turns it black and white, each with a card showing the tool's settings. Then the black and white photo sits beside the editor's panels in Lightroom's order, from Basic to Calibration, under the words Same panel order, and the editor's list of shortcuts fills the frame under the words 135 shortcuts, with the four keys lit. The video ends with Familiar layout and shortcuts, then Download free, redlamp.app."
     },
     {
       "id": "e04-trial",
@@ -380,7 +380,7 @@
       "file": "e04-b.mp4",
       "coverMs": 3333,
       "caption": "Redlamp uses Lightroom Classic's keyboard shortcuts, panel order and slider names, so you can start editing without relearning anything. Redlamp is a free raw photo editor for Mac. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Redlamp isn't affiliated with Adobe.\n\n#lightroom #lightroomclassic #photoediting #macos #photography",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Lightroom shortcuts. Then a photo editor on a Mac and a keyboard. Keys are pressed one a beat, each labelled: R for crop, K for brush, backslash for before and after, V for black and white, and the editor responds to each. Then the editor's panels appear in Lightroom's order, then its list of 98 shortcuts. The video ends with Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Lightroom shortcuts. Then a colourful photo editor with a pixel-art photo of a grey-haired man in profile in a green shirt, and a keyboard panel with four keys. The keys go down one a bar, each labelled: R brings up the crop frame, K the brush's ring, backslash shows the photo before and after, and V turns it black and white, each with a card showing the tool's settings. Then the black and white photo sits beside the editor's panels in Lightroom's order, from Basic to Calibration, under the words Same panel order, and the editor's list of shortcuts fills the frame under the words 135 shortcuts, with the four keys lit. The video ends with Familiar layout and shortcuts, then Download free, redlamp.app."
     },
     {
       "id": "e05",
@@ -480,7 +480,7 @@
       "file": "e08-a.mp4",
       "coverMs": 3333,
       "caption": "Redlamp has camera-style recipes, built from Fujifilm-style recipe cards. Hover over one to preview it on your photo, click to apply it, then set its amount. Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Fujifilm is a trademark of its owner. Redlamp isn't affiliated with it.\n\n#fujifilmrecipes #filmsimulation #fujifilm #photoediting #macos",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Camera recipes. Then a photo editor on a Mac with a Fujifilm raw open. The Recipes panel's camera recipes are listed; the pointer moves over Chrome Street and Bright Slide and the photo previews each, then Chrome Street is applied and its Amount set. Then the photo fills the frame, before and after. The video ends with Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Camera recipes. Then a colourful photo editor with a pixel-art photo of plush toys beside a blue bag of yerba mate, from a Fujifilm raw, and the Camera Recipes group listed in the Recipes panel. The pointer moves over Chrome Street and the photo previews it, as a card shows the settings it's built from, then over Bright Slide and Cinema Teal, the photo following each. It clicks Chrome Street to apply it, as a card shows the step added to the history, then the recipe's Amount slider goes down from 100 to 70, a step a beat. Then the photo fills the frame, before and after. The video ends with Camera recipes for your raws, then Download free, redlamp.app."
     },
     {
       "id": "e08-trial",
@@ -494,7 +494,7 @@
       "file": "e08-b.mp4",
       "coverMs": 3333,
       "caption": "Redlamp has camera-style recipes, built from Fujifilm-style recipe cards. Hover over one to preview it on your photo, click to apply it, then set its amount. Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Fujifilm is a trademark of its owner. Redlamp isn't affiliated with it.\n\n#fujifilmrecipes #filmsimulation #fujifilm #photoediting #macos",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Camera recipes. Then a photo editor on a Mac with a Fujifilm raw open. The Recipes panel's camera recipes are listed; the pointer moves over Chrome Street and Bright Slide and the photo previews each, then Chrome Street is applied and its Amount set. Then the photo fills the frame, before and after. The video ends with Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Camera recipes. Then a colourful photo editor with a pixel-art photo of plush toys beside a blue bag of yerba mate, from a Fujifilm raw, and the Camera Recipes group listed in the Recipes panel. The pointer moves over Chrome Street and the photo previews it, as a card shows the settings it's built from, then over Bright Slide and Cinema Teal, the photo following each. It clicks Chrome Street to apply it, as a card shows the step added to the history, then the recipe's Amount slider goes down from 100 to 70, a step a beat. Then the photo fills the frame, before and after. The video ends with Camera recipes for your raws, then Download free, redlamp.app."
     },
     {
       "id": "e09",

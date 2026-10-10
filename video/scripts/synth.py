@@ -212,6 +212,16 @@ def crash(velocity=1.0, length=2.4, decay=0.75):
     return out * velocity * 0.5
 
 
+def tambourine(velocity=1.0):
+    """A tambourine shaken once: its jingles struck three times in quick succession, bright metal ringing
+    briefly over a hiss."""
+    t = times(0.16)
+    strikes = sum(a * np.where(t >= o, np.exp(-(t - o) / 0.01), 0) for o, a in ((0, 1.0), (0.007, 0.65), (0.016, 0.4)))
+    metal = sum(np.sin(2 * np.pi * f * t + rng.uniform(0, 6.3)) for f in (5300, 6900, 8300, 9700)) / 4
+    hiss = highpass(rng.standard_normal(len(t)), 6000, order=2)
+    return (metal * np.exp(-t / 0.045) * 0.5 + hiss * strikes * 0.5) * np.clip(t / 0.0005, 0, 1) * velocity * 0.5
+
+
 # ---------------------------------------------------------------- tuned
 
 
@@ -277,6 +287,40 @@ def pulse_lead(note, length, velocity=1.0, glide=None, duty=0.3, cutoff=2400, de
     return out * envelope(n, 0.005, 0.25, 0.7, 0.12, hold=length)[:, None] * velocity * 0.35
 
 
+def pwm_lead(note, length, velocity=1.0, cutoff=2600, rate=0.8, depth=0.18, detune=5, vibrato=0.0):
+    """A warm lead whose pulse width sweeps slowly, stereo: two pulses a few cents apart, each swinging
+    `depth` of a cycle either side of a square at `rate` Hz, out of step with each other, through a
+    low-pass that opens a little at each note and settles below `cutoff`; held for `length` seconds, with
+    a `vibrato` (in semitones) that comes in after the attack."""
+    n = int(round((length + 0.15) * SR))
+    t = np.arange(n) / SR
+    pitch = note + vibrato * np.sin(2 * np.pi * 5.3 * t) * np.clip((t - 0.15) / 0.2, 0, 1)
+    opening = cutoff * (0.7 + 0.8 * np.exp(-t / 0.08))
+    out = np.zeros((n, 2))
+    for i, cents in enumerate((-detune, detune)):
+        width = 0.5 + depth * np.sin(2 * np.pi * rate * t + rng.uniform(0, 6.3))
+        partials = [(k, np.sin(np.pi * k * width) / k) for k in range(1, 41)]
+        out += pan(harmonics(hz(pitch + cents / 100), n, partials, cutoff=opening), (-0.3, 0.3)[i])
+    return out * envelope(n, 0.006, 0.25, 0.72, 0.12, hold=length)[:, None] * velocity * 0.35
+
+
+def pwm_pad(notes, seconds, cutoff=2400, attack=0.4, release=0.5, rate=0.5, depth=0.2, detune=6):
+    """A poly-synth's pad, stereo: two pulses a few cents apart for each note, each swinging `depth` of a
+    cycle either side of a square at about `rate` Hz, out of step with the others, so the chord moves as
+    an eighties poly-synth's does; through a low-pass at `cutoff`, swelling in over `attack`, held for
+    `seconds` and let go over `release`."""
+    n = int(round((seconds + release) * SR))
+    t = np.arange(n) / SR
+    out = np.zeros((n, 2))
+    for j, note in enumerate(notes):
+        for i, cents in enumerate((-detune, detune)):
+            width = 0.5 + depth * np.sin(2 * np.pi * rate * (1 + 0.13 * j) * t + rng.uniform(0, 6.3))
+            partials = [(k, np.sin(np.pi * k * width) / k) for k in range(1, 33)]
+            out += pan(harmonics(hz(note + cents / 100), n, partials, cutoff=cutoff), (-0.5, 0.5)[i])
+    out = out / (2 * max(1, len(notes)) ** 0.5)
+    return out * envelope(n, attack, 10, 1.0, release, hold=seconds)[:, None]
+
+
 def supersaw(notes, seconds, voices=7, spread=22, cutoff=4200, attack=0.02, release=0.25):
     """A wide pad of detuned saws for each note, stereo."""
     n = int(round((seconds + release) * SR))
@@ -331,6 +375,120 @@ def fm(note, length=0.6, velocity=1.0, ratio=1.0, index=2.5, decay=0.3):
     phase = 2 * np.pi * phase_of(hz(note), len(t))
     depth = index * velocity * (0.2 + 0.8 * np.exp(-t / decay))
     return np.sin(phase + depth * np.sin(ratio * phase)) * envelope(len(t), 0.002, 0.6, 0.0, 0.04) * velocity * 0.4
+
+
+def choir(notes, seconds, attack=0.4, release=0.5, vibrato=0.08, cutoff=5000):
+    """A synth choir's chord, stereo, as the eighties' sampling keyboards sang one: three saws a few cents
+    apart for each note, left, centre and right, each with its own slow vibrato, through the formants of
+    an open "ah" (about 750, 1200 and 2700 Hz), so the chord sings rather than buzzes; swelling in over
+    `attack` and held for `seconds`. Short, with a quick `attack`, it's the choir stab."""
+    n = int(round((seconds + release) * SR))
+    t = np.arange(n) / SR
+    out = np.zeros((n, 2))
+    for note in notes:
+        for i, (cents, position) in enumerate(((-9, -0.6), (0, 0.0), (9, 0.6))):
+            wobble = vibrato * np.sin(2 * np.pi * (4.8 + 0.5 * i) * t + rng.uniform(0, 6.3)) * np.clip((t - 0.25) / 0.4, 0, 1)
+            out += pan(blep_saw(hz(note + cents / 100 + wobble), n), position)
+
+    def ah(f):
+        return (0.12 + np.exp(-0.5 * (np.log2(f / 750) / 0.32) ** 2) + 0.6 * np.exp(-0.5 * (np.log2(f / 1200) / 0.28) ** 2)
+                + 0.3 * np.exp(-0.5 * (np.log2(f / 2700) / 0.25) ** 2)) / np.sqrt(1 + (f / cutoff) ** 4)
+
+    return shape(out, ah) / (3 * len(notes) ** 0.5) * envelope(n, attack, 10, 1.0, release, hold=seconds)[:, None]
+
+
+def plucked(note, length=0.5, velocity=1.0, bright=0.5, damp=0.996, detune=7):
+    """A plucked string, stereo, as a clean guitar through a chorus sounds: the string's shape where it's
+    plucked, a third of the way along, with a burst of noise on it that's brighter as `bright` rises,
+    ringing round a loop a period long whose every pass softens it (Karplus–Strong), as two strings a
+    few cents apart, left and right; damped after `length` seconds."""
+    n = int(round((length + 0.06) * SR))
+    out = np.zeros((n, 2))
+    for i, cents in enumerate((-detune, detune)):
+        # The loop's averaging delays it half a sample more, so it rings at SR / (loop + 0.5), and is
+        # read faster by what's left over to tune it.
+        period = SR / float(hz(note + cents / 100))
+        loop = int(np.ceil(period - 0.5))
+        rate = (loop + 0.5) / period
+        m = int(np.ceil(n * rate)) + loop + 1
+        y = np.zeros(m)
+        x = np.arange(loop + 1) / loop
+        pluck_ = np.where(x < 0.33, x / 0.33, (1 - x) / 0.67) + 0.15 * bright * lowpass(rng.standard_normal(loop + 1), 1500 + 6000 * bright)
+        y[: loop + 1] = pluck_ - pluck_.mean()
+        for k in range(1, m // loop):
+            before = y[k * loop - loop - 1 : k * loop] if k > 1 else np.concatenate([[0.0], y[:loop]])
+            y[k * loop : (k + 1) * loop] = damp * 0.5 * (before[1:] + before[:-1])
+        string = np.interp(np.arange(n) * rate, np.arange(m), y)
+        out += pan(string, (-0.5, 0.5)[i])
+    return out * envelope(n, 0.001, 10, 1.0, 0.06, hold=length)[:, None] * velocity * 0.35
+
+
+def chime_lead(note, length, velocity=1.0, glide=None, cutoff=3000, detune=5, vibrato=0.0):
+    """A lead that rings as it's struck, stereo: a chime's strike, an FM bell's bright inharmonic partials
+    dying away in a quarter of a second, over a soft square body of two voices a few cents apart through
+    a low-pass that settles below `cutoff`; held for `length` seconds, with a `vibrato` (in semitones)
+    after the attack and, given `glide`, a slide in from that note."""
+    n = int(round((length + 0.2) * SR))
+    t = np.arange(n) / SR
+    pitch = note + (0.0 if glide is None else (glide - note) * np.exp(-t / 0.03))
+    pitch = pitch + vibrato * np.sin(2 * np.pi * 5.3 * t) * np.clip((t - 0.18) / 0.2, 0, 1)
+    opening = cutoff * (0.75 + 0.6 * np.exp(-t / 0.06))
+    body = np.zeros((n, 2))
+    for i, cents in enumerate((-detune, detune)):
+        body += pan(harmonics(hz(pitch + cents / 100), n, SQUARE[:24], cutoff=opening), (-0.25, 0.25)[i])
+    phase = 2 * np.pi * phase_of(hz(pitch), n)
+    strike = np.sin(phase + 2.2 * np.exp(-t / 0.12) * np.sin(3.5 * phase)) * np.exp(-t / 0.25)
+    held = envelope(n, 0.004, 0.3, 0.75, 0.15, hold=length)
+    return (body * held[:, None] + pan(strike * np.clip(t / 0.002, 0, 1) * 0.8, 0.0)) * velocity * 0.3
+
+
+def resonant(partials, freq, cutoff, resonance):
+    """`partials` through a resonant two-pole low-pass at `cutoff` (which may change every sample), its
+    peak `resonance` times as loud as what passes under it."""
+    for k, amp in partials:
+        r = k * freq / cutoff
+        yield k, amp / np.sqrt((1 - r**2) ** 2 + (r / resonance) ** 2)
+
+
+def reso_lead(note, length, velocity=1.0, glide=None, cutoff=1600, resonance=2.4, detune=5, vibrato=0.0):
+    """A monosynth's lead, stereo: two saws a few cents apart through a resonant low-pass that sweeps down
+    onto `cutoff` at each note, so its peak sings down through the harmonics and settles, as a Minimoog's
+    does; held for `length` seconds, with a `vibrato` (in semitones) that comes in after the attack.
+    Given `glide`, the note before it, it slides from that note's pitch into its own."""
+    n = int(round((length + 0.15) * SR))
+    t = np.arange(n) / SR
+    pitch = note + (0.0 if glide is None else (glide - note) * np.exp(-t / 0.04))
+    pitch = pitch + vibrato * np.sin(2 * np.pi * 5.0 * t) * np.clip((t - 0.18) / 0.25, 0, 1)
+    sweep = cutoff * (1 + 1.4 * np.exp(-t / 0.12))
+    out = np.zeros((n, 2))
+    for i, cents in enumerate((-detune, detune)):
+        f = hz(pitch + cents / 100)
+        phase = 2 * np.pi * phase_of(f, n)
+        tone = np.zeros(n)
+        for k, gain in resonant([(k, a) for k, a in SAW[:48] if k * float(np.max(f)) < 16000], f, sweep, resonance):
+            tone += gain * np.sin(k * phase)
+        out += pan(tone, (-0.3, 0.3)[i])
+    return out * envelope(n, 0.006, 0.25, 0.75, 0.12, hold=length)[:, None] * velocity * 0.18
+
+
+def sweep_pad(notes, seconds, low=500, high=2400, period=2.4, resonance=1.8, attack=0.25, release=0.5, detune=8):
+    """A poly-synth's pad, stereo: two saws a few cents apart for each note through a resonant low-pass
+    that sweeps from `low` up to `high` Hz and back once every `period` seconds, so the chord breathes
+    and its peak sings through the harmonics; swelling in over `attack` and held for `seconds`."""
+    n = int(round((seconds + release) * SR))
+    t = np.arange(n) / SR
+    sweep = low * (high / low) ** (0.5 - 0.5 * np.cos(2 * np.pi * t / period))
+    out = np.zeros((n, 2))
+    for j, note in enumerate(notes):
+        spread = 0.25 + 0.5 * j / max(1, len(notes) - 1)
+        for i, cents in enumerate((-detune, detune)):
+            f = float(hz(note)) * 2 ** (cents / 1200)
+            phase = 2 * np.pi * phase_of(f, n)
+            tone = np.zeros(n)
+            for k, gain in resonant([(k, a) for k, a in SAW[:40] if k * f < 12000], f, sweep, resonance):
+                tone += gain * np.sin(k * phase)
+            out += pan(tone, (-spread, spread)[i])
+    return out / (2 * len(notes) ** 0.5) * envelope(n, attack, 10, 1.0, release, hold=seconds)[:, None] * 0.5
 
 
 # ---------------------------------------------------------------- effects
