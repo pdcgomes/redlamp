@@ -528,6 +528,13 @@
                     try app.main { _ in ImportWindowController.current?.close() }
                     try app.wait("the import window to close") { _ in ImportWindowController.current == nil }
                 })
+            case .importFromLightroom:
+                ActionCheck(action: action, observe: { _ in windows() }, restore: { app in
+                    try app.main { _ in LightroomWindowController.current?.close() }
+                    try app.wait("the Lightroom Classic window to close") { _ in
+                        LightroomWindowController.current == nil
+                    }
+                })
             case .sendFeedback: .sheet(action)
             case .testCamera:
                 ActionCheck(action: action, observe: { _ in windows() }, restore: { app in

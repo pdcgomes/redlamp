@@ -193,6 +193,7 @@ public extension EditorModel {
             guard onSendFeedback != nil else { return false }
             sendFeedback()
         case .importPhotos: ImportActions.open(model: self)
+        case .importFromLightroom: return LightroomActions.open(model: self)
         case .moveEditsAndMetadata: return moveEditsAndMetadata()
         case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
         case .testCamera:
@@ -254,6 +255,7 @@ public extension EditorModel {
         case .editTool, .maskingTool, .cancel, .showShortcuts, .openFolder, .importPhotos, .filmLooks, .commandPalette:
             return true
         case .testCamera: return onTestCamera != nil
+        case .importFromLightroom: return library.service?.isReady == true
         case .sendFeedback: return onSendFeedback != nil
         case .moveEditsAndMetadata: return rootMovingEdits != nil
         case .cropTool, .healTool, .rotateLeft, .rotateRight: return photo

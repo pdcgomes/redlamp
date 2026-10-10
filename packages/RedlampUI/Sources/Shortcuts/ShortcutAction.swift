@@ -162,6 +162,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     /// File & Edit
     case openFolder, importPhotos, export, exportWithPrevious, mergeFocusStack, editFocusStack, showShortcuts
+    case importFromLightroom
     case filmLooks
     case commandPalette, sendFeedback
     case testCamera
@@ -219,6 +220,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
             .rating
         case .openFolder, .importPhotos, .export, .exportWithPrevious, .mergeFocusStack, .editFocusStack,
              .showShortcuts, .filmLooks, .commandPalette, .sendFeedback:
+            .file
+        case .importFromLightroom:
             .file
         case .testCamera:
             .file
@@ -399,6 +402,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .autoAdvance: "Auto Advance"
         case .openFolder: "Open Folder…"
         case .importPhotos: "Import Photos…"
+        case .importFromLightroom: "Import from Lightroom Classic…"
         case .export: "Export…"
         case .exportWithPrevious: "Export with Previous"
         case .mergeFocusStack: "Merge to Focus Stack…"
@@ -564,6 +568,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .export: [.char("e", shift: true, command: true)]
         case .exportWithPrevious: [.char("e", shift: true, option: true, command: true)]
         case .mergeFocusStack, .editFocusStack, .sendFeedback: []
+        case .importFromLightroom: []
         case .showShortcuts: [.char("/", command: true)]
         case .filmLooks: [.char("l", shift: true, command: true)]
         case .findAdjustment: [.char("f", command: true)]
