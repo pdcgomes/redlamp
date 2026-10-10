@@ -115,12 +115,12 @@ A high-level list of the features photographers know from Lightroom, and where R
 | People and their parts | Yes | Done | | | MSK-08, MSK-13, UX-21 | A picker shows who is in the photo as crops to tick, with the parts to mask and a mask for each person if you like. Face parts from Apple Vision; body skin, clothes and hair from SAM 3, a download under Meta's SAM License |
 | Objects | Yes | Done | | | MSK-10 | Hover to preview, click to select (Segment Anything 2.1, an 80 MB download, an open model trained partly on data Redlamp couldn't use itself) |
 | Objects by rectangle and brush | Yes | Done | | | MSK-19 | |
-| Landscape | Yes | Done | | | MSK-17, MSK-22 | Water, vegetation, mountains, architecture, ground and snow, from SAM 3 (a 988 MB download under Meta's SAM License) |
+| Landscape | Yes | Done | | | MSK-17, MSK-22, UX-26 | A picker lists the regions found, each with its share of the photo, to mask together or one each: water, vegetation, mountains, architecture, ground and snow, from SAM 3 (a 988 MB download under Meta's SAM License) |
 | Snow in Landscape masks, and adaptive Landscape presets | Yes | Done | | | MSK-22 | |
 | Depth Range | Yes | Done | | | MSK-14 | From the photo's own depth map, or estimated by Depth Anything, an open model trained partly on data Redlamp couldn't use itself |
 | Refine AI mask edges | Yes | Done | Different | | MSK-07, MSK-26, MSK-31 | Refine Edges, which solves a mask's whole edge again per pixel, and a Refine Edge brush that solves an edge again where you paint; from process 13, coarse masks (iPhone mattes, face parts) refined at full resolution as the photo is drawn |
 | Feather and Edge sliders for AI masks | Yes | Done | | | MSK-18 | Lightroom Classic 15.5 added the sliders |
-| Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | | Save your own from any mask |
+| Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | UX-25 | On one photo or every selected photo at once, each one's AI masks made for it; save your own from any mask |
 | Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | UX-24 | A component or the whole mask inverted; Duplicate and Invert inverts the copy as a whole |
 | A masks panel with a thumbnail of each mask, and its overlay on hover | Yes | Done | | | UX-20, UX-22, UX-23, UX-24 | One picker for every mask and component, a menu on each mask and component, pins where each mask covers most, and Option-click on an eye to show one mask alone |
 | Reorder masks and components, every overlay mode and its opacity | Yes | Done | | | MSK-21 | |
