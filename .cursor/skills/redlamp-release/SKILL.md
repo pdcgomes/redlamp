@@ -24,7 +24,8 @@ The agent never runs `mise run release` without `DRY_RUN=1`: notarizing needs th
 2. **Run `scripts/release-status.py`** (`--json` for the details). Never take versions from memory. It reports:
    - the latest release (GitHub's Latest, or the newest `v*` tag) and the upcoming one, by `mise run release`'s rule: `Version.xcconfig` on origin/main, or its next patch when that version is already tagged; the build number is the count of commits on main;
    - the commits on origin/main since the latest release, by tracker row, and those rows' statuses: a row with commits in the release that isn't Done ships part of a feature;
-   - What's New on origin/main for the upcoming version; unmerged branches and unpushed commits on local main; open bug and in-app reports; CI's latest run on main; the tracker rows In progress or Blocked; the README's Known limitations.
+   - What's New on origin/main for the upcoming version; unmerged branches and unpushed commits on local main; open bug and in-app reports; CI's latest run on main; the tracker rows In progress or Blocked; the README's Known limitations;
+   - how many of LibRaw master's commits the commit Redlamp pins from its fork lacks, and the fork's open `upstream-sync` pull request. When master has commits, offer the owner adopting them before the release (the fork's `REDLAMP.md`, then "Updating LibRaw" in `docs/raw-pipeline.md`); it's his call, and it needs a full suite, so it goes in `needsYou` rather than holding the release up.
 3. **Bring the room up to date** in the same turn: `upcoming` (version, build, stage, summary, gate, base commit), `scope`, `heldBack`, `whatsNew`, `checks`, `problems`, `needsYou`, a `log` entry and `updated`. Say plainly what you didn't check.
 
 ## Preparing a release

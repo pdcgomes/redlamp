@@ -15,6 +15,8 @@ It reads, without changing anything:
   - the What's New highlights on origin/main for the upcoming version (web/content/whats-new)
   - branches with commits that aren't on origin/main, which this release leaves out
   - open bug reports and in-app reports, and CI's latest run on main
+  - how far LibRaw's master has moved past the commit Redlamp pins from its fork (CAM-30), and the
+    fork's open upstream-sync pull request, if any
 
 GitHub is asked through `gh`; when it can't be reached, those parts say so and the rest stands.
 """
@@ -189,6 +191,21 @@ def ci_on_main():
             "commit": run["headSha"][:7], "isMainHead": run["headSha"] == main_sha, "date": run["createdAt"][:16]}
 
 
+def libraw_upstream():
+    """LibRaw master's commits that the pinned fork commit lacks, and the fork's sync pull request."""
+    pin = json.loads(git("show", f"{MAIN}:config/vendored-libs.json"))["LibRaw"]
+    fork = re.match(r"https://github\.com/([^/]+/[^/]+)/", pin["url"])
+    if not fork or fork.group(1) == "LibRaw/LibRaw" or not re.fullmatch(r"[0-9a-f]{40}", pin["version"]):
+        return None
+    compare = gh("api", f"repos/LibRaw/LibRaw/compare/{pin['version']}...master")
+    if compare is None:
+        return {"pin": pin["version"][:7], "fork": fork.group(1), "behind": None}
+    sync = gh("pr", "list", "-R", fork.group(1), "--head", "upstream-sync", "--state", "open",
+              "--json", "number,title,url,isDraft") or []
+    return {"pin": pin["version"][:7], "fork": fork.group(1), "behind": compare["ahead_by"],
+            "base": compare["merge_base_commit"]["sha"][:7], "sync": sync[0] if sync else None}
+
+
 def status():
     git("fetch", "--quiet", "--tags", "origin", check=False)
     latest = latest_release()
@@ -221,6 +238,7 @@ def status():
         "unmergedBranches": unmerged_branches(),
         "reports": open_reports(),
         "ci": ci_on_main(),
+        "libraw": libraw_upstream(),
     }
 
 
@@ -259,6 +277,17 @@ def report(data):
     ci = data["ci"]
     print("\nCI on main: " + ("GitHub not reached" if ci is None else
           f"{ci['conclusion'] or ci['status']} at {ci['commit']}{'' if ci['isMainHead'] else ' (not main head)'} {ci['url']}"))
+    libraw = data["libraw"]
+    if libraw:
+        line = f"\nLibRaw: {libraw['fork']} at {libraw['pin']}, "
+        if libraw["behind"] is None:
+            line += "GitHub not reached"
+        else:
+            line += f"on LibRaw master's {libraw['base']}; master has {libraw['behind']} commits since"
+        if libraw.get("sync"):
+            sync = libraw["sync"]
+            line += f"\n  Upstream sync: {sync['title']}{' (draft: the bench failed)' if sync['isDraft'] else ''} {sync['url']}"
+        print(line)
     print(f"\nTracker rows In progress or Blocked: {len(data['inProgress'])}")
     print(f"Known limitations in the README: {len(data['knownLimitations'])}")
 
