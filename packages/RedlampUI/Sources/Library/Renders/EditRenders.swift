@@ -506,7 +506,10 @@ extension EditRenders {
             }
             index += 1
         }
-        library.askForRows(at: asking)
+        // Rows are read for renders only while they can be made.
+        if makeEngine != nil, isWindowOpen {
+            library.askForRows(at: asking)
+        }
         if index == end, end < edited.count, asking.isEmpty {
             schedulePump()
         }
