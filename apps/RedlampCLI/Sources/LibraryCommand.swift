@@ -227,6 +227,7 @@ extension LibraryCommand {
             try await runFiles(command, rest)
         case "keywords", "stacks", "groups", "metadata", "collections", "import":
             try await runOrganising(command, rest)
+        case "lightroom": try await lightroom(rest)
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
     }
