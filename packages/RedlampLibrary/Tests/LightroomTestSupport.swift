@@ -225,9 +225,9 @@ final class LightroomCatalogMaker {
     /// The photo's XMP as the catalog keeps it, with Develop settings around the fields, as text or compressed.
     func xmp(
         _ photo: Int64, title: String? = nil, creator: [String] = [], location: PhotoLocation? = nil,
-        caption: String? = nil, compressed: Bool = false,
+        caption: String? = nil, compressed: Bool = false, settings: Int = 3,
     ) throws {
-        let text = Self.packet(title: title, creator: creator, location: location, caption: caption)
+        let text = Self.packet(title: title, creator: creator, location: location, caption: caption, settings: settings)
         let value: Any = compressed ? Self.compressed(Data(text.utf8)) : text
         let id = id()
         try run(
@@ -236,12 +236,16 @@ final class LightroomCatalogMaker {
         )
     }
 
-    static func packet(title: String?, creator: [String], location: PhotoLocation?, caption: String?) -> String {
+    /// `settings` Develop settings around the fields: a real catalog's photos have a hundred or more.
+    static func packet(
+        title: String?, creator: [String], location: PhotoLocation?, caption: String?, settings: Int = 3,
+    ) -> String {
         func escaped(_ text: String) -> String {
             text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
                 .replacingOccurrences(of: "\"", with: "&quot;")
         }
         var attributes = [#"crs:Version="15.5""#, #"crs:Exposure2012="+0.35""#, #"crs:Contrast2012="+12""#]
+        attributes += (3 ..< max(settings, 3)).map { "crs:Setting\($0)=\"\($0 * 7 % 100)\"" }
         if let location {
             for (name, value) in [
                 ("Iptc4xmpCore:Location", location.sublocation),
