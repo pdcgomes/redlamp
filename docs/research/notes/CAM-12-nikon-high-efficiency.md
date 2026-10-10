@@ -115,7 +115,7 @@ Shooting Lossless compressed works on every body, though the Z5 II's and Z50 II'
 2. Ask counsel about patents. intoPIX asserts patents on TicoRAW and JPEG XS; LibRaw's decoder, like every open one, is unlicensed.
 3. Optionally install Adobe DNG Converter, for the exact references.
 4. ~~Decide how to triage the Send Feedback requests for HE support~~: decided on 5 October 2026, they stay open, labelled `follows:CAM-12`, and are answered and closed when CAM-12 is done (`.cursor/rules/tracker-issues.mdc`).
-5. ~~Accept the route~~: decided on 10 October 2026, a different one: LibRaw#826's decoder, fixed, in Redlamp's LibRaw fork (CAM-30), until LibRaw's own ships. The patent question is DEC-54.
+5. ~~Accept the route~~: decided on 10 October 2026, a different one: LibRaw#826's decoder, fixed, in Redlamp's LibRaw fork (CAM-30), until LibRaw's own ships. The patent question is DEC-54, which the owner approved on 10 October 2026: a release may ship the decoder.
 
 ## Testing LibRaw#826 (9 October 2026)
 
@@ -137,6 +137,12 @@ The pull request at `499bfd4` was built as it stands and with RdWing's four fixe
 ## Not verified
 
 - Whether Apple licenses TicoRAW, and whether DNG Converter's output opens in Redlamp.
-- Any decode against Adobe DNG Converter's output: RdWing's report is the only exact comparison so far.
-- The Nikon ZR's files, and the Z 8's and Z 9's other crops and smaller raw sizes: raw.pixls.us has none.
+- The Nikon ZR's files, the Z 9's other crops and both bodies' smaller raw sizes: raw.pixls.us has none, and the ZR sets people posted to LibRaw#826 and dnglab#683 have expired or are no longer shared.
+
+## More samples (10 October 2026)
+
+raw.pixls.us has nothing past the 41 files the bench already uses. Bug reports and forum threads had more:
+
+- **Against Adobe.** A discuss.pixls.us Play Raw ([Beating Nikon High Efficieny NEFs](https://discuss.pixls.us/t/beating-nikon-high-efficieny-nefs/59347), CC BY-SA 4.0) posts a Z 6III HE* NEF with the DNG Adobe DNG Converter 18 made from it. The fork's decode matches Adobe's in all 24,498,560 photosites, the first exact comparison of our own; it is in the fork's bench (`Z6_3_3x2_HEstar_4111fa11`, fork b9fd8fc), so every run, CI's included, repeats it.
+- **Without a licence.** Fifteen HE* files posted for testing decoders in darktable issues (#17587, #18072, #18838, #20841) and a discuss.pixls.us thread: a Z 8 1:1 frame (5520 × 5520, a crop raw.pixls.us lacks), four Z 8 night scenes, eight Z 8 shots of a colour checker under different white balances, and two Z 6III files. All decode, clean under ASan and UBSan, and look right; with no lossless shot or Adobe reference, that is all they show. They stay out of the sample lists, kept for local checks in the fork's bench cache (`redlamp/bench/cache/unlicensed/`, with their sources).
 - When LibRaw's snapshot ships, and which bodies its detection covers.
