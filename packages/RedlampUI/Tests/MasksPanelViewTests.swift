@@ -112,7 +112,7 @@ struct MasksPanelViewTests {
         #expect(panel.arrangedViews.elementsEqual([header, picker], by: ===), "the picker comes back")
     }
 
-    @Test func `the drawing hint, messages and the People picker go where the design has them`() async throws {
+    @Test func `the drawing hint, messages and the pickers go where the design has them`() async throws {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }
         let panel = MasksPanelView(model: model)
@@ -146,6 +146,14 @@ struct MasksPanelViewTests {
         model.closePeoplePicker()
         try await settle(window)
         #expect(panel.arrangedViews.elementsEqual(settings, by: ===), "and gives it back, the mask's settings kept")
+
+        model.openLandscapePicker(.component(.add, target: mask))
+        try await settle(window)
+        #expect(panel.arrangedViews.count == 2, "the Landscape picker takes the list's place")
+        #expect(panel.arrangedViews.first === rows[0])
+        model.closeLandscapePicker()
+        try await settle(window)
+        #expect(panel.arrangedViews.elementsEqual(settings, by: ===), "and gives it back")
     }
 
     @Test func `the Masks panel's column is re-measured when a mask comes back`() async throws {

@@ -5,11 +5,11 @@ import SwiftUI
 
 /// The Masks panel (`MasksPanel`) in AppKit, as the Develop panels are.
 ///
-/// The selected mask's sliders are AppKit. The header, the picker, the list, the People picker,
-/// the component rows and the menus are the SwiftUI panel's own, hosted one by one; they read
-/// the model and update themselves, so they are made once. Only the selected mask's settings
-/// are rebuilt, when its name, its components or its tools change; dragging a slider touches
-/// only that slider.
+/// The selected mask's sliders are AppKit. The header, the picker, the list, the People and
+/// Landscape pickers, the component rows and the menus are the SwiftUI panel's own, hosted one
+/// by one; they read the model and update themselves, so they are made once. Only the selected
+/// mask's settings are rebuilt, when its name, its components or its tools change; dragging a
+/// slider touches only that slider.
 final class MasksPanelView: ColumnView {
     private let model: EditorModel
     private var tracker: Tracker?
@@ -21,6 +21,7 @@ final class MasksPanelView: ColumnView {
     private lazy var drawingHint = panelRows.native(DrawingHint())
     private lazy var messages = panelRows.native(MaskMessages())
     private lazy var peoplePicker = panelRows.native(OpenPeoplePicker())
+    private lazy var landscapePicker = panelRows.native(OpenLandscapePicker())
     private lazy var picker = panelRows.native(
         MaskPicker(mode: .new, inline: true)
             .padding(.horizontal, Metrics.panelPadding)
@@ -56,6 +57,7 @@ final class MasksPanelView: ColumnView {
         var drawing: Bool
         var messages: Bool
         var choosingPeople: Bool
+        var choosingLandscape: Bool
     }
 
     init(model: EditorModel) {
@@ -87,6 +89,7 @@ final class MasksPanelView: ColumnView {
                 messages: model.aiMaskProgress != nil || model.maskMessage != nil || model.pendingModel != nil
                     || model.modelDownloadProgress != nil,
                 choosingPeople: model.peoplePicker != nil,
+                choosingLandscape: model.landscapePicker != nil,
             )
             guard next != structure else { return }
             let previous = structure
@@ -117,6 +120,9 @@ final class MasksPanelView: ColumnView {
         }
         if structure.choosingPeople {
             return views + [peoplePicker]
+        }
+        if structure.choosingLandscape {
+            return views + [landscapePicker]
         }
         guard !structure.outlines.isEmpty else {
             return views + [picker]

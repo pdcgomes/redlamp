@@ -923,8 +923,12 @@ struct ComponentRow: View {
     let component: MaskOutline.Component
     @Environment(EditorModel.self) private var model
 
-    /// "Subject 1"; a People component names its part and person, "Face Skin · Person 2".
+    /// "Subject 1"; a People component names its part and person, "Face Skin · Person 2", and a
+    /// Landscape component its class, "Water".
     private func title(_ index: Int) -> String {
+        if component.kind == .landscape, let landscape = component.part.flatMap(LandscapeClass.init(rawValue:)) {
+            return landscape.name
+        }
         guard component.kind == .people else {
             return "\(component.kind?.name ?? "Newer Component") \(index)"
         }

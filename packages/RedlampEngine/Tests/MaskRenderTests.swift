@@ -1198,6 +1198,25 @@ extension MaskRenderTests {
         #expect(vegetation.coveredFraction > 0.05, "vegetation covers \(vegetation.coveredFraction)")
     }
 
+    /// With SAM 3 on this Mac: the Landscape picker's regions, each class found with its share of
+    /// the photo, in Lightroom's order; the classes don't overlap, so the shares add up to at most 1.
+    @Test(.enabled(if: EngineSmokeTests.canRender && Self.isInstalled("sam3")))
+    func `landscape lists the regions it finds, with their share of the photo`() async throws {
+        setenv("REDLAMP_EVALUATION_MODELS", "1", 1)
+        let engine = try RedlampEngine()
+        let url = try #require(EngineSmokeTests.fixtures.first { $0.lastPathComponent == "_DSC0009.ARW" })
+        _ = try await engine.open(url)
+        let found = try await engine.landscapeFound()
+        let classes = found.map(\.landscape)
+        #expect(classes == LandscapeClass.allCases.filter(classes.contains))
+        let vegetation = try #require(found.first { $0.landscape == .vegetation }, "found: \(classes)")
+        #expect(vegetation.share > 0.05, "vegetation covers \(vegetation.share)")
+        #expect(found.allSatisfy { $0.share > RedlampEngine.landscapeMinimumShare })
+        #expect(found.map(\.share).reduce(0, +) <= 1.0001)
+        let mask = try await engine.computeMasks(MaskRequest(kind: .landscape, landscape: .vegetation))
+        #expect(mask.count == 1, "a region listed can be made into a mask")
+    }
+
     /// With SAM 3 on this Mac: People offers hair, facial hair, body skin and clothes on any photo.
     /// None of the samples has a person, but Vision takes the Canon's pig statues for people, one
     /// with a tuft SAM 3 calls hair; the Sony landscape has no clothes.

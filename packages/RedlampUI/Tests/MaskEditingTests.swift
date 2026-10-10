@@ -219,12 +219,17 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
 
     /// People parts `computeMasks` can't compute, as without SAM 3.
     var missingParts: Set<PersonPart> = []
+    /// Landscape classes `computeMasks` doesn't find.
+    var missingLandscapes: Set<LandscapeClass> = []
 
     func computeMasks(_ request: MaskRequest) async throws -> [AIMask] {
         lastRequest = request
         requests.append(request)
         if request.kind == .people, missingParts.contains(request.part) {
             throw MaskComputationError.needsSAM3(request.part)
+        }
+        if request.kind == .landscape, missingLandscapes.contains(request.landscape) {
+            throw MaskComputationError.notFound(request.landscape)
         }
         let masks = computed.map { mask in
             var mask = mask
@@ -239,6 +244,9 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
             if request.people != nil {
                 mask.part = request.part.rawValue
             }
+            if request.kind == .landscape {
+                mask.part = request.landscape.rawValue
+            }
             return mask
         }
         guard request.kind == .people, let chosen = request.people else { return masks }
@@ -250,6 +258,13 @@ final class StubEngine: EditingEngine, @unchecked Sendable {
 
     func peopleFound() async throws -> [PersonFound] {
         people
+    }
+
+    /// What `landscapeFound` reports.
+    var regions: [LandscapeFound] = []
+
+    func landscapeFound() async throws -> [LandscapeFound] {
+        regions
     }
 
     /// What `withShadowAndReflection` gives in place of a mask; nil gives the mask itself.
@@ -852,9 +867,9 @@ struct MaskEditingTests {
         #expect(!model.isRefiningEdges)
     }
 
-    /// A Landscape class, and a People part only SAM 3 makes, ask before downloading it as
-    /// Objects do, and the mask follows the download.
-    @Test func `landscape classes and SAM 3's people parts ask before downloading it`() async throws {
+    /// Landscape, and a People part only SAM 3 makes, ask before downloading it as Objects do;
+    /// the Landscape picker follows the download (UX-26).
+    @Test func `landscape and SAM 3's people parts ask before downloading it`() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -879,13 +894,13 @@ struct MaskEditingTests {
         #expect(model.pendingModel?.part == .clothes)
         model.declinePendingModel()
 
-        await model.startAIMask(.landscape, landscape: .water)
-        #expect(model.pendingModel?.landscape == .water)
+        await model.startAIMask(.landscape)
+        #expect(model.pendingModel?.kind == .landscape)
         #expect(model.recipe.masks.isEmpty)
         await model.downloadPendingModel()
         #expect(engine.downloaded == ["sam3"])
-        #expect(engine.lastRequest?.landscape == .water)
-        #expect(model.recipe.masks.first?.name == "Water")
+        #expect(model.landscapePicker != nil)
+        #expect(model.recipe.masks.isEmpty, "the picker waits for the regions to be ticked")
     }
 
     /// A photo holds up to 16 masks; a 17th says why it isn't made, rather than nothing happening.

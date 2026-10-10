@@ -9,7 +9,7 @@ import SwiftUI
 /// action is on screen, not only in context menus. From UX-23: each row shows its mask's
 /// coverage, the canvas previews the mask or component under the pointer, and pins sit where
 /// each mask covers most. From UX-21: People opens a picker of who is in the photo and which of
-/// their parts to mask.
+/// their parts to mask. From UX-26: Landscape opens a picker of the regions found in it.
 @_spi(Harness) public struct MasksPanel: View {
     @Environment(EditorModel.self) private var model
 
@@ -24,6 +24,8 @@ import SwiftUI
             MaskMessages()
             if model.peoplePicker != nil {
                 OpenPeoplePicker()
+            } else if model.landscapePicker != nil {
+                OpenLandscapePicker()
             } else if model.maskOutlines.isEmpty {
                 MaskPicker(mode: .new, inline: true)
                     .padding(.horizontal, Theme.panelPadding)
@@ -247,15 +249,11 @@ enum MaskKindGroup: String, CaseIterable, Identifiable {
                     face(kind)
                 }
             } else if kind == .landscape {
-                Menu {
-                    ForEach(LandscapeClass.allCases, id: \.self) { cls in
-                        Button(cls.name) { choose(.landscape, landscape: cls) }
-                    }
+                Button {
+                    chooseLandscape()
                 } label: {
                     face(kind)
                 }
-                .menuStyle(.button)
-                .menuIndicator(.hidden)
             } else {
                 Button {
                     choose(kind)
@@ -288,20 +286,30 @@ enum MaskKindGroup: String, CaseIterable, Identifiable {
         .contentShape(Rectangle())
     }
 
-    private func choose(_ kind: MaskKind, part: PersonPart = .entirePerson, landscape: LandscapeClass = .vegetation) {
+    private func choose(_ kind: MaskKind) {
         let (operation, target) = (mode.operation, mode.target)
         Task {
-            if kind.isAI, await model.engine.modelNeeded(for: kind, part: part) != nil {
+            if kind.isAI, await model.engine.modelNeeded(for: kind) != nil {
                 // Records the question, which this picker shows; the mask follows a yes.
-                await model.startAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
+                await model.startAIMask(kind, operation: operation, addingTo: target)
                 return
             }
             dismiss()
-            if kind == .people || kind == .landscape {
-                await model.startAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
-            } else {
-                model.startDrawing(kind, operation: operation, addingTo: target)
+            model.startDrawing(kind, operation: operation, addingTo: target)
+        }
+    }
+
+    /// Landscape asks here for SAM 3 when it isn't downloaded, and opens its own picker, now or
+    /// after a yes.
+    private func chooseLandscape() {
+        let mode = mode
+        Task {
+            if await model.engine.modelNeeded(for: .landscape) != nil {
+                await model.startAIMask(.landscape, operation: mode.operation, addingTo: mode.target)
+                return
             }
+            dismiss()
+            model.openLandscapePicker(mode)
         }
     }
 }

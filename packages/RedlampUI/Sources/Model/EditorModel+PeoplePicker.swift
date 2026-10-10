@@ -30,6 +30,7 @@ extension EditorModel {
         guard let visit = currentVisit else { return }
         activeTool = .masking
         cancelDrawing()
+        closeLandscapePicker()
         peoplePicker = PeoplePicker(mode: mode)
         peopleCrops = [:]
         maskMessage = nil

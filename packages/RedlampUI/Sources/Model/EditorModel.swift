@@ -510,6 +510,8 @@ public final class EditorModel {
     var peoplePicker: PeoplePicker?
     var peopleCrops: [Int: CGImage] = [:]
     var hoveredPersonBox: ImageRect?
+    /// The Landscape picker while it's open (UX-26).
+    var landscapePicker: LandscapePicker?
     /// The people found in the photo, which names People components "Person 2".
     var foundPeople: (visit: PhotoVisit, people: [PersonFound])?
 
@@ -949,6 +951,9 @@ public final class EditorModel {
         edgeBrushTarget = nil
         edgeBrushStrokes = []
         pendingModel = nil
+        // What they found was in the photo left.
+        closePeoplePicker()
+        closeLandscapePicker()
     }
 
     /// Shows the photo's thumbnail on the canvas until its first frame arrives.

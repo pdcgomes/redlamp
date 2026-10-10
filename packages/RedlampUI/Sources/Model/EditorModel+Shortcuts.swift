@@ -294,6 +294,8 @@ public extension EditorModel {
             cancelDrawing()
         } else if peoplePicker != nil {
             closePeoplePicker()
+        } else if landscapePicker != nil {
+            closeLandscapePicker()
         } else if eyedropperActive {
             eyedropperActive = false
         } else if calibrationTargetActive || calibrationTarget != nil {

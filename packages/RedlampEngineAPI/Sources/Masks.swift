@@ -512,6 +512,22 @@ public struct PersonFound: Sendable, Hashable, Identifiable {
     }
 }
 
+/// A Landscape class SAM 3 finds in the open photo, for the Landscape picker, with the share of
+/// the photo it covers (0...1).
+public struct LandscapeFound: Sendable, Hashable, Identifiable {
+    public var landscape: LandscapeClass
+    public var share: Double
+
+    public var id: LandscapeClass {
+        landscape
+    }
+
+    public init(landscape: LandscapeClass, share: Double) {
+        self.landscape = landscape
+        self.share = share
+    }
+}
+
 public struct MaskRequest: Sendable, Hashable {
     public var kind: MaskKind
     /// For People: the part of each person.

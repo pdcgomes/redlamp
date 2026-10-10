@@ -577,6 +577,24 @@ extension RedlampEngine {
         Double(mask.pixels.count { $0 > 127 }) / Double(max(mask.pixels.count, 1))
     }
 
+    /// The share of the photo a Landscape class covers at least to be found.
+    static let landscapeMinimumShare = 0.001
+
+    /// The Landscape classes SAM 3 finds in the open photo, each with the share of the photo its
+    /// mask covers at SAM 3's output size (the photo squashed to a square, which keeps shares).
+    public func landscapeFound() async throws -> [LandscapeFound] {
+        guard let session = currentSession() else { throw EngineError.noImageOpen }
+        guard let model = await sam3() else { throw MaskComputationError.unsupported(.landscape) }
+        let analysis = try await analysisImage(for: session)
+        let classes = try await landscapeClasses(analysis, model: model)
+        return LandscapeClass.allCases.compactMap { landscape in
+            guard let share = classes[landscape]?.coveredFraction, share > Self.landscapeMinimumShare else {
+                return nil
+            }
+            return LandscapeFound(landscape: landscape, share: share)
+        }
+    }
+
     /// One Landscape class, from SAM 3's at its output size, its edges solved per pixel at the
     /// size masks are stored at (REDLAMP_EDGE_MATTE=off keeps the model's).
     func landscapeMask(
@@ -584,7 +602,7 @@ extension RedlampEngine {
     ) async throws -> [AIMask] {
         guard let model = await sam3() else { throw MaskComputationError.unsupported(.landscape) }
         let classes = try await landscapeClasses(analysis, model: model)
-        guard let coarse = classes[request.landscape], coarse.coveredFraction > 0.001 else {
+        guard let coarse = classes[request.landscape], coarse.coveredFraction > Self.landscapeMinimumShare else {
             throw MaskComputationError.notFound(request.landscape)
         }
         let size = PixelSize(width: analysis.image.width, height: analysis.image.height)
@@ -594,7 +612,7 @@ extension RedlampEngine {
             let resized = coarse.resized(to: size)
             return full.map { ClosedFormMatte.refine(resized, image: $0) } ?? resized
         }.value
-        guard mask.coveredFraction > 0.001, let bitmap = mask.bitmap() else {
+        guard mask.coveredFraction > Self.landscapeMinimumShare, let bitmap = mask.bitmap() else {
             throw MaskComputationError.notFound(request.landscape)
         }
         return [AIMask(

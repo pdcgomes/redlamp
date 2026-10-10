@@ -65,6 +65,10 @@ public protocol EditingEngine: AnyObject, Sendable {
     /// The people People finds in the current photo, in the order its masks number them.
     func peopleFound() async throws -> [PersonFound]
 
+    /// The Landscape classes found in the current photo with their share of it, in
+    /// `LandscapeClass`'s order. Throws `MaskComputationError.unsupported` without SAM 3.
+    func landscapeFound() async throws -> [LandscapeFound]
+
     /// A quick, low-resolution Objects mask for hovering, or nil when its model isn't ready.
     func previewObjectMask(_ request: MaskRequest) async throws -> MaskBitmap?
 
@@ -204,6 +208,10 @@ public extension EditingEngine {
     func warmUpMasks() {}
 
     func peopleFound() async throws -> [PersonFound] {
+        []
+    }
+
+    func landscapeFound() async throws -> [LandscapeFound] {
         []
     }
 

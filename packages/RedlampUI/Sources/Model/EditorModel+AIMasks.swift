@@ -85,8 +85,8 @@ public extension EditorModel {
     }
 
     /// Starts an AI mask, asking first when its model needs downloading (App Review 4.2.3: the
-    /// size is shown and nothing downloads without consent): a People part or a Landscape class
-    /// as much as a mask kind.
+    /// size is shown and nothing downloads without consent): a People part as much as a mask
+    /// kind. Landscape opens its picker.
     func startAIMask(
         _ kind: MaskKind, part: PersonPart = .entirePerson, landscape: LandscapeClass = .vegetation,
         operation: MaskOperation = .add, addingTo target: UUID? = nil,
@@ -99,6 +99,8 @@ public extension EditorModel {
         }
         if kind == .objects {
             armObjectSelection(operation: operation, addingTo: target)
+        } else if kind == .landscape {
+            openLandscapePicker(target.map { .component(operation, target: $0) } ?? .new)
         } else {
             await createAIMask(kind, part: part, landscape: landscape, operation: operation, addingTo: target)
         }
