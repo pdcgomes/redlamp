@@ -32,7 +32,9 @@
     ///   opens What's New from the Help menu playing its film (`film`), on its highlights
     ///   (`highlights`) or on a page (`page1`, `page2`, …). `filmstrip=shown` keeps the filmstrip
     ///   up with a photo selected, `inspector=end` scrolls the inspector to its end, `extend=<n>`
-    ///   selects from the open photo to the nth, as ⇧-click does, and `filmstrip-menu=<n>` opens
+    ///   selects from the open photo to the nth, as ⇧-click does, `type=<identifier>` clicks a value
+    ///   field to type in it, such as `type=slider.basic.exposure.value`, `off=<panel>[+<panel>]`
+    ///   switches Develop panels off, and `filmstrip-menu=<n>` opens
     ///   the context menu of the nth photo on screen; the menu holds the app, so it comes last.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
@@ -118,6 +120,8 @@
                 await showFilmstripMenu(at: Int(value) ?? 0)
             case "inspector" where value == "end":
                 await scrollInspectorToEnd()
+            case "type":
+                await beginTyping(in: value)
             case "select" where Int(value) == nil:
                 await select(named: value, model: model)
             case "mask":
@@ -265,6 +269,27 @@
         /// middle as a right-click there does near the bottom of the screen, with the photo ringed.
         /// The menu holds the app until it closes, so it comes last in a script.
         /// The inspector is the scroll view furthest right in the editor window.
+        /// Clicks the value field carrying `identifier`, such as `slider.basic.exposure.value`, so it
+        /// shows as it does while a value is typed in.
+        private static func beginTyping(in identifier: String) async {
+            try? await Task.sleep(for: .seconds(1))
+            guard let window = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil }),
+                  let root = window.contentView
+            else { return }
+            func find(_ view: NSView) -> NSView? {
+                view.accessibilityIdentifier() == identifier ? view : view.subviews.lazy.compactMap(find).first
+            }
+            guard let field = find(root) else { return }
+            let location = field.convert(CGPoint(x: field.bounds.midX, y: field.bounds.midY), to: nil)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                guard let event = NSEvent.mouseEvent(
+                    with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+                ) else { continue }
+                type == .leftMouseDown ? field.mouseDown(with: event) : field.mouseUp(with: event)
+            }
+        }
+
         private static func scrollInspectorToEnd() async {
             try? await Task.sleep(for: .seconds(1))
             guard let root = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })?.contentView

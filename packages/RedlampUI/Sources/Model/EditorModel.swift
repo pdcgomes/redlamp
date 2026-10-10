@@ -1769,6 +1769,10 @@ public final class EditorModel {
                     Set(value.split(separator: "+").compactMap { PanelID(rawValue: String($0)) })
             case "tool":
                 activeTool = EditTool(rawValue: value) ?? .edit
+            case "off":
+                for panel in value.split(separator: "+").compactMap({ PanelID(rawValue: String($0)) }) {
+                    setPanel(panel, on: false)
+                }
             case "select":
                 if let index = Int(value), items.indices.contains(index) {
                     select(items[index].url)
