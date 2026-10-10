@@ -14,6 +14,7 @@ final class ModuleContentController: NSViewController {
     let library: LibraryModuleView
     private var tracker: Tracker?
     private var shown: AppModule?
+    private var prefetch: NavigationPrefetch?
 
     init(model: EditorModel, theme: ThemeSettings, develop: NSViewController) {
         self.model = model
@@ -49,6 +50,7 @@ final class ModuleContentController: NSViewController {
             guard let self else { return }
             show(model.module)
         }
+        prefetch = NavigationPrefetch(model: model)
     }
 
     private func show(_ module: AppModule) {

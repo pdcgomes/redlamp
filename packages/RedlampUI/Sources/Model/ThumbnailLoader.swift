@@ -14,7 +14,8 @@ import Synchronization
 /// at the cell's pixel size, which then goes into the pack. Thumbnails are kept by the edit they
 /// show, and requests for one photo and edit share a decode. A request can be promoted (its cell
 /// scrolled into view) or
-/// cancelled (it scrolled away), and photos iCloud Drive hasn't downloaded are never read. Warming
+/// cancelled (it scrolled away), held arrow keys read the photos ahead (`prefetch`), and photos iCloud
+/// Drive hasn't downloaded are never read. Warming
 /// decodes a folder's thumbnails into its pack on the background lane, without keeping them in
 /// memory; the library's photos are left to the indexer.
 @MainActor
@@ -47,6 +48,8 @@ public final class ThumbnailLoader {
     private var requested: [UInt64: Key] = [:]
     private var lanes: [Key: WorkScheduler.Lane] = [:]
     private var nextID: UInt64 = 0
+    /// The requests the last `prefetch` made that are still waiting, by photo.
+    private var prefetching: [URL: UInt64] = [:]
     private var warmQueue: [LibraryItem] = []
     private var warmHead = 0
     private var warming = 0
@@ -186,6 +189,34 @@ public final class ThumbnailLoader {
                     self?.cancel(id)
                 }
             }
+        }
+    }
+
+    /// The photos held arrow keys reach next (LIB-16): their thumbnails decoded into memory, in order, so the loupe
+    /// and Develop show each at once when they get there; the first `soon`, which the keys reach within a frame or
+    /// two, on the on-screen lane, the rest on the look-ahead lane. Each call replaces the last: what that asked for
+    /// and this leaves out is dropped unless it has started or someone else waits for it.
+    public func prefetch(_ items: [LibraryItem], soon: Int = 0) {
+        let wanted = Set(items.map(\.url))
+        for (url, id) in prefetching where !wanted.contains(url) {
+            prefetching[url] = nil
+            cancel(id)
+        }
+        for (place, item) in items.enumerated() where item.isLocal && !item.isSettling {
+            let lane: WorkScheduler.Lane = place < soon ? .onScreen : .lookAhead
+            guard prefetching[item.url] == nil else {
+                promote(item.url, to: lane)
+                continue
+            }
+            guard !hasThumbnail(item) else { continue }
+            let url = item.url
+            var id: UInt64 = 0
+            id = request(item, lane: lane) { [weak self] _ in
+                if self?.prefetching[url] == id {
+                    self?.prefetching[url] = nil
+                }
+            }
+            prefetching[url] = id
         }
     }
 
