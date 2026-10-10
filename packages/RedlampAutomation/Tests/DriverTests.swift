@@ -7,8 +7,11 @@ import Testing
 @testable import RedlampAutomation
 @_spi(Harness) import RedlampUI
 
-/// The driver's own parts: the events it makes, the names it looks for, what it writes.
+/// The driver's own parts: the events it makes, the names it looks for, what it writes. One test
+/// at a time: those that open windows send events through the app's one queue, and a control's
+/// or a menu's tracking runs whatever else waits on the main thread inside it.
 @MainActor
+@Suite(.serialized)
 struct DriverTests {
     init() {
         _ = NSApplication.shared
