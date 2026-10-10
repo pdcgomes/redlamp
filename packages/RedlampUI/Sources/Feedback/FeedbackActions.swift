@@ -96,7 +96,7 @@ public enum FeedbackActions {
         content: (@escaping () -> Void, CGFloat) -> some View,
     ) {
         let height = window.sheetHeight(fitting: size.height)
-        let sheetWindow = RinglessWindow(
+        let sheetWindow = NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: size.width, height: height),
             styleMask: [.titled],
             backing: .buffered,

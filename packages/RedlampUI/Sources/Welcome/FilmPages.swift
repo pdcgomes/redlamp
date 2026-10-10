@@ -233,7 +233,7 @@ enum FilmWindow {
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true
         window.standardWindowButton(.zoomButton)?.isHidden = true
         // The film fills the window, titlebar included; left to size it, SwiftUI adds the titlebar.
-        let hosting = NSHostingView(rootView: content)
+        let hosting = NSHostingView(rootView: content.focusEffectDisabled())
         hosting.sizingOptions = []
         window.contentView = hosting
         return window

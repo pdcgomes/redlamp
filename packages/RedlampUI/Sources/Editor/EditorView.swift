@@ -78,7 +78,6 @@ struct EditorContentView: View {
             .environment(model)
             .environment(theme)
             .tint(Theme.nativeTint)
-            .focusEffectDisabled()
     }
 
     private func updateStage() {
@@ -112,7 +111,6 @@ struct EditorOverlays: View {
         .environment(model)
         .environment(theme)
         .tint(Theme.nativeTint)
-        .focusEffectDisabled()
     }
 
     /// The palette's actions that the app, not the editor, performs.

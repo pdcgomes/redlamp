@@ -20,7 +20,8 @@ public final class CameraBenchWindowController: NSWindowController, NSWindowDele
         window.tabbingMode = .disallowed
         super.init(window: window)
         window.contentView = NSHostingView(rootView: CameraBenchView(model: model) { [weak self] in self?.choose() }
-            .tint(Theme.nativeTint))
+            .tint(Theme.nativeTint)
+            .focusEffectDisabled())
         window.delegate = self
         window.center()
     }

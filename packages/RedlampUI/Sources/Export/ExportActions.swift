@@ -50,7 +50,7 @@ public enum ExportActions {
               let window = EditorWindowController.frontWindow, window.attachedSheet == nil
         else { return }
         let height = window.sheetHeight(fitting: ExportSheet.size.height)
-        let sheetWindow = RinglessWindow(
+        let sheetWindow = NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: ExportSheet.size.width, height: height),
             styleMask: [.titled],
             backing: .buffered,

@@ -169,7 +169,7 @@ public enum RecipeActions {
         panel.allowedContentTypes = folders ? types + [.folder] : types
         panel.message = message
         let choice = LookTableSpaceChoice()
-        let accessory = NSHostingView(rootView: LookTableSpaceAccessory(choice: choice))
+        let accessory = NSHostingView(rootView: LookTableSpaceAccessory(choice: choice).focusEffectDisabled())
         accessory.frame.size = accessory.fittingSize
         panel.accessoryView = accessory
         panel.isAccessoryViewDisclosed = true

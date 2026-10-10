@@ -38,7 +38,6 @@ struct WelcomeView: View {
         .background(Brand.wall.color)
         .foregroundStyle(Brand.paper.color)
         .ignoresSafeArea()
-        .focusEffectDisabled()
     }
 }
 

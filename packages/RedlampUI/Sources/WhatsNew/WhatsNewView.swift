@@ -29,7 +29,6 @@ struct WhatsNewView: View {
         .background(Brand.wall.color)
         .foregroundStyle(Brand.paper.color)
         .ignoresSafeArea()
-        .focusEffectDisabled()
     }
 
     /// The feed names SF Symbols; one this macOS doesn't have shows as a sparkle.

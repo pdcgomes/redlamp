@@ -26,7 +26,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
     private lazy var themePopover: NSPopover = {
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: ThemePopover(theme: theme))
+        popover.contentViewController = NSHostingController(rootView: ThemePopover(theme: theme).focusEffectDisabled())
         return popover
     }()
 
@@ -40,7 +40,8 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
         self.onOpen = onOpen
         self.onExport = onExport
 
-        let content = NSHostingController(rootView: EditorContentView(model: model, theme: theme, onOpen: onOpen))
+        let content = NSHostingController(rootView: EditorContentView(model: model, theme: theme, onOpen: onOpen)
+            .focusEffectDisabled())
         content.sizingOptions = []
         let split = EditorSplitViewController(model: model, theme: theme, content: content)
         let root = EditorRootViewController(
@@ -51,7 +52,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
             ),
         )
 
-        let window = RinglessWindow(
+        let window = NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: 1600, height: 1000),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false,
@@ -265,7 +266,7 @@ private extension NSToolbarItem.Identifier {
 /// it never takes clicks meant for the canvas or the panels.
 private final class EditorRootViewController: NSViewController {
     private let split: NSSplitViewController
-    private let overlays: NSHostingView<EditorOverlays>
+    private let overlays: NSView
 
     var showsOverlays = false {
         didSet {
@@ -284,9 +285,10 @@ private final class EditorRootViewController: NSViewController {
 
     init(split: NSSplitViewController, overlays: EditorOverlays) {
         self.split = split
-        self.overlays = NSHostingView(rootView: overlays)
-        self.overlays.autoresizingMask = [.width, .height]
-        self.overlays.sizingOptions = []
+        let hosting = NSHostingView(rootView: overlays.focusEffectDisabled())
+        hosting.autoresizingMask = [.width, .height]
+        hosting.sizingOptions = []
+        self.overlays = hosting
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -319,6 +321,5 @@ private struct ThemePopover: View {
         ThemeControls(theme: $theme.selection, transparency: $theme.panelTransparency)
             .padding(14)
             .frame(width: 260)
-            .focusEffectDisabled()
     }
 }
