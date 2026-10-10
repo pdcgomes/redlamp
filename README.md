@@ -38,7 +38,7 @@ Redlamp is built from scratch in Swift and Metal for Apple Silicon. It focuses o
   <a href="https://redlamp.app/performance">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="docs/images/performance-card-light.svg">
-      <img src="docs/images/performance-card.svg" width="880" alt="Redlamp's measured performance on an Apple M1 Ultra with a Release build, 29 Sep – 8 Oct 2026: 1.8 ms to render a slider change; 160 ms to open a 24 MP raw; 317 MB peak, browsing 50,000 photos (measured under load); 1.3 GB GPU, 1:1 with noise reduction; 22.1 MB to download; 44.9 MB installed.">
+      <img src="docs/images/performance-card.svg" width="880" alt="Redlamp's measured performance on an Apple M1 Ultra with a Release build, 29 Sep – 10 Oct 2026: 1.8 ms to render a slider change; 160 ms to open a 24 MP raw; 317 MB peak, browsing 50,000 photos (measured under load); 1.3 GB GPU, 1:1 with noise reduction; 22.1 MB to download; 45.0 MB installed.">
     </picture>
   </a>
 </p>
@@ -201,7 +201,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 
 Measured on an Apple M1 Ultra with a Release build. Every figure since 29 September, the benchmark harness's runs, and what's got faster or slower are at [redlamp.app/performance](https://redlamp.app/performance), from [`docs/performance/history.jsonl`](docs/performance/history.jsonl); `scripts/perf-record.sh` records a run. The card at the top of this README is drawn from the same history by `scripts/perf-card.py`, each figure from its latest quiet record, and CI fails when the card falls behind the history.
 
-Each release's download and installed size is recorded from its zip on GitHub (`scripts/perf-history.py release`). 0.2.7 is a 22.1 MB download and 44.9 MB installed; the AI models download only when a feature first needs them. 0.2.5 added Generative Remove and its MLX frameworks and grew to 115.6 MB installed; 0.2.6 ships stripped of debugging symbols, with LibRaw built hidden so unused code is dropped and the decode service sharing the app's frameworks (AUD-11), and is smaller than 0.2.4 was. 0.2.7 ships its 69 Base Look tables compressed, each read when a render first uses it (AUD-11), and is 17% smaller installed than 0.2.6. The release check fails a bundle with an Intel slice, debugging symbols or more than its size budget (`scripts/check-release-bundle.sh`).
+Each release's download and installed size is recorded from its zip on GitHub (`scripts/perf-history.py release`). 0.2.8 is a 22.2 MB download and 45.0 MB installed; the AI models download only when a feature first needs them. 0.2.5 added Generative Remove and its MLX frameworks and grew to 115.6 MB installed; 0.2.6 ships stripped of debugging symbols, with LibRaw built hidden so unused code is dropped and the decode service sharing the app's frameworks (AUD-11), and is smaller than 0.2.4 was. 0.2.7 ships its 69 Base Look tables compressed, each read when a render first uses it (AUD-11), and is 17% smaller installed than 0.2.6. The release check fails a bundle with an Intel slice, debugging symbols or more than its size budget (`scripts/check-release-bundle.sh`).
 
 | Operation | Time |
 | --- | --- |
