@@ -6,7 +6,7 @@ import RedlampLibrary
 /// and other apps' `.xmp`; across volumes each file is copied and checked by size and SHA-256 before its original
 /// goes. Moved, the photos leave the folders shown at once, the photo after them becoming active; copied, each copy
 /// is a photo of its own, numbered where its name is held. The batch's progress shows in the grid's toolbar with Stop,
-/// as a drop's does: a sheet holds the main thread for its own opening and closing, about 0.3 s each, and Library's
+/// as a drop's does, rather than in a sheet, whose opening and closing each hold the main thread about 0.3 s. Library's
 /// Undo puts the photos back, selected as they were, or moves the copies to the Trash.
 public extension EditorModel {
     @discardableResult

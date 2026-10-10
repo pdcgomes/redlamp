@@ -55,6 +55,7 @@ final class MoveEditsSheetController: NSViewController {
             contentRect: CGRect(x: 0, y: 0, width: width, height: 300), styleMask: [.titled], backing: .buffered,
             defer: false,
         )
+        sheet.isReleasedWhenClosed = false
         kept = sheet
         sheet.title = "Move Edits and Metadata"
         sheet.contentViewController = controller
