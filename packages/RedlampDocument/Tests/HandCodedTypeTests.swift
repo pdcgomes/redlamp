@@ -41,10 +41,14 @@ struct HandCodedTypeTests {
 
     @Test func `the sidecar and its edit`() throws {
         try check(everything, notWritten: ["session", "clearsHistory", "unsavedSessions"])
-        try check(everything.recipe, renamed: ["whiteBalanceMode": "whiteBalance"], notWritten: ["pointColor"])
+        try check(
+            everything.recipe, renamed: ["whiteBalanceMode": "whiteBalance"],
+            notWritten: ["pointColor", "panelsOff", "unknownPanelsOff"],
+        )
         var colored = everything.recipe
         colored.pointColor = [Self.pickedSwatch]
-        try check(colored, renamed: ["whiteBalanceMode": "whiteBalance"])
+        colored.panelsOff = [.detail, .lens]
+        try check(colored, renamed: ["whiteBalanceMode": "whiteBalance", "unknownPanelsOff": "panelsOff"])
         try check(#require(everything.recipe.exposureAnchor))
         try check(#require(everything.snapshots.first))
         try check(#require(everything.metadata))
