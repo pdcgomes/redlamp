@@ -17,6 +17,8 @@ The Edit panels change the whole photo. A mask changes only part of it: you make
 
 Press [[⇧W]], or click Masking at the right of the tool strip under the histogram. Click it again, or press [[D]], to go back to Edit. Each mask that you draw has a key of its own, [[M]], [[⇧M]], [[K]], [[⇧J]], [[⇧Q]] and [[⇧Z]], and pressing one opens the tool and starts that mask at once. [[Esc]] finishes the mask you're drawing; a second [[Esc]] leaves the tool.
 
+{{figure: masks-panel}}
+
 Every mask starts in one picker. Before a photo has any masks it takes the list's place, titled New Mask, with a tile for each kind of mask in three groups: AI, DRAWN and RANGE. Once there are masks, New Mask at the top of the panel opens the same picker beside it. A tile is dimmed when its mask can't be made for this photo, and its tooltip says so.
 
 The panel keeps the same order, top to bottom:

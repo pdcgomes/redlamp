@@ -30,17 +30,28 @@ mkdir -p "$FIXTURES"
 for file in _DSC0009.ARW AFXT2720.RAF Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3 DSC_0750.NEF IMG_1361.DNG; do
     cp "$ROOT/tests/fixtures/raw/$file" "$FIXTURES/"
 done
-# The app remembers the last folder it opened; put the user's back afterwards.
-LAST_FOLDER="$(defaults read app.redlamp.mac lastFolder 2>/dev/null || true)"
+# The app's preferences are saved now and put back on exit, as capture-promo.sh does.
+DOMAIN=app.redlamp.mac
+PREFS="$(dirname "$FIXTURES")/preferences.plist"
+defaults export "$DOMAIN" "$PREFS" 2>/dev/null || PREFS=""
 restore() {
-    rm -rf "$(dirname "$FIXTURES")"
-    if [[ -n "$LAST_FOLDER" ]]; then
-        defaults write app.redlamp.mac lastFolder "$LAST_FOLDER"
-    else
-        defaults delete app.redlamp.mac lastFolder 2>/dev/null || true
+    pkill -f "$APP" 2>/dev/null || true
+    sleep 1
+    # Import merges, so clear the domain first: keys the run added, such as the last folder, go too.
+    defaults delete "$DOMAIN" 2>/dev/null || true
+    if [[ -n "$PREFS" ]]; then
+        defaults import "$DOMAIN" "$PREFS"
     fi
+    rm -rf "$(dirname "$FIXTURES")"
 }
 trap restore EXIT
+# What would show in a shot goes too: the theme, the remembered folders (the Folders panel lists
+# only the fixtures), the library's views (the filmstrip is in the order below) and the window's size.
+for key in themeFamily themeAppearance themeTint themeTintsNativeControls panelTransparency \
+    folders.roots folders.open folders.expanded folders.lastPhotos folders.subfolders lastFolder \
+    library.views library.filters "NSWindow Frame editor"; do
+    defaults delete "$DOMAIN" "$key" 2>/dev/null || true
+done
 
 capture() {
     local name="$1" script="$2" title="${3:-}"
@@ -49,8 +60,9 @@ capture() {
     sleep 1
     find "$FIXTURES" -name '*.redlamp' -delete
     # Launched through `open` (a process started from a non-GUI shell may never get a
-    # window), with the arguments in the file the app reads once on launch.
-    echo "$FIXTURES --script $script" >/tmp/redlamp-launch-args
+    # window), with the arguments in the file beside the bundle that the app reads once on
+    # launch, which no other checkout's launch can take.
+    echo "$FIXTURES --window-size 1600x1000 --script $script" >"$(dirname "$BUNDLE")/redlamp-launch-args"
     open -n -g "$BUNDLE"
     local pid=""
     for _ in $(seq 1 40); do
