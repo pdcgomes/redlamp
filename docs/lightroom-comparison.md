@@ -203,7 +203,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Histogram you can drag to adjust | Yes | Done | | | | |
 | RGB and L*a*b* values of the pixel under the pointer | Yes | Done | Different | | UX-32 | Under the histogram; RGB in Display P3, where Lightroom uses Melissa RGB, and L*a*b* relative to D50 |
 | Readout points pinned on the photo | No | Planned | | P3 | UX-40 | As Photoshop's colour samplers, with values that stay while sliders move |
-| Panel on/off switches | Yes | Planned | | P2 | UX-30 | Turn a panel's settings off and on without losing them |
+| Panel on/off switches | Yes | Done | | | UX-30 | Turn a panel's settings off and on without losing them |
 | Hiding Develop panels you don't use | Yes (Classic) | Planned | | P2 | UX-41 | From a panel header's right-click menu; a hidden panel that holds edits shows anyway |
 | Reordering Develop panels | Yes (Classic) | Undecided | | | | |
 | Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
