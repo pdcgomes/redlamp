@@ -651,7 +651,7 @@ final class FirstThumbnails {
 }
 
 /// Renders after a relaunch (LIB-17): the index records each photo's edit whose render is stored, so the render shows
-/// from the start, until the photo's sidecar says otherwise.
+/// from the start, until the photo's sidecar says otherwise; and a photo's first edit renders wherever it is.
 @MainActor
 extension EditRendersTests {
     @Test func `after a relaunch, an edited photo's stored render shows from the start, before its sidecar is read again`(
@@ -748,5 +748,52 @@ extension EditRendersTests {
         try await fixture.eventually { fixture.renders.shownEdit(for: item) == digest }
         let after = await fixture.model.thumbnailLoader.image(for: item)
         #expect(EditRenderFixture.isRender(after, exposure: 1), "rendered again")
+    }
+
+    @Test func `a photo's first edit made off screen is rendered in the background, as other edits are`() async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        let names = (0 ..< 24).map { String(format: "IMG_%02d.JPG", $0) }
+        try fixture.photos(names)
+        try fixture.edit(names[1], exposure: 1)
+        try await fixture.open()
+        let renders = fixture.renders
+        renders.show(0 ..< 3, in: .grid)
+        try await fixture.eventually { renders.statistics.rendered == 1 }
+        try #require(renders.statistics.rendered == 1)
+        // The rest of the source looked at, with nothing more to render.
+        try await Task.sleep(for: .milliseconds(300))
+
+        // Paste, Sync or another Mac gives a photo far off screen its first edit.
+        try fixture.edit(names[20], exposure: -1, telling: true)
+        try await fixture.eventually { renders.statistics.rendered == 2 }
+        #expect(renders.statistics.rendered == 2, "rendered without coming near the screen")
+        #expect(fixture.engine.opened.withLock { $0.last } == fixture.photo(names[20]))
+        let item = try #require(fixture.item(names[20]))
+        #expect(try renders.shownEdit(for: item) == EditRenderFixture.digest(exposure: -1))
+    }
+
+    @Test func `in a large folder too, a photo's first edit made off screen is rendered in the background`(
+    ) async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        let names = (0 ..< 24).map { String(format: "IMG_%02d.JPG", $0) }
+        try fixture.photos(names)
+        try fixture.edit(names[1], exposure: 1)
+        fixture.library.largestRead = 8
+        fixture.library.firstRead = 4
+        try await fixture.open()
+        try await fixture.eventually { fixture.model.items.readsOnRequest && fixture.model.items.count == names.count }
+        try #require(fixture.model.items.readsOnRequest, "shown as a large folder")
+        let renders = fixture.renders
+        renders.show(0 ..< 3, in: .grid)
+        try await fixture.eventually { renders.statistics.rendered == 1 }
+        try #require(renders.statistics.rendered == 1)
+        try await Task.sleep(for: .milliseconds(300))
+
+        try fixture.edit(names[20], exposure: -1, telling: true)
+        try await fixture.eventually { renders.statistics.rendered == 2 }
+        #expect(renders.statistics.rendered == 2, "rendered though its row was never on screen")
+        #expect(fixture.engine.opened.withLock { $0.last } == fixture.photo(names[20]))
     }
 }

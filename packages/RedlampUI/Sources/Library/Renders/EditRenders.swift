@@ -19,7 +19,8 @@ import RedlampLibrary
 /// - Changes: a photo whose sidecar or file changed (the editor's saves, and other apps' changes that
 ///   LibraryLive reports) is read again, showing what it showed until then. When its edit changed, it
 ///   shows its embedded preview until the new edit is rendered, never the old edit's, whose renders leave
-///   the store unless another copy of the photo shows them.
+///   the store unless another copy of the photo shows them. A photo given its first edit is read and rendered
+///   in its turn, as the others are, wherever it is in the source.
 /// - Develop first: a render starts, and goes from one step to the next (opening the photo, rendering
 ///   it), only while no export runs and no dialog is open, Develop isn't shown or has asked for no frame
 ///   for `developQuiet` and isn't opening a photo, no thumbnail on screen waits, and the Mac isn't hot or
@@ -110,9 +111,13 @@ public final class EditRenders {
     private var readCursor = 0
     private var renderCursor = 0
     /// A large source's photos with an edit, by their rows in order, which the rest of the source is looked at in:
-    /// nil until they're found, and again once photos come or go (`findEdited`).
+    /// nil until they're found, and again once photos come, go or change (`findEdited`).
     private var editedRows: [Int]?
     private var findingEdited = false
+    /// Photos changed while their edits were being found, so they're found again.
+    private var findAgain = false
+    /// Counts the changes that move the source's photos, which `editedRows` are rows of.
+    private var layout = 0
     /// Whether a photo whose sidecar isn't read shows the render the index records for it; not once
     /// `renderAgain()` removed the renders.
     private var showsRecords = true
@@ -318,6 +323,7 @@ public final class EditRenders {
 
     private func changed(_ diff: LibraryDiff) {
         if diff.reset || !diff.removed.isEmpty || !diff.inserted.isEmpty {
+            layout += 1
             (readCursor, renderCursor) = (0, 0)
             editedRows = nil
             if diff.reset {
@@ -328,6 +334,16 @@ public final class EditRenders {
             }
             if let current, library.index(of: current.url) == nil {
                 current.task.cancel()
+            }
+        } else if let first = diff.updated.first {
+            // A photo may have been given its first edit, on screen or off it (Sync, Paste, another Mac): the rest of
+            // the source is looked at again from the first photo that changed, and a large source's photos with an
+            // edit are found again.
+            readCursor = min(readCursor, first)
+            renderCursor = min(renderCursor, first)
+            if library.items.readsOnRequest {
+                editedRows = nil
+                findAgain = findingEdited
             }
         }
         var gone: [URL] = []
@@ -496,22 +512,26 @@ extension EditRenders {
         }
     }
 
-    /// Finds the large source's photos with an edit, off the main thread, for `scanLarge`.
+    /// Finds the large source's or folder's photos with an edit, and their rows, off the main thread, for
+    /// `scanLarge`: again when photos moved or changed meanwhile.
     private func findEdited() {
-        guard !findingEdited, let engine = library.service?.core?.engine, let source = library.shownSourcePhotos,
+        guard !findingEdited, let engine = library.service?.core?.engine,
               let query = try? LibraryQuery(parsing: "edited:yes")
         else { return }
         findingEdited = true
-        let revision = library.revision
+        findAgain = false
+        let (layout, list) = (layout, library.photoList)
+        let source = list.source
         Task { [weak self] in
-            let found = try? await engine.list(source, matching: query)
+            let rows = await Task.detached(priority: .utility) { () -> [Int]? in
+                guard let found = try? await engine.list(source, matching: query) else { return nil }
+                return found.ids.compactMap(list.index(of:)).sorted()
+            }.value
             guard let self else { return }
             findingEdited = false
-            guard library.revision == revision, library.items.readsOnRequest else {
-                return library.items.readsOnRequest ? findEdited() : ()
-            }
-            let list = library.photoList
-            editedRows = found.map { $0.ids.compactMap(list.index(of:)).sorted() } ?? []
+            guard library.items.readsOnRequest else { return }
+            guard self.layout == layout, !findAgain else { return findEdited() }
+            editedRows = rows ?? []
             schedulePump()
         }
     }
