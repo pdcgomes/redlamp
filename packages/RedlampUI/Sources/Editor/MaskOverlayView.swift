@@ -49,8 +49,9 @@ struct MaskOverlayView: View {
                 ForEach(model.maskOutlines) { mask in
                     if model.showMaskPins, mask.id != model.selectedMaskID, let first = mask.components.first,
                        let center = model.maskPins[mask.id] ?? shapes[first.id]?.center {
+                        // The hover and the tooltip go on the pin itself: after `position` they'd
+                        // follow its frame, which is the whole canvas.
                         Pin(selected: false)
-                            .position(frame.view(center))
                             .onTapGesture { model.selectMask(mask.id) }
                             .onHover { inside in
                                 if inside {
@@ -67,6 +68,7 @@ struct MaskOverlayView: View {
                                 }
                             }
                             .help(mask.name)
+                            .position(frame.view(center))
                     }
                 }
 
