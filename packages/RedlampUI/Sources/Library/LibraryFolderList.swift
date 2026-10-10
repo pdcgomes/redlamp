@@ -393,9 +393,10 @@ extension LibraryFolderList {
             let (path, includesSubfolders) = (path, includesSubfolders)
             let read = try await index.read { reader -> ([PhotoRecord], [Int64: String], [Int64: EditDigest])? in
                 guard let top = try reader.folder(path: path) else { return nil }
+                let renderer = EditRenders.renderer
                 guard includesSubfolders else {
-                    let rows = try reader.photos(inFolder: top.id)
-                    return try (rows, [top.id: top.path], Self.renderedEdits(of: rows, in: reader))
+                    let edits = try reader.standingPhotoEdits(inFolders: [top.id], renderer: renderer)
+                    return try (reader.photos(inFolder: top.id), [top.id: top.path], edits)
                 }
                 let below = path == "/" ? "/" : path + "/"
                 var folders: [Int64: String] = [:]
@@ -403,8 +404,8 @@ extension LibraryFolderList {
                     where folder.path == path || folder.path.hasPrefix(below) {
                     folders[folder.id] = folder.path
                 }
-                let rows = try reader.photos(inSubtreeOf: top.id)
-                return try (rows, folders, Self.renderedEdits(of: rows, in: reader))
+                let edits = try reader.standingPhotoEdits(inFolders: folders.keys, renderer: renderer)
+                return try (reader.photos(inSubtreeOf: top.id), folders, edits)
             }
             items = [:]
             keys = [:]

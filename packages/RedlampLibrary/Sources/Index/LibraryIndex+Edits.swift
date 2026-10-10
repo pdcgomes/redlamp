@@ -56,6 +56,27 @@ public extension IndexQueries {
         }
         return edits
     }
+
+    /// The digests of the edits recorded for the photos of `folders` that stand for them as their rows are now, for
+    /// `renderer`, by photo ID: a folder's in one statement, through its photos with sidecars.
+    func standingPhotoEdits(inFolders folders: some Sequence<Int64>, renderer: Int) throws -> [Int64: EditDigest] {
+        let statement = try database.cached("""
+        SELECT e.photo, e.digest FROM photos p JOIN photo_edits e ON e.photo = p.id
+        WHERE p.folder = ? AND p.sidecar_modified IS NOT NULL AND e.renderer = ?
+          AND e.sidecar_modified = p.sidecar_modified
+        """)
+        try statement.bind(renderer, at: 2)
+        var edits: [Int64: EditDigest] = [:]
+        for folder in folders {
+            try statement.bind(folder, at: 1)
+            try statement.forEachRow { row in
+                if let digest = row.data(at: 1).flatMap(EditDigest.init(data:)) {
+                    edits[row.int64(at: 0)] = digest
+                }
+            }
+        }
+        return edits
+    }
 }
 
 public extension LibraryIndex.Writer {

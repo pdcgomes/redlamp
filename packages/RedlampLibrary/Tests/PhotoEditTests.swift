@@ -58,6 +58,10 @@ struct PhotoEditTests {
         #expect(recorded == [true, false, false], "a sidecar saved since, or none, records nothing")
         #expect(try await Self.standing(sandbox, ids) == [ids[0]: Self.digest(1)])
         #expect(try await Self.standing(sandbox, ids, renderer: 2).isEmpty, "edits rendered another way stand for none")
+        let first = try await sandbox.index.read { try $0.photo(id: ids[0]) }
+        let folder = try #require(first?.folder)
+        let inFolder = try await sandbox.index.read { try $0.standingPhotoEdits(inFolders: [folder], renderer: 1) }
+        #expect(inFolder == [ids[0]: Self.digest(1)], "a folder's photos' at once")
         let (edits, row) = try await sandbox.index.read { try ($0.photoEdits(ids), $0.photo(id: ids[0])) }
         let edit = try #require(edits[ids[0]])
         #expect(edit.digest == Self.digest(1) && edit.renderer == 1)
