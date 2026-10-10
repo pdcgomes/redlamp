@@ -44,7 +44,7 @@
       "feature": "Mask your subject in one click with an AI mask that runs on the Mac, invert it to select the background, and darken the background so the subject stands out.",
       "audience": "People who edit now and then, portrait and family photographers, people used to phone filter apps.",
       "source": "README: Masking (AI masks: Subject with Apple Vision's built-in models and nothing to download; Invert, as Lightroom's; Subject edges solved per pixel, which brings back stray hairs; mask presets including Darken Background); Models on demand (every model runs on the Mac; photos are never uploaded).",
-      "stage": "in review",
+      "stage": "rendered",
       "hooks": {
         "a": [
           "MASK YOUR SUBJECT",
