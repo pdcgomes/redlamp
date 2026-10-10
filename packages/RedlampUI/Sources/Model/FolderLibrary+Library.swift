@@ -243,23 +243,25 @@ extension FolderLibrary {
 
     /// Takes over the photos listed here from the library's, off the main thread: photos only one
     /// side has are removed or inserted, and those whose badges differ updated, keeping each file's
-    /// dates as listed so cells and the thumbnail cache see the same photo.
+    /// dates as listed so cells and the thumbnail cache see the same photo. The edited photos are updated
+    /// too, whatever shows the same: they're the library's now, with its renders of their edits (LIB-17).
     private func adopt(_ library: [LibraryItem], generation: Int) {
         let (current, revision) = (items.allRows, revision)
         fromLibrary.adopting = true
         Task { [weak self] in
-            let difference = await Task.detached(priority: .userInitiated) {
-                Self.difference(from: current, to: library)
+            let (difference, edited) = await Task.detached(priority: .userInitiated) {
+                (Self.difference(from: current, to: library), library.filter(\.hasEdits).map(\.url))
             }.value
             guard let self, self.generation == generation, fromLibrary.list != nil else { return }
             guard self.revision == revision else { return adopt(library, generation: generation) }
             for (index, item) in difference.updated {
                 items[index] = item
             }
-            if !difference.removed.isEmpty || !difference.inserting.isEmpty || !difference.updated.isEmpty {
+            let inserting = Set(difference.inserting.map(\.url))
+            let updated = difference.updated.map { items[$0.index].url } + edited.filter { !inserting.contains($0) }
+            if !difference.removed.isEmpty || !difference.inserting.isEmpty || !updated.isEmpty {
                 apply(
-                    removed: difference.removed, inserting: difference.inserting,
-                    updated: difference.updated.map { items[$0.index].url }, probing: false,
+                    removed: difference.removed, inserting: difference.inserting, updated: updated, probing: false,
                 )
             }
             listedDirectories.formUnion(difference.inserting.map(\.folderPath))

@@ -228,20 +228,24 @@ final class EditRenderFixture {
         }
     }
 
+    /// Where the library keeps its index and store.
+    var paths: LibraryPaths {
+        LibraryPaths(root: base.appending(path: "Library"))
+    }
+
     /// The library indexes the root and shows it in an editor, in `module`, renders paused while
-    /// `running` is false; `showing` makes views of the editor before the root opens.
+    /// `running` is false; `showing` makes views of the editor before the root opens. Unless `waiting`, the root
+    /// opens at once, as a launch restores its folder, listed from the disk until the library can show it.
     func open(
-        module: AppModule = .library, running: Bool = true, showing: (EditorModel) -> Void = { _ in },
+        module: AppModule = .library, running: Bool = true, waiting: Bool = true,
+        showing: (EditorModel) -> Void = { _ in },
     ) async throws {
         library.add([root])
-        service = LibraryService(
-            paths: LibraryPaths(root: base.appending(path: "Library")),
-            sidecars: library.sidecars,
-        ) {
-            url, size in StoreThumbnailMaker.imageIO(url, nil, size)
+        service = LibraryService(paths: paths, sidecars: library.sidecars) { url, size in
+            StoreThumbnailMaker.imageIO(url, nil, size)
         }
         library.attach(service)
-        for _ in 0 ..< 2000 {
+        for _ in 0 ..< (waiting ? 2000 : 0) {
             if await service.canShow(root, includingSubfolders: true) {
                 break
             }
@@ -264,7 +268,8 @@ final class EditRenderFixture {
     /// launch does, its edits rendered by the same engine, renders paused while `running` is false; `showing` makes
     /// views of the editor before the root opens.
     func relaunch(
-        running: Bool = true, whileClosed: () throws -> Void = {}, showing: (EditorModel) -> Void = { _ in },
+        running: Bool = true, waiting: Bool = true, whileClosed: () throws -> Void = {},
+        showing: (EditorModel) -> Void = { _ in },
     ) async throws {
         model.editRenders.isRunning = false
         model.editRenders.letEngineGo()
@@ -275,7 +280,7 @@ final class EditRenderFixture {
         try whileClosed()
         library = FolderLibrary()
         model = nil
-        try await open(running: running, showing: showing)
+        try await open(running: running, waiting: waiting, showing: showing)
     }
 
     /// The edit of the photo at `path` whose render the index records as stored, standing for its sidecar as it is.
@@ -748,6 +753,37 @@ extension EditRendersTests {
         try await fixture.eventually { fixture.renders.shownEdit(for: item) == digest }
         let after = await fixture.model.thumbnailLoader.image(for: item)
         #expect(EditRenderFixture.isRender(after, exposure: 1), "rendered again")
+    }
+
+    @Test func `a folder listed from the disk before the library opens shows its stored renders once the library takes it over`(
+    ) async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        let names = (0 ..< 6).map { String(format: "IMG_%02d.JPG", $0) }
+        try fixture.photos(names)
+        for name in names.prefix(4) {
+            try fixture.edit(name, exposure: 1)
+        }
+        try await fixture.open()
+        let digest = try EditRenderFixture.digest(exposure: 1)
+        try await fixture.eventually { fixture.renders.statistics.rendered == 4 }
+        try await fixture.waitForRecord(names[3], digest)
+
+        // An index without the records (made before them, say), so each photo's sidecar must be read again.
+        let index = fixture.paths.index
+        try await fixture.relaunch(running: false, waiting: false, whileClosed: {
+            try SQLiteDatabase(path: index.path).execute("DELETE FROM photo_edits")
+        })
+        let urls = names.prefix(4).map { fixture.photo($0) }
+        try await fixture.eventually {
+            urls.allSatisfy { fixture.library.item(for: $0).flatMap(fixture.renders.shownEdit(for:)) == digest }
+        }
+        for url in urls {
+            let item = try #require(fixture.library.item(for: url))
+            #expect(item.renderedEdit == nil, "nothing recorded for it")
+            #expect(fixture.renders.shownEdit(for: item) == digest, "its render, its sidecar read again")
+        }
+        #expect(fixture.engine.rendered.withLock { $0.count } == 4, "none rendered again")
     }
 
     @Test func `a photo's first edit made off screen is rendered in the background, as other edits are`() async throws {
