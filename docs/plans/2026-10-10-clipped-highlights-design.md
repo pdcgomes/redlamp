@@ -6,7 +6,7 @@ The owner decided on 10 October 2026 that it is fixed properly, in rendering, un
 
 Proposed tracker row: CAM-31 (below). Related rows: CAM-08 (Done, 6789502, the reconstruction this corrects) and CAM-09 (segmentation-based reconstruction of fully blown highlights, not started).
 
-**Status (2026-10-10):** proposed. The candidates are prototyped in the engine on the local branch `fix/clipped-highlights-prototype` (a77757f9, f893ba93), behind environment variables that don't belong on main; the measurements' scripts are in `research/prototypes/highlights/`.
+**Status (2026-10-10):** accepted by the owner: candidate E, keeping the surroundings' colour where one or two colours clipped; gated by a variant session per raw revision, so older edits render exactly as before; and 0.2.9 waits for it. The candidates are prototyped in the engine on the local branch `fix/clipped-highlights-prototype` (a77757f9, f893ba93), behind environment variables that don't belong on main; the measurements' scripts are in `research/prototypes/highlights/`.
 
 ## What the sky is
 
