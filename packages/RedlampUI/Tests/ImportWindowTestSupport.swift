@@ -14,11 +14,6 @@ import UniformTypeIdentifiers
 /// apart; photo `n` has the same bytes wherever it's written, so the library recognises it.
 @MainActor
 final class ImportWindowFixture {
-    static let scratch: URL = {
-        let ssd = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
-        return FileManager.default.fileExists(atPath: ssd.path) ? ssd : FileManager.default.temporaryDirectory
-    }()
-
     let base: URL
     let suite = "import-window-tests-\(UUID().uuidString)"
     let defaults: UserDefaults
@@ -50,7 +45,8 @@ final class ImportWindowFixture {
     }
 
     static func make() async throws -> ImportWindowFixture {
-        let base = scratch.appending(path: "import-window-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let base = LibrarySandbox.scratch
+            .appending(path: "import-window-\(UUID().uuidString)", directoryHint: .isDirectory)
             .standardizedFileURL
         try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         let paths = LibraryPaths(root: base.appending(path: "Library", directoryHint: .isDirectory))

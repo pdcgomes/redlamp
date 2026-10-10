@@ -8,11 +8,11 @@ import Testing
 import UniformTypeIdentifiers
 @_spi(Harness) @testable import RedlampUI
 
-/// A library of small JPEGs on the external disk's scratch folder, indexed, in an editor, for the left panel's
-/// Library and Collections sections (LIB-23); removed with what it made.
+/// A library of small JPEGs in the scratch folder, indexed, in an editor, for the left panel's Library and
+/// Collections sections (LIB-23); removed with what it made.
 @MainActor
 final class SourcesSandbox {
-    let base = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
+    let base = LibrarySandbox.scratch
         .appending(path: "collections-\(UUID().uuidString)", directoryHint: .isDirectory)
     private(set) var model: EditorModel?
     private(set) var service: LibraryService?

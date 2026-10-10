@@ -5,13 +5,13 @@ import RedlampLibrary
 import Testing
 @_spi(Harness) @testable import RedlampUI
 
-/// A folder of small JPEGs on the external disk's scratch folder, indexed and shown from the library in Library's
+/// A folder of small JPEGs in the scratch folder, indexed and shown from the library in Library's
 /// grid, with the left and right columns beside it in a window, for Library's drags (LIB-21, LIB-23, LIB-26): drags
 /// follow a synthetic mouse through the window as the regression suite's do (`SimulatedDrag`). Removed with what it
 /// made.
 @MainActor
 final class DragSandbox {
-    let base = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
+    let base = LibrarySandbox.scratch
         .appending(path: "drags-\(UUID().uuidString)", directoryHint: .isDirectory)
     /// Folders' choices, in a suite of their own that goes with the sandbox.
     let suite = "drags-\(UUID().uuidString)"

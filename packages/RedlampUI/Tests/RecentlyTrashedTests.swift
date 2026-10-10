@@ -14,12 +14,12 @@ import UniformTypeIdentifiers
 /// their sidecars and their rows through the file operations' journal; nothing in it written, and its photos
 /// kept out of Develop; and, empty, a line saying what it holds.
 ///
-/// The Trash is the real one: every photo is a copy made on the external disk's scratch folder, and what a
-/// test leaves in the Trash is removed with it.
+/// The Trash is the real one: every photo is a copy made in the scratch folder, and what a test leaves in the
+/// Trash is removed with it.
 @MainActor
 @Suite(.serialized)
 struct RecentlyTrashedTests {
-    private let base = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
+    private let base = LibrarySandbox.scratch
         .appending(path: "naming-trash-\(UUID().uuidString)", directoryHint: .isDirectory)
 
     private var root: URL {

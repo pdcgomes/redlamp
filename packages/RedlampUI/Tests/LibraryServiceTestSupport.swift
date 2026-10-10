@@ -4,9 +4,16 @@ import RedlampLibrary
 import Synchronization
 @_spi(Harness) @testable import RedlampUI
 
-/// How a test's scratch folder of photos and libraries is removed.
+/// Where a test's scratch folder of photos and libraries is made, and how it's removed.
 @MainActor
 enum LibrarySandbox {
+    /// The external disk's scratch folder when this Mac has one, else the temporary folder: CI's runner has no
+    /// external disk.
+    nonisolated static let scratch: URL = {
+        let ssd = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
+        return FileManager.default.fileExists(atPath: ssd.path) ? ssd : FileManager.default.temporaryDirectory
+    }()
+
     /// The folders whose libraries' indexes are closing, still to go.
     private nonisolated static let going = Mutex<Set<URL>>([])
 

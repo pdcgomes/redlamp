@@ -17,7 +17,7 @@ struct LibraryUndoOrderTests {
     /// following the selection; E in the Trash, put there by one of the library's batches.
     @MainActor
     final class Sandbox {
-        let base = URL(fileURLWithPath: "/Volumes/SSD/redlamp-tmp", isDirectory: true)
+        let base = LibrarySandbox.scratch
             .appending(path: "undo-order-\(UUID().uuidString)", directoryHint: .isDirectory)
         let defaults = UserDefaults(suiteName: "undo-order-\(UUID().uuidString)")
         private(set) var service: LibraryService!

@@ -66,7 +66,7 @@ struct VolumeIOTests {
         #expect(VolumeIO.initialWidth(for: onBoard) == CoreCounts.performance)
         #expect(VolumeIO.initialWidth(for: external) == 2)
         let io = VolumeIO(volume: network, fileSystem: LocalFileSystem(), probe: URL(fileURLWithPath: "/"))
-        #expect(io.width == 4 && io.throughput == 0 && io.isReachable)
+        #expect(io.width == min(4, CoreCounts.performance) && io.throughput == 0 && io.isReachable)
     }
 
     @Test func `on a spinning disk the readers narrow, since another reader only queues behind the head`() throws {
