@@ -97,7 +97,7 @@ Lightroom defined how millions of photographers edit, but it is a cross-platform
 - [x] Hot pixels are repaired before demosaicing, judged against each photo's own noise level.
 - [x] Row and column banding is measured in the sensor's masked (optical-black) margins and subtracted with the black level, only where the margins show more than their own noise.
 - [x] **DNG gain maps** (OpcodeList2), such as phones' lens shading correction, are applied before demosaicing, and noise reduction scales with the noise they amplify.
-- [x] **Highlight reconstruction:** channels are no longer clipped at 1 after white balance, and photosites that did clip are rebuilt from their bright unclipped neighbours, using the colour measured around the clipped area. Fully blown areas stay neutral.
+- [x] **Highlight reconstruction:** channels are no longer clipped at 1 after white balance, and photosites that did clip are rebuilt from their bright unclipped neighbours, using the colour measured around the clipped area. Fully blown areas stay neutral. From process version 15, highlights clipped in one or two colours keep the colour of what's around them when Highlights or Exposure pull them below white, so a clipped sky stays blue instead of turning lilac, and areas clipped in every colour fade smoothly to neutral.
 - [x] Tested on Sony **ARW**, Canon **CR3**, Nikon **NEF**, Fujifilm **RAF** (X-Trans), Apple **ProRAW DNG** and Google **Pixel DNG**, plus JPEG, HEIC, TIFF, and PNG.
 - [x] The demosaiced image is cached as a full mip pyramid, so interactive renders sample the right resolution for the zoom level.
 - [x] A single fused Metal kernel applies every per-pixel adjustment. Frames are delivered as IOSurfaces, so pixels are never copied between engine and UI.
@@ -877,7 +877,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Texture, Clarity and Dehaze, globally and inside masks, and Moiré and Defringe inside masks <!-- tracker: MSK-03, TON-27 -->
 - [x] Copy Settings with Lightroom's checklist, Sync and Auto Sync across a filmstrip selection <!-- tracker: EDT-08, EDT-17, EDT-18, EDT-19, EDT-20 -->
 - [x] Detail panel: noise reduction scaled to each photo's measured noise, and noise-aware sharpening, with Lightroom's controls <!-- tracker: DN-02, SHP-01 -->
-- [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction <!-- tracker: CAM-05, CAM-06, CAM-08 -->
+- [x] Menon Bayer demosaic with a dual pass for flat noisy areas, hot-pixel repair and highlight reconstruction that keeps a clipped sky's colour <!-- tracker: CAM-05, CAM-06, CAM-08, CAM-31 -->
 - [x] **Recipes:** one format for presets, profiles and LUTs, Base Look tables, camera recipe cards, `.cube`, `.3dl` and HaldCLUT import (with LUTs for S-Log3, LogC3, V-Log and Apple Log footage), 39 bundled recipes, and the Recipe Lab <!-- tracker: EDT-07, TON-11, TON-28 -->
 - [x] Before/After layouts, themes and a Settings window
 - [x] Edge-aware Highlights and Shadows, and edge-refined Dehaze <!-- tracker: TON-05, TON-27 -->
