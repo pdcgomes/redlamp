@@ -24,6 +24,8 @@ export function RemotionRoot() {
   const star: StarPromoProps = { hook: "charging", stars: 25, musicSrc: "star/score.wav", guides: false };
   const pixelkit: PixelkitPromoProps = { hook: DEFAULT_HOOK, musicSrc: "pixelkit/score.wav" };
   const feature: FeatureVideoProps = { episode: "e01", hook: "a", score: "score", opener: true, guides: false, manifest: null };
+  // The episodes built so far, each listed under Features on its own so it opens in one click.
+  const featureEpisodes = ["e01", "e02"];
   return (
     <>
       <Composition
@@ -131,6 +133,19 @@ export function RemotionRoot() {
           defaultProps={feature}
           calculateMetadata={withFrames}
         />
+        {featureEpisodes.map((episode) => (
+          <Composition
+            key={episode}
+            id={episode.toUpperCase()}
+            component={FeatureVideo}
+            durationInFrames={FEATURE_VIDEO_FRAMES}
+            fps={FPS}
+            width={1080}
+            height={1920}
+            defaultProps={{ ...feature, episode }}
+            calculateMetadata={withFrames}
+          />
+        ))}
       </Folder>
       <Folder name="Review">
         <Still
