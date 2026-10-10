@@ -19,6 +19,7 @@
             + ImportScenarios.all
             + LibraryPanelScenarios.all
             + HealthScenarios.all
+            + MissingPhotosScenarios.all
             + CollectionScenarios.all
             + PanelScenarios.all
             + RenameScenarios.all
