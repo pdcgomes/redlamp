@@ -322,11 +322,7 @@ struct AppCommands: Commands {
         }
         item(.zoomIn)
         item(.zoomOut)
-        Toggle(ShortcutAction.labReadout.title, isOn: Binding(
-            get: { model.showsLabReadout },
-            set: { _ in model.perform(.labReadout) },
-        ))
-        .disabled(!model.canPerform(.labReadout))
+        toggle(.labReadout)
         commandItem(.toggleRightPanel)
         toggle(.showPhotosInSubfolders)
         item(.showRecentlyTrashed)
