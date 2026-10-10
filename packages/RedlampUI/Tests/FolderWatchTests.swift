@@ -87,6 +87,30 @@ struct FolderWatchTests {
         #expect(model.items.last?.isSettling == false, "settled once its date was older than the delay")
     }
 
+    @Test func `a photo copied in while another settles settles too`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        try write("Trip/A.ARW")
+        let (model, _) = try await open("Trip")
+
+        try write("Trip/B.ARW", age: 0)
+        try await eventually { model.items.count == 2 }
+        // The folder now waits for B; C arrives during the wait, and is younger than B when it ends.
+        try write("Trip/C.ARW", age: 0)
+        try await eventually { model.items.count == 3 }
+        try await eventually(10) { !model.items.contains(where: \.isSettling) }
+        #expect(model.items.filter(\.isSettling).map(\.name) == [])
+    }
+
+    @Test func `a photo dated ahead of the clock isn't taken for one being copied in`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        try write("Trip/A.ARW")
+        let (model, _) = try await open("Trip")
+
+        try write("Trip/B.ARW", age: -3600)
+        try await eventually { model.items.count == 2 }
+        #expect(model.items.last?.isSettling == false)
+    }
+
     @Test func `with subfolders, a new subfolder's photos arrive in order`() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         try write("Trip/a.ARW")

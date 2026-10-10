@@ -151,7 +151,9 @@ extension FolderLibrary {
         let now = Date()
         var incoming: [URL: LibraryItem] = [:]
         for var item in listing.map(LibraryItem.items) ?? [] {
-            item.isSettling = now.timeIntervalSince(item.modified) < Self.settleDelay
+            // Dated further ahead than that, a photo was copied with its source's date (a camera's
+            // clock set ahead), and has finished.
+            item.isSettling = abs(now.timeIntervalSince(item.modified)) < Self.settleDelay
             incoming[item.url] = item
         }
         var removed = IndexSet()
@@ -184,8 +186,9 @@ extension FolderLibrary {
                     walkIn(subfolder)
                 }
             }
-            if inserting.contains(where: \.isSettling) || updated
-                .contains(where: { item(for: $0)?.isSettling == true }) {
+            // Unchanged photos too: one that arrived while the directory already waited was listed
+            // again when that wait ended, maybe before its own date was old enough.
+            if items.contains(where: { $0.folderPath == directory && $0.isSettling }) {
                 settle(directory)
             }
         } else {
