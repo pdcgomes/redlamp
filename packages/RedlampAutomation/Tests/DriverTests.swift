@@ -229,6 +229,23 @@ struct DriverTests {
         #expect(Views.popoverWindow == nil, "a closing popover isn't one to click in")
     }
 
+    /// The Mask Presets menu heads its presets with a section when several photos are selected:
+    /// the arrow keys pass over the header, so counting it would choose the item after.
+    @Test func `the keys step past a menu's section headers, separators and what's disabled`() {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem.sectionHeader(title: "Apply to 3 Selected Photos"))
+        let disabled = NSMenuItem(title: "Smooth Skin", action: nil, keyEquivalent: "")
+        disabled.isEnabled = false
+        menu.autoenablesItems = false
+        for title in ["Blue Sky", "Brighten Subject"] {
+            menu.addItem(NSMenuItem(title: title, action: #selector(NSText.selectAll(_:)), keyEquivalent: ""))
+        }
+        menu.addItem(disabled)
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Delete Preset", action: #selector(NSText.selectAll(_:)), keyEquivalent: ""))
+        #expect(Menus.steps(in: menu).map(\.title) == ["Blue Sky", "Brighten Subject", "Delete Preset"])
+    }
+
     @Test func `holding a modifier makes the event the app's flags handling reads`() throws {
         let event = try Keyboard.flags(.option)
         #expect(event.type == .flagsChanged)

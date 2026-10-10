@@ -4,12 +4,12 @@
     @_spi(Harness) import RedlampUI
     import Synchronization
 
-    /// The Masks panel (UX-20 to UX-24) worked through its own controls, as a person works it:
+    /// The Masks panel (UX-20 to UX-26) worked through its own controls, as a person works it:
     /// clicks on its buttons, tiles, rows and checkboxes, choices in its menus, and drags on its
     /// value fields. Hovers aren't among them, since SwiftUI reads them from the real pointer:
     /// `PointerPreviewTests` and `MasksPanelViewTests` cover the previews they start.
     enum MasksPanelScenarios {
-        static let all: [Scenario] = [panel, tools, people]
+        static let all: [Scenario] = [panel, tools, people, presets, landscape]
 
         static let panel = Scenario(
             "masking.panel",
@@ -295,6 +295,127 @@
             try app.main { $0.deleteAllMasks() }
             app.covered([.feature("masking.people"), .mask(.people)], via: .mouse)
         }
+
+        static let presets = Scenario(
+            "masking.panel-presets",
+            "A mask preset from the Masks panel's header onto every photo selected, each one's AI masks made for "
+                + "it, then Undo Sync Settings",
+            claims: [.feature("masking.presets")],
+        ) { app in
+            try app.openMasks()
+            guard let preset = MaskPreset.builtIn.first(where: { $0.name == "Blue Sky" }),
+                  try app.main({ $0.availableAIMaskKinds.contains(.sky) && $0.canApply(preset) })
+            else { throw ScenarioSkip("The Sky mask isn't available") }
+            let working = try app.workingPhoto()
+            try app.choose(.selectAllPhotos)
+            try app.wait("every photo selected") { $0.selectedPhotos.count == $0.items.count }
+            let others = try app.photoNames().filter { $0 != working }
+            try app.expect(!others.isEmpty, "The run's folder has one photo")
+
+            try app.main { $0.maskMessage = nil }
+            try app.choose(preset.name, inMenuOf: .identifier("masks.presets"))
+            try app.wait("\(preset.name) on the open photo", timeout: 240) { model in
+                model.masks.contains { $0.name == preset.name } || model.maskMessage != nil
+            }
+            let (made, message) = try app.main { model in
+                (model.masks.contains { $0.name == preset.name }, model.maskMessage ?? "")
+            }
+            guard made else {
+                try app.wait("the batch", timeout: 600) { $0.settingsSync.progress == nil }
+                if try app.main({ $0.settingsSync.canUndo }) {
+                    try app.choose(.undoSync)
+                    try app.wait("Undo Sync Settings", timeout: 180) { $0.settingsSync.progress == nil }
+                }
+                try app.choose(.deselectOtherPhotos)
+                if message.contains("No sky was found") {
+                    throw ScenarioSkip("Sky found nothing to mask in the working photo")
+                }
+                throw ScenarioFailure("\(preset.name) wasn't applied to the open photo: \(message)")
+            }
+            try app.wait("\(preset.name) on the other photos", timeout: 600) { $0.settingsSync.progress == nil }
+            let given = others.filter { app.sidecarJSON($0).contains("\"\(preset.name)\"") }
+            let report = try app.main { $0.settingsSync.report ?? "" }
+            try app.expect(
+                given.count == others.count || report.contains("\(preset.name)'s masks couldn't be made"),
+                "\(given.count) of \(others.count) other photos got \(preset.name), and the report says: \(report)",
+            )
+            try app.expect(!given.isEmpty, "None of the other photos got \(preset.name): \(report)")
+
+            try app.choose(.undoSync)
+            try app.wait("Undo Sync Settings", timeout: 180) { $0.settingsSync.progress == nil }
+            let kept = others.filter { app.sidecarJSON($0).contains("\"\(preset.name)\"") }
+            try app.expect(kept.isEmpty, "Undo Sync Settings left \(preset.name) on \(kept)")
+            try app.choose(.deselectOtherPhotos)
+            try app.main { $0.deleteAllMasks() }
+            app.covered(.feature("masking.presets"), via: .mouse)
+        }
+
+        static let landscape = Scenario(
+            "masking.panel-landscape",
+            "The Landscape picker by its controls: Cancel, the regions found, two ticked as separate masks, and "
+                + "Add ▸ Landscape on a mask",
+            claims: [.feature("masking.landscape"), .mask(.landscape)],
+        ) { app in
+            try app.openMasks()
+            let needed = Mutex<Bool>(true)
+            try app.run("whether SAM 3 is here") { model in
+                let download = await model.engine.modelNeeded(for: .landscape)
+                needed.withLock { $0 = download != nil }
+            }
+            guard try app.main({ $0.availableAIMaskKinds.contains(.landscape) }), !needed.withLock({ $0 }) else {
+                throw ScenarioSkip("Landscape needs SAM 3, which isn't downloaded")
+            }
+
+            // Landscape opens its picker in the list's place; Cancel gives the list back.
+            try app.tap(.identifier("masks.picker.landscape"))
+            try app.waitFor(.identifier("masks.landscape.cancel"))
+            try app.tap(.identifier("masks.landscape.cancel"))
+            try app.waitFor(.identifier("masks.landscape.cancel"), shown: false)
+
+            try app.pick(.landscape, from: "masks.new")
+            try app.waitFor(.identifier("masks.landscape.create"))
+            let found = Mutex<[LandscapeClass]>([])
+            try app.run("the regions in the photo", timeout: 300) { model in
+                let regions = await (try? model.engine.landscapeFound()) ?? []
+                found.withLock { $0 = regions.map(\.landscape) }
+            }
+            let regions = found.withLock { $0 }
+            guard regions.count > 1 else {
+                try app.tap(.identifier("masks.landscape.cancel"))
+                throw ScenarioSkip("SAM 3 found \(regions.count) region in the working photo, not two")
+            }
+            func region(_ landscape: LandscapeClass) -> Target {
+                .identifier("masks.landscape.region.\(landscape.rawValue)")
+            }
+            try app.waitFor(region(regions[0]), timeout: 60)
+            try app.tap(region(regions[0]))
+            try app.tap(region(regions[1]))
+            try app.waitFor(.identifier("masks.landscape.separate"))
+            try app.tap(.identifier("masks.landscape.separate"))
+            try app.tap(.identifier("masks.landscape.create"))
+            @MainActor func landscapeMasks(_ model: EditorModel) -> Int {
+                model.masks.count { $0.components.contains { $0.shape.kind == .landscape } }
+            }
+            try app.wait("a mask for each region", timeout: 300) { landscapeMasks($0) == 2 || $0.maskMessage != nil }
+            let message = try app.main { $0.maskMessage ?? "" }
+            try app.expect(try app.main(landscapeMasks) == 2, "Create didn't make two masks: \(message)")
+
+            // Add ▸ Landscape on the selected mask: a third region, or the first again.
+            let target = try app.selectedMask()
+            try app.pick(.landscape, from: "masks.add")
+            let third = regions.count > 2 ? regions[2] : regions[0]
+            try app.waitFor(region(third), timeout: 60)
+            try app.tap(region(third))
+            try app.tap(.identifier("masks.landscape.create"))
+            try app.wait("a region added to the mask", timeout: 300) { model in
+                model.recipe.mask(target)?.components.count == 2 || model.maskMessage != nil
+            }
+            let (components, why) = try app
+                .main { ($0.recipe.mask(target)?.components.count ?? 0, $0.maskMessage ?? "") }
+            try app.expect(components == 2, "Add made no component: \(why)")
+            try app.main { $0.deleteAllMasks() }
+            app.covered([.feature("masking.landscape"), .mask(.landscape)], via: .mouse)
+        }
     }
 
     private extension RunningApp {
@@ -333,8 +454,8 @@
             try tap(.identifier(button))
             try waitForPopover("\(button)'s picker")
             try tap(.identifier("masks.picker.\(kind.rawValue)"))
-            if kind == .people {
-                // The People picker takes the list's place; the scenario waits for its buttons.
+            if kind == .people || kind == .landscape {
+                // Their pickers take the list's place; the scenario waits for their buttons.
                 return
             } else if kind.isAI {
                 try wait("the \(kind.name) mask started", timeout: 30) { model in

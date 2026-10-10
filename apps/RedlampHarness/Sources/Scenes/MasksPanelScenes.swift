@@ -29,7 +29,7 @@ extension HarnessScene {
             id: "masks-panel-states",
             title: "States",
             symbol: "square.grid.2x2",
-            synopsis: "The picker for a new mask and for a mask's component, and the People picker",
+            synopsis: "The picker for a new mask and for a mask's component, and the People and Landscape pickers",
             section: .masks,
         ) {
             MasksStatesScene()
@@ -145,7 +145,6 @@ private struct MasksTask: Identifiable, Sendable {
         ),
         MasksTask(
             id: 4, title: "Fix a missed strand", steps: "Refine Edge Brush under the AI component, paint",
-            row: "UX-22",
             shown: { masks in
                 masks.contains { mask in
                     mask.components.contains { component in
@@ -161,10 +160,8 @@ private struct MasksTask: Identifiable, Sendable {
         MasksTask(
             id: 5, title: "Find which mask changed an area", steps: "Pointer over the rows; pins inside each mask",
         ),
-        MasksTask(
-            id: 6, title: "Change a component to Subtract", steps: "Click its operation icon", row: "UX-22",
-        ),
-        MasksTask(id: 7, title: "Invert a mask", steps: "Invert at the top of the mask", row: "UX-24"),
+        MasksTask(id: 6, title: "Change a component to Subtract", steps: "Click its operation icon"),
+        MasksTask(id: 7, title: "Invert a mask", steps: "Invert at the top of the mask"),
         MasksTask(
             id: 8, title: "Make a mask from an existing one", steps: "Add ▸ Existing Mask in the picker, or Duplicate",
             shown: { masks in
@@ -179,12 +176,9 @@ private struct MasksTask: Identifiable, Sendable {
                 }
             },
         ),
+        MasksTask(id: 9, title: "Apply a mask preset to several photos", steps: "Presets with the photos selected"),
         MasksTask(
-            id: 9, title: "Apply a mask preset to several photos", steps: "Presets with the photos selected",
-            row: "UX-25",
-        ),
-        MasksTask(
-            id: 10, title: "Hide every mask but one", steps: "Option-click its eye", row: "UX-24",
+            id: 10, title: "Hide every mask but one", steps: "Option-click its eye",
             shown: { masks in masks.count > 1 && masks.count(where: \.isVisible) == 1 },
         ),
         MasksTask(
@@ -213,12 +207,21 @@ private struct MasksTask: Identifiable, Sendable {
             },
         ),
         MasksTask(
-            id: 14, title: "Water and vegetation", steps: "New Mask ▸ Landscape: tick both", row: "UX-26",
+            id: 14, title: "Water and vegetation", steps: "New Mask ▸ Landscape: tick both",
+            shown: { masks in
+                Set(masks.flatMap(\.components).compactMap(landscape(in:))).isSuperset(of: [.water, .vegetation])
+            },
         ),
     ]
 
     private static func has(_ kind: MaskKind, in mask: MaskLayer) -> Bool {
         mask.components.contains { $0.shape.kind == kind }
+    }
+
+    /// A Landscape component's class.
+    private static func landscape(in component: MaskComponent) -> LandscapeClass? {
+        guard case let .ai(ai) = component.shape, ai.kind == .landscape else { return nil }
+        return ai.part.flatMap(LandscapeClass.init(rawValue:))
     }
 
     /// A People component's part and person.
@@ -255,6 +258,14 @@ private struct MasksStatesScene: View {
                 }
                 specimen("People, nobody found") {
                     PeoplePickerSpecimen(people: 0)
+                }
+            }
+            VStack(alignment: .leading, spacing: 24) {
+                specimen("Landscape, four regions found") {
+                    LandscapePickerSpecimen()
+                }
+                specimen("Landscape, none found") {
+                    LandscapePickerSpecimen(found: false)
                 }
             }
         }

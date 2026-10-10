@@ -807,7 +807,7 @@
         /// its tracking with the item chosen, as a click on it does: a pop-up menu's tracking runs
         /// nothing else on the main thread. Without the item it closes the menu. Whether it chose.
         static func chooseByKeys(_ title: String, in menu: NSMenu) -> Bool {
-            let items = menu.items.filter { !$0.isSeparatorItem && !$0.isHidden && $0.isEnabled }
+            let items = steps(in: menu)
             let position = items.firstIndex { $0.title == title }
             // The menu's tracking reads them from the queue: up to the first item, which arrows
             // don't wrap past, down to this one, and Return.
@@ -818,6 +818,12 @@
             guard let events = try? keys.map(Keyboard.event) else { return false }
             events.forEach { NSApp.postEvent($0, atStart: false) }
             return position != nil
+        }
+
+        /// The items the arrow keys stop on, in order. A section's header (SwiftUI's `Section`
+        /// in a menu) is enabled but never highlighted.
+        static func steps(in menu: NSMenu) -> [NSMenuItem] {
+            menu.items.filter { !$0.isSeparatorItem && !$0.isHidden && !$0.isSectionHeader && $0.isEnabled }
         }
 
         /// Whether the menu bar's item titled `title` shows a checkmark, once its menu has updated it.
