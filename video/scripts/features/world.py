@@ -878,3 +878,155 @@ def opener(c, f, episode, hook, feature):
     appear(c, flat * (1 - handed), lambda c: c.sprite(lx, LOGO_Y, *LAMP_MARK, scale=2))
     appear(c, words * (1 - handed), lambda c: c.text(lx + 24, LOGO_Y + 1, "REDLAMP", "white", font="large", scale=2))
     appear(c, handed, lambda c: header(c, feature))
+
+
+# ---------------------------------------------------------------- the dashboard
+
+# The series' look (the owner, 10 October 2026): each episode's editor drawn as the pixelkit's
+# dashboards are, in the kit's navy with an accent each, a pixel-art scene developed by the feature's
+# controls in place of a photo, a card for what each bar says, and the result in pixel art.
+
+def _hex(h):
+    return np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)]) / 255
+
+
+def _linear(v):
+    return np.where(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055) ** 2.4)
+
+
+def _encode(v):
+    v = np.clip(v, 0, 1)
+    return np.where(v <= 0.0031308, v * 12.92, 1.055 * v ** (1 / 2.4) - 0.055)
+
+
+DUSK_SKY = [(0.0, "#0b0d2e"), (0.3, "#1f1650"), (0.55, "#53206a"), (0.78, "#b03f5c"), (1.0, "#f4893f")]
+DUSK_HORIZON, DUSK_SUN = 0.64, (0.68, 0.53, 0.1)
+
+
+def dusk(width, height):
+    """A dusk as the eye saw it, in linear light: a sky from night to orange over two ridges of hills,
+    a low sun with its glow, still water that mirrors the sky and the sun, and a few stars."""
+    x = (np.arange(width) + 0.5) / width
+    y = (np.arange(height) + 0.5) / height
+    X, Y = np.meshgrid(x, y)
+    aspect, horizon = width / height, DUSK_HORIZON
+    img = np.zeros((height, width, 3))
+    stops = [s for s, _ in DUSK_SKY]
+    cols = np.array([_linear(_hex(c)) for _, c in DUSK_SKY])
+    mirrored = np.where(Y < horizon, Y, 2 * horizon - Y)
+    for k in range(3):
+        img[..., k] = np.interp(np.clip(mirrored / horizon, 0, 1), stops, cols[:, k])
+    sx, sy, sr = DUSK_SUN
+    d = np.hypot((X - sx) * aspect, mirrored - sy)
+    glow = np.exp(-np.maximum(d - sr, 0) / 0.13)
+    img += glow[..., None] * _linear(_hex("#ff8a4a")) * 0.55
+    img[(d < sr) & (Y < horizon)] = _linear(_hex("#ffe39a"))
+    far = (Y > (horizon - 0.1 - 0.045 * np.sin(x * 9 + 1.3) - 0.03 * np.sin(x * 23 + 0.4))[None, :]) & (Y < horizon)
+    near = (Y > (horizon - 0.035 - 0.05 * np.sin(x * 6 + 4.1) - 0.02 * np.sin(x * 17 + 2))[None, :]) & (Y < horizon)
+    img[far] = _linear(_hex("#40205e")) + 0.04 * glow[far][:, None]
+    img[near] = _linear(_hex("#1d0e33"))
+    water = Y >= horizon
+    img[water] *= 0.55
+    rows = np.arange(height)[:, None] * np.ones((1, width))
+    column = (np.abs(X - sx) * aspect < sr * (0.9 - 0.5 * (Y - horizon) / (1 - horizon))) & water & (rows % 3 != 0)
+    img[column] = img[column] * 0.4 + _linear(_hex("#ffc27a")) * 0.75
+    rng = np.random.default_rng(4)
+    for _ in range(width * height // 260):
+        px, py = rng.integers(0, width), rng.integers(0, int(height * horizon * 0.55))
+        if np.hypot((px / width - sx) * aspect, py / height - sy) > sr * 2.5:
+            img[py, px] = _linear(_hex("#f3f4f9"))
+    return img
+
+
+def edited(lin, values):
+    """A scene as a raw opens it, flat and dark, then developed by Basic sliders' values (EXPOSURE,
+    HIGHLIGHTS, SHADOWS, VIBRANCE, by label) in linear light. A drawing of what they do, for pixel art."""
+    grey = lin @ [0.2126, 0.7152, 0.0722]
+    v = (grey[..., None] + (lin - grey[..., None]) * 0.5) * 0.4
+    v = v * 2 ** values.get("EXPOSURE", 0)
+    v = v * (1 + values.get("HIGHLIGHTS", 0) / 100 * 0.6 * np.clip((v - 0.3) / 0.7, 0, 1))
+    v = np.clip(v * (1 + values.get("SHADOWS", 0) / 100 * 0.7 * np.clip(1 - v / 0.22, 0, 1)), 0, 1)
+    grey = v @ [0.2126, 0.7152, 0.0722]
+    sat = np.abs(v - grey[..., None]).max(axis=-1, keepdims=True)
+    v = grey[..., None] + (v - grey[..., None]) * (1 + values.get("VIBRANCE", 0) / 100 * 4.2 * (1 - sat))
+    return Image.fromarray(np.rint(_encode(v) * 255).astype(np.uint8))
+
+
+_scenes, _palettes = {}, {}
+
+
+def scene(draw, values, size, target):
+    """The scene `draw` (width, height) at `size`, developed by `values`, locked as pixel art to a
+    palette taken from it as opened and as `target` develops it."""
+    if draw not in _palettes:
+        tiles = [edited(draw(96, 72), vals) for vals in ({}, target)]
+        sheet = Image.new("RGB", (192, 72))
+        sheet.paste(tiles[0], (0, 0))
+        sheet.paste(tiles[1], (96, 0))
+        flat = sheet.quantize(colors=40, method=Image.Quantize.MEDIANCUT).getpalette()[:120]
+        _palettes[draw] = list(dict.fromkeys(tuple(flat[i:i + 3]) for i in range(0, len(flat), 3)))
+    key = (draw, tuple(sorted(values.items())), size)
+    if key not in _scenes:
+        _scenes[key] = lock(edited(draw(*size), values), _palettes[draw], dither=0.45).convert("RGB")
+    return _scenes[key]
+
+
+def photo_panel(c, rect, image, b, file, *, right="RAW", right_color="dim", mark=None, horizon=DUSK_HORIZON):
+    """The photo in its panel, with the file's name in orange; its water glints below `horizon` (a share
+    of its height, None for none). Returns the content rect."""
+    r = c.panel(*rect, file, color="orange", right=right, right_color=right_color)
+    c.img.paste(image, (r.x, r.y))
+    if horizon is not None:
+        water = round(r.h * horizon)
+        c.shimmer(r.x, r.y + water + 1, r.w, r.h - water - 1, (b / 8) % 1, "orange.light", n=10, seed=5)
+    if mark:
+        tag(c, r, mark)
+    return r
+
+
+def histogram(c, img, r):
+    """A photo's red, green and blue as three interleaved bar graphs, as the app's histogram shows them."""
+    c.rect(*r, "panel")
+    c.box(*r, "line")
+    a = np.asarray(img)
+    bins = (r.w - 4) // 3
+    counts = [np.histogram(a[..., k], bins=bins, range=(0, 256))[0] for k in range(3)]
+    top = max(1, max(int(n.max()) for n in counts))
+    for k, (n, colour) in enumerate(zip(counts, ("red", "green", "sky"))):
+        for i, v in enumerate(n):
+            h = round((r.h - 4) * (v / top) ** 0.5)
+            if h:
+                c.vline(r.x + 2 + 3 * i + k, r.y2 - 2 - h, h, colour)
+
+
+def meters(c, rect, rows, *, title="BASIC", right=None, accent="sky", track=(48, 136)):
+    """A panel of sliders as meters, one a row: (label, accent, value text, share 0 to 1 from the
+    centre's 0.5, lit), each filled from its centre to its value, the lit one brighter on a raised row.
+    `track` is where the meters run, from the panel's left. Returns each knob's (x, y), by label."""
+    r = c.panel(*rect, title, color=accent, right=right, right_color="dim")
+    t0, t1 = rect.x + track[0], rect.x + track[1]
+    knobs = {}
+    for i, (label, colour, text, share, lit) in enumerate(rows):
+        y = r.y + 2 + i * 12
+        if lit:
+            c.rect(r.x - 2, y - 2, r.w + 4, 10, "raised")
+        c.text(r.x, y, label, "white" if lit else colour)
+        c.rect(t0, y + 1, t1 - t0, 3, "shadow")
+        mid, kx = round(t0 + 0.5 * (t1 - t0)), round(t0 + share * (t1 - t0))
+        lo, hi = sorted((mid, kx))
+        c.rect(lo, y + 1, hi - lo + 1, 3, f"{colour}.light" if lit else colour)
+        c.vline(mid, y, 5, "dim")
+        c.rect(kx - 1, y - 1, 3, 7, "white")
+        c.text(r.x2, y, text, "white", align="right")
+        knobs[label] = (kx, y + 2)
+    return knobs
+
+
+def card(c, x, y, title, color, body, *, w=76, h=46):
+    """A widget card over the dashboard: a panel with its accent title and a shadow, `body(c, content)`
+    drawn in it."""
+    c.rect(x + 2, y + 2, w, h, "shadow")
+    body(c, c.panel(x, y, w, h, title, color=color))
+
+
+CLOUD = ["..####......", ".######.##..", "###########.", "############", ".##########."]

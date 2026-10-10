@@ -1,333 +1,195 @@
 """
-E01, Free: a free raw photo editor for Mac. The editor opens the owner's raw as Redlamp opens it; the
-pointer drags the Basic panel's sliders to his edit's values, one or two a bar, while the words say
-what Redlamp costs and where it runs; backslash shows before and after; then the real photo, before
-and after, and the end card. frame() draws any moment of it from the beat; scripts/features-frames.py
-draws every frame with it, and the storyboard's panels are moments of it.
-
-The photo is the owner's cosplayer with orange hair, DSC02372.ARW in ~/src/redlamp-social/photos, and
-every picture of it is Redlamp's render (features/results.py): BEFORE is the raw with his edit's crop
-alone, AFTER is his edit, and each step of a drag is the crop with the sliders moved so far, so the
-pixel photo changes as the real one does. The editor shows a 4:5 part of it about his face, to fill
-its canvas, and the result shows the same part at full resolution.
-
-Until his edit is saved beside the raw (DSC02372.ARW.redlamp), STAND_IN takes its place: his JPEG's
-crop, found by matching the JPEG against Redlamp's render of the whole frame, and the four sliders the
-video moves, set to read well. His JPEG's own grade needs more than these four sliders.
+E01, Free alternative to Lightroom, in the series' look, drawn as the pixelkit's dashboards are (the
+DAW, the fruit music player, the system monitor), from the owner's idea of 10 October 2026. The
+editor's panels are in the kit's navy with an accent each, a pixel-art dusk stands in for the photo,
+the four sliders are coloured meters over a live histogram, and what each bar says comes up as a card:
+a plan at $0 a month, a network panel with nothing uploaded, the licence over a heatmap of commits.
+The result is the dusk before and after, in pixel art. The beats, the words and the sounds are those
+of E01 with the owner's real photo (boards/e01-photo.py), which this takes them from.
 """
 
-import math
-from pathlib import Path
-from typing import NamedTuple
+import importlib.util
 
-from PIL import Image
+import numpy as np
 
-from features import results
 from features import world as w
 
-EPISODE = w.episode("e01")
-FEATURE = "ALTERNATIVE TO LIGHTROOM"
-RAW = Path.home() / "src/redlamp-social/photos/DSC02372.ARW"
-FILE = RAW.name
-FOLDER = w.VIDEO / "public/features/e01/results"
-STAND_IN = {
-    "version": 3,
-    "processVersion": 14,
-    "crop": {"left": 0.4571, "top": 0.2705, "right": 0.9011, "bottom": 0.7148},
-    "values": {"basic.exposure": 1.0, "basic.highlights": -40, "basic.shadows": -60, "basic.vibrance": 30},
-}
-EDIT = results.sidecar(RAW) or STAND_IN
-STANDING_IN = EDIT is STAND_IN
-# The 4:5 part of the photo the editor shows, as shares of its width and height, about his face and
-# leaving out most of the shoulder at the left.
-BOX = (0.1685, 0.1318, 0.9744, 0.8032)
-ASPECT = 4 / 5
-PANEL, RESULT_PANEL = 58, 8
-PHOTO = ("THE OWNER'S DSC02372.ARW (THE COSPLAYER), EVERY PICTURE OF IT REDLAMP'S OWN RENDER: BEFORE WITH THE EDIT'S "
-         "CROP ALONE, AFTER WITH THE EDIT, AND EACH STEP OF A DRAG WITH THE SLIDERS MOVED SO FAR, SHOWN 4:5 ABOUT HIS "
-         "FACE. " + ("THE EDIT IS A STAND-IN UNTIL HIS IS SAVED BESIDE THE RAW: HIS JPEG'S CROP AND THE FOUR SLIDERS SHOWN"
-                     if STANDING_IN else "THE EDIT IS HIS, FROM DSC02372.ARW.REDLAMP"))
+_spec = importlib.util.spec_from_file_location("board_e01_photo", w.VIDEO / "scripts/features/boards/e01-photo.py")
+e01 = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(e01)
+
+EPISODE, FEATURE = e01.EPISODE, e01.FEATURE
+PHOTO = ("NO PHOTO: A PIXEL-ART DUSK STANDS IN FOR IT, DEVELOPED BY THE FOUR SLIDERS AT E01'S VALUES (EXPOSURE "
+         "+1.00, HIGHLIGHTS -40, SHADOWS -60, VIBRANCE +30)")
+FILE = "DUSK.ARW"
+sounds = e01.sounds
+CUE = w.CUE
+
+PHOTO_PANEL = w.Rect(4, 106, 208, 90)
+RESULT_PANEL = w.Rect(4, 106, 208, 178)
+HIST = w.Rect(4, 198, 208, 20)
+BASIC = w.Rect(4, 220, 178, 66)
+LEVEL = w.Rect(190, 224, 18, 58)
+TRACK = (52, 140)
+# Each slider's accent, as the kit gives each layer one.
+ACCENT = {"EXPOSURE": "gold", "HIGHLIGHTS": "cyan", "SHADOWS": "violet", "VIBRANCE": "orange"}
+CAPTION_RESULT = "BEFORE AND AFTER"
 
 
-class Slider(NamedTuple):
-    label: str
-    key: str
-    reach: float
-
-
-class Drag(NamedTuple):
-    """The pointer presses a slider's knob on `press`, moves it a step on each of `ticks`, the last at
-    the edit's value, and lets go on `release`."""
-    slider: Slider
-    press: float
-    ticks: tuple
-    release: float
-
-
-# The Basic panel's sliders this edit moves, in the panel's order, and how far each reaches either side
-# of zero (ParameterSpec).
-SLIDERS = [Slider("EXPOSURE", "basic.exposure", 5), Slider("HIGHLIGHTS", "basic.highlights", 100),
-           Slider("SHADOWS", "basic.shadows", 100), Slider("VIBRANCE", "basic.vibrance", 100)]
-EXPOSURE, HIGHLIGHTS, SHADOWS, VIBRANCE = SLIDERS
-VALUES = results.recipe_of(EDIT).get("values", {})
-TARGET = {s.label: VALUES.get(s.key, 0) for s in SLIDERS}
-
-s1, s2, s3, s4 = (w.CUE[f"step{i}"] for i in range(1, 5))
-DRAGS = [
-    Drag(EXPOSURE, s1, (s1 + 1, s1 + 2, s1 + 3), s1 + 3.5),
-    Drag(HIGHLIGHTS, s2, (s2 + 0.5, s2 + 1), s2 + 1.25),
-    Drag(SHADOWS, s2 + 2, (s2 + 2.5, s2 + 3), s2 + 3.25),
-    Drag(VIBRANCE, s3, (s3 + 1, s3 + 2, s3 + 3), s3 + 3.5),
-]
-# The pointer comes in from the right two beats before the first press.
-ENTER = s1 - 2
-# Backslash is held from the fourth step's cue to two beats later.
-KEY_DOWN, KEY_UP = s4, s4 + 2
-# A knob's step eases in over the frames before its tick and lands on it.
-EASE = 3 / w.PER_BEAT
-# The pixel photo resolves into the real one over this many beats from the result's cue.
-REVEAL = 1.0
-TITLE = w.wrapped(EPISODE["title"].upper())
-CAPTIONS = [(s1, "NO SUBSCRIPTION"), (s2, "NO CLOUD"), (s3, "OPEN SOURCE"), (s4, ["FAMILIAR LAYOUT", "AND SHORTCUTS"]),
-            (w.CUE["result"], w.REAL_PHOTO)]
-
-
-# ---------------------------------------------------------------- the photo, from Redlamp
-
-def states():
-    """The slider values after each tick, from the photo as opened (none) to the whole edit."""
-    out, done = [{}], {}
-    for drag in DRAGS:
-        for k in range(1, len(drag.ticks) + 1):
-            out.append({**done, drag.slider.key: TARGET[drag.slider.label] * k / len(drag.ticks)})
-        done[drag.slider.key] = TARGET[drag.slider.label]
+def values_at(b):
+    """Each slider's value at beat b, stepping as E01's drags do: the photo follows each tick."""
+    done = e01.state_at(b)
+    out, k = {}, 0
+    for drag in e01.DRAGS:
+        n = len(drag.ticks)
+        out[drag.slider.label] = e01.TARGET[drag.slider.label] * max(0, min(n, done - k)) / n
+        k += n
     return out
 
 
-_renders = {}
+def picture(values, size):
+    return w.scene(w.dusk, values, size, e01.TARGET)
 
 
-def real(state):
-    """Redlamp's render after `state` ticks: 0 is BEFORE, the last is AFTER, at full size; those
-    between are smaller, for the pixel photo only."""
-    if state not in _renders:
-        last = len(states()) - 1
-        if state == 0:
-            _renders[state] = results.render(RAW, FOLDER, "before", edit=results.geometry(EDIT))
-        elif state == last:
-            _renders[state] = results.render(RAW, FOLDER, "after", edit=EDIT)
-        else:
-            sets = [(k, round(v, 4)) for k, v in states()[state].items()]
-            _renders[state] = results.render(RAW, FOLDER, f"step-{state}", edit=results.geometry(EDIT), sets=sets,
-                                             size=512)
-    return _renders[state]
+# ---------------------------------------------------------------- the cards
+
+def plan(c, r):
+    c.text(r.cx, r.y + 2, "$0", "green.light", font="large", scale=2, align="center")
+    c.text(r.cx, r.y + 21, "PER MONTH", "text", align="center")
 
 
-def shown(img):
-    """The 4:5 part of a render the editor shows."""
-    l, t, r, b = BOX
-    return img.crop((round(l * img.width), round(t * img.height), round(r * img.width), round(b * img.height)))
+def network(c, r):
+    c.sprite(r.x + 6, r.y + 4, w.CLOUD, {"#": "cyan"})
+    c.icon(r.x + 12, r.y + 2, "cross", "red")
+    c.text(r.x + 26, r.y + 3, "UPLOADS", "dim")
+    c.text(r.x + 26, r.y + 11, "0 B", "white", font="large")
+    c.text(r.cx, r.y + 22, "ON YOUR MAC", "text", align="center")
 
 
-_palette = []
+def source(c, r):
+    commits = [[0, 2, 1, 3, 2, 4, 3, 1, 2, 4, 3], [1, 3, 4, 2, 4, 3, 4, 2, 3, 2, 4], [2, 1, 3, 4, 3, 4, 2, 4, 4, 3, 2]]
+    c.heatmap(r.x + 3, r.y + 2, commits, cell=4, gap=1, colors=["raised", "violet.dark", "violet", "violet.light"])
+    c.text(r.cx, r.y + 22, "MPL-2.0", "white", align="center")
 
 
-def palette():
-    """A palette taken from the photo before and after, with the editor's greys, so his skin, the orange
-    hair and the jacket's red keep their own colours in the pixel photo."""
-    if not _palette:
-        tiles = [shown(real(s)).resize((96, 120), Image.BOX) for s in (0, len(states()) - 1)]
-        sheet = Image.new("RGB", (96 * len(tiles), 120))
-        for i, tile in enumerate(tiles):
-            sheet.paste(tile, (96 * i, 0))
-        flat = sheet.quantize(colors=40, method=Image.Quantize.MEDIANCUT).getpalette()[:120]
-        found = [tuple(flat[i:i + 3]) for i in range(0, len(flat), 3)]
-        _palette.extend(dict.fromkeys(found + [w.THEME.rgb(g) for g in w.GREY.values()]))
-    return _palette
+# Each card, with the beat its bar starts on: what the bar's words say, drawn.
+CARDS = [(e01.s1, "PLAN", "green", plan), (e01.s2, "NETWORK", "cyan", network), (e01.s3, "SOURCE", "violet", source)]
 
 
-_pixels = {}
+# ---------------------------------------------------------------- the dashboard
+
+def meter_x(slider, v):
+    """Where a meter's knob is at value v."""
+    t0, t1 = BASIC.x + TRACK[0], BASIC.x + TRACK[1]
+    return round(t0 + (0.5 + v / (2 * slider.reach)) * (t1 - t0))
 
 
-def pixel(state, size):
-    if (state, size) not in _pixels:
-        _pixels[state, size] = w.lock(w.fit(shown(real(state)), *size, Image.BOX), palette(), dither=0.4).convert("RGB")
-    return _pixels[state, size]
+def basic(c, b):
+    """The Basic panel as meters, the one being dragged lit."""
+    active = next((d.slider for d in e01.DRAGS if d.press <= b < d.release), None)
+    rows = []
+    for s in e01.SLIDERS:
+        v = e01.value_at(s, b)
+        rows.append((s.label, ACCENT[s.label], e01.value_text(s.reach, v), 0.5 + v / (2 * s.reach), s == active))
+    return w.meters(c, BASIC, rows, right="4 SLIDERS", track=TRACK)
 
 
-# ---------------------------------------------------------------- the drags
-
-def value_text(reach, v):
-    if round(v, 2 if reach < 10 else 0) == 0:
-        return "0.00" if reach < 10 else "0"
-    return f"{v:+.2f}" if reach < 10 else f"{v:+.0f}"
-
-
-def steps_done(drag, b):
-    """How many of the drag's steps have landed by beat b, with the next one's share as it eases in."""
-    k = sum(1 for t in drag.ticks if t <= b)
-    if k < len(drag.ticks) and b > drag.ticks[k] - EASE:
-        return k, w.ease((b - drag.ticks[k] + EASE) / EASE)
-    return k, 0.0
-
-
-def value_at(slider, b):
-    for drag in DRAGS:
-        if drag.slider == slider:
-            k, part = steps_done(drag, b)
-            return TARGET[slider.label] * (k + part) / len(drag.ticks)
-    return 0.0
-
-
-def state_at(b):
-    """The photo's state at beat b: how many ticks have landed."""
-    return sum(steps_done(drag, b)[0] for drag in DRAGS)
-
-
-def knob(panel, slider, v):
-    """Where a slider's knob is at value v, as w.slider draws it in the Basic panel."""
-    i = SLIDERS.index(slider)
-    x, y = panel.x, panel.y + 12 + i * 10
-    t0, t1 = x + 46, x + panel.w - 24
-    return t0 + round((0.5 + v / (2 * slider.reach)) * (t1 - t0 - 1)), y + 2
-
-
-def pointer_at(panel, b):
-    """Where the pointer's tip is at beat b and whether it's pressed, or None while it's off screen."""
-    if b < ENTER:
+def pointer_at(knobs, b):
+    """E01's pointer on these meters: it comes in from the right, presses each knob on its beat, moves
+    with it and glides to the next."""
+    if b < e01.ENTER:
         return None
-    first = DRAGS[0]
+
+    def at(slider, v):
+        return meter_x(slider, v), knobs[slider.label][1]
+
+    def glide(a, z, t):
+        return round(a[0] + (z[0] - a[0]) * t), round(a[1] + (z[1] - a[1]) * t)
+
+    first = e01.DRAGS[0]
     if b < first.press:
-        start = (w.W + 6, panel.y + 40)
-        end = knob(panel, first.slider, 0)
-        t = w.ease(w.between(b, ENTER, first.press))
-        return (round(start[0] + (end[0] - start[0]) * t), round(start[1] + (end[1] - start[1]) * t)), False
-    for drag, following in zip(DRAGS, DRAGS[1:] + [None]):
+        return glide((w.W + 6, BASIC.y + 40), at(first.slider, 0), w.ease(w.between(b, e01.ENTER, first.press))), False
+    for drag, following in zip(e01.DRAGS, e01.DRAGS[1:] + [None]):
         if b < drag.release:
-            return knob(panel, drag.slider, value_at(drag.slider, b)), b >= drag.press
+            return at(drag.slider, e01.value_at(drag.slider, b)), b >= drag.press
         if following and b < following.press:
-            start = knob(panel, drag.slider, TARGET[drag.slider.label])
-            end = knob(panel, following.slider, 0)
             t = w.ease(w.between(b, drag.release, following.press))
-            return (round(start[0] + (end[0] - start[0]) * t), round(start[1] + (end[1] - start[1]) * t)), False
-    return knob(panel, DRAGS[-1].slider, TARGET[DRAGS[-1].slider.label]), False
+            return glide(at(drag.slider, e01.TARGET[drag.slider.label]), at(following.slider, 0), t), False
+    last = e01.DRAGS[-1]
+    return at(last.slider, e01.TARGET[last.slider.label]), False
 
 
-def caption_at(b):
-    """The caption at beat b: the title held from the opener, then each step's words."""
-    lines = TITLE
-    for start, words in CAPTIONS:
-        if b >= start:
-            lines = words
-    return lines
-
-
-# ---------------------------------------------------------------- the picture
-
-def editing(c, b):
-    """Bars 1 to 5: the editor, the sliders moving to the edit's values, then backslash held down."""
+def dashboard(c, b):
+    """Bars 1 to 5: the photo, its histogram, its level, the meters with the pointer, and the bar's card;
+    backslash held shows the photo as opened."""
     w.header(c, FEATURE)
-    size = w.layout(aspect=ASPECT, panel=PANEL).photo[2:]
-    held = KEY_DOWN <= b < KEY_UP
-    ed = w.editor(c, pixel(0 if held else state_at(b), size), file=FILE, aspect=ASPECT, panel=PANEL)
-    if held:
-        w.tag(c, ed.photo, "BEFORE")
-    p = ed.panel
-    y = w.panel_title(c, p.x, p.y, p.w, "BASIC")
-    if b >= KEY_DOWN:
+    held = e01.KEY_DOWN <= b < e01.KEY_UP
+    img = picture({} if held else values_at(b), (PHOTO_PANEL.w - 8, PHOTO_PANEL.h - 16))
+    r = w.photo_panel(c, PHOTO_PANEL, img, b, FILE, mark="BEFORE" if held else None)
+    w.histogram(c, img, HIST)
+    c.seg_column(*LEVEL, min(1.0, float(np.asarray(img).mean()) / 255 * 2.2), "gold", seg=2, gap=1)
+    for start, title, colour, body in CARDS:
+        if start <= b < start + 4:
+            grown = w.between(b, start, start + 6 / w.PER_BEAT)
+            w.appear(c, grown, lambda c, t=title, col=colour, bd=body: w.card(c, r.x + 4, r.y + 8, t, col, bd))
+            if b < start + 0.5:
+                c.sparkles(r.x + 2, r.y + 6, 82, 52, 8, [f"{colour}.light", "white"], seed=int(b * w.PER_BEAT))
+    if b >= e01.KEY_DOWN:
+        p = c.panel(*BASIC, "SHORTCUTS", color="gold")
         label = "BEFORE / AFTER"
-        box = w.Rect(p.x - 3, p.y + 9, p.w + 3, 43)
-        c.rect(*box, w.GREY["chrome"])
-        c.box(*box, w.GREY["light"])
         width = 25 + 6 + c.measure(label, "large")
-        w.keycap(c, box.cx - width // 2, box.y + 9, "\\", label, pressed=held, size=25, scale=2)
+        w.keycap(c, p.cx - width // 2, p.y + 8, "\\", label, pressed=held, size=25, scale=2)
     else:
-        active = next((d.slider for d in DRAGS if d.press <= b < d.release), None)
-        for i, s in enumerate(SLIDERS):
-            v = value_at(s, b)
-            w.slider(c, p.x, y + i * 10, p.w, s.label, value_text(s.reach, v), 0.5 + v / (2 * s.reach), active=s == active)
-        at = pointer_at(p, b)
+        knobs = basic(c, b)
+        at = pointer_at(knobs, b)
         if at:
             w.pointer(c, *at[0], pressed=at[1])
-    w.caption(c, caption_at(b))
+    w.caption(c, e01.caption_at(b))
     return []
 
 
 def result(c, b):
-    """Bar 6: the panel folds away and the photo resolves into Redlamp's render before the edit, then
-    shows the edit from the flip."""
+    """Bar 6: the photo fills the stage, as opened, then developing into the edit on the flip."""
     w.header(c, FEATURE)
-    size = w.layout(aspect=ASPECT, panel=RESULT_PANEL).photo[2:]
-    after = b >= w.CUE["flip"]
-    state = len(states()) - 1 if after else 0
-    ed = w.editor(c, pixel(state, size), file=FILE, aspect=ASPECT, panel=RESULT_PANEL)
-    progress = 1.0 if after else w.between(b, w.CUE["result"], w.CUE["result"] + REVEAL)
-    return w.result_frame(c, ed, shown(real(state)), mark="AFTER" if after else "BEFORE", progress=progress, block=2)
-
-
-def end_card(c, b):
-    """Bars 7 and 8: the lamp comes on with the end line, the call to action from its cue, then the fade."""
-    light = math.ceil(6 * w.ease(w.between(b, w.CUE["endLine"], w.CUE["endLine"] + 1))) / 6
-    w.cta_card(c, EPISODE["endLine"], cta=b >= w.CUE["cta"], light=light)
-    w.fade(c, w.between(b, w.CUE["fade"], w.CUE["end"]))
+    size = (RESULT_PANEL.w - 8, RESULT_PANEL.h - 16)
+    if b < CUE["flip"]:
+        w.photo_panel(c, RESULT_PANEL, picture({}, size), b, FILE, right="BEFORE", right_color="text")
+    else:
+        flat = w.canvas()
+        w.header(flat, FEATURE)
+        w.photo_panel(flat, RESULT_PANEL, picture({}, size), b, FILE, right="BEFORE", right_color="text")
+        r = w.photo_panel(c, RESULT_PANEL, picture(e01.TARGET, size), b, FILE, right="AFTER", right_color="gold")
+        w.develop(c, flat.img, w.between(b, CUE["flip"], CUE["flip"] + 8 / w.PER_BEAT))
+        if b < CUE["flip"] + 1:
+            c.sparkles(r.x, r.y, r.w, r.h, 26, ["gold.light", "white", "orange.light"], seed=int(b * w.PER_BEAT))
+    w.caption(c, CAPTION_RESULT)
     return []
 
 
 def frame(c, b, hook="a"):
-    """The picture at beat b, drawn on c; the hook is the opener's, so the episode is the same for each.
-    Returns the overlays to render over it."""
-    if b < w.CUE["result"]:
-        return editing(c, b)
-    if b < w.CUE["endLine"]:
+    """The picture at beat b, drawn on c; the hook is the opener's. All pixel art, so no overlays."""
+    if b < CUE["result"]:
+        return dashboard(c, b)
+    if b < CUE["endLine"]:
         return result(c, b)
-    return end_card(c, b)
+    return e01.end_card(c, b)
 
-
-# ---------------------------------------------------------------- its sounds
-
-def pan(x):
-    return round((x / w.W - 0.5) * 0.8, 2)
-
-
-def sounds():
-    """Each sound on screen, (beat, kind, pan): a press and a tick a step for every drag, panned with
-    its knob, backslash down and up, and a tick on the flip to after."""
-    p = w.layout(aspect=ASPECT, panel=PANEL).panel
-    out = []
-    for drag in DRAGS:
-        out.append((drag.press, "press", pan(knob(p, drag.slider, 0)[0])))
-        for k, t in enumerate(drag.ticks, 1):
-            out.append((t, "tick", pan(knob(p, drag.slider, TARGET[drag.slider.label] * k / len(drag.ticks))[0])))
-        out.append((drag.release, "release", pan(knob(p, drag.slider, TARGET[drag.slider.label])[0])))
-    out += [(KEY_DOWN, "key", 0.0), (KEY_UP, "key up", 0.0), (w.CUE["flip"], "flip", 0.0)]
-    return sorted(out)
-
-
-# ---------------------------------------------------------------- the storyboard
 
 def at(b):
     return lambda c: frame(c, b)
 
 
-def result_panel(c, progress=1.0):
-    """The result after the flip, or the reveal partway through for features-boards.py."""
-    return frame(c, w.CUE["result"] + progress * REVEAL if progress < 1 else w.CUE["flip"] + 0.5)
-
-
 PANELS = [
-    w.Panel(1, 0.0, at(0), " / ".join(TITLE),
-            "A deep hit on frame 0, then sixteenths under a beat held back. The pointer comes in from the right from 1.2 s."),
-    w.Panel(2, 2.4, at(s1 + 3.2), "NO SUBSCRIPTION",
-            "The motif starts; a click as Exposure's knob is pressed, then a tick on each beat of the drag."),
-    w.Panel(3, 4.8, at(s2 + 3.1), "NO CLOUD",
-            "The motif; a click and a tick on each half beat, for Highlights, then Shadows."),
-    w.Panel(4, 7.2, at(s3 + 3.2), "OPEN SOURCE",
-            "The motif's answer; the drums come in; a click as Vibrance is pressed and a tick a beat."),
-    w.Panel(5, 9.6, at(s4 + 0.5), "FAMILIAR LAYOUT / AND SHORTCUTS",
-            "Backslash down on the beat, and up two beats later as the photo shows the edit again."),
-    w.Panel(6, 12.0, result_panel, " / ".join(w.REAL_PHOTO) + "; before, then after at 13.2 s",
-            "The develop sting: the motif's head over struck glass; a tick on the flip to after at 13.2 s."),
-    w.Panel(7, 14.4, at(w.CUE["cta"] + 0.5), " / ".join(EPISODE["endLine"]) + ", then " + " / ".join(w.END_CARD)
-            + " at 15.6 s", "The theme's last phrase."),
-    w.Panel(8, 16.8, at(w.CUE["fade"] + 1), " / ".join(w.END_CARD), "The last chord dies away as the picture fades from 17.4 s."),
+    w.Panel(1, 0.0, at(0), " / ".join(e01.TITLE), "A deep hit, then the arpeggio over a kick muffled as if through a wall."),
+    w.Panel(2, 2.4, at(e01.s1 + 3.2), "NO SUBSCRIPTION",
+            "The riff starts; a click as Exposure's knob is pressed and a tick a beat; the PLAN card pops up."),
+    w.Panel(3, 4.8, at(e01.s2 + 1.2), "NO CLOUD", "A click and two ticks for each slider; the NETWORK card."),
+    w.Panel(4, 7.2, at(e01.s3 + 3.2), "OPEN SOURCE", "The beat comes in, gated snare and all; the SOURCE card."),
+    w.Panel(5, 9.6, at(e01.s4 + 0.5), "FAMILIAR LAYOUT / AND SHORTCUTS",
+            "Backslash down and up two beats later; toms fall into the stop."),
+    w.Panel(6, 12.0, at(CUE["flip"] + 0.6), CAPTION_RESULT + "; before, then after at 13.2 s",
+            "The drop and the sting; a tick and a burst of sparkles as the dusk develops on the flip."),
+    w.Panel(7, 14.4, at(CUE["cta"] + 0.5), " / ".join(EPISODE["endLine"]) + ", then " + " / ".join(w.END_CARD),
+            "The closing phrase over the full beat."),
+    w.Panel(8, 16.8, at(CUE["fade"] + 1), " / ".join(w.END_CARD), "The last chord dies away as the picture fades."),
 ]

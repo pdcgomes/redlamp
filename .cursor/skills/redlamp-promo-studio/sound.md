@@ -6,6 +6,8 @@ The composer and sound designer write the score in `video/scripts/<slug>-score.p
 
 Dark, cinematic and sophisticated. The star promo's first score, in D major with a bouncy pulse lead, a pumping supersaw, four-on-the-floor with claps and hats, a boing and a slide whistle, was turned down as cheesy and too happy, and replaced by the one described here. Start from the cinematic palette; reach for the bright one (`lead`, `supersaw`, `stab`, `clap`, `hat`, `boing`, `slide`) only when a brief asks for it in so many words.
 
+The feature videos' brief does (10 October 2026). For them the owner turned down a sweet F major tune on a square lead over felt piano as cheesy and short of energy, liked the D minor riff that replaced it, and chose its synthwave arrangement over an electronic one and a cinematic one: supersaw pads, a plucked arpeggio, an octave bass, a gated snare on 2 and 4 and the riff on a saw lead with vibrato, moving from the first frame (`video/scripts/features-theme.py`). It suits the pixel-art dashboards it plays under. The minor key, the colour notes and the held tension below still apply.
+
 What makes it sophisticated rather than loud:
 
 - **A minor key, and chords with their colour notes**: a ninth against the minor third, a major seventh, a seventh on the dominant; not bare triads.
@@ -21,8 +23,8 @@ What makes it sophisticated rather than loud:
 | Kind | Functions |
 | --- | --- |
 | Cinematic | `strings` (a bowed section, legato, opening up as it plays), `spiccato` (short bounced strings for an ostinato), `piano` (felt), `braam` (a trailer's low brass hit), `drone` (a dark bed), `taiko` (also a low tom, with a short `decay`), `deep_kick`, `big_snare`, `tock` (a watch's tick), `glass` (struck, or bowed with a slow `attack`), `shepard` (a Shepard–Risset tone that seems to rise for ever), `swell_into` (a sound's own reverb, reversed, swelling into it) |
-| Drums | `kick`, `snare` (its `tone` rises through a build), `clap`, `hat` (closed or open), `crash` (with its `decay`) |
-| Tuned | `pluck`, `bass` (a saw with a quick filter over a sine an octave down: keep its note above about D2), `sub`, `lead`, `supersaw`, `stab`, `bell` |
+| Drums | `kick`, `snare` (its `tone` rises through a build), `gated_snare` (the eighties' snare, its reverb cut short), `clap`, `hat` (closed or open), `crash` (with its `decay`) |
+| Tuned | `pluck`, `bass` (a saw with a quick filter over a sine an octave down: keep its note above about D2), `sub`, `lead`, `saw_lead` (detuned saws through a filter, with vibrato), `supersaw`, `stab`, `bell` |
 | Chiptune | `pulse` (a pulse of any width, with vibrato and a slide), `triangle` (16 steps, for bass), `chip_noise` (a 15-bit shift register), `chip_kick`, `chip_snare`, `chip_hat`, `chip_crash`, `arp` (a chord as a fast arpeggio), `blip`, `coin`; and the phone line's `dtmf`, `ringback` and `handshake`. For a brief that asks for retro, as the pixelkit promo's does |
 | Effects | `riser`, `whoosh`, `inhale` (the breath before a drop), `boom`, `hum`, `zap`, `boing`, `slide`, `knock` (wood), `creak` (rope), `click` (a mouse button), `tick`, `key` (a keyboard key going down, or `up`), `crackle` |
 | Mixing | `Bus` (stereo, with a reverb send; `pan_to` may change every sample), `sidechain`, `reverb`, `master` (with a `choke` and `presence`) |

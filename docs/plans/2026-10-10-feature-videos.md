@@ -1,6 +1,6 @@
 # Redlamp feature videos for Instagram and TikTok
 
-Ten vertical videos, each about one Redlamp feature and 29.2 seconds long with Redlamp's opener. In every video a pixel-art Redlamp editor shows the feature step by step, the real photo edited in Redlamp follows, and the video ends with "Download free" and "redlamp.app". They are made in the promo studio (`.cursor/skills/redlamp-promo-studio/SKILL.md`) and run from the social room (`.cursor/skills/redlamp-social/SKILL.md`).
+Ten vertical videos, each about one Redlamp feature and 29.2 seconds long with Redlamp's opener. In every video Redlamp's editor, drawn in pixel art as a colourful dashboard, shows the feature step by step and then its result before and after, and the video ends with "Download free" and "redlamp.app". They are made in the promo studio (`.cursor/skills/redlamp-promo-studio/SKILL.md`) and run from the social room (`.cursor/skills/redlamp-social/SKILL.md`).
 
 The captions, posting times and alt text are in [`docs/social/posts.json`](../social/posts.json). The social room shows them, and the Instagram publisher posts from them, so the file is the one place they change.
 
@@ -42,38 +42,38 @@ The episode follows one cue sheet, `video/src/features/cues.json`: 100 BPM at 30
 | --- | --- | --- |
 | 1 | 0.0 s | The episode's title, held from the opener, over the pixel editor with the photo it will work on. |
 | 2 to 5 | 2.4 s to 12.0 s | The feature in the pixel editor, in two to four labelled steps, one a bar. Each click, key press and slider move lands on a beat. |
-| 6 | 12.0 s | The real result. The pixel photo resolves into the real render block by block, and before and after flip at 13.2 s. The label reads REAL PHOTO, / EDITED IN REDLAMP, or THE REAL APP when the result is the app's window. |
+| 6 | 12.0 s | The result. The pixel photo fills the stage as it was opened, then develops into the edit through an ordered dither at 13.2 s. The words say what the result shows: BEFORE AND AFTER for an edit. |
 | 7 | 14.4 s | The end line, then DOWNLOAD FREE / REDLAMP.APP from 15.6 s under the lamp mark. |
 | 8 | 16.8 s | The card holds. The picture and the sound fade out from 17.4 s; a feed that loops the video starts again on the hook. |
 
-- **Picture:** pixelkit, as the Redlamp architecture series uses it: a dark navy background, bitmap capitals, one accent per meaning. The editor is drawn in neutral greys, as the app is. The only red is the lamp's light and the editor's own red mask overlay.
+- **Picture:** the editor drawn as pixelkit's dashboards are (the DAW, the fruit music player and the system monitor in `~/src/pixelartvisuals`). The owner chose this over the editor with his real photo as more colourful and more inviting, and asked for every episode to be built this way (10 October 2026). Panels in the kit's navy, each with its accent; a pixel-art scene where the photo would be, developed by the episode's sliders at their values; the sliders as coloured meters over a live RGB histogram and an LED level; and a card for what each bar says, drawn rather than written (in E01, a plan at $0 a month, a network panel with nothing uploaded, the licence over a heatmap of commits). Bitmap capitals, one accent per meaning. The only red is the lamp's light and the editor's own red mask overlay.
 - **Grid:** 216 × 384 logical pixels at ×5.
 - **Safe zones:** nothing to read in the top 260 px, the bottom 480 px, or the right-hand 160 px between 700 and 1600 px down, where TikTok and Instagram put their own controls.
 - **Header:** a strip with Redlamp's safelight mark and the feature: REDLAMP · SUBJECT MASK.
-- **Values on screen** are the real edit's own: the pixel sliders move to the values the real result was made with, so the two match.
+- **Values on screen** are the edit's own: the sliders move to the values the scene is developed with, so what they read and what the picture does match.
 - **Covers:** the opener's frame 100, 3.3 s in (each post's `coverMs`, 3333): the hook over the lamp at its warmest, chosen as the cover on both platforms. Its words sit inside the middle 3:4 of the frame, which Instagram's profile grid shows.
-- **The real results** are Redlamp's own renders of the owner's photos, from the `redlamp` CLI, or captures of the app from `scripts/capture-promo.sh`. What each episode needs, and what already exists, is listed under [Real results](#real-results).
+- **Results** are pixel art too, so the whole video is one picture. Redlamp's renders of the owner's photos, planned under [Real results](#real-results), are kept for a version of an episode with the real photo, as E01 has.
 
 ### How a video is built
 
-E01 set the template, and every episode is built the same way in `video/`:
+E01 sets the template (`scripts/features/boards/e01.py`), and every episode is built the same way in `video/`:
 
-- **The board**, `scripts/features/boards/<episode>.py`, draws the video with the shared pieces in `scripts/features/world.py`. Its `frame(c, beat, hook)` draws any moment from the beat, and its `sounds()` lists each sound on screen as a beat, a kind and a pan, both timed on the cue sheet. The storyboard's eight panels are moments of `frame()`.
-- **The real result**, through `scripts/features/results.py`, is rendered by the `redlamp` CLI (`$REDLAMP_CLI`, or `build/cli/redlamp`) from the owner's sidecar beside the raw: AFTER with his edit, BEFORE with its crop alone, and each step of a drag with the sliders moved so far, so the pixel photo changes as the real one does. Renders are kept in `public/features/<episode>/results/` and made again only when something that went into them changes.
-- **The frames**, `npm run features-frames -- --episode e01`: every frame drawn by pixelkit at 216 × 384, or at 1080 × 1920 while the real photo is on screen, where it shows at full resolution through the ordered dither that resolves it out of the pixel photo. A picture that comes out the same as another is written once, and `frames.json` lists each hook's frames.
-- **The score**, `npm run features-score -- --episode e01`: the theme in the chosen arrangement with the episode's sounds on their frames, with `score.json` for the storyboard sheet and a cue sheet of every sound for `scripts/score-report.py`.
+- **The board**, `scripts/features/boards/<episode>.py`, draws the video with the shared pieces in `scripts/features/world.py`. Its `frame(c, beat, hook)` draws any moment from the beat, and its `sounds()` lists each sound on screen as a beat, a kind and a pan, both timed on the cue sheet. The storyboard's eight panels are moments of `frame()`. The dashboard's pieces are in `world.py`'s dashboard section: `scene()` develops a pixel-art scene, such as `dusk()`, with the episode's slider values, and `photo_panel()`, `histogram()`, `meters()` and `card()` draw the photo, its histogram, the sliders and the cards.
+- **A version with the real photo**, if one is wanted, is a board of its own, as `boards/e01-photo.py` is, with the episode's beats, words and sounds. Its result, through `scripts/features/results.py`, is rendered by the `redlamp` CLI (`$REDLAMP_CLI`, or `build/cli/redlamp`) from the owner's sidecar beside the raw: AFTER with his edit, BEFORE with its crop alone, and each step of a drag with the sliders moved so far, so the pixel photo changes as the real one does. Renders are kept in `public/features/<board>/results/` and made again only when something that went into them changes. It plays in Studio with `"episode": "e01-photo"` and renders with `--episode=e01-photo`.
+- **The frames**, `npm run features-frames -- --episode e01`: every frame drawn by pixelkit at 216 × 384, or at 1080 × 1920 while a real photo is on screen, where it shows at full resolution through the ordered dither that resolves it out of the pixel photo. A picture that comes out the same as another is written once, and `frames.json` lists each hook's frames.
+- **The score**, `npm run features-score -- --episode e01`: the theme in the series' arrangement, synthwave, with the episode's sounds on their frames, with `score.json` for the storyboard sheet and a cue sheet of every sound for `scripts/score-report.py`.
 - **The opener** is `opener()` in `scripts/features/world.py`, timed by the cue sheet's `opener` section: three bars at 72 BPM, the first two (`scene`) the short's opening scene, which `scripts/features-score.py` checks against `src/introducing/cuts.json`, and the beats the hook goes, the lens settles, the brand's line and the title come in, and the header takes over. The frames script draws it before each episode, with the episode's hook, its title and its feature.
 - **The composition**, `FeatureVideo` in Remotion Studio's Features folder, plays the frames and the two scores, with `episode`, `hook`, `score`, `opener` and `guides` props. With `opener` off it plays the episode alone, on its cue sheet's own frames, as `scripts/storyboard.mjs` and the review stills expect.
-- **The render**, `npm run features -- --episode e01 [--hook a] [--draft]`, writes `~/src/redlamp-social/renders/<the post's file>` and its cover, once the owner has approved the cut. A draft is half the size, named `…-draft.mp4`.
+- **The render**, `npm run features -- --episode=e01 [--hook=a] [--draft]`, writes `~/src/redlamp-social/renders/<the post's file>` and its cover, once the owner has approved the cut. A draft is half the size, named `…-draft.mp4`.
 
 ## Sound
 
-One theme for the series, in the same shape in every video so the series sounds like one thing: a two-bar riff in D minor that moves from the first frame and builds to the real result, the drop at 12.0 s, with the same sting on the drop (the riff's head over struck glass) and the same ending. The owner asked for a catchy motif that isn't aggressive, then turned down the first theme, a sweet tune in F major on a soft square lead over felt piano in half time, as cheesy and short of energy (both 10 October 2026).
+One theme for the series, in the same shape in every video so the series sounds like one thing: a two-bar riff in D minor that moves from the first frame and builds to the result, the drop at 12.0 s, with the same sting on the drop (the riff's head over struck glass) and the same ending. The owner asked for a catchy motif that isn't aggressive, then turned down the first theme, a sweet tune in F major on a soft square lead over felt piano in half time, as cheesy and short of energy. Of the D minor theme's arrangements he chose a synthwave one, keeping the opener's own sound (all 10 October 2026).
 
 - **Shape:** under the hook, sixteenths and a beat held back; the riff from the first step; the full beat from the third; a roll and a riser through the fourth, the rhythm stopping half a beat before the drop while the riser and the hit's own reverb swell on into it; the drop, the loudest bar; the closing phrase from the end line, through A7 to D minor on the last hit; and the last chord dying away as the picture fades.
-- **Arrangements:** two for the owner to choose between against the picture, in `video/scripts/features-theme.py`. Drive is electronic: a four-on-the-floor kick, a rolling bass that opens through the build, offbeat chord stabs and an arpeggio from the drop, and the riff on two detuned saws. Pulse is cinematic, after the star promo: spiccato strings, a ticking watch, taiko, a film snare, a Shepard tone into the drop and the trailer's low brass on it. Drive is the lean. Their sketches are `video/public/features/theme-drive.wav` and `theme-pulse.wav`.
+- **Arrangement:** synthwave, in `video/scripts/features-theme.py`: supersaw pads, a plucked arpeggio in sixteenths with an echo a dotted eighth later, opening through the build, and a bass jumping the octave in eighths. A kick muffled as if through a wall plays under the hook, then on 1 and 3 from the first step and on every beat from the third, with a gated snare on 2 and 4 and a fill of falling toms into the stop. The riff is on a saw lead with vibrato on its long notes and an echo either side, its head doubled an octave up on the drop. Drive (electronic: four on the floor, offbeat chord stabs, the riff on two detuned saws) and pulse (cinematic, after the star promo: spiccato strings, taiko, a Shepard tone into the drop and low brass on it), which it was chosen over, stay in the same file. The sketches are `video/public/features/theme-<arrangement>.wav`.
 - **Sync:** every click, key and slider move on screen has its sound on the same frame. The sound comes from the cue sheet, as the picture does.
-- **Each video's score** is the chosen arrangement, drive until the owner picks, with the video's own clicks, ticks and keys on the frames their pictures land on (`video/scripts/features-score.py`). It writes every arrangement, and the composition's `score` prop plays any of them, so they can be compared in Studio.
+- **Each video's score** is synthwave, with the video's own clicks, ticks and keys on the frames their pictures land on (`video/scripts/features-score.py`). It writes drive and pulse too, which the composition's `score` prop plays (`score-drive`, `score-pulse`).
 - **The opener's sound** is the Introducing short's own score under its opening scene, sample for sample, then its last chord held for the third bar, drawn by `scripts/score.py` in the same room and at the same level, with a breath of air rising into the episode's first hit. It is kept as far below the episode as the short's opening sits below the rest of the short (3 LU), and written by `video/scripts/features-score.py` to `video/public/features/opener.wav`.
 - **Mastering:** each video, opener and all, is mastered to −14 LUFS integrated with a true peak at or under −1 dBFS, so the episode's score sits at about −13.1 LUFS; no more than about a quarter of the energy is under 60 Hz, which phones don't play.
 - **Audio name:** on both platforms, "Redlamp theme".
@@ -99,12 +99,12 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a raw photo open, its sliders at zero. | FREE ALTERNATIVE TO LIGHTROOM (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
-| 2 | 2.4 s | The pointer drags EXPOSURE to the edit's value; the photo brightens. | NO SUBSCRIPTION | The motif starts; a slider tick on each beat of the drag. |
-| 3 | 4.8 s | HIGHLIGHTS and SHADOWS move to the edit's values. | NO CLOUD | The motif; ticks. |
-| 4 | 7.2 s | VIBRANCE moves to the edit's value; the photo gains colour. | OPEN SOURCE | The motif's answer; the drums come in. |
-| 5 | 9.6 s | The backslash key shows the photo before, then after. | FAMILIAR LAYOUT / AND SHORTCUTS | A key click on the beat. |
-| 6 | 12.0 s | The real photo in place of the pixel one, before, then after at 13.2 s. | REAL PHOTO, / EDITED IN REDLAMP | The sting. |
+| 1 | 0.0 s | The dashboard: a pixel-art dusk as opened (DUSK.ARW), its histogram and level, and the four sliders as coloured meters at zero. | FREE ALTERNATIVE TO LIGHTROOM (the title, held from the opener) | A deep hit on the first frame, then the arpeggio over a kick muffled as if through a wall. |
+| 2 | 2.4 s | The pointer drags EXPOSURE to the edit's value and the dusk brightens; the PLAN card: $0 PER MONTH. | NO SUBSCRIPTION | The riff starts; a slider tick on each beat of the drag. |
+| 3 | 4.8 s | HIGHLIGHTS and SHADOWS move to the edit's values; the NETWORK card: 0 B uploaded, ON YOUR MAC. | NO CLOUD | The riff; ticks. |
+| 4 | 7.2 s | VIBRANCE moves to the edit's value and the dusk gains colour; the SOURCE card: MPL-2.0 over a heatmap of commits. | OPEN SOURCE | The riff's answer; the full beat comes in. |
+| 5 | 9.6 s | The backslash key shows the dusk before, then after. | FAMILIAR LAYOUT / AND SHORTCUTS | A key click on the beat; falling toms into the stop. |
+| 6 | 12.0 s | The dusk fills the stage as opened, then develops into the edit at 13.2 s. | BEFORE AND AFTER | The drop and the sting; sparkles on the flip. |
 | 7 | 14.4 s | The end card. | RAW PHOTO EDITOR / FOR MAC, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -131,7 +131,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | The red overlay covers the boy, hair included; the background stays clear. | HE IS SELECTED, / HAIR INCLUDED | A soft rising blip as the overlay fills. |
 | 4 | 7.2 s | INVERT is clicked; the overlay moves to the background. | INVERT IT FOR / THE BACKGROUND | A click; the drums come in. |
 | 5 | 9.6 s | The mask's EXPOSURE moves down; the background darkens and the boy stands out. | DARKEN THE / BACKGROUND | Slider ticks; the motif's answer. |
-| 6 | 12.0 s | The real photo, before, then after at 13.2 s. | REAL PHOTO, / EDITED IN REDLAMP | The sting. |
+| 6 | 12.0 s | The pixel photo, before, then after at 13.2 s: the background darker, the boy as he was. | BEFORE AND AFTER | The sting. |
 | 7 | 14.4 s | The end card. | AI MASKS THAT RUN / ON YOUR MAC, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -157,7 +157,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | PORTRA 400 is chosen; the photo warms. | PORTRA 400 | A blip as the look applies. |
 | 4 | 7.2 s | TRI-X 400, then CINESTILL 800T two beats later. | TRI-X 400, then CINESTILL 800T | A blip for each; the drums come in. |
 | 5 | 9.6 s | VELVIA 50, then HP5 PLUS. | VELVIA 50, then HP5 PLUS | A blip for each. |
-| 6 | 12.0 s | The real photo in the five looks, one a beat. | REAL PHOTO, / EDITED IN REDLAMP | The sting, then a blip a beat. |
+| 6 | 12.0 s | The pixel photo in the five looks, one a beat. | FIVE FILM LOOKS | The sting, then a blip a beat. |
 | 7 | 14.4 s | The end card. | 36 FILM LOOKS / FROM 30 STOCKS, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -183,7 +183,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | K is pressed; the brush ring appears. | K  BRUSH | A key click and the motif's next note. |
 | 4 | 7.2 s | Backslash is pressed; the photo shows before, then after. | \  BEFORE / AFTER | A key click; the drums come in. |
 | 5 | 9.6 s | V is pressed; the photo turns black and white. | V  BLACK & WHITE | A key click. |
-| 6 | 12.0 s | The real Redlamp window, its panels in Lightroom's order, then its shortcut list at 13.2 s. | THE REAL APP | The sting. |
+| 6 | 12.0 s | The editor's panels in Lightroom's order, then its shortcut list at 13.2 s, as dashboard panels. | SAME PANEL ORDER, then 98 SHORTCUTS | The sting. |
 | 7 | 14.4 s | The end card. | FAMILIAR LAYOUT / AND SHORTCUTS, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -209,7 +209,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | The import report: settings marked EXACT, APPROXIMATE and NOT AT ALL. | IT SHOWS WHAT / CAME ACROSS | A tick for each row. |
 | 4 | 7.2 s | A .CUBE file is dropped and joins the list. | .CUBE AND .3DL / LUTS TOO | A drop sound; the drums come in. |
 | 5 | 9.6 s | A preset is clicked; the photo changes. | CLICK TO APPLY | A click on the beat. |
-| 6 | 12.0 s | The real photo with an imported preset, before, then after at 13.2 s. | REAL PHOTO, / EDITED IN REDLAMP | The sting. |
+| 6 | 12.0 s | The pixel photo with an imported preset, before, then after at 13.2 s. | BEFORE AND AFTER | The sting. |
 | 7 | 14.4 s | The end card. | PRESETS AND LUTS / IMPORT, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -235,7 +235,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | The filmstrip fills at once, with a readout: 50,000 PHOTOS · 0.2 S. | 50,000 PHOTOS / LISTED IN 0.2 S | A quick run of soft ticks as the thumbnails arrive. |
 | 4 | 7.2 s | A file list: after an edit, IMG_1234.ARW.REDLAMP appears next to IMG_1234.ARW. | EDITS SAVED NEXT / TO THE PHOTO | A soft click; the drums come in. |
 | 5 | 9.6 s | IMG_1234.ARW is marked UNCHANGED. | THE ORIGINAL IS / NEVER CHANGED | The motif's answer. |
-| 6 | 12.0 s | The real Folders panel and filmstrip. | THE REAL APP | The sting. |
+| 6 | 12.0 s | The Folders panel and the filmstrip full of the folder's photos, as dashboard panels. | YOUR FOLDERS, / AS THEY ARE | The sting. |
 | 7 | 14.4 s | The end card. | YOUR ORIGINALS / ARE NEVER CHANGED, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -261,7 +261,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | The drag comes back down to −0.50; the readout stays at 1.8 MS. | 1.8 MS PER CHANGE | Ticks. |
 | 4 | 7.2 s | A raw opens from the filmstrip, with a readout: OPEN 0.16 S. | A 24 MP RAW OPENS / IN 0.16 S | A click; the drums come in. |
 | 5 | 9.6 s | The readouts, with where they were measured. | MEASURED ON / AN M1 ULTRA | The motif's answer. |
-| 6 | 12.0 s | The real photo as EXPOSURE moves, one render a beat. | REAL PHOTO, / EDITED IN REDLAMP | The sting, then a tick a beat. |
+| 6 | 12.0 s | The pixel photo as EXPOSURE moves, a render a beat. | THE PHOTO FOLLOWS / THE SLIDER | The sting, then a tick a beat. |
 | 7 | 14.4 s | The end card. | BUILT FOR / APPLE SILICON, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -287,7 +287,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | The pointer moves over BRIGHT SLIDE, then CINEMA TEAL, two more of the camera recipes; the preview follows. | ONE RECIPE / AT A TIME | A tick for each. |
 | 4 | 7.2 s | CHROME STREET is clicked. | CLICK TO APPLY | A click; the drums come in. |
 | 5 | 9.6 s | The recipe's AMOUNT moves from 100 to 70. | SET THE AMOUNT | Slider ticks. |
-| 6 | 12.0 s | Chrome Street on the real X-T3 raw, before, then after at 13.2 s. | REAL PHOTO, / EDITED IN REDLAMP | The sting. |
+| 6 | 12.0 s | Chrome Street on the pixel photo, before, then after at 13.2 s. | BEFORE AND AFTER | The sting. |
 | 7 | 14.4 s | The end card. | CAMERA RECIPES / FOR YOUR RAWS, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -313,7 +313,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | Each power line is outlined; a count reads 4 FOUND. | REDLAMP FINDS / EACH ONE | A blip for each outline. |
 | 4 | 7.2 s | The pointer clicks REMOVE ALL; the lines go, one a beat. | REMOVE ALL | A click, then a soft sound a line; the drums come in. |
 | 5 | 9.6 s | The clean photo. | DONE ON YOUR MAC | The motif's answer. |
-| 6 | 12.0 s | The real street photo, before, then after at 13.2 s. | REAL PHOTO, / EDITED IN REDLAMP | The sting. |
+| 6 | 12.0 s | The pixel street, before, then after at 13.2 s. | BEFORE AND AFTER | The sting. |
 | 7 | 14.4 s | The end card. | ON YOUR MAC. / NO CREDITS. Then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -339,7 +339,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 3 | 4.8 s | The pointer clicks MERGE. | CLICK MERGE | A click on the beat. |
 | 4 | 7.2 s | Frames, each sharp in a different band, combine into one, a band a beat. | ONE SHARP PHOTO | A soft blip a band; the drums come in. |
 | 5 | 9.6 s | Sliders move on the merged photo. | EDIT IT LIKE / A RAW | Slider ticks. |
-| 6 | 12.0 s | One real frame, then the real merged photo at 13.2 s. | REAL PHOTO, / EDITED IN REDLAMP | The sting. |
+| 6 | 12.0 s | One frame of the stack, then the merged photo at 13.2 s. | ONE FRAME, then 25 FRAMES MERGED | The sting. |
 | 7 | 14.4 s | The end card. | FOCUS STACKING / IN YOUR EDITOR, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -350,7 +350,7 @@ Two of these go out on Tue 1 Dec and Fri 4 Dec, chosen from the first eight post
 - **Command palette:** type a setting and its value, such as EXPOSURE 0.7, and it's set (README, Workspace, Command palette).
 - **Masks for eyes, lips and teeth:** People masks and their parts (README, Masking).
 - **Film effects:** halation, grain, light leaks and frames (README, Film simulations; Lightroom comparison).
-- **All ten results:** a cut of the real results from the ten videos.
+- **All ten results:** a cut of the ten videos' results.
 
 ## Schedule
 
@@ -379,6 +379,8 @@ Each group of four is approved by the Friday before it starts: 23 October, 6 Nov
 - **TikTok:** TikTok's API can't post publicly for us. Posts from an app TikTok hasn't audited stay private, and its guidelines rule out a tool that uploads to the accounts you or your team manage. So the owner schedules each post in TikTok Studio on the web, using the caption and cover the room gives, and marks it Scheduled, then Posted with its link. TikTok's numbers come from TikTok Studio at each review.
 
 ## Real results
+
+Superseded on 10 October 2026, when the owner chose the dashboard look, whose results are pixel art ([The format](#the-format)). This plan is kept for a version of an episode with the real photo, as E01 has (`boards/e01-photo.py`).
 
 Every result is a photo the owner took, rendered by Redlamp with the `redlamp` CLI and shown at full resolution where the pixel photo was, so it is the best-looking picture in the video. A window capture is used only where the app itself is the result (E04 and E06), taken at full size with `scripts/capture-promo.sh` and shown, not cropped from. Captures and README images already in the repository stand in on the storyboards until the owner's photos arrive.
 
@@ -413,14 +415,13 @@ The first cut, for the owner's review in Studio, with hook A or B and the stand-
 
 ### E01's UI variation, 10 October 2026
 
-The owner found the pixelartvisuals pieces (the DAW, the fruit music player, the system monitor) more colourful and interesting than the editor with the real photo, and asked to explore a variation built from them. `video/scripts/features/boards/e01-ui.py` keeps E01's beats, words and sounds, and draws the editor as one of those dashboards: the panels in the kit's navy with an accent each, a pixel-art dusk in place of the photo, developed by E01's four sliders at E01's values, the sliders as coloured meters over a live RGB histogram and an LED level, and a card for what each bar says (a plan at $0 a month, a network panel with nothing uploaded, the licence over a heatmap of commits). The result is the dusk before and after, filling the stage, under BEFORE AND AFTER. It plays in Studio as FeatureVideo with `"episode": "e01-ui"`, and its draft is `~/src/redlamp-social/renders/e01-a-ui-draft.mp4`. Its frames raise no warning (773 pictures for 876 frames), and its draft measures −14.1 LUFS with a true peak of −1.3 dBFS.
+The owner found the pixelartvisuals pieces (the DAW, the fruit music player, the system monitor) more colourful and interesting than the editor with the real photo, and asked to explore a variation built from them. `video/scripts/features/boards/e01-ui.py` (now `boards/e01.py`) keeps E01's beats, words and sounds, and draws the editor as one of those dashboards: the panels in the kit's navy with an accent each, a pixel-art dusk in place of the photo, developed by E01's four sliders at E01's values, the sliders as coloured meters over a live RGB histogram and an LED level, and a card for what each bar says (a plan at $0 a month, a network panel with nothing uploaded, the licence over a heatmap of commits). The result is the dusk before and after, filling the stage, under BEFORE AND AFTER. It played in Studio as `"episode": "e01-ui"` until it became E01's cut (below). Its frames raise no warning (773 pictures for 876 frames), and its draft measures −14.1 LUFS with a true peak of −1.3 dBFS.
 
 ## For the owner to decide
 
 - The hook each video leads with. A is the default, and B is tested as a trial reel.
-- The theme's arrangement: drive or pulse.
 - Whether "Lightroom" may appear on screen (E04 a, b, c, d and e, E05 a and c, E01 e, E10 d) as well as in the captions, never with Adobe's logo or interface. E01's title, FREE ALTERNATIVE TO LIGHTROOM, already names it in the opener, as the owner asked on 10 October, so E01's captions say Redlamp isn't affiliated with Adobe. Whether film stock names may appear on screen (E03), with the README's trademark line in the caption. Whether "Fujifilm-style" may appear on screen (E08 b).
-- The photos for the results above, in `~/src/redlamp-social/photos/`: the dancer's raw and its edit first, since four videos use it.
+- Whether any episode should also have a version with the real photo, as E01 has. Its photos would go in `~/src/redlamp-social/photos/`, as [Real results](#real-results) lists.
 
 ## Results
 

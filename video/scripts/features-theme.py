@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 The feature videos' theme (src/features/): one tune in D minor at 100 BPM, 8 bars and 19.2 seconds,
-in two arrangements for the owner to choose between by ear, written from the series' cue sheet,
-src/features/cues.json, so every sound lands on the frame its picture does.
+in three arrangements, written from the series' cue sheet, src/features/cues.json, so every sound
+lands on the frame its picture does.
 
-    python3 scripts/features-theme.py              # public/features/theme-drive.wav and theme-pulse.wav
-    python3 scripts/features-theme.py drive        # one of them
+    python3 scripts/features-theme.py              # public/features/theme-synthwave.wav, theme-drive.wav, theme-pulse.wav
+    python3 scripts/features-theme.py synthwave    # one of them
 
 The owner turned down the first theme, a sweet tune in F major on a soft square lead over felt piano,
 as cheesy and short of energy (10 October 2026). This one moves from the first frame and builds to
@@ -16,6 +16,10 @@ half a beat before the drop while the riser and the hit's own reverb swell on in
 the riff's head over struck glass, the same in every video; from the end line the closing phrase,
 turning through A7 to D minor on the last hit, and the last chord dying away as the picture fades.
 
+- synthwave: the series' (the owner, 10 October 2026). A sixteenth-note arpeggio through the chords
+  from the first frame, wide detuned-saw pads that open through the build, an octave-jumping bass in
+  eighths, a kick on every beat from the third step with the gated snare on 2 and 4, falling toms
+  into the drop, and the riff on the saw lead with a vibrato and an echo.
 - drive: electronic. A four-on-the-floor kick, a rolling bass in sixteenths that opens through the
   build, closed and open hats, a backbeat snare, dark chord stabs on the offbeats from the drop, an
   arpeggio, and the riff on two detuned saws with an echo.
@@ -389,9 +393,114 @@ def pulse(sounds=ui):
     return [drums, low, bows, keys, fx], dict(room=room, wet=0.65, presence=3.0)
 
 
+def toms(beat):
+    """An electronic tom, higher at the start of a fill and falling with it."""
+    return s.taiko(0.75, 150 - 40 * ((beat - (S4 + 2)) / (STOP - S4 - 2)), 0.35, decay=0.11)
+
+
+def synthwave(sounds=ui):
+    start(53)
+    room = s.reverb(2.2, 0.55, 0.02)
+    drums, low, pads, arps, lead, fx = (s.Bus(TOTAL + 4) for _ in range(6))
+    kicks = []
+
+    # The first frame lands as a deep hit; the pads come in slowly under the arpeggio.
+    drums.add(0, s.deep_kick(0.85), gain=0.6, wet=0.12)
+    fx.add(0, s.boom(1.4, 0.7), gain=0.2, wet=0.3)
+    for name, first, length in sheet["chords"]:
+        _, voicing = CHORDS[name]
+        last = first == LAST
+        cutoff = 2600 if first >= DROP else opening(first, 0, S4, 1100, 2300)
+        pad = s.supersaw(voicing, 2.8 if last else length * BEAT, voices=6, spread=18, cutoff=cutoff,
+                         attack=0.35 if first == 0 else 0.12, release=1.6 if last else 0.3)
+        pads.add(at(first), dying(pad, 1.2) if last else pad, gain=0.27 * swell(first), wet=0.45)
+
+    # The arpeggio: sixteenths up and down the chord an octave up, with an echo a dotted eighth later,
+    # darker in the first bar and opening through the build.
+    for i, beat in enumerate(playing(0, LAST, 0.25)):
+        _, voicing = CHORDS[chord_at(beat)]
+        note = [n + 12 for n in voicing][(0, 1, 2, 3, 2, 1, 3, 2)[i % 8]]
+        bright = 0.4 if beat < S1 else opening(beat, S1, STOP, 0.45, 0.85) if beat < DROP else 0.8
+        tone = s.pluck(note, 0.8, 0.18, bright=bright)
+        arps.add(at(beat), tone, gain=0.13 * swell(beat), pan_to=(-0.3, 0.3)[i % 2], wet=0.25)
+        arps.add(at(beat + 0.75), s.lowpass(tone, 2200), gain=0.05 * swell(beat), pan_to=(0.4, -0.4)[i % 2], wet=0.4)
+
+    # The bass jumps the octave in eighths on each chord's root from the first step; the last root dies away.
+    for beat in playing(S1, LAST, 0.5):
+        root, _ = CHORDS[chord_at(beat)]
+        up = round(beat * 2) % 2
+        low.add(at(beat), s.bass(root + 12 * up, 0.85 if not up else 0.7, 0.24, bright=0.5 if beat >= DROP else 0.35),
+                gain=0.38 * swell(beat), wet=0.04)
+    low.add(at(LAST), dying(s.bass(50, 0.9, 3.0, bright=0.35), 0.9), gain=0.4, wet=0.1)
+
+    # The beat: a kick muffled as if through a wall under the first bar, on 1 and 3 from the first step
+    # and on every beat from the third, with the gated snare on 2 and 4; a fill of falling toms into the stop.
+    for beat in range(1, S1):
+        drums.add(at(beat), s.lowpass(s.kick(0.9), 220), gain=0.5, wet=0.02)
+        kicks.append(at(beat))
+    for beat in playing(S1, LAST, 1):
+        if beat < S3 and beat % 2:
+            continue
+        drums.add(at(beat), s.kick(0.95), gain=0.54 * swell(beat) ** 0.5, wet=0.03)
+        kicks.append(at(beat))
+    for beat in [b for b in playing(S3, LAST, 1) if b % BAR in (1, 3) and not S4 + 2 <= b < DROP]:
+        drums.add(at(beat), s.gated_snare(0.9), gain=0.36, pan_to=0.05, wet=0.15)
+    for beat in playing(S2, LAST, 0.5):
+        drums.add(at(beat), s.hat(1.0 if beat % 1 == 0 else 0.6), gain=0.08 * swell(beat), pan_to=0.3, wet=0.06)
+    for beat in playing(DROP, LAST, 0.25):
+        if beat % 0.5:
+            drums.add(at(beat), s.hat(0.45), gain=0.06, pan_to=0.35, wet=0.06)
+    for beat in np.arange(S4 + 2, STOP, 0.25):
+        drums.add(at(beat), toms(beat), gain=0.42, pan_to=0.3 - 0.6 * (beat - S4 - 2) / 1.5, wet=0.25)
+
+    # The riff on the saw lead, with a vibrato on the long notes and an echo either side; the head on
+    # the drop doubled an octave up.
+    for beat, note, beats in TUNE:
+        last = beat >= LAST
+        tone = s.saw_lead(note, beats * BEAT * 0.94, 0.9, cutoff=3000 if beat >= DROP else 2400,
+                          vibrato=0.18 if beats >= 1 else 0.0)
+        if last:
+            tone = dying(tone, 1.0)
+        level = 0.5 * swell(beat) ** 0.5
+        lead.add(at(beat), tone, gain=level, wet=0.3)
+        lead.add(at(beat + 0.75), s.lowpass(tone, 1800), gain=level * 0.32, pan_to=-0.5, wet=0.5)
+        lead.add(at(beat + 1.5), s.lowpass(tone, 1200), gain=level * 0.14, pan_to=0.5, wet=0.6)
+        if DROP <= beat < cue["endLine"]:
+            lead.add(at(beat), s.saw_lead(note + 12, beats * BEAT * 0.9, 0.55, cutoff=3600, vibrato=0.12),
+                     gain=level * 0.3, wet=0.4)
+
+    # The build: a riser, and the hit's own reverb swelling up into the drop.
+    hit = s.stab([n + 12 for n in CHORDS["Dm9"][1]], 1.0, 1.2, cutoff=3000)
+    fx.add(at(S4), s.riser(at(DROP) - at(S4), 300, 7000, curve=2.2), gain=0.09, wet=0.35)
+    fx.add(at(STOP), s.swell_into(hit, at(DROP) - at(STOP), room), gain=0.2, wet=0.0)
+
+    # The drop, a hit on the call to action, and the last hit with the chord left to die away.
+    drums.add(at(DROP), s.deep_kick(1.0), gain=0.68, wet=0.08)
+    fx.add(at(DROP), s.boom(2.2, 1.0), gain=0.24, wet=0.3)
+    pads.add(at(DROP), hit, gain=0.22, wet=0.3)
+    drums.add(at(DROP), s.lowpass(s.crash(0.9, 3.0, decay=1.3), 6500), gain=0.22, wet=0.35)
+    drums.add(at(cue["cta"]), s.lowpass(s.crash(0.7, 2.0, decay=0.9), 6000), gain=0.14, wet=0.35)
+    drums.add(at(LAST), s.deep_kick(1.0), gain=0.68, wet=0.1)
+    kicks.append(at(LAST))
+    fx.add(at(LAST), s.boom(2.4, 0.9), gain=0.22, wet=0.3)
+    drums.add(at(LAST), s.lowpass(s.crash(0.8, 3.0, decay=1.4), 6000), gain=0.16, wet=0.4)
+
+    develop(fx, room)
+    sounds(fx)
+
+    pump = s.sidechain(TOTAL + 4, kicks, depth=0.5, release=0.18)
+    low.duck(1 - 0.5 * (1 - pump))
+    pads.duck(1 - 0.4 * (1 - pump))
+    arps.duck(1 - 0.2 * (1 - pump))
+    trim(drums, 55)
+    trim(low, 60)
+    trim(fx, 45)
+    return [drums, low, pads, arps, lead, fx], dict(room=room, wet=0.55, presence=3.0)
+
+
 # Each arrangement returns its buses and how they're mastered. `sounds` puts a video's own sounds on its
 # effects bus; the sketches have ui's in their place.
-ARRANGEMENTS = {"drive": drive, "pulse": pulse}
+ARRANGEMENTS = {"synthwave": synthwave, "drive": drive, "pulse": pulse}
 
 if __name__ == "__main__":
     names = sys.argv[1:] or list(ARRANGEMENTS)

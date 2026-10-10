@@ -175,6 +175,16 @@ def snare(velocity=1.0, tone=185.0, length=0.24, snap=1.0):
     return saturate((0.55 * body + noise + attack) * np.clip(t / 0.0008, 0, 1), 1.4) * velocity
 
 
+def gated_snare(velocity=1.0, tone=180.0, gate=0.24):
+    """The eighties' big snare: its crack, and a burst of bright room noise that a gate cuts off dead."""
+    t = times(gate + 0.02)
+    room = bandpass(rng.standard_normal(len(t)), 3000, octaves=2.2) * np.exp(-t / 0.35) * np.clip((gate - t) / 0.012, 0, 1)
+    out = room * 0.55
+    crack = snare(1.0, tone=tone, length=0.18, snap=1.2)
+    out[: len(crack)] += crack[: len(out)]
+    return saturate(out, 1.3) * velocity
+
+
 def clap(velocity=1.0):
     """Three quick bursts and a short tail, band-passed, with a little body."""
     t = times(0.4)
@@ -237,15 +247,17 @@ def lead(note, length, velocity=1.0, vibrato=True):
     return tone * envelope(len(t), 0.004, 0.18, 0.62, 0.1, hold=length) * velocity * 0.45
 
 
-def saw_lead(note, length, velocity=1.0, cutoff=2200, detune=7):
+def saw_lead(note, length, velocity=1.0, cutoff=2200, detune=7, vibrato=0.0):
     """A dark lead, stereo: two saws a few cents apart through a low-pass that opens a little at each
-    note and settles below `cutoff`, held for `length` seconds."""
+    note and settles below `cutoff`, held for `length` seconds, with a `vibrato` (in semitones) that
+    comes in after the attack."""
     n = int(round((length + 0.15) * SR))
     t = np.arange(n) / SR
     opening = cutoff * (0.7 + 0.7 * np.exp(-t / 0.07))
+    wobble = 2 ** (vibrato * np.sin(2 * np.pi * 5.4 * t) * np.clip((t - 0.15) / 0.2, 0, 1) / 12)
     out = np.zeros((n, 2))
     for i, cents in enumerate((-detune, detune)):
-        out += pan(harmonics(hz(note) * 2 ** (cents / 1200), n, SAW[:48], cutoff=opening), (-0.3, 0.3)[i])
+        out += pan(harmonics(hz(note) * 2 ** (cents / 1200) * wobble, n, SAW[:48], cutoff=opening), (-0.3, 0.3)[i])
     return out * envelope(n, 0.005, 0.22, 0.7, 0.12, hold=length)[:, None] * velocity * 0.35
 
 
