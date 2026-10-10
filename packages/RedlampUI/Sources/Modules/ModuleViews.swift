@@ -164,7 +164,8 @@ final class ModuleColumnView: NSView {
 @_spi(Harness) public enum ModuleViews {
     /// The editor window's content as the app builds it, both modules and their panels, for measurements.
     @MainActor public static func make(model: EditorModel, theme: ThemeSettings) -> NSViewController {
-        let develop = NSHostingController(rootView: EditorContentView(model: model, theme: theme, onOpen: {}))
+        let develop = NSHostingController(rootView: EditorContentView(model: model, theme: theme, onOpen: {})
+            .focusEffectDisabled())
         develop.sizingOptions = []
         let content = ModuleContentController(model: model, theme: theme, develop: develop)
         return EditorSplitViewController(model: model, theme: theme, content: content)

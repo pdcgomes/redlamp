@@ -12,7 +12,7 @@ final class LibraryModuleView: NSView {
     let toolbar: LibraryToolbarView
     /// The filter bar above the grid (LIB-18), shown by `\`.
     let filterBar: LibraryFilterBarView
-    private let filmstrip: NSHostingView<LibraryFilmstrip>
+    private let filmstrip: NSView
     private let model: EditorModel
     private var trackers: [Tracker] = []
     private var withFilmstrip: [NSLayoutConstraint] = []
@@ -31,8 +31,9 @@ final class LibraryModuleView: NSView {
         loupe = LibraryLoupeView(model: model)
         toolbar = LibraryToolbarView(model: model)
         filterBar = LibraryFilterBarView(model: model)
-        filmstrip = NSHostingView(rootView: LibraryFilmstrip(model: model, theme: theme))
-        filmstrip.sizingOptions = []
+        let hosting = NSHostingView(rootView: LibraryFilmstrip(model: model, theme: theme).focusEffectDisabled())
+        hosting.sizingOptions = []
+        filmstrip = hosting
         super.init(frame: CGRect(x: 0, y: 0, width: 1600, height: 1000))
         wantsLayer = true
         layer?.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
