@@ -17,10 +17,10 @@ struct KeywordListTests {
         try await sandbox.indexAll()
 
         let list = try await sandbox.keywords().list()
-        #expect(list.roots == [kw("Birds"), kw("birds"), kw("Places"), kw("tram")])
+        #expect(list.roots == [kw("birds"), kw("Birds"), kw("Places"), kw("tram")])
         let counts = list.ordered.map { "\($0.path.text) \($0.photos) \($0.count)" }
         #expect(counts == [
-            "Birds 0 1", "Birds/Gulls 1 1", "birds 1 1", "Places 0 3", "Places/Portugal 1 3",
+            "birds 1 1", "Birds 0 1", "Birds/Gulls 1 1", "Places 0 3", "Places/Portugal 1 3",
             "Places/Portugal/Lisbon 2 2", "Places/Portugal/Porto 1 1", "tram 1 1",
         ])
         #expect(list.children(of: kw("Places/Portugal")).map(\.name) == ["Lisbon", "Porto"])

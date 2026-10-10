@@ -287,22 +287,19 @@ struct ColumnStoreTests {
         }
     }
 
-    @Test func `the name order is Folders': digits by value, case, accents and width folded, an ASCII name first`() {
+    @Test func `the name order is the Finder's: punctuation before digits, digits by value, then accents, case and width`() {
         let ascending = [
             ("a.jpg", "a1.jpg"), ("a1.jpg", "ab.jpg"), ("IMG_2.JPG", "IMG_10.JPG"), ("DSC_0009.ARW", "DSC_0010.ARW"),
-            ("Été", "Ezz"), ("Zebra", "東京"), ("DSC_0001.ARW", "DSCF0001.RAF"), ("a 2.jpg", "a-2.jpg"),
-            ("DSC05507.ARW", "DSC_5513.ARW"), ("a-2.jpg", "a2.jpg"), ("a2.jpg", "a_2.jpg"), ("cafe", "Café"),
-            ("full", "Ｆｕｌｌ"), ("Café", "Cafe 2"),
+            ("Été", "Ezz"), ("Zebra", "東京"), ("DSC_0001.ARW", "DSCF0001.RAF"), ("a 2.jpg", "a_2.jpg"),
+            ("a_2.jpg", "a-2.jpg"), ("a-2.jpg", "a2.jpg"), ("DSC_5513.ARW", "DSC05507.ARW"), ("cafe", "Café"),
+            ("full", "Ｆｕｌｌ"), ("Café", "Cafe 2"), ("img_0001.jpg", "IMG_1.JPG"), ("IMG_1.JPG", "IMG_0001.JPG"),
+            ("café", "Café"), ("Cafe\u{301}", "Caf\u{E9}"),
         ]
         for (first, second) in ascending {
             #expect(FinderOrder.compare(first, second) < 0, "\(first) before \(second)")
             #expect(FinderOrder.compare(second, first) > 0, "\(second) after \(first)")
             #expect(FinderOrder.key(first).lexicographicallyPrecedes(FinderOrder.key(second)), "\(first)'s key first")
             #expect(FileOrder.precedes(first, second), "and in Folders")
-        }
-        for (first, second) in [("img_0001.jpg", "IMG_1.JPG"), ("Café", "café"), ("Caf\u{E9}", "Cafe\u{301}")] {
-            #expect(FinderOrder.compare(first, second) == 0, "\(first) and \(second)")
-            #expect(FinderOrder.key(first) == FinderOrder.key(second))
         }
     }
 

@@ -147,7 +147,7 @@ struct FoldedText: Sendable, Hashable {
     }
 }
 
-/// The library's name order, Folders' own (`FileOrder`): its keys sort a million names without
+/// The library's name order, the Finder's as Folders has it (`FileOrder`): its keys sort a million names without
 /// comparing strings, and the index's SQL sorts with `compare`. Names with the same key keep the
 /// order of their photos' IDs.
 enum FinderOrder {

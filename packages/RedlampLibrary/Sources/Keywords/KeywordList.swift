@@ -110,7 +110,7 @@ public struct KeywordList: Sendable {
     }
 
     /// Whether `lhs` comes before `rhs` among the keywords of one level: by their names as the Finder
-    /// orders them (case, accents and width aside, numbers by value), then by their texts.
+    /// orders them (numbers by value, then accents, case and width), then by their texts.
     public static func inOrder(_ lhs: KeywordPath, _ rhs: KeywordPath) -> Bool {
         let order = FinderOrder.compare(lhs.name, rhs.name)
         return order != 0 ? order < 0 : lhs < rhs

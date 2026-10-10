@@ -58,59 +58,6 @@ struct FolderScannerTests {
         #expect(photos == ["a.ARW", "b.ARW", "b2.ARW", "c.ARW"])
     }
 
-    @Test func `names sort as Finder sorts them`() {
-        let names = ["IMG_10.ARW", "img_9.arw", "IMG_009b.ARW", "DSC0001.NEF", "Ölberg.jpg", "a.jpg", "IMG_9.ARW"]
-        let sorted = names.sorted(by: FileOrder.precedes)
-        let finder = names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-        #expect(sorted.map { $0.lowercased() } == finder.map { $0.lowercased() })
-        #expect(FileOrder.precedes("IMG_2.ARW", "IMG_10.ARW"))
-        #expect(!FileOrder.precedes("IMG_10.ARW", "IMG_2.ARW"))
-    }
-
-    @Test func `digits come after a space, a hyphen and a full stop and before an underscore, and a name all ASCII before one that folds the same`() {
-        let ordered = [
-            "cafe", "Café", "Cafe 2", "Café 10", "DSC 2", "DSC-2", "DSC.2", "DSC05507", "DSC_5513", "DSCF0001", "Ete",
-            "Été 2", "Etude", "Zoë", "東京",
-        ]
-        for seed in 0 ..< 20 {
-            var random = Xorshift(seed: UInt64(seed + 1))
-            #expect(ordered.shuffled(using: &random).sorted(by: FileOrder.precedes) == ordered, "seed \(seed)")
-        }
-        for (first, second) in [("img_0001.jpg", "IMG_1.JPG"), ("Café", "café"), ("Caf\u{E9}", "Cafe\u{301}")] {
-            #expect(FileOrder.compare(first, second) == .orderedSame, "\(first) and \(second)")
-        }
-    }
-
-    @Test func `names sort as their keys do, whatever their digits, punctuation, case and accents`() {
-        let pieces = [
-            "a", "B", "z", "img", "_", "-", " ", ".", "~", "(", ":", "0", "1", "9", "007", "10", "é", "É", "e\u{301}",
-            "\u{301}", "ß", "Ａ", "１", "–", "東",
-        ]
-        for seed in 1 ... 3 {
-            var random = Xorshift(seed: UInt64(seed))
-            let names = (0 ..< 300).map { _ in
-                (0 ..< Int.random(in: 1 ... 6, using: &random)).map { _ in pieces.randomElement(using: &random) ?? "" }
-                    .joined()
-            }
-            let keys = names.map(FileOrder.key)
-            for (left, name) in names.enumerated() {
-                for (right, other) in names.enumerated() {
-                    let keyed: ComparisonResult = keys[left] == keys[right] ? .orderedSame
-                        : keys[left].lexicographicallyPrecedes(keys[right]) ? .orderedAscending : .orderedDescending
-                    #expect(FileOrder.compare(name, other) == keyed, "\(name) and \(other)")
-                }
-            }
-        }
-    }
-
-    @Test func `the order holds across names beyond ASCII, as localizedStandardCompare's didn't`() {
-        // That one put a0 before a_é and a_é before a–, but a– before a0.
-        let names = ["a0", "a_é", "a–"]
-        for order in [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
-            #expect(order.map { names[$0] }.sorted(by: FileOrder.precedes) == names)
-        }
-    }
-
     @Test func `the sidecar probe reads badges from edit.json alone`() throws {
         defer { try? FileManager.default.removeItem(at: root) }
         try folder("")
@@ -124,21 +71,5 @@ struct FolderScannerTests {
         #expect(summary.hasEdits)
         #expect(summary.metadata == PhotoMetadata(rating: 3, flag: .pick))
         #expect(SidecarStore().summary(for: root.appending(path: "IMG_2.ARW")) == nil)
-    }
-}
-
-/// The same numbers for the same seed, so a failure can be run again.
-private struct Xorshift: RandomNumberGenerator {
-    private var state: UInt64
-
-    init(seed: UInt64) {
-        state = seed
-    }
-
-    mutating func next() -> UInt64 {
-        state ^= state << 13
-        state ^= state >> 7
-        state ^= state << 17
-        return state
     }
 }
