@@ -60,6 +60,7 @@
                 runDirectory: directory, allowsFocus: plan.focus, seed: plan.seed, steps: plan.steps ?? [],
                 knownIssues: plan.knownIssues ?? [:], knownStalls: plan.knownStalls ?? [:], host: host,
             )
+            Views.watchPopovers()
             let watchdog = Watchdog(recorder: recorder)
             let knownStalls = Array((plan.knownStalls ?? [:]).keys)
             MainThread.isInKnownStall = { watchdog.isMainThread(inAnyOf: knownStalls) }

@@ -199,25 +199,25 @@
                 via: .mouse,
             )
 
-            // Subject from New Mask's picker, then Refine Edges and the Refine Edge Brush.
-            guard try app.main({ $0.availableAIMaskKinds.contains(.subject) }) else {
-                throw ScenarioSkip("Apple Vision's Subject mask isn't available")
+            // Sky from New Mask's picker (the working photo is a landscape, with no subject), then
+            // Refine Edges and the Refine Edge Brush.
+            guard try app.main({ $0.availableAIMaskKinds.contains(.sky) }) else {
+                throw ScenarioSkip("The Sky mask isn't available")
             }
-            try app.pick(.subject, from: "masks.new")
-            try app.wait("a Subject mask", timeout: 180) { model in
-                model.selectedMask?.components.contains { $0.shape.kind == .subject } == true || model
-                    .maskMessage != nil
+            try app.pick(.sky, from: "masks.new")
+            try app.wait("a Sky mask", timeout: 180) { model in
+                model.selectedMask?.components.contains { $0.shape.kind == .sky } == true || model.maskMessage != nil
             }
             guard let (mask, component) = try app.main({ model -> (UUID, UUID)? in
                 guard let mask = model.selectedMask,
-                      let component = mask.components.first(where: { $0.shape.kind == .subject })
+                      let component = mask.components.first(where: { $0.shape.kind == .sky })
                 else { return nil }
                 return (mask.id, component.id)
             }) else {
-                throw ScenarioSkip("Subject found nothing to mask in the working photo")
+                throw ScenarioSkip("Sky found nothing to mask in the working photo")
             }
             _ = try app.chooseRow(.component(component)) { $0.selectedComponentID = component }
-            try app.wait("the Subject component chosen") { $0.selectedComponentID == component }
+            try app.wait("the Sky component chosen") { $0.selectedComponentID == component }
             let mark = try app.mark()
             try app.tap(.identifier("masks.refineEdges"))
             try app.wait("Refine Edges", timeout: 240) { model in
@@ -229,11 +229,11 @@
             try app.scrub(.identifier("masks.edgeBrush.size"), "the Refine Edge Brush's Size") { $0.edgeBrushSize }
             try app.tap(.identifier("masks.hint.done"))
             try app.wait("the Refine Edge Brush put down") { !$0.isRefiningEdges }
-            try app.expect(try app.main { $0.recipe.mask(mask) != nil }, "The Subject mask went")
+            try app.expect(try app.main { $0.recipe.mask(mask) != nil }, "The Sky mask went")
             app.covered(.feature("masking.refine"), via: .mouse)
 
             // A preset from the header's Mask Presets menu.
-            if let preset = MaskPreset.builtIn.first(where: { $0.name == "Brighten Subject" }),
+            if let preset = MaskPreset.builtIn.first(where: { $0.name == "Blue Sky" }),
                try app.main({ $0.canApply(preset) }) {
                 try app.choose(preset.name, inMenuOf: .identifier("masks.presets"))
                 try app.wait("the \(preset.name) preset", timeout: 180) { model in
@@ -254,7 +254,7 @@
                 throw ScenarioSkip("The run's photos have no Canon sample")
             }
             try app.open(canon)
-            try app.openMasks()
+            try app.showMasks()
             guard try app.main({ $0.availableAIMaskKinds.contains(.people) }) else {
                 throw ScenarioSkip("People needs Apple Vision's person segmentation")
             }
@@ -301,10 +301,15 @@
         /// The working photo in the Masking tool, with no masks.
         func openMasks() throws {
             try openWorking()
+            try showMasks()
+        }
+
+        /// The Masking tool on the photo open, with no masks: the picker in the list's place.
+        func showMasks() throws {
             try click(.tool(.masking))
             try wait("the Masking tool") { $0.activeTool == .masking }
             try main { $0.deleteAllMasks() }
-            try waitFor(.identifier("masks.new"))
+            try waitFor(.identifier("masks.picker.radial"))
         }
 
         /// Chooses a row of the list by a click, which SwiftUI's tap gestures take only in a key

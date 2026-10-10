@@ -176,6 +176,45 @@ struct DriverTests {
         #expect(state.presses.last == "Second")
     }
 
+    /// The Masks panel's picker opens in a popover, which takes no clicks until it has finished
+    /// opening, though its window is up: the driver finds it from then.
+    @Test func `a tap reaches a SwiftUI button in a popover once it has opened`() async throws {
+        Views.watchPopovers()
+        let state = TapState()
+        let window = NSWindow(
+            contentRect: CGRect(x: 200, y: 200, width: 320, height: 200), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: PopoverSpecimen(state: state))
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        func settle() async throws {
+            for _ in 0 ..< 10 {
+                window.layoutIfNeeded()
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+        func tap(_ identifier: String) throws {
+            let place = try #require(Views.place(of: identifier), "no \(identifier)")
+            Views.tap(
+                at: NSPoint(x: place.frame.midX, y: place.frame.midY), inWindow: place.window, clicks: 1, modifiers: [],
+            )
+        }
+        try await settle()
+        let open = try #require(Views.find("test.open", in: window))
+        Views.tap(at: NSPoint(x: open.midX, y: open.midY), inWindow: window.windowNumber, clicks: 1, modifiers: [])
+        for _ in 0 ..< 300 where Views.popoverWindow == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let popover = try #require(Views.popoverWindow, "the popover didn't finish opening")
+        #expect(!popover.isKeyWindow)
+        try tap("test.inside")
+        try await settle()
+        #expect(state.presses == ["inside"])
+        #expect(Views.popoverWindow == nil, "a closing popover isn't one to click in")
+    }
+
     @Test func `holding a modifier makes the event the app's flags handling reads`() throws {
         let event = try Keyboard.flags(.option)
         #expect(event.type == .flagsChanged)
@@ -268,6 +307,30 @@ struct DriverTests {
 private final class TapState {
     var presses: [String] = []
     var checked = false
+    var open = false
+}
+
+/// A button that opens a popover, as New Mask opens its picker, with a tile-like button in it.
+private struct PopoverSpecimen: View {
+    @Bindable var state: TapState
+
+    var body: some View {
+        Button("Open") { state.open = true }
+            .controlSize(.small)
+            .automationIdentifier("test.open")
+            .popover(isPresented: $state.open, arrowEdge: .leading) {
+                Button {
+                    state.presses.append("inside")
+                    state.open = false
+                } label: {
+                    Image(systemName: "circle").frame(width: 60, height: 60)
+                }
+                .buttonStyle(.plain)
+                .automationIdentifier("test.inside")
+                .padding(20)
+            }
+            .padding(40)
+    }
 }
 
 /// The kinds of SwiftUI control the Masks panel has, each with an identifier.

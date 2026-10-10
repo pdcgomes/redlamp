@@ -97,16 +97,21 @@
         }
 
         /// Where the target is: the window it's in (the editor's, or a popover in front of it)
-        /// and its frame there, scrolled into view first. A SwiftUI control is found as
-        /// VoiceOver finds it.
+        /// and its frame there, scrolled into view first. A view that an edit has just rebuilt
+        /// is given a moment to come back.
         func place(of target: Target) throws -> (window: Int, frame: NSRect) {
             let identifier = target.identifier
-            return try main { _ in
-                guard Views.editorWindow != nil else { throw ScenarioFailure("No editor window") }
-                guard let place = Views.place(of: identifier) else {
-                    throw ScenarioFailure("\(identifier) isn't on screen")
+            let deadline = Date().addingTimeInterval(2)
+            while true {
+                let place = try main { _ -> (window: Int, frame: NSRect)? in
+                    guard Views.editorWindow != nil else { throw ScenarioFailure("No editor window") }
+                    return Views.place(of: identifier)
                 }
-                return place
+                if let place {
+                    return place
+                }
+                guard Date() < deadline else { throw ScenarioFailure("\(identifier) isn't on screen") }
+                pause(0.05)
             }
         }
 
@@ -146,9 +151,9 @@
             _ target: Target, at point: CGPoint = CGPoint(x: 0.5, y: 0.5), count: Int = 1,
             modifiers: NSEvent.ModifierFlags = [],
         ) throws {
-            let (window, location) = try place(point, on: target)
+            let found = try place(point, on: target)
             for clicks in 1 ... count {
-                post { _ in Views.tap(at: location, inWindow: window, clicks: clicks, modifiers: modifiers) }
+                send(clicks: clicks, to: target, at: point, found: found, modifiers: modifiers)
                 pause(0.05)
             }
             pause(0.1)
@@ -214,6 +219,24 @@
                 "\(target) is off its window, at \(Views.describe(location)) of \(Views.describe(bounds))",
             )
             return (place.window, location)
+        }
+
+        /// Sends a click to the view carrying `target`'s identifier, at `point` of its frame as it
+        /// is when the click goes out, after the layout an edit a moment ago may have left to do:
+        /// the edit may have rebuilt the view somewhere else. `found` is where it was.
+        private func send(
+            clicks: Int, to target: Target, at point: CGPoint, found: (window: Int, location: NSPoint),
+            modifiers: NSEvent.ModifierFlags,
+        ) {
+            let identifier = target.identifier
+            post { _ in
+                for window in [Views.popoverWindow, Views.editorWindow] {
+                    window?.contentView?.layoutSubtreeIfNeeded()
+                }
+                let place = Views.place(of: identifier)
+                    .map { (window: $0.window, location: Self.location(point, in: $0.frame)) } ?? found
+                Views.tap(at: place.location, inWindow: place.window, clicks: clicks, modifiers: modifiers)
+            }
         }
 
         /// Window coordinates: y grows upwards; `point.y` 0 is the frame's top.
@@ -342,17 +365,7 @@
             }
             let opened = OpenedMenu()
             try main { _ in
-                opened.watch { menu in
-                    let items = menu.items.filter { !$0.isSeparatorItem && !$0.isHidden && $0.isEnabled }
-                    guard let position = items.firstIndex(where: { $0.title == title }) else { return }
-                    // The menu's tracking reads them from the queue: up to the first item, which
-                    // arrows don't wrap past, down to this one, and Return.
-                    let keys = Array(repeating: KeyCombo(.up), count: items.count)
-                        + Array(repeating: KeyCombo(.down), count: position) + [KeyCombo(.character("\r"))]
-                    guard let events = try? keys.map(Keyboard.event) else { return }
-                    events.forEach { NSApp.postEvent($0, atStart: false) }
-                    opened.chose = true
-                }
+                opened.watch { menu in opened.chose = Menus.chooseByKeys(title, in: menu) }
             }
             // The menu tracks inside the press. A sheet that isn't key spends a press on becoming
             // key unless the view under it accepts first mouse, so the press goes to the view then.
@@ -502,19 +515,33 @@
             return try pick(title, in: opened, of: target)
         }
 
-        /// Clicks the menu button carrying `target`'s identifier through the window, as the mouse
-        /// does, and chooses `title` in the menu that opens, as a click on the item does. Returns
-        /// the menu's items, and whether each is checked.
+        /// Clicks the menu button carrying `target`'s identifier (a SwiftUI menu, or a picker in
+        /// the menu style) through the window, as the mouse does, and chooses `title` in the menu
+        /// that opens with the keyboard, as `choose(_:inPopUpButtonShowing:)` does in a sheet: a
+        /// bordered menu button's or a picker's menu runs nothing else on the main thread while
+        /// it's open. Returns the menu's items, and whether each is checked.
         @discardableResult
         func choose(_ title: String, inMenuOf target: Target) throws -> [(title: String, on: Bool)] {
-            let (window, location) = try place(CGPoint(x: 0.5, y: 0.5), on: target)
+            let center = CGPoint(x: 0.5, y: 0.5)
+            let found = try place(center, on: target)
             let opened = OpenedMenu()
-            try main { _ in opened.watch() }
+            try main { _ in
+                opened.watch { menu in opened.chose = Menus.chooseByKeys(title, in: menu) }
+            }
             defer { try? main { _ in opened.stop() } }
             // The menu tracks inside the press, so this doesn't return until it closes.
-            post { _ in Views.tap(at: location, inWindow: window, clicks: 1, modifiers: []) }
+            send(clicks: 1, to: target, at: center, found: found, modifiers: [])
             try wait("\(target)'s menu to open") { _ in opened.menu != nil }
-            return try pick(title, in: opened, of: target)
+            try wait("\(target)'s menu to close") { _ in opened.closed }
+            let (items, chose) = try main { _ in (opened.items, opened.chose) }
+            guard chose else {
+                let item = items.first { $0.title == title }
+                throw ScenarioFailure(
+                    item == nil ? "\(target)'s menu has no \(title): \(items.map(\.title))"
+                        : "\(title) is disabled in \(target)'s menu",
+                )
+            }
+            return items.map { (title: $0.title, on: $0.on) }
         }
 
         /// Chooses `title` (when given) in the menu that `opened` caught, and closes it.
@@ -607,6 +634,8 @@
     /// The context menu a right-click opens, caught as it starts tracking; only touched on main.
     final class OpenedMenu: @unchecked Sendable {
         var menu: NSMenu?
+        /// The menu's items as it opened, and whether each was checked and enabled.
+        var items: [(title: String, on: Bool, enabled: Bool)] = []
         var closed = false
         /// Whether `onOpen` chose an item.
         var chose = false
@@ -622,6 +651,8 @@
                     MainActor.assumeIsolated {
                         if self.menu == nil, let opened, opened.supermenu == nil {
                             self.menu = opened
+                            self.items = opened.items.filter { !$0.isSeparatorItem }
+                                .map { (title: $0.title, on: $0.state == .on, enabled: $0.isEnabled) }
                             onOpen?(opened)
                         }
                     }
@@ -648,9 +679,34 @@
             NSApp.windows.first { $0.isVisible && $0.title == title }
         }
 
-        /// The popover in front, which is a window of its own.
+        /// The popover in front, which is a window of its own, once it has finished opening: until
+        /// then its window is up but takes no clicks (`watchPopovers`).
         static var popoverWindow: NSWindow? {
-            NSApp.windows.first { $0.isVisible && NSStringFromClass(type(of: $0)).contains("Popover") }
+            NSApp.windows.first { window in
+                window.isVisible && NSStringFromClass(type(of: window)).contains("Popover")
+                    && openedPopovers.contains(window.windowNumber)
+            }
+        }
+
+        private static var openedPopovers: Set<Int> = []
+        private static var watchingPopovers = false
+
+        /// Follows popovers as they finish opening and start closing, for `popoverWindow`.
+        static func watchPopovers() {
+            guard !watchingPopovers else { return }
+            watchingPopovers = true
+            func follow(_ name: Notification.Name, _ change: @escaping @MainActor (Int) -> Void) {
+                _ = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { notification in
+                    let popover = notification.object as? NSPopover
+                    MainActor.assumeIsolated {
+                        if let window = popover?.contentViewController?.view.window {
+                            change(window.windowNumber)
+                        }
+                    }
+                }
+            }
+            follow(NSPopover.didShowNotification) { openedPopovers.insert($0) }
+            follow(NSPopover.willCloseNotification) { openedPopovers.remove($0) }
         }
 
         /// The pop-up button showing `shown` in the sheet in front. A sheet's SwiftUI controls give
@@ -679,12 +735,12 @@
     // MARK: - SwiftUI's controls
 
     extension Views {
-        /// The window showing the view carrying `identifier` (the editor's, or a popover in front
-        /// of it) and its frame there, scrolled into view first. A SwiftUI control carries its
-        /// identifier on an empty view behind it (`automationIdentifier`): SwiftUI builds no
-        /// accessibility to find it by until an assistive app asks.
+        /// The window showing the view carrying `identifier` (a popover in front of the editor
+        /// first, then the editor's) and its frame there, scrolled into view first. A SwiftUI
+        /// control carries its identifier on an empty view behind it (`automationIdentifier`):
+        /// SwiftUI builds no accessibility to find it by until an assistive app asks.
         static func place(of identifier: String, scrolling: Bool = true) -> (window: Int, frame: NSRect)? {
-            for window in [editorWindow, popoverWindow].compactMap(\.self) {
+            for window in [popoverWindow, editorWindow].compactMap(\.self) {
                 guard let root = window.contentView?.superview ?? window.contentView else { continue }
                 if scrolling,
                    let view = all(NSView.self, in: root).first(where: { $0.accessibilityIdentifier() == identifier }) {
@@ -745,6 +801,23 @@
     enum Menus {
         nonisolated static func title(of action: ShortcutAction) -> String {
             action.plannedPhase.map { "\(action.title) (\($0))" } ?? action.title
+        }
+
+        /// Chooses `title` with the keyboard in the pop-up menu that has just opened, which ends
+        /// its tracking with the item chosen, as a click on it does: a pop-up menu's tracking runs
+        /// nothing else on the main thread. Without the item it closes the menu. Whether it chose.
+        static func chooseByKeys(_ title: String, in menu: NSMenu) -> Bool {
+            let items = menu.items.filter { !$0.isSeparatorItem && !$0.isHidden && $0.isEnabled }
+            let position = items.firstIndex { $0.title == title }
+            // The menu's tracking reads them from the queue: up to the first item, which arrows
+            // don't wrap past, down to this one, and Return.
+            let keys = position.map { position in
+                Array(repeating: KeyCombo(.up), count: items.count)
+                    + Array(repeating: KeyCombo(.down), count: position) + [KeyCombo(.character("\r"))]
+            } ?? [KeyCombo(.escape)]
+            guard let events = try? keys.map(Keyboard.event) else { return false }
+            events.forEach { NSApp.postEvent($0, atStart: false) }
+            return position != nil
         }
 
         /// Whether the menu bar's item titled `title` shows a checkmark, once its menu has updated it.
