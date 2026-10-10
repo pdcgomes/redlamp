@@ -316,7 +316,7 @@ extension LibraryFolderList {
                         folders[row.folder] = try reader.folder(id: row.folder)?.path
                     }
                 }
-                return (rows, folders)
+                return try (rows, folders, Self.renderedEdits(of: rows, in: reader))
             }
             folders.merge(read.1) { _, new in new }
             var change = Change()
@@ -332,7 +332,7 @@ extension LibraryFolderList {
             let rows = Dictionary(read.0.map { ($0.id, $0) }) { first, _ in first }
             for id in changed {
                 let before = shown[id]
-                guard let row = rows[id], let item = item(row) else {
+                guard let row = rows[id], var item = item(row) else {
                     if let before {
                         shown[id] = nil
                         change.removed.append(before)
@@ -341,6 +341,7 @@ extension LibraryFolderList {
                     moved = true
                     continue
                 }
+                item.renderedEdit = read.2[id]
                 // A photo shown under the same URL with the same content (a culling batch's thousands) sends no key.
                 if let key = row.contentKey.flatMap(ContentKey.init(data:)), before != item.url || keys[id] != key {
                     change.keys[item.url] = key
@@ -390,22 +391,26 @@ extension LibraryFolderList {
         /// Every photo of `list`, from their rows, in Folders' order.
         private mutating func everything(in list: PhotoList, index: LibraryIndex) async throws -> Change? {
             let (path, includesSubfolders) = (path, includesSubfolders)
-            let read = try await index.read { reader -> ([PhotoRecord], [Int64: String])? in
+            let read = try await index.read { reader -> ([PhotoRecord], [Int64: String], [Int64: EditDigest])? in
                 guard let top = try reader.folder(path: path) else { return nil }
-                guard includesSubfolders else { return try (reader.photos(inFolder: top.id), [top.id: top.path]) }
+                guard includesSubfolders else {
+                    let rows = try reader.photos(inFolder: top.id)
+                    return try (rows, [top.id: top.path], Self.renderedEdits(of: rows, in: reader))
+                }
                 let below = path == "/" ? "/" : path + "/"
                 var folders: [Int64: String] = [:]
                 for folder in try reader.folders(inRoot: top.root)
                     where folder.path == path || folder.path.hasPrefix(below) {
                     folders[folder.id] = folder.path
                 }
-                return try (reader.photos(inSubtreeOf: top.id), folders)
+                let rows = try reader.photos(inSubtreeOf: top.id)
+                return try (rows, folders, Self.renderedEdits(of: rows, in: reader))
             }
             items = [:]
             keys = [:]
             order = nil
             touchedAll = true
-            guard let (rows, folders) = read ?? nil else { return Change(all: ([], [:], [])) }
+            guard let (rows, folders, edits) = read ?? nil else { return Change(all: ([], [:], [])) }
             self.folders = folders
             shown = [:]
             var change = Change()
@@ -413,7 +418,8 @@ extension LibraryFolderList {
             listed.reserveCapacity(list.count)
             var ids: [URL: Int64] = [:]
             for row in rows where list.contains(row.id) {
-                guard let item = item(row) else { continue }
+                guard var item = item(row) else { continue }
+                item.renderedEdit = edits[row.id]
                 shown[row.id] = item.url
                 items[row.id] = item
                 ids[item.url] = row.id
@@ -433,6 +439,15 @@ extension LibraryFolderList {
             }
             change.all = (listed, positions, ContiguousArray(order ?? []))
             return change
+        }
+
+        /// The digests of the edits of `rows`' photos whose renders the store holds, as the index records them for
+        /// their sidecars as they are (LIB-17): read in the transaction that read the rows.
+        static func renderedEdits(of rows: [PhotoRecord], in reader: some IndexQueries) throws -> [Int64: EditDigest] {
+            try reader.standingPhotoEdits(
+                ofPhotos: rows.lazy.filter { $0.edited && $0.sidecarModified != nil }.map(\.id),
+                renderer: EditRenders.renderer,
+            )
         }
 
         /// The photo of `row` as Folders shows it, under the folder's URL; nil for a photo outside it.

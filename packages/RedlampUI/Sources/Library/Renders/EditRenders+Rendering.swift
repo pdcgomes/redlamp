@@ -28,7 +28,8 @@ extension EditRenders {
 
     /// Renders `item`'s edit, whose digest was read as `digest`, and stores its tiers: the sidecar read
     /// again with its masks' bitmaps, the photo opened and its edit rendered at the preview tier's size,
-    /// each step once `mayGoOn` says so, then both tiers made from that render off the main thread.
+    /// each step once `mayGoOn` says so, then both tiers made from that render off the main thread, and the
+    /// edit recorded in the index as rendered.
     private func render(_ item: LibraryItem, key: ContentKey, store: PhotoStore, digest: EditDigest) async {
         let url = item.url
         defer {
@@ -91,6 +92,7 @@ extension EditRenders {
         entry.state = .rendered
         set(url, entry)
         notify([url])
+        record([Record(url: url, sidecarModified: item.sidecarModified, digest: digest)])
     }
 
     private func failed(_ url: URL, _ digest: EditDigest) {

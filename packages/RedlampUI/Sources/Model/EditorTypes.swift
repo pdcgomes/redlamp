@@ -1,6 +1,7 @@
 import Foundation
 import RedlampDocument
 import RedlampEngineAPI
+import RedlampLibrary
 
 public struct LibraryItem: Identifiable, Hashable, Sendable {
     public let url: URL
@@ -14,6 +15,9 @@ public struct LibraryItem: Identifiable, Hashable, Sendable {
     /// The sidecar can be read without waiting for iCloud Drive.
     public var sidecarIsLocal = true
     public var sidecarModified: Date?
+    /// The edit whose render the store holds, as the index recorded it for the sidecar as it is (LIB-17): what the
+    /// photo shows until its sidecar is read again after a relaunch. Nil for none.
+    public var renderedEdit: EditDigest?
     /// The photo is on this Mac, not only in iCloud Drive.
     public var isLocal = true
     /// Still being written (copied in): its thumbnail waits until its size and date settle.

@@ -620,6 +620,7 @@ extension LibrarySourceList.Mapping {
                         }
                     }
                 }
+                try Self.addRenderedEdits(to: &photos, from: reader)
                 return ([photos], folders)
             }
         }
@@ -647,6 +648,7 @@ extension LibrarySourceList.Mapping {
                     else { return }
                     found.append(Self.read(row, folder: path))
                 }
+                try Self.addRenderedEdits(to: &found, from: reader)
                 return found
             }
         }
@@ -667,6 +669,21 @@ extension LibrarySourceList.Mapping {
             return parts
         }
         return (read, folders)
+    }
+
+    /// Gives each edited photo of `photos` the edit whose render the store holds, as the index records it for its
+    /// sidecar as it is (LIB-17): read in the transaction that read their rows.
+    private static func addRenderedEdits(to photos: inout [LibrarySourceList.Read], from reader: some IndexQueries)
+        throws {
+        let edited = photos.indices.filter { photos[$0].item.hasEdits }
+        guard !edited.isEmpty else { return }
+        let edits = try reader.standingPhotoEdits(
+            ofPhotos: edited.map { photos[$0].id },
+            renderer: EditRenders.renderer,
+        )
+        for index in edited {
+            photos[index].item.renderedEdit = edits[photos[index].id]
+        }
     }
 
     /// The photo of `row`, read with `shown`'s columns, as the grid shows it in the folder at `folder`.

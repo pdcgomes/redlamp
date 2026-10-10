@@ -148,7 +148,7 @@ final class EditRenderFixture {
         .appending(path: "edit-renders-\(UUID().uuidString)", directoryHint: .isDirectory).standardizedFileURL
     let engine = RenderEngine()
     let editor = StubEngine()
-    let library = FolderLibrary()
+    private(set) var library = FolderLibrary()
     private(set) var model: EditorModel!
     private(set) var service: LibraryService!
     private var windows: [NSWindow] = []
@@ -229,8 +229,10 @@ final class EditRenderFixture {
     }
 
     /// The library indexes the root and shows it in an editor, in `module`, renders paused while
-    /// `running` is false.
-    func open(module: AppModule = .library, running: Bool = true) async throws {
+    /// `running` is false; `showing` makes views of the editor before the root opens.
+    func open(
+        module: AppModule = .library, running: Bool = true, showing: (EditorModel) -> Void = { _ in },
+    ) async throws {
         library.add([root])
         service = LibraryService(
             paths: LibraryPaths(root: base.appending(path: "Library")),
@@ -252,9 +254,44 @@ final class EditRenderFixture {
         if module == .library {
             model.showModule(.library)
         }
+        showing(model)
         model.open([root])
         try await eventually(seconds: 20) { self.library.isShownFromLibrary && !self.library.isListing }
         try #require(library.isShownFromLibrary, "the folder is shown from the library")
+    }
+
+    /// Closes the library as quitting does, then, after `whileClosed`, opens the root again in a new editor, as a
+    /// launch does, its edits rendered by the same engine, renders paused while `running` is false; `showing` makes
+    /// views of the editor before the root opens.
+    func relaunch(
+        running: Bool = true, whileClosed: () throws -> Void = {}, showing: (EditorModel) -> Void = { _ in },
+    ) async throws {
+        model.editRenders.isRunning = false
+        model.editRenders.letEngineGo()
+        for window in windows {
+            window.contentView = nil
+        }
+        service.close()
+        try whileClosed()
+        library = FolderLibrary()
+        model = nil
+        try await open(running: running, showing: showing)
+    }
+
+    /// The edit of the photo at `path` whose render the index records as stored, standing for its sidecar as it is.
+    func recordedEdit(_ path: String) async throws -> EditDigest? {
+        let index = try #require(service.core?.index)
+        let url = photo(path)
+        guard let id = await LibraryService.indexIDs(of: [url], in: index)[url] else { return nil }
+        return try await index.read { try $0.standingPhotoEdits(ofPhotos: [id], renderer: EditRenders.renderer)[id] }
+    }
+
+    /// Waits until the index records `edit` as the photo at `path`'s render.
+    func waitForRecord(_ path: String, _ edit: EditDigest) async throws {
+        for _ in 0 ..< 2000 where try await recordedEdit(path) != edit {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(try await recordedEdit(path) == edit, "the render of \(path)'s edit is recorded")
     }
 
     /// `view` in a window of its own, laid out.
@@ -588,5 +625,128 @@ extension EditRendersTests {
         model.windowReopened()
         try await fixture.eventually { renders.statistics.rendered == 3 }
         #expect(renders.statistics.rendered == 3)
+    }
+}
+
+/// The first thumbnail each photo's cell showed in a grid: the edit it was the render of, `EditDigest.unedited` for
+/// the embedded preview.
+@MainActor
+final class FirstThumbnails {
+    private(set) var edits: [URL: EditDigest] = [:]
+
+    /// Looks at `grid`'s cells every millisecond for `seconds`.
+    func follow(_ grid: LibraryGridView, seconds: Double = 20) {
+        Task { [weak self, weak grid] in
+            let end = ContinuousClock.now + .seconds(seconds)
+            while ContinuousClock.now < end, let self, let grid {
+                for cell in grid.cells.values where cell.image != nil {
+                    if let url = cell.item?.url, edits[url] == nil {
+                        edits[url] = cell.shownEdit ?? .unedited
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(1))
+            }
+        }
+    }
+}
+
+/// Renders after a relaunch (LIB-17): the index records each photo's edit whose render is stored, so the render shows
+/// from the start, until the photo's sidecar says otherwise.
+@MainActor
+extension EditRendersTests {
+    @Test func `after a relaunch, an edited photo's stored render shows from the start, before its sidecar is read again`(
+    ) async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        try fixture.photos(["IMG_1.JPG", "IMG_2.JPG"])
+        try fixture.edit("IMG_1.JPG", exposure: 1)
+        try await fixture.open()
+        let digest = try EditRenderFixture.digest(exposure: 1)
+        try await fixture.eventually { fixture.item("IMG_1.JPG").flatMap(fixture.renders.shownEdit(for:)) == digest }
+        try await fixture.waitForRecord("IMG_1.JPG", digest)
+        #expect(try await fixture.recordedEdit("IMG_2.JPG") == nil, "an unedited photo has none")
+
+        let first = FirstThumbnails()
+        var grid: LibraryGridView?
+        try await fixture.relaunch(running: false, showing: { model in
+            let view = LibraryGridView(model: model)
+            fixture.show(view)
+            first.follow(view)
+            grid = view
+        })
+        let (edited, plain) = (fixture.photo("IMG_1.JPG"), fixture.photo("IMG_2.JPG"))
+        let item = try #require(fixture.library.item(for: edited))
+        #expect(item.renderedEdit == digest, "the photo comes from the index with the edit whose render is stored")
+        #expect(fixture.library.item(for: plain)?.renderedEdit == nil)
+        try await fixture.eventually { first.edits[edited] != nil && first.edits[plain] != nil }
+        #expect(first.edits[edited] == digest, "the grid's first thumbnail of it is its render")
+        #expect(first.edits[plain] == .unedited)
+        let cell = try #require(grid?.cells.values.first { $0.item?.url == edited })
+        #expect(!cell.showsUneditedPreview && EditRenderFixture.isRender(cell.image, exposure: 1), "unmarked")
+        let thumbnail = await fixture.model.thumbnailLoader.image(for: item)
+        #expect(EditRenderFixture.isRender(thumbnail, exposure: 1), "and the filmstrip's is too")
+        try await fixture.eventually { fixture.renders.isRendered(item) == true }
+        #expect(fixture.renders.isRendered(item) == true, "its sidecar, read again, holds the same edit")
+        #expect(fixture.engine.rendered.withLock { $0.count } == 1, "rendered once")
+    }
+
+    @Test func `an edit changed while Redlamp was closed is rendered again, and once its sidecar is read the old render never shows`(
+    ) async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        try fixture.photos(["IMG_1.JPG", "IMG_2.JPG"])
+        try fixture.edit("IMG_1.JPG", exposure: 1)
+        try await fixture.open()
+        let (brighter, darker) = try (EditRenderFixture.digest(exposure: 1), EditRenderFixture.digest(exposure: -1))
+        try await fixture.eventually { fixture.item("IMG_1.JPG").flatMap(fixture.renders.shownEdit(for:)) == brighter }
+        try await fixture.waitForRecord("IMG_1.JPG", brighter)
+
+        fixture.engine.gate.hold()
+        // Saved meanwhile by another Mac, or another app.
+        try await fixture.relaunch(whileClosed: { try fixture.edit("IMG_1.JPG", exposure: -1) })
+        let url = fixture.photo("IMG_1.JPG")
+        try await fixture.eventually { fixture.renders.known[url]?.digest == darker }
+        #expect(fixture.renders.known[url]?.digest == darker, "its sidecar is read again")
+        let read = try #require(fixture.item("IMG_1.JPG"))
+        #expect(fixture.renders.shownEdit(for: read) == nil, "its embedded preview shows until the new edit renders")
+        let meanwhile = await fixture.model.thumbnailLoader.image(for: read)
+        #expect(meanwhile != nil && !EditRenderFixture.isRender(meanwhile, exposure: 1), "never the old edit's render")
+
+        try await fixture.eventually { fixture.engine.gate.arrived == 1 }
+        fixture.engine.gate.release()
+        try await fixture.eventually { fixture.item("IMG_1.JPG").flatMap(fixture.renders.shownEdit(for:)) == darker }
+        #expect(fixture.item("IMG_1.JPG").flatMap(fixture.renders.shownEdit(for:)) == darker)
+        try await fixture.waitForRecord("IMG_1.JPG", darker)
+        let key = try #require(fixture.key("IMG_1.JPG"))
+        #expect(fixture.store.edits(of: key) == [darker], "the old edit's tiers leave the store")
+    }
+
+    @Test func `a recorded render the store no longer holds is made again, the embedded preview showing meanwhile`(
+    ) async throws {
+        let fixture = EditRenderFixture()
+        defer { fixture.cleanUp() }
+        try fixture.photos(["IMG_1.JPG", "IMG_2.JPG"])
+        try fixture.edit("IMG_1.JPG", exposure: 1)
+        try await fixture.open()
+        let digest = try EditRenderFixture.digest(exposure: 1)
+        try await fixture.eventually { fixture.item("IMG_1.JPG").flatMap(fixture.renders.shownEdit(for:)) == digest }
+        try await fixture.waitForRecord("IMG_1.JPG", digest)
+        let store = fixture.store.root
+
+        fixture.engine.gate.hold()
+        try await fixture.relaunch(whileClosed: { try FileManager.default.removeItem(at: store) })
+        let item = try #require(fixture.item("IMG_1.JPG"))
+        #expect(item.renderedEdit == digest, "the index still records it")
+        _ = await fixture.model.thumbnailLoader.image(for: item)
+        try await fixture.eventually { fixture.renders.shownEdit(for: item) == nil }
+        #expect(fixture.renders.shownEdit(for: item) == nil, "its embedded preview shows meanwhile")
+        let meanwhile = await fixture.model.thumbnailLoader.image(for: item)
+        #expect(meanwhile != nil && !EditRenderFixture.isRender(meanwhile, exposure: 1))
+
+        try await fixture.eventually { fixture.engine.gate.arrived == 1 }
+        fixture.engine.gate.release()
+        try await fixture.eventually { fixture.renders.shownEdit(for: item) == digest }
+        let after = await fixture.model.thumbnailLoader.image(for: item)
+        #expect(EditRenderFixture.isRender(after, exposure: 1), "rendered again")
     }
 }

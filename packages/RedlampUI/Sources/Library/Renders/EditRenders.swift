@@ -13,6 +13,9 @@ import RedlampLibrary
 /// - Order: the photos on screen first (the grid's, the filmstrip's and the active photo), then those
 ///   within a screen of them, nearest first, then the rest of the source in its order. A photo's sidecar
 ///   is read off the main thread for its edit's digest, up to `readAhead` photos ahead of the renders.
+/// - Relaunching: the index records each photo's edit once its render is stored, with the date its sidecar had
+///   (`PhotoEdit`), and the photo comes from the index with it (`LibraryItem.renderedEdit`) while its sidecar's
+///   date is the same, so its render shows from the start, before its sidecar is read again.
 /// - Changes: a photo whose sidecar or file changed (the editor's saves, and other apps' changes that
 ///   LibraryLive reports) is read again, showing what it showed until then. When its edit changed, it
 ///   shows its embedded preview until the new edit is rendered, never the old edit's, whose renders leave
@@ -57,7 +60,10 @@ public final class EditRenders {
     }
 
     /// Names how the library renders edits, in every digest: a change to it makes every render again.
-    nonisolated static let renderVersion = "app.redlamp.library.edit-render 1\n"
+    nonisolated static let renderVersion = "app.redlamp.library.edit-render \(renderer)\n"
+    /// Its number, which the index keeps with each photo's rendered edit (`PhotoEdit`): a render made before a
+    /// change to it never shows as current.
+    nonisolated static let renderer = 1
     /// How long Develop must have asked for no frame before a render goes on.
     static let developQuiet = Duration.milliseconds(1000)
     /// The GPU memory the pyramids of the engine's opened photos may take before it's let go: their
@@ -107,6 +113,11 @@ public final class EditRenders {
     /// nil until they're found, and again once photos come or go (`findEdited`).
     private var editedRows: [Int]?
     private var findingEdited = false
+    /// Whether a photo whose sidecar isn't read shows the render the index records for it; not once
+    /// `renderAgain()` removed the renders.
+    private var showsRecords = true
+    /// The index's records of rendered edits being written, one write after another.
+    private var recording: Task<Void, Never>?
     var current: (url: URL, task: Task<Void, Never>)?
     var engine: (any EditingEngine)?
     var engineBytes = 0
@@ -154,10 +165,12 @@ public final class EditRenders {
     // MARK: - What's shown
 
     /// The edit `item`'s thumbnails and previews show: its edit's digest once that's rendered, else nil
-    /// for its embedded preview.
+    /// for its embedded preview. Until its sidecar is read, the edit the index records as rendered for the sidecar
+    /// as it is.
     func shownEdit(for item: LibraryItem) -> EditDigest? {
-        guard item.hasEdits, let known = known[item.url], known.state == .rendered else { return nil }
-        return known.digest
+        guard item.hasEdits else { return nil }
+        guard let known = known[item.url] else { return showsRecords ? item.renderedEdit : nil }
+        return known.state == .rendered ? known.digest : nil
     }
 
     func shownEdit(at url: URL) -> EditDigest? {
@@ -209,11 +222,22 @@ public final class EditRenders {
         }
     }
 
-    /// A loader found no render of `edit` in the store, where one was: it's made again.
+    /// A loader found no render of `edit` in the store, where one was, or where the index recorded one: it's made
+    /// again.
     func missing(_ url: URL, _ edit: EditDigest) {
-        guard var entry = known[url], entry.digest == edit, entry.state == .rendered else { return }
-        entry.state = .unrendered
-        set(url, entry)
+        if var entry = known[url] {
+            guard entry.digest == edit, entry.state == .rendered else { return }
+            entry.state = .unrendered
+            set(url, entry)
+        } else {
+            guard let item = library.item(for: url), shownEdit(for: item) == edit,
+                  let (_, key) = library.storeThumbnail(for: item)
+            else { return }
+            set(url, Known(
+                key: key, size: item.size, modified: item.modified, sidecarModified: item.sidecarModified, digest: edit,
+                state: .unrendered,
+            ))
+        }
         revisit(url)
         notify([url])
         schedulePump()
@@ -226,9 +250,9 @@ public final class EditRenders {
         renderCursor = min(renderCursor, row)
     }
 
-    /// Forgets every photo's edit and removes the store's renders of them, so they're read and rendered
-    /// again, and starts the statistics again: for measurements. The renders are removed off the main
-    /// thread, rewriting the store's shards, with renders paused until they're gone.
+    /// Forgets every photo's edit and removes the store's renders of them and the index's records of those, so
+    /// they're read and rendered again, and starts the statistics again: for measurements. The renders are removed
+    /// off the main thread, rewriting the store's shards, with renders paused until they're gone.
     @_spi(Harness) public func renderAgain() async {
         current?.task.cancel()
         let wasRunning = isRunning
@@ -241,6 +265,8 @@ public final class EditRenders {
                 }
             }
         }
+        record(known.keys.map { Record(url: $0, sidecarModified: nil, digest: nil) })
+        showsRecords = false
         known = [:]
         waiting = 0
         (readCursor, renderCursor) = (0, 0)
@@ -554,9 +580,12 @@ extension EditRenders {
         return ReadEdit(digest: digest, isStored: stored)
     }
 
+    /// Takes the edits read. Before a photo's sidecar is read, the edit the index records stands for the one it
+    /// showed; a photo whose edit isn't recorded as it's now stored has its record set right.
     private func received(_ read: [(ReadPhoto, ReadEdit)]) {
         readJobs -= 1
         var changed: [URL] = []
+        var records: [Record] = []
         for (photo, edit) in read {
             let url = photo.item.url
             reading.remove(url)
@@ -569,20 +598,61 @@ extension EditRenders {
             }
             let shown = shownEdit(for: item)
             let before = known[url]
+            let previous = before == nil ? shown : before?.digest
             set(url, Known(
                 key: photo.key, size: item.size, modified: item.modified, sidecarModified: item.sidecarModified,
                 digest: edit.digest,
                 state: edit.digest == nil ? .failed : edit.isStored ? .rendered : .unrendered,
             ))
-            if let before, before.digest != edit.digest {
-                drop(before.digest, of: before.key, unlessShownBy: url)
+            if let previous, previous != edit.digest {
+                drop(previous, of: before?.key ?? photo.key, unlessShownBy: url)
+            }
+            if edit.digest != item.renderedEdit, edit.isStored || item.renderedEdit != nil {
+                records.append(Record(
+                    url: url, sidecarModified: item.sidecarModified, digest: edit.isStored ? edit.digest : nil,
+                ))
             }
             if shownEdit(for: item) != shown {
                 changed.append(url)
             }
         }
+        record(records)
         notify(changed)
         schedulePump()
+    }
+
+    /// What the index is to record of a photo's rendered edit: the digest whose render the store holds, read from
+    /// its sidecar as modified at `sidecarModified`; with no digest, that it has none.
+    struct Record: Sendable {
+        let url: URL
+        let sidecarModified: Date?
+        let digest: EditDigest?
+    }
+
+    /// Records the edits whose renders the store holds in the index, off the main thread and in the order asked, so
+    /// a relaunch shows them before the photos' sidecars are read again (`PhotoEdit`); forgets a photo's for a
+    /// record with no digest.
+    func record(_ records: [Record]) {
+        guard !records.isEmpty, let index = library.service?.core?.index else { return }
+        let (renderer, previous) = (Self.renderer, recording)
+        recording = Task.detached(priority: .utility) {
+            await previous?.value
+            _ = try? await index.write { writer in
+                for record in records {
+                    guard let photo = try LibraryService.photo(at: record.url, in: writer) else { continue }
+                    if let digest = record.digest, let modified = record.sidecarModified {
+                        try writer.setPhotoEdit(
+                            digest,
+                            ofPhoto: photo.id,
+                            sidecarModified: modified,
+                            renderer: renderer,
+                        )
+                    } else {
+                        try writer.removePhotoEdits([photo.id])
+                    }
+                }
+            }
+        }
     }
 
     /// A photo to render: its edit's digest, and the store its tiers go to under its content key.
