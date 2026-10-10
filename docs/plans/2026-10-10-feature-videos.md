@@ -421,6 +421,10 @@ The owner found the pixelartvisuals pieces (the DAW, the fruit music player, the
 
 The owner found the cut from the opener's sound into the theme too abrupt and asked for a ramp. Measured in 200 ms steps, the opener's held chord was a steady bed at about −18.5 dB; at the cut it stopped within three frames, and after the first hit the theme's first bar fell to −26 to −31 dB between its muffled kicks, its pads 14 dB under the kicks and no bass until the second bar. The theme's lead-in now rises through the opener's last bar into the hit, and the drone keeps the theme's first bar within about 2 dB of the held chord between kicks (−19 to −21 dB). The 400 ms either side of the cut measure −14.8 and −15.0 LUFS, where they were −17.4 and −16.4. With the opener, each arrangement measures −14.0 LUFS with a true peak of −1.1 to −1.2 dBFS; the episode's sounds still land on their beats (median 0.0 ms; one button release reads 24 ms early, under an arpeggio note on the same sixteenth, as one did before); and 18.8% of the score's energy is under 60 Hz.
 
+### E01 approved, 10 October 2026
+
+The owner approved E01's cut, in the dashboard look with the synthwave score and the lead-in, as the series' first reel: hook A posts on Tue 27 Oct and hook B goes out as an Instagram trial reel on Thu 29 Oct. Its videos and covers are rendered in `~/src/redlamp-social/renders/` (`e01-a.mp4`, `e01-b.mp4`).
+
 ## For the owner to decide
 
 - The hook each video leads with. A is the default, and B is tested as a trial reel.
