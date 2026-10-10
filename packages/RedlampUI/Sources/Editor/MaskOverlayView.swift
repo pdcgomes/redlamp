@@ -55,16 +55,16 @@ struct MaskOverlayView: View {
                             .onTapGesture { model.selectMask(mask.id) }
                             .onHover { inside in
                                 if inside {
-                                    model.hoveredMaskID = mask.id
-                                } else if model.hoveredMaskID == mask.id {
-                                    model.hoveredMaskID = nil
+                                    model.hoveredPinMaskID = mask.id
+                                } else if model.hoveredPinMaskID == mask.id {
+                                    model.hoveredPinMaskID = nil
                                 }
                             }
                             // A pin taken away under the pointer, as a click on it does, gets no
                             // hover's end from SwiftUI.
                             .onDisappear {
-                                if model.hoveredMaskID == mask.id {
-                                    model.hoveredMaskID = nil
+                                if model.hoveredPinMaskID == mask.id {
+                                    model.hoveredPinMaskID = nil
                                 }
                             }
                             .help(mask.name)

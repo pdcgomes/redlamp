@@ -9,13 +9,16 @@ import SwiftUI
 /// each panel its own titlebar section for its buttons.
 final class EditorSplitViewController: NSSplitViewController {
     private let model: EditorModel
+    private let content: NSViewController
     private let sidebarItem: NSSplitViewItem
     private let inspectorItem: NSSplitViewItem
     private var tracker: Tracker?
     private var observations: [NSKeyValueObservation] = []
+    private var pointer: PanelPointer?
 
     init(model: EditorModel, theme: ThemeSettings, content: NSViewController) {
         self.model = model
+        self.content = content
         sidebarItem = NSSplitViewItem(sidebarWithViewController: PaneViewController(
             model: model, theme: theme, width: PanelMetrics.sidebarNominal,
         ) {
@@ -73,6 +76,7 @@ final class EditorSplitViewController: NSSplitViewController {
                 MainActor.assumeIsolated { self?.inspectorCollapsedChanged() }
             },
         ]
+        pointer = PanelPointer(model: model, tracking: view, canvas: content.view)
     }
 
     /// Each item writes back only its own state: the other may be mid-way through a change
@@ -199,5 +203,52 @@ private final class ShadeView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         blocksClicks ? super.hitTest(point) : nil
+    }
+}
+
+/// Keeps `EditorModel.pointerOverPanel`: whether the window's hit test finds a panel or the
+/// toolbar under the pointer, rather than the canvas. AppKit reports the pointer to every
+/// tracking area it's in, whatever covers the area's view, so the canvas's own hovers can't tell.
+private final class PanelPointer: NSResponder {
+    private let model: EditorModel
+    private weak var canvas: NSView?
+
+    init(model: EditorModel, tracking view: NSView, canvas: NSView) {
+        self.model = model
+        self.canvas = canvas
+        super.init()
+        view.addTrackingArea(NSTrackingArea(
+            rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect], owner: self,
+        ))
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        update(event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        update(event)
+    }
+
+    override func mouseExited(with _: NSEvent) {
+        set(false)
+    }
+
+    private func update(_ event: NSEvent) {
+        guard let canvas, let frame = canvas.window?.contentView?.superview,
+              let hit = frame.hitTest(event.locationInWindow) else { return }
+        // Where nothing on the canvas takes the point, the hit test finds a view holding it.
+        set(!hit.isDescendant(of: canvas) && !canvas.isDescendant(of: hit))
+    }
+
+    private func set(_ over: Bool) {
+        if model.pointerOverPanel != over {
+            model.pointerOverPanel = over
+        }
     }
 }

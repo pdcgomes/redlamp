@@ -513,6 +513,27 @@ public final class EditorModel {
         }
     }
 
+    /// The mask whose pin on the canvas is under the pointer (`MaskOverlayView`), previewed as the
+    /// list's are while the pointer isn't over a panel.
+    public var hoveredPinMaskID: UUID? {
+        didSet {
+            if hoveredPinMaskID != oldValue {
+                requestRender()
+            }
+        }
+    }
+
+    /// Whether the pointer is over a panel or the toolbar rather than the canvas they float over
+    /// (`EditorSplitViewController`). The canvas sees the pointer through them, so a pin beneath
+    /// the inspector takes its hover there.
+    public internal(set) var pointerOverPanel = false {
+        didSet {
+            if pointerOverPanel != oldValue, hoveredPinMaskID != nil {
+                requestRender()
+            }
+        }
+    }
+
     /// The component under the pointer in the new Masks panel, whose own coverage the canvas
     /// previews (`componentPreview`).
     public var hoveredComponentID: UUID? {
@@ -1339,11 +1360,11 @@ public final class EditorModel {
     /// its adjustments is being dragged, so the edit itself shows (Lightroom's automatic overlay
     /// toggle), and while a tool is armed for a new mask, so what it selects shows alone. Sliders
     /// that shape the mask (Feather, Detail, Refine) keep it. The mask under the pointer in the
-    /// list shows instead, overlay on or off.
+    /// list, or on its pin with the pointer over the canvas, shows instead, overlay on or off.
     public var maskOverlayShown: UUID? {
         guard activeTool == .masking, !isShowingOriginal, !isAdjustingMask else { return nil }
-        if let hoveredMaskID {
-            return hoveredMaskID
+        if let hovered = hoveredMaskID ?? (pointerOverPanel ? nil : hoveredPinMaskID) {
+            return hovered
         }
         return showMaskOverlay && !isArmedForNewMask ? selectedMaskID : nil
     }

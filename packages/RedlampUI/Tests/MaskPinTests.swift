@@ -137,11 +137,11 @@ struct PointerPreviewTests {
         try #require(model.selectedMaskID == right)
 
         // The pointer comes onto the left mask's pin and clicks it.
-        model.hoveredMaskID = left
+        model.hoveredPinMaskID = left
         #expect(model.maskOverlayShown == left)
         model.selectMask(left)
         try await settle(window)
-        #expect(model.hoveredMaskID == nil, "the selected mask has no pin, so nothing previews it")
+        #expect(model.hoveredPinMaskID == nil, "the selected mask has no pin, so nothing previews it")
         model.selectMask(right)
         #expect(model.maskOverlayShown == right, "the overlay shows the mask chosen in the list")
         #expect(engine.base.lastRender?.maskOverlay == right)
@@ -150,7 +150,7 @@ struct PointerPreviewTests {
         model.cancelDrawing()
 
         try await settle(window)
-        model.hoveredMaskID = left
+        model.hoveredPinMaskID = left
         model.activeTool = .edit
         try await settle(window)
         model.activeTool = .masking
