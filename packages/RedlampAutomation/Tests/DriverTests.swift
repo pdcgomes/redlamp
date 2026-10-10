@@ -212,9 +212,20 @@ struct DriverTests {
         }
         let popover = try #require(Views.popoverWindow, "the popover didn't finish opening")
         #expect(!popover.isKeyWindow)
+        // Laid out and drawn, as the popover is by the time a person clicks in it; on CI's runner
+        // the tap could otherwise come first.
+        for _ in 0 ..< 5 {
+            popover.contentView?.layoutSubtreeIfNeeded()
+            popover.displayIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
         try tap("test.inside")
         try await settle()
-        #expect(state.presses == ["inside"])
+        let press = Views.lastPress.map { "found \($0.found), sent to \($0.sentTo), in \($0.window)" } ?? "none"
+        #expect(
+            state.presses == ["inside"],
+            "the press: \(press); the popover key: \(popover.isKeyWindow); the app active: \(NSApp.isActive)",
+        )
         #expect(Views.popoverWindow == nil, "a closing popover isn't one to click in")
     }
 
