@@ -6,7 +6,9 @@ import SwiftUI
 /// view, so the editor's key monitor steps aside for it as it does for text being edited.
 final class KeyRecorderView: NSTextView {
     /// Whether a key is being recorded, which keeps the menu bar's key handling (`MenuBarKeys`) out of the way.
-    static var isRecording = false
+    static var isRecording: Bool {
+        NSApp?.keyWindow?.firstResponder is KeyRecorderView
+    }
 
     var onKey: ((KeyCombo) -> Void)?
     var onModifiers: ((NSEvent.ModifierFlags) -> Void)?
@@ -17,12 +19,10 @@ final class KeyRecorderView: NSTextView {
     }
 
     override func becomeFirstResponder() -> Bool {
-        Self.isRecording = true
-        return true
+        true
     }
 
     override func resignFirstResponder() -> Bool {
-        Self.isRecording = false
         onModifiers?([])
         onEnd?()
         return true

@@ -170,7 +170,7 @@ public final class ShortcutEditor {
         switch conflict {
         case let .taken(other): "\(combo.display) is \(other.title)’s key."
         case let .shiftVariant(other):
-            "\(other.title) answers \(combo.display) as its key with ⇧; taking it ends that."
+            "\(combo.display) also runs \(other.title), as its key with ⇧ held; taking it ends that."
         case let .reserved(use): "\(combo.display) is the Mac’s or Redlamp’s own key for \(use)."
         }
     }
