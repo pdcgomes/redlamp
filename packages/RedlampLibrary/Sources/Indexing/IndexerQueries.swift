@@ -16,6 +16,27 @@ public extension IndexQueries {
         return try statement.first(RootRecord.init)
     }
 
+    /// The photos missing from their folders (DEC-59), read through their own index (schema version 11).
+    func missingPhotoIDs() throws -> Set<Int64> {
+        var ids = Set<Int64>()
+        try database.cached(Self.missingPhotos).forEachRow { ids.insert($0.int64(at: 0)) }
+        return ids
+    }
+
+    /// The names of the photos missing from each folder, by the folder's ID, as `photos_missing` finds them.
+    func foldersWithMissingPhotos() throws -> [Int64: Set<String>] {
+        var folders: [Int64: Set<String>] = [:]
+        try database.cached("""
+        SELECT folder, name FROM photos WHERE state & \(PhotoRecord.State.missing.rawValue) != 0
+        """).forEachRow { folders[$0.int64(at: 0), default: []].insert($0.string(at: 1) ?? "") }
+        return folders
+    }
+
+    /// A query of the missing photos' IDs, as `photos_missing` answers it.
+    static var missingPhotos: String {
+        "SELECT id FROM photos WHERE state & \(PhotoRecord.State.missing.rawValue) != 0"
+    }
+
     /// How many photos have any of the bits of `state`.
     func photoCount(withState state: PhotoRecord.State) throws -> Int {
         let statement = try database.cached("SELECT count(*) FROM photos WHERE state & ? != 0")
@@ -81,6 +102,52 @@ public extension LibraryIndex.Writer {
         let changed = database.changes
         try setSetting(offline ? "1" : nil, for: Self.offlineKey(uuid))
         return changed
+    }
+
+    /// Marks missing, from `date`, the photos of `rows` still in the folder each vanished from (DEC-59), but those
+    /// missing already and those of roots marked removed; returns those marked.
+    @discardableResult
+    func markMissing(_ rows: [(photo: Int64, folder: Int64)], at date: Date) throws -> [Int64] {
+        let statement = try database.cached("""
+        UPDATE photos SET state = state | ?1, missing_since = ?2
+        WHERE id = ?3 AND folder = ?4 AND state & ?1 = 0 AND \(notRemoved())
+        """)
+        try statement.bind(PhotoRecord.State.missing.rawValue, at: 1)
+        try statement.bind(date.timeIntervalSince1970, at: 2)
+        var marked: [Int64] = []
+        for row in rows {
+            try statement.bind(row.photo, at: 3)
+            try statement.bind(row.folder, at: 4)
+            try statement.run()
+            if database.changes > 0 {
+                marked.append(row.photo)
+            }
+        }
+        return marked
+    }
+
+    /// Marks missing, from `date`, the photos in `folder` and every folder under it, as `markMissing(_:at:)` does.
+    @discardableResult
+    func markMissing(inSubtreeOf folder: Int64, at date: Date) throws -> [Int64] {
+        try markMissing(photos(inSubtreeOf: folder).map { ($0.id, $0.folder) }, at: date)
+    }
+
+    /// Takes the missing mark off photos `ids`, found again; returns those that had it.
+    @discardableResult
+    func markFound(_ ids: [Int64]) throws -> [Int64] {
+        let statement = try database.cached("""
+        UPDATE photos SET state = state & ~?1, missing_since = NULL WHERE id = ?2 AND state & ?1 != 0
+        """)
+        try statement.bind(PhotoRecord.State.missing.rawValue, at: 1)
+        var found: [Int64] = []
+        for id in ids {
+            try statement.bind(id, at: 2)
+            try statement.run()
+            if database.changes > 0 {
+                found.append(id)
+            }
+        }
+        return found
     }
 
     /// Records that the index holds the changes of the volume with `uuid` up to `history.lastEvent`

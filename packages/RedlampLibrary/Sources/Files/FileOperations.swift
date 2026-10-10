@@ -409,7 +409,9 @@ public final class FileOperations: Sendable {
 
     static func photos(in steps: ArraySlice<FileStep>) -> Int {
         var ids = Set<Int64>()
-        for step in steps where [.move, .trash, .putBack, .copy].contains(step.kind) {
+        for step in steps
+            where [.move, .trash, .putBack, .copy, .removeFromLibrary, .returnToLibrary, .relink, .unlink]
+            .contains(step.kind) {
             ids.formUnion(step.photos.map(\.id))
             ids.formUnion(step.removed.map(\.photo.id))
         }
@@ -422,8 +424,8 @@ public final class FileOperations: Sendable {
         var ids: [Int64] = []
         for step in steps {
             let done: [Int64] = switch step.kind {
-            case .move: step.photos.map(\.id).filter { $0 != 0 }
-            case .trash, .putBack: step.removed.map(\.photo.id)
+            case .move, .relink, .unlink: step.photos.map(\.id).filter { $0 != 0 }
+            case .trash, .putBack, .removeFromLibrary, .returnToLibrary: step.removed.map(\.photo.id)
             case .copy: step.removed.compactMap(\.copyOf)
             case .createFolder, .removeFolder, .recordOriginalNames, .clearOriginalNames, .detachCopies: []
             }

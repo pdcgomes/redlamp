@@ -95,7 +95,7 @@ extension HealthChecker {
             let damaged = try """
             SELECT \(columns) FROM photo_health h CROSS JOIN photos p ON p.id = h.photo
             WHERE h.damage BETWEEN 1 AND 4 AND p.size = h.size AND abs(p.modified - h.modified) < 1e-6
-              AND \(reader.inLibrary(folder: "p.folder"))
+              AND \(reader.inLibrary(folder: "p.folder", state: "p.state"))
             """
             if let ids {
                 let statement = try reader.database.cached(damaged + " AND h.photo = ?")
@@ -123,16 +123,18 @@ extension HealthChecker {
         }
     }
 
-    /// Whether photo `id` is marked unreadable in `store`.
+    /// Whether photo `id` is marked unreadable in `store`, and not missing, which only the Missing check lists.
     private static func isUnreadable(_ id: Int64, in store: ColumnStore) -> Bool {
         guard let row = store.row(of: id) else { return false }
-        return store.states[row] & UInt8(PhotoRecord.State.unreadable.rawValue) != 0
+        let state = PhotoRecord.State(rawValue: Int(store.states[row]))
+        return state.contains(.unreadable) && !state.contains(.missing)
     }
 
-    /// The store's photos marked unreadable, by ID.
+    /// The store's photos marked unreadable, by ID, but those missing, which only the Missing check lists.
     private static func unreadable(in store: ColumnStore) -> [Int64] {
         var ids: [Int64] = []
-        store.rows(matching: .leaf(.state(UInt8(PhotoRecord.State.unreadable.rawValue))), sets: [:]).forEach {
+        let marked = store.rows(matching: .leaf(.state(UInt8(PhotoRecord.State.unreadable.rawValue))), sets: [:])
+        store.listed(marked, unreadable: true).forEach {
             ids.append(store.ids[$0])
             return true
         }

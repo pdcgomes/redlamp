@@ -165,10 +165,10 @@ public final class LibraryLive: Sendable {
 
     // MARK: - Changes
 
-    /// What the indexer reported: photos added, changed and removed, and folders indexed.
+    /// What the indexer reported: photos added, changed, gone missing and removed, and folders indexed.
     public func receive(_ event: LibraryIndexerEvent) {
         switch event {
-        case let .photosInserted(ids), let .photosUpdated(ids), let .photosRemoved(ids):
+        case let .photosInserted(ids), let .photosUpdated(ids), let .photosMissing(ids), let .photosRemoved(ids):
             photosChanged(ids)
         case .folderIndexed:
             gather { $0.names = true }

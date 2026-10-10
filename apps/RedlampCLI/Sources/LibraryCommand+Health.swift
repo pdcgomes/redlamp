@@ -23,9 +23,13 @@ extension LibraryCommand {
                 try await hash(health)
             }
             if let name = options.value("--keep") ?? options.value("--unkeep") {
+                let check = try check(named: name, rule: rule)
+                guard check != .missing else {
+                    throw CLIError(description: "missing photos aren't kept anyway: they're found again or removed")
+                }
                 try await keep(
                     health,
-                    check: check(named: name, rule: rule),
+                    check: check,
                     keeping: options.value("--keep") != nil,
                     photos: options.positional,
                 )
@@ -35,6 +39,9 @@ extension LibraryCommand {
                 let check = try check(named: name, rule: rule)
                 guard check != .extensions else {
                     throw CLIError(description: "wrong extensions are renamed, with --rename, not moved to the Trash")
+                }
+                guard check != .missing else {
+                    throw CLIError(description: "missing photos have no files to move to the Trash")
                 }
                 try await act(health, check: check, options: options)
             } else if options.has("--rename") {
@@ -104,6 +111,7 @@ extension LibraryCommand {
             let groups = Set(findings.findings.compactMap(\.group)).count
             heading += " in \(count(groups)) group\(groups == 1 ? "" : "s")"
         }
+        guard findings.check != .missing else { return heading + ", gone from their folders" }
         let proposed = findings.proposed.count
         let action = findings.check == .extensions ? "to rename" : "to the Trash"
         heading += ", \(count(proposed)) \(action)"
@@ -358,8 +366,10 @@ extension LibraryCommand {
         case .duplicates: return .duplicates
         case .pairs: return .pairs(rule)
         case .damaged: return .damaged
+        case .missing: return .missing
         case .extensions: return .extensions
-        case nil: throw CLIError(description: "\(name) isn't a check: duplicates, pairs, damaged or extensions")
+        case nil:
+            throw CLIError(description: "\(name) isn't a check: duplicates, pairs, damaged, missing or extensions")
         }
     }
 

@@ -525,8 +525,34 @@ final class FilePlanner: @unchecked Sendable {
                     kept.append(item)
                 }
                 checked[number].items = kept
-            case .recordOriginalNames, .clearOriginalNames, .detachCopies:
+            case .recordOriginalNames, .clearOriginalNames, .detachCopies, .removeFromLibrary, .returnToLibrary:
                 break
+            case .relink, .unlink:
+                var kept: [FileItem] = []
+                for item in step.items {
+                    guard let destination = item.destination else {
+                        // The file the photo is found as stays where it is: a relink needs it as it was, its Undo
+                        // doesn't.
+                        if step.kind == .unlink || atSource(item) != nil {
+                            kept.append(item)
+                        }
+                        continue
+                    }
+                    // A sidecar goes as a move's does, but stays where it is when the folder it goes back to is gone.
+                    guard let item = atSource(item),
+                          item.role == .sidecarOnThisMac || folderIsThere(Self.split(destination).folder)
+                    else { continue }
+                    let (sourceKey, destinationKey) = (NamingJob.fold(item.source), NamingJob.fold(destination))
+                    if sourceKey != destinationKey, isThere(destination) {
+                        conflicts.append(FileConflict(path: destination, reason: .taken))
+                    }
+                    placed.remove(sourceKey)
+                    vacated.insert(sourceKey)
+                    vacated.remove(destinationKey)
+                    placed.insert(destinationKey)
+                    kept.append(item)
+                }
+                checked[number].items = kept
             }
         }
         return (checked, conflicts)

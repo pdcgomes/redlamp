@@ -28,7 +28,7 @@ public struct PhotosNamed: Sendable, Hashable {
 
 public extension QueryEngine {
     /// The photos whose file name holds `text`, as the text index finds them (three characters or
-    /// more, as `name:` does): the first `limit` in the name order, without those that can't be read,
+    /// more, as `name:` does): the first `limit` in the name order, without those lists leave out,
     /// and how many there are. Unlike `search`, it cancels nothing. Nothing runs on the caller's thread.
     func photos(named text: String, limit: Int = 5) async throws -> PhotosNamed {
         let text = text.trimmingCharacters(in: .whitespaces)
@@ -39,7 +39,7 @@ public extension QueryEngine {
         }
         guard let (store, vocabulary, generation) = snapshot() else { return none }
         let query = LibraryQuery.filter(LibraryQuery.Filter(.name, .equal, [.text(text)]))
-        let found = try await store.readable(matches(
+        let found = try await store.listed(matches(
             for: query, in: store, vocabulary: vocabulary, generation: generation,
         ))
         try Task.checkCancellation()

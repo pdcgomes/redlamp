@@ -168,11 +168,13 @@ struct LibraryIndexerTests {
         #expect(after[sandbox.path(moves[2].1)]?.sidecarModified == nil)
     }
 
-    @Test func `photos and folders that vanish are removed`() async throws {
+    @Test func `photos and folders that vanish are kept as missing, and a vanished folder's row stays for them`(
+    ) async throws {
         let sandbox = try await IndexerSandbox.make(.init(photos: 400, seed: 25, shapes: []))
         defer { sandbox.remove() }
         let indexer = LibraryIndexer(index: sandbox.index, configuration: .testing())
         _ = await IndexerRun.collect(indexer.index([sandbox.root]))
+        let before = try await Self.rows(sandbox)
         let folders = sandbox.fixture.folders
         let removedFolder = try #require(folders.last)
         let kept = folders[0]
@@ -182,25 +184,41 @@ struct LibraryIndexerTests {
         }
         try FileManager.default.removeItem(at: sandbox.root.appending(path: removedFolder.path))
 
+        let started = Date()
         let run = await IndexerRun.collect(indexer.index([sandbox.root]))
         let summary = try #require(run.summary)
-        let removed = gone.count + removedFolder.photos.count
-        #expect(summary.photosRemoved == removed && summary.foldersRemoved == 1 && summary.headsRead == 0)
-        let removedIDs = run.events.flatMap { event -> [Int64] in
-            guard case let .photosRemoved(ids) = event else { return [] }
+        let missing = gone.count + removedFolder.photos.count
+        #expect(summary.photosMissing == missing && summary.photosRemoved == 0 && summary.foldersRemoved == 0)
+        #expect(summary.headsRead == 0)
+        let missingIDs = run.events.flatMap { event -> [Int64] in
+            guard case let .photosMissing(ids) = event else { return [] }
             return ids
         }
-        #expect(removedIDs.count == removed)
+        #expect(missingIDs.count == missing)
         let rows = try await Self.rows(sandbox)
-        #expect(rows.count == 400 - removed)
-        #expect(gone.allSatisfy { rows[sandbox.path($0.path)] == nil })
+        #expect(rows.count == 400, "every row kept")
+        let marked = rows.filter { $0.value.state.contains(.missing) }
+        #expect(marked.count == missing)
+        for (path, row) in marked {
+            var unmarked = row
+            unmarked.state.remove(.missing)
+            unmarked.missingSince = nil
+            #expect(unmarked == before[path], "\(path) keeps its row as it was")
+            #expect(row.missingSince.map { $0 >= started.addingTimeInterval(-1) } == true, "\(path) went just now")
+        }
+        #expect(gone.allSatisfy { rows[sandbox.path($0.path)]?.state.contains(.missing) == true })
         let removedPath = sandbox.path(removedFolder.path)
         let (folder, unfinished) = try await sandbox.index.read { reader in
             try (reader.folder(path: removedPath), reader.foldersToIndex())
         }
-        #expect(folder == nil && unfinished.isEmpty)
+        #expect(folder != nil && unfinished.isEmpty)
         let keptFolder = FolderIndexed(path: sandbox.path(kept.path), removed: 2)
         #expect(run.events.contains(LibraryIndexerEvent.folderIndexed(keptFolder)))
+
+        // Indexing again finds nothing to change, and the photos stay missing from when they went.
+        let again = try #require(await IndexerRun.collect(indexer.index([sandbox.root])).summary)
+        #expect(again.photosMissing == 0 && again.photosUpdated == 0 && again.headsRead == 0)
+        #expect(try await Self.rows(sandbox) == rows)
     }
 
     @Test func `a photo rewritten is read again in place, and a sidecar saved changes only its row`() async throws {

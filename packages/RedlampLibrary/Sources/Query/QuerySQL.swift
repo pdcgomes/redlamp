@@ -16,14 +16,17 @@ struct QuerySQL: Sendable, Hashable {
     var bindings: [Binding]
 
     /// The photos `query` finds, in `sort`'s order; nil finds every photo. `query` has been through
-    /// `LibraryQuery.searchable`. `synonyms` are the keywords' synonyms, by path. Photos that can't
-    /// be read are left out unless the query names `unreadable`, as lists leave them out (LIB-40).
+    /// `LibraryQuery.searchable`. `synonyms` are the keywords' synonyms, by path. Photos missing from
+    /// their folders are left out (DEC-59), and those that can't be read unless the query names
+    /// `unreadable`, as lists leave them out (LIB-40).
     init(_ query: LibraryQuery?, sort: QuerySort, today: Int, synonyms: [String: [String]] = [:]) {
         var compiler = Compiler(today: today, synonyms: KeywordSynonyms(synonyms))
-        var predicate = query.map { compiler.predicate($0) } ?? "1"
+        var leftOut = PhotoRecord.State.missing
         if query?.findsUnreadable != true {
-            predicate = "(\(predicate)) AND (\(ColumnEncoding.stateSQL) & \(PhotoRecord.State.unreadable.rawValue)) = 0"
+            leftOut.insert(.unreadable)
         }
+        let predicate = "(\(query.map { compiler.predicate($0) } ?? "1")) AND (\(ColumnEncoding.stateSQL) & "
+            + "\(leftOut.rawValue)) = 0"
         let direction = sort.ascending ? "" : " DESC"
         let keys: [String] = switch sort.key {
         case .captured: [ColumnEncoding.capturedSQL, "p.id"]

@@ -13,6 +13,10 @@ public struct FileBatch: Sendable, Hashable, Identifiable {
         case putBack
         /// Photos copied into a folder, each copy a photo of its own.
         case copy
+        /// Missing photos taken out of the library (DEC-59): nothing moves.
+        case remove
+        /// Missing photos found again in the files the user located (DEC-59).
+        case relink
     }
 
     public let id: UUID
@@ -72,6 +76,21 @@ public struct FileStep: Sendable, Hashable, Codable {
         /// are in, and, for a copy given a number, its original's name recorded as its original name
         /// unless it has one. Like original names, it can't be told done, so it's made again.
         case detachCopies
+        /// Photos taken out of the index with nothing moved, their rows as they were in `removed`: missing photos
+        /// removed from the library (DEC-59), or the row a file had while a missing photo is relinked to it.
+        case removeFromLibrary
+        /// Photos put back in the index as `removed` has them, as `removeFromLibrary` took them out; one whose place
+        /// another photo has taken since stays out.
+        case returnToLibrary
+        /// A missing photo found again (DEC-59): its row moved to the file it was found as (`photos`, from where it
+        /// was), with that file's identifier, size and date, and read again from it. `items` are the file, which
+        /// stays where it is, and the `.redlamp` sidecar the photo left behind, brought beside it; `removed` is the
+        /// photo's row as it was; with `writesDecisions`, a file without a sidecar is given one with what the row
+        /// holds.
+        case relink
+        /// A relinked photo back where it was, missing again, as `removed` has its row, and the sidecar its relink
+        /// brought beside the file taken back.
+        case unlink
     }
 
     public var kind: Kind
@@ -90,10 +109,14 @@ public struct FileStep: Sendable, Hashable, Codable {
     public var removedFolders: [RemovedFolder]
     /// After it, nothing is under a temporary name: a batch that's cancelled stops after a safe step.
     public var isSafe: Bool
+    /// For `relink`, the file it finds the photo as has no `.redlamp` sidecar, nor did the photo leave one behind: the
+    /// photo's decisions, as its row holds them, are written in a new one, so reading the file again keeps them.
+    public var writesDecisions: Bool
 
     public init(
         kind: Kind, items: [FileItem] = [], photos: [PhotoMove] = [], folders: [FolderMove] = [],
         folder: String? = nil, removed: [RemovedPhoto] = [], removedFolders: [RemovedFolder] = [], isSafe: Bool = true,
+        writesDecisions: Bool = false,
     ) {
         self.kind = kind
         self.items = items
@@ -103,10 +126,11 @@ public struct FileStep: Sendable, Hashable, Codable {
         self.removed = removed
         self.removedFolders = removedFolders
         self.isSafe = isSafe
+        self.writesDecisions = writesDecisions
     }
 
     private enum CodingKeys: String, CodingKey {
-        case kind, items, photos, folders, folder, removed, removedFolders, isSafe
+        case kind, items, photos, folders, folder, removed, removedFolders, isSafe, writesDecisions
     }
 
     public init(from decoder: any Decoder) throws {
@@ -119,6 +143,7 @@ public struct FileStep: Sendable, Hashable, Codable {
         removed = try container.decodeIfPresent([RemovedPhoto].self, forKey: .removed) ?? []
         removedFolders = try container.decodeIfPresent([RemovedFolder].self, forKey: .removedFolders) ?? []
         isSafe = try container.decodeIfPresent(Bool.self, forKey: .isSafe) ?? true
+        writesDecisions = try container.decodeIfPresent(Bool.self, forKey: .writesDecisions) ?? false
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -142,6 +167,9 @@ public struct FileStep: Sendable, Hashable, Codable {
         }
         if !isSafe {
             try container.encode(isSafe, forKey: .isSafe)
+        }
+        if writesDecisions {
+            try container.encode(writesDecisions, forKey: .writesDecisions)
         }
     }
 }
@@ -379,6 +407,9 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
     /// sidecar doesn't change it.
     public var cameraCaptured: Double?
     public var cameraOffset: Int?
+    /// When a missing photo's file was found gone (DEC-59); nil in batches journaled before the index kept it
+    /// (schema version 11), which had no missing photos.
+    public var missingSince: Double?
 
     public init(_ photo: PhotoRecord) {
         id = photo.id
@@ -427,6 +458,7 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
         xmpSignature = photo.xmpSignature
         cameraCaptured = photo.cameraCaptured?.timeIntervalSince1970
         cameraOffset = photo.cameraOffset
+        missingSince = photo.missingSince?.timeIntervalSince1970
     }
 
     /// The row in `folder`.
@@ -448,6 +480,7 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
             stack: PhotoRecord.storedStack(id: stack?.uuidString, top: stackTop ?? false, position: stackPosition),
             otherFields: PhotoRecord.fields(code: otherFields ?? 0), xmpSignature: xmpSignature,
             cameraCaptured: cameraCaptured.map(Date.init(timeIntervalSince1970:)), cameraOffset: cameraOffset,
+            missingSince: missingSince.map(Date.init(timeIntervalSince1970:)),
         )
     }
 }
@@ -511,6 +544,30 @@ extension FileStep {
         case .detachCopies:
             // The copies' sidecars go with them.
             FileStep(kind: .detachCopies)
+        case .removeFromLibrary:
+            FileStep(kind: .returnToLibrary, removed: removed)
+        case .returnToLibrary:
+            FileStep(kind: .removeFromLibrary, removed: removed)
+        case .relink:
+            // The file stays where it is, and a sidecar written with the photo's decisions stays with it.
+            FileStep(kind: .unlink, items: Self.back(items), photos: Self.back(photos), removed: removed)
+        case .unlink:
+            FileStep(kind: .relink, items: Self.back(items), photos: Self.back(photos), removed: removed)
         }
+    }
+
+    /// `items` the other way, last first: those that move go back where they were, the others stay.
+    private static func back(_ items: [FileItem]) -> [FileItem] {
+        items.reversed().map { item in
+            guard let destination = item.destination else { return item }
+            var back = item
+            back.source = destination
+            back.destination = item.source
+            return back
+        }
+    }
+
+    private static func back(_ photos: [PhotoMove]) -> [PhotoMove] {
+        photos.map { PhotoMove(id: $0.id, from: $0.to, to: $0.from) }
     }
 }

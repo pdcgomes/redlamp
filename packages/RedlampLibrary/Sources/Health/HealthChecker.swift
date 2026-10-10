@@ -30,6 +30,7 @@ struct HealthChecker: Sendable {
         case .duplicates: try await duplicates()
         case let .pairs(rule): try await pairs(rule, store: store)
         case .damaged: try await damaged(store: store)
+        case .missing: try await missing(store: store)
         case .extensions: try await extensions()
         }
     }

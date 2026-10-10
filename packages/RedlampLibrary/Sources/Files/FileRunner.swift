@@ -64,6 +64,15 @@ final class FileRunner: @unchecked Sendable {
             try copyItems(of: step, index, from: states)
         case .detachCopies:
             detachCopies(step.photos)
+        case .removeFromLibrary, .returnToLibrary:
+            break
+        case .relink:
+            try moveItems(of: step, index, from: states)
+            if step.writesDecisions {
+                writeDecisions(of: step)
+            }
+        case .unlink:
+            try moveItems(of: step, index, from: states)
         }
         try logDone(index)
     }
@@ -76,7 +85,8 @@ final class FileRunner: @unchecked Sendable {
         case .recordOriginalNames: changeOriginalNames(of: photos, recording: true)
         case .clearOriginalNames: changeOriginalNames(of: photos, recording: false)
         case .detachCopies: detachCopies(photos)
-        case .move, .createFolder, .removeFolder, .trash, .putBack, .copy: return try perform(index)
+        case .move, .createFolder, .removeFolder, .trash, .putBack, .copy, .removeFromLibrary, .returnToLibrary,
+             .relink, .unlink: return try perform(index)
         }
         try logDone(index)
     }
@@ -103,7 +113,7 @@ final class FileRunner: @unchecked Sendable {
     func reverse(_ index: Int, from states: [ItemState]) throws {
         let step = batch.steps[index]
         switch step.kind {
-        case .move, .putBack:
+        case .move, .putBack, .relink, .unlink:
             for (item, state) in zip(step.items, states).reversed() {
                 guard let destination = item.destination else { continue }
                 try reverseMove(item, destination: destination, state: state)
@@ -141,8 +151,31 @@ final class FileRunner: @unchecked Sendable {
                     try fileSystem.removeItem(at: sidecar)
                 }
             }
+        case .removeFromLibrary, .returnToLibrary:
+            break
         }
         try log.undone(index)
+    }
+
+    /// Writes the relinked photo's decisions, as its row held them, in a new `.redlamp` sidecar for the file it was
+    /// found as, unless the file has one by now; the fields its row showed from other apps' files are left to them.
+    private func writeDecisions(of step: FileStep) {
+        guard let move = step.photos.first, let row = step.removed.first else { return }
+        let photo = row.photo.record(inFolder: 0)
+        var decisions = PhotoMetadata(shown: photo, collections: row.collections.compactMap(\.path))
+        decisions.keywords = row.keywords
+        for field in photo.otherFields {
+            decisions.leave(field)
+        }
+        guard !decisions.isEmpty else { return }
+        let metadata = decisions
+        store.change([URL(fileURLWithPath: move.to)]) { _, sidecar in
+            guard sidecar == nil else { return .keep }
+            var written = Sidecar(recipe: EditRecipe())
+            written.metadata = metadata
+            written.modified = Date()
+            return .saveOrRemove(written)
+        } done: { _ in }
     }
 
     private func moveItems(of step: FileStep, _ index: Int, from states: [ItemState]?) throws {
@@ -663,9 +696,9 @@ extension FileRunner {
         case .removeFolder:
             let gone = step.folder.map { !fileSystem.exists(URL(fileURLWithPath: $0)) } ?? true
             return ([], gone, !gone)
-        case .recordOriginalNames, .clearOriginalNames, .detachCopies:
+        case .recordOriginalNames, .clearOriginalNames, .detachCopies, .removeFromLibrary, .returnToLibrary:
             return ([], false, true)
-        case .move, .putBack, .trash, .copy:
+        case .move, .putBack, .trash, .copy, .relink, .unlink:
             let states = states(of: index)
             let isDone = states.allSatisfy { $0 == .atDestination || $0 == .neither }
                 && states.contains(.atDestination)

@@ -170,6 +170,17 @@ public final class ChangeTracker: Sendable {
         indexer.prioritise(folders)
     }
 
+    /// Lists `folders` again, as an event naming them would: for a change the library made to what they hold that the
+    /// disk doesn't show, such as a missing photo relinked to a file there (DEC-59), read again from it.
+    public func look(at folders: [URL]) {
+        let paths = Set(folders.map(LibraryIndexer.path))
+        for volume in state.withLock({ Array($0.volumes.values) }) {
+            let below = paths.filter { path in volume.roots.contains { path == $0 || path.hasPrefix($0 + "/") } }
+            guard !below.isEmpty else { continue }
+            enqueue(Work(volume, .update(Dictionary(uniqueKeysWithValues: below.map { ($0, false) }), replayed: false)))
+        }
+    }
+
     /// Whether the app is in the foreground: network volumes are polled only while it is, and their
     /// folders on screen are listed as soon as it's back.
     public func setActive(_ active: Bool) {
@@ -390,7 +401,7 @@ public final class ChangeTracker: Sendable {
         guard let summary, !Task.isCancelled, !summary.offlineVolumes.contains(work.volume.key) else { return nil }
         await record(work)
         return summary.photosInserted + summary.photosUpdated + summary.photosMoved + summary.photosRemoved
-            + summary.foldersIndexed + summary.foldersRemoved > 0
+            + summary.photosMissing + summary.foldersIndexed + summary.foldersRemoved > 0
     }
 
     private func record(_ work: Work) async {

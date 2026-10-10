@@ -298,6 +298,20 @@ public struct FileJournal: Sendable {
         return photos
     }
 
+    /// The photos of the batches a forced quit left unfinished, which `FileOperations.recover` finishes or rolls back,
+    /// writing their rows as their files are: their files may have moved before their rows did. Empty when the journal
+    /// can't be read, as recovery can't read it either.
+    func unfinishedPhotos() -> Set<Int64> {
+        var photos = Set<Int64>()
+        for entry in (try? entries()) ?? [] where entry.state.isUnfinished {
+            for step in (try? load(entry.id).batch.steps) ?? [] {
+                photos.formUnion(step.photos.map(\.id))
+                photos.formUnion(step.removed.map(\.photo.id))
+            }
+        }
+        return photos
+    }
+
     // MARK: - Files
 
     /// `2026-10-05 231000.123 <id>`: names sort as batches were made.

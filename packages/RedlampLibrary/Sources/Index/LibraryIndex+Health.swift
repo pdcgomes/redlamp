@@ -75,7 +75,10 @@ public extension IndexQueries {
         var found: [Int64: (health: PhotoHealth, name: String)] = [:]
         try database.cached("""
         SELECT \(Self.healthColumns), h.photo, p.name FROM photo_health h JOIN photos p ON p.id = h.photo
-        WHERE p.size = h.size AND abs(p.modified - h.modified) < 1e-6 AND \(inLibrary(folder: "p.folder"))
+        WHERE p.size = h.size AND abs(p.modified - h.modified) < 1e-6 AND \(inLibrary(
+            folder: "p.folder",
+            state: "p.state",
+        ))
         """).forEachRow { row in
             found[row.int64(at: 8)] = (Self.health(row), row.string(at: 9) ?? "")
         }

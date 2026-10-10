@@ -20,11 +20,21 @@ struct IndexChanges: Sendable {
     var removedPhotos: [Int64] = []
     var removedFolderTrees: [Int64] = []
     var emptiedFolders: [String] = []
+    /// Rows taken out with nothing moved (`removeFromLibrary`), and whether each was missing then: one that was goes
+    /// only while it still is.
+    var leftPhotos: [(id: Int64, missing: Bool)] = []
+    /// Rows put back as they were (`returnToLibrary`), unless another photo has taken a place since.
+    var returnedPhotos: [RemovedPhoto] = []
+    /// Missing photos found again: each one's ID, the path of the file it's found as, and that file as it was planned.
+    var relinkedPhotos: [(id: Int64, path: String, file: FileItem)] = []
+    /// Relinked photos back where they were, missing again, as their rows were.
+    var unlinkedPhotos: [RemovedPhoto] = []
 
     var isEmpty: Bool {
         restoredFolders.isEmpty && madeFolders.isEmpty && movedFolders.isEmpty && restoredPhotos.isEmpty
             && copiedPhotos.isEmpty && placed.isEmpty && refreshed.isEmpty && removedPhotos.isEmpty
-            && removedFolderTrees.isEmpty && emptiedFolders.isEmpty
+            && removedFolderTrees.isEmpty && emptiedFolders.isEmpty && leftPhotos.isEmpty && returnedPhotos.isEmpty
+            && relinkedPhotos.isEmpty && unlinkedPhotos.isEmpty
     }
 
     mutating func add(_ step: FileStep) {
@@ -103,6 +113,30 @@ struct IndexChanges: Sendable {
             for photo in step.photos {
                 refreshed[photo.id] = FilePlanner.composedLast(photo.to)
             }
+        case .removeFromLibrary:
+            let ids = Set(step.removed.map(\.photo.id))
+            leftPhotos += step.removed.map { removed in
+                (removed.photo.id, PhotoRecord.State(rawValue: removed.photo.state).contains(.missing))
+            }
+            returnedPhotos.removeAll { ids.contains($0.photo.id) }
+        case .returnToLibrary:
+            let ids = Set(step.removed.map(\.photo.id))
+            returnedPhotos += step.removed
+            leftPhotos.removeAll { ids.contains($0.id) }
+        case .relink:
+            guard let move = step.photos.first, let file = step.items.first(where: { $0.destination == nil })
+            else { return }
+            let path = FilePlanner.composedLast(move.to)
+            relinkedPhotos.append((move.id, path, file))
+            unlinkedPhotos.removeAll { $0.photo.id == move.id }
+            refreshed[move.id] = path
+        case .unlink:
+            let ids = Set(step.removed.map(\.photo.id))
+            unlinkedPhotos += step.removed
+            relinkedPhotos.removeAll { ids.contains($0.id) }
+            for id in ids {
+                refreshed.removeValue(forKey: id)
+            }
         }
     }
 }
@@ -175,12 +209,11 @@ extension FileOperations {
                 try writer.moveFolder(id, to: move.to, parent: parent, root: root.id)
                 folders.formUnion([move.from, move.to])
             }
-            var restored: [Int64] = []
+            var (restored, stale) = try Self.writeRelinks(changes, writer: writer)
             for (photo, name) in changes.restoredPhotos {
                 guard let folder = try writer.folderID(forPath: photo.folder) else { continue }
                 try restored.append(writer.restorePhoto(photo, inFolder: folder, name: name))
             }
-            var stale: [Int64] = []
             for copy in changes.copiedPhotos {
                 guard let folder = try writer.folderID(forPath: copy.folder) else { continue }
                 // A row holding the copy's place is of a file that's gone: its collections aren't the copy's.
@@ -219,10 +252,11 @@ extension FileOperations {
             try await removeUnrestorableNow(gone: Set(written.stale))
         }
         guard let live else { return }
-        let changed = Array(Set(changes.placed.keys).union(changes.refreshed.keys))
-        live.photosChanged(changed)
-        if !changes.removedPhotos.isEmpty || !written.stale.isEmpty {
-            live.receive(.photosRemoved(changes.removedPhotos + written.stale))
+        let changed = Set(changes.placed.keys).union(changes.refreshed.keys)
+            .union(changes.unlinkedPhotos.map(\.photo.id))
+        live.photosChanged(Array(changed))
+        if !changes.removedPhotos.isEmpty || !changes.leftPhotos.isEmpty || !written.stale.isEmpty {
+            live.receive(.photosRemoved(changes.removedPhotos + changes.leftPhotos.map(\.id) + written.stale))
         }
         if !written.restored.isEmpty {
             live.receive(.photosInserted(written.restored))
@@ -230,5 +264,42 @@ extension FileOperations {
         if let folder = written.folders.first {
             live.receive(.folderIndexed(FolderIndexed(path: folder)))
         }
+    }
+
+    /// Writes the steps that change rows with nothing moved (DEC-59): rows taken out first, so a relink can take the
+    /// place one had; relinked photos put back where they were missing, then photos relinked; then rows put back, in
+    /// places an Undo of a relink has freed. A photo doesn't go back to a place another photo has taken since: it stays
+    /// relinked, or out. Returns the photos put back, and those of rows removed that held a relinked photo's place.
+    private static func writeRelinks(
+        _ changes: IndexChanges, writer: LibraryIndex.Writer,
+    ) throws -> (restored: [Int64], stale: [Int64]) {
+        try writer.deletePhotos(changes.leftPhotos.filter { left in
+            try !left.missing || writer.photo(id: left.id)?.state.contains(.missing) == true
+        }.map(\.id))
+        var restored: [Int64] = []
+        var stale: [Int64] = []
+        func isFree(_ photo: RemovedPhoto) throws -> Int64? {
+            guard let folder = try writer.folderID(forPath: photo.folder) else { return nil }
+            let holder = try writer.photo(folder: folder, name: photo.photo.name)
+            return holder == nil || holder?.id == photo.photo.id ? folder : nil
+        }
+        for photo in changes.unlinkedPhotos {
+            guard try writer.photo(id: photo.photo.id) != nil, let folder = try isFree(photo) else { continue }
+            try writer.deletePhotos([photo.photo.id])
+            try restored.append(writer.restorePhoto(photo, inFolder: folder, name: photo.photo.name))
+        }
+        for relink in changes.relinkedPhotos {
+            let (folderPath, name) = FilePlanner.split(relink.path)
+            guard let folder = try writer.folderID(forPath: folderPath) else { continue }
+            stale += try writer.relinkPhoto(
+                relink.id, toFolder: folder, name: name, fileID: relink.file.fileID, size: relink.file.size,
+                modified: relink.file.modified,
+            )
+        }
+        for photo in changes.returnedPhotos {
+            guard try writer.photo(id: photo.photo.id) == nil, let folder = try isFree(photo) else { continue }
+            try restored.append(writer.restorePhoto(photo, inFolder: folder, name: photo.photo.name))
+        }
+        return (restored, stale)
     }
 }

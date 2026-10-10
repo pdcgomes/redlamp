@@ -27,9 +27,10 @@ extension LibraryIndexer {
             case folder(FolderListing)
             case photo(PendingPhoto)
             case move(PendingMove)
-            /// Rows whose photos vanished, with the folder each vanished from.
-            case delete([(photo: Int64, folder: Int64)])
-            case deleteFolder(String)
+            /// Rows whose photos vanished, with the folder each vanished from: kept, marked missing (DEC-59).
+            case missing([(photo: Int64, folder: Int64)])
+            /// A folder that vanished, whose photos are kept as missing.
+            case missingFolder(String)
             case complete(FolderCompletion)
             case offline(volume: Int64, key: String)
             /// How a photo written before ends (LIB-40).
@@ -56,7 +57,10 @@ extension LibraryIndexer {
             var moved = 0
             /// Photos whose ends were read, their rows otherwise as they were.
             var ended: [Int64] = []
-            var removed: [Int64] = []
+            /// Photos marked missing, their files gone (DEC-59).
+            var missing: [Int64] = []
+            /// Folders that vanished with no photo in them, whose rows went.
+            var foldersRemoved = 0
             var completed: [FolderIndexed] = []
             /// The volumes whose photos were marked offline, by key.
             var offline: [String] = []
@@ -246,10 +250,10 @@ extension LibraryIndexer {
         private func write(_ batch: [Item]) async {
             var outcome: Outcome
             do {
-                let restorable = await Self.restorable(before: batch, in: index)
+                let held = await Self.held(before: batch, in: index)
                 let writing = index.photoWrites
                 outcome = try await index.write { writer in
-                    try Self.apply(batch, writer, writing: writing, keeping: restorable)
+                    try Self.apply(batch, writer, writing: writing, holding: held)
                 }
             } catch {
                 outcome = Outcome()
@@ -265,31 +269,32 @@ extension LibraryIndexer {
             }
         }
 
-        /// The photos the file journal beside the index can bring back under their IDs (LIB-26), when `batch` removes
-        /// photos; nil when a batch of it can't be read. Read after the listings that found photos gone, so a batch
-        /// that moved one to the Trash is among them.
-        static func restorable(before batch: [Item], in index: LibraryIndex) async -> Set<Int64>? {
-            let removes = batch.contains { item in
+        /// The photos of the file batches beside the index that a forced quit left unfinished (LIB-26), when `batch`
+        /// marks photos missing: their files may have moved or gone to the Trash before their rows did, and recovery
+        /// writes the rows. Read after the listings that found photos gone, so a batch that moved one is among them.
+        static func held(before batch: [Item], in index: LibraryIndex) async -> Set<Int64> {
+            let marks = batch.contains { item in
                 switch item {
-                case .delete, .deleteFolder: true
+                case .missing, .missingFolder: true
                 default: false
                 }
             }
-            guard removes else { return [] }
+            guard marks else { return [] }
             let journal = FileJournal(paths: LibraryPaths(root: index.url.deletingLastPathComponent()))
-            return try? await LibraryIndex.offCaller { journal.restorable() }
+            return await (try? LibraryIndex.offCaller { journal.unfinishedPhotos() }) ?? []
         }
     }
 }
 
 extension LibraryIndexer.Batcher {
     /// Writes `batch` in one transaction: folders first, in order, then moves, then photos with their
-    /// health, then their ends, then what's removed, then the folders that are indexed. A photo `writing` names, or
-    /// whose row changed since it was listed, isn't written. The photos removed take their XMP merge records with
-    /// them, but for `restorable`'s (all of them while it's nil), which a batch of the file journal can bring back;
-    /// their health and hashes go once none can (`FileOperations.removeUnrestorable`).
+    /// health, then their ends, then the photos found gone, marked missing at `date`, then the folders that are
+    /// indexed.
+    /// A photo `writing` names, or whose row changed since it was listed, isn't written; one of `held`, which an
+    /// unfinished file batch has, isn't marked missing.
     static func apply(
-        _ batch: [Item], _ writer: LibraryIndex.Writer, writing: PhotoWrites, keeping restorable: Set<Int64>? = [],
+        _ batch: [Item], _ writer: LibraryIndex.Writer, writing: PhotoWrites, holding held: Set<Int64> = [],
+        at date: Date = Date(),
     ) throws -> Outcome {
         var write = BatchWrite(writer: writer, writing: writing)
         var items = BatchItems()
@@ -299,7 +304,7 @@ extension LibraryIndexer.Batcher {
         try write.move(items.moves, replacing: &items.photos)
         try write.write(items.photos)
         try write.end(items.ends)
-        try write.remove(items.deleted, folders: items.deletedFolders, keeping: restorable)
+        try write.markMissing(items.missing, folders: items.missingFolders, holding: held, at: date)
         try write.complete(items.completed)
         try write.markOffline(items.offline)
         return write.outcome
@@ -310,8 +315,8 @@ extension LibraryIndexer.Batcher {
 private struct BatchItems {
     var photos: [LibraryIndexer.PendingPhoto] = []
     var moves: [LibraryIndexer.PendingMove] = []
-    var deleted: [(photo: Int64, folder: Int64)] = []
-    var deletedFolders: [String] = []
+    var missing: [(photo: Int64, folder: Int64)] = []
+    var missingFolders: [String] = []
     var completed: [LibraryIndexer.FolderCompletion] = []
     var offline: [(volume: Int64, key: String)] = []
     var ends: [LibraryIndexer.EndResult] = []
@@ -346,8 +351,8 @@ private struct BatchWrite {
         case let .folder(listing): try record(listing)
         case let .photo(photo): items.photos.append(photo)
         case let .move(move): items.moves.append(move)
-        case let .delete(rows): items.deleted += rows
-        case let .deleteFolder(path): items.deletedFolders.append(path)
+        case let .missing(rows): items.missing += rows
+        case let .missingFolder(path): items.missingFolders.append(path)
         case let .complete(completion): items.completed.append(completion)
         case let .offline(volume, key): items.offline.append((volume, key))
         case let .end(result): items.ends.append(result)
@@ -366,7 +371,7 @@ private struct BatchWrite {
         }
     }
 
-    /// Moves `moves`' photos, adding the photos they replace to `photos`.
+    /// Moves `moves`' photos, adding the photos they replace to `photos`; a missing photo moved is found again.
     mutating func move(_ moves: [LibraryIndexer.PendingMove], replacing photos: inout [LibraryIndexer.PendingPhoto])
         throws {
         var moving: [(photo: Int64, folder: Int64, name: String)] = []
@@ -379,6 +384,7 @@ private struct BatchWrite {
             }
         }
         try writer.movePhotos(moving)
+        try writer.markFound(moving.map(\.photo))
         outcome.updated = moving.map(\.photo)
         outcome.moved = moving.count
     }
@@ -445,24 +451,27 @@ private struct BatchWrite {
         }
     }
 
-    /// Removes the rows of photos that vanished, but those no longer in the folder they vanished from, which a file
-    /// batch
-    /// has moved since; then the folders that vanished, with the photos in them.
-    mutating func remove(
-        _ deleted: [(photo: Int64, folder: Int64)], folders deletedFolders: [String], keeping restorable: Set<Int64>?,
+    /// Marks missing at `date` the photos that vanished, their rows kept with everything decided about them (DEC-59),
+    /// but
+    /// those of `held`, which an unfinished file batch has, and those no longer in the folder they vanished from, which
+    /// a
+    /// file batch has moved since; then those in the folders that vanished. A vanished folder's row stays while photos
+    /// are in it, for where they were, and goes with the folders under it once none is.
+    mutating func markMissing(
+        _ vanished: [(photo: Int64, folder: Int64)], folders: [String], holding held: Set<Int64>, at date: Date,
     ) throws {
-        let gone = try deleted.filter { try writer.photo(id: $0.photo)?.folder == $0.folder }.map(\.photo)
-        if !gone.isEmpty {
-            try writer.deletePhotos(gone)
-            outcome.removed += gone
-        }
-        for path in deletedFolders {
+        outcome.missing += try writer.markMissing(vanished.filter { !held.contains($0.photo) }, at: date)
+        for path in folders {
             guard let id = try folderID(path) else { continue }
-            outcome.removed += try writer.photoIDs(inSubtreeOf: id)
-            try writer.deleteFolder(id)
-        }
-        if let restorable, !outcome.removed.isEmpty {
-            try XMPMergeRecord.save([:], dropping: outcome.removed.filter { !restorable.contains($0) }, in: writer)
+            let photos = try writer.photos(inSubtreeOf: id)
+            guard !photos.isEmpty else {
+                try writer.deleteFolder(id)
+                self.folders = self.folders.filter { $0.key != path && !$0.key.hasPrefix(path + "/") }
+                outcome.foldersRemoved += 1
+                continue
+            }
+            let marking = photos.filter { !held.contains($0.id) }.map { ($0.id, $0.folder) }
+            outcome.missing += try writer.markMissing(marking, at: date)
         }
     }
 

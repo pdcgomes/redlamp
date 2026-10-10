@@ -52,6 +52,26 @@ extension PhotoMetadata {
         )
     }
 
+    /// Leaves `field` to other apps' files: what the sidecar holds of it taken out.
+    mutating func leave(_ field: XMPField) {
+        switch field {
+        case .rating: rating = 0
+        case .flag: flag = nil
+        case .label:
+            label = nil
+            customLabel = nil
+        case .keywords: keywords = nil
+        case .title: title = nil
+        case .caption: caption = nil
+        case .creator: creator = nil
+        case .copyright: copyright = nil
+        case .location: location = nil
+        case .captureTime:
+            captureShift = 0
+            captureOffset = nil
+        }
+    }
+
     /// The field of `XMPField` a sidecar key is, for the keys other apps share.
     static func xmpField(_ key: String) -> XMPField? {
         switch key {

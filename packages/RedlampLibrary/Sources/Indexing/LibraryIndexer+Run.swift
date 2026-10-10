@@ -192,10 +192,11 @@ extension LibraryIndexer {
                 }
             }
             let rootIDs = records.flatMap { $0.roots.map(\.id) }
-            let folders = try await indexer.index.read { reader in
-                try rootIDs.flatMap { try reader.folders(inRoot: $0) }
+            let (folders, holdingMissing) = try await indexer.index.read { reader in
+                try (rootIDs.flatMap { try reader.folders(inRoot: $0) }, reader.foldersWithMissingPhotos())
             }
             state.withLock { state in
+                state.holdingMissing = holdingMissing
                 for folder in folders {
                     state.folders[folder.path] = folder
                     state.paths[folder.id] = folder.path
@@ -371,6 +372,11 @@ extension LibraryIndexer {
         var queued: Set<String> = []
         /// Folders listed whose signatures are the ones they were indexed at.
         var unchanged: Set<String> = []
+        /// The names of the photos missing from each folder (DEC-59), by the folder's ID: one listed with any of them
+        /// is
+        /// compared with its rows even when its signature is the one it was indexed at, as a folder that comes back
+        /// whole has.
+        var holdingMissing: [Int64: Set<String>] = [:]
         /// The names of the photos in folders listed with a new signature.
         var names: [String: Set<String>] = [:]
         /// The names in folders listed only to see whether a photo left them; nil for one that's gone.
@@ -473,7 +479,8 @@ extension LibraryIndexer.Run {
         let signature = FolderSignature(entries)
         let subfolders = entries.filter(FolderWalk.isFolder)
         let wanted = indexer.prioritised
-        let (existing, found) = state.withLock { state -> (FolderRecord?, [LibraryIndexer.WalkQueue.Item]) in
+        let (existing, found, returned) = state.withLock {
+            state -> (FolderRecord?, [LibraryIndexer.WalkQueue.Item], Bool) in
             state.summary.foldersListed += 1
             let existing = state.folders[item.path]
             var found: [LibraryIndexer.WalkQueue.Item] = []
@@ -495,12 +502,14 @@ extension LibraryIndexer.Run {
                     state.vanishedFolders[child] = volume.id
                 }
             }
-            return (existing, found)
+            let missing = existing.flatMap { state.holdingMissing[$0.id] }
+            return (existing, found, missing.map { names in entries.contains { names.contains($0.name) } } ?? false)
         }
         for subfolder in found where subfolder.ahead {
             volume.photos.hold()
         }
-        if let existing, existing.signature == signature.rawValue, existing.indexedSignature == signature.rawValue {
+        if let existing, !returned, existing.signature == signature.rawValue,
+           existing.indexedSignature == signature.rawValue {
             state.withLock { _ = $0.unchanged.insert(item.path) }
             volume.walk.add(found)
             return
@@ -531,7 +540,7 @@ extension LibraryIndexer.Run {
 
     /// The jobs that bring `folder`'s rows in step with its listing, with what `LibraryXMP`
     /// recorded of their photos (`merged`); rows whose names are gone wait for the end of the run,
-    /// where those that weren't moved elsewhere are removed.
+    /// where those that weren't moved elsewhere are marked missing.
     private func compare(
         _ folder: String, _ entries: [FileEntry], _ rows: [PhotoRecord], merged: [Int64: XMPMergeRecord],
         signature: FolderSignature, on volume: LibraryIndexer.VolumeWork,
@@ -640,8 +649,8 @@ extension LibraryIndexer.Run {
         await readEnds(on: volume)
     }
 
-    /// One job done: the folder is indexed once its last is, unless rows of its are to be removed
-    /// at the end of the run.
+    /// One job done: the folder is indexed once its last is, unless rows of its are to be marked
+    /// missing at the end of the run.
     func jobFinished(in folder: String) async {
         let completion = state.withLock { state -> LibraryIndexer.FolderCompletion? in
             guard var work = state.work[folder] else { return nil }
@@ -681,24 +690,25 @@ extension LibraryIndexer.Run {
 
     // MARK: - The end
 
-    /// Removes the rows whose photos vanished and weren't found elsewhere, and the folders that
-    /// vanished, then marks the folders that waited for that indexed.
+    /// Marks missing the rows whose photos vanished and weren't found elsewhere, and the photos of
+    /// the folders that vanished, then marks the folders that waited for that indexed. Nothing on a
+    /// volume that stopped answering is marked: its photos are offline.
     private func conclude() async {
         let items = state.withLock { state -> [LibraryIndexer.Batcher.Item] in
             let failed = state.failedVolumes
-            let deleted = state.vanished.values
+            let gone = state.vanished.values
                 .filter { !failed.contains($0.volume) && !state.moved.contains($0.record.id) }
             var removed: [String: Int] = [:]
-            for photo in deleted {
+            for photo in gone where !photo.record.state.contains(.missing) {
                 removed[photo.folder, default: 0] += 1
             }
             let folders = state.vanishedFolders.filter { !failed.contains($0.value) }.keys
             let topmost = folders.filter { path in !folders.contains { path.hasPrefix($0 + "/") } }.sorted()
             var items: [LibraryIndexer.Batcher.Item] = []
-            if !deleted.isEmpty {
-                items.append(.delete(deleted.map { ($0.record.id, $0.record.folder) }))
+            if !gone.isEmpty {
+                items.append(.missing(gone.map { ($0.record.id, $0.record.folder) }))
             }
-            items += topmost.map(LibraryIndexer.Batcher.Item.deleteFolder)
+            items += topmost.map(LibraryIndexer.Batcher.Item.missingFolder)
             for path in state.deferred {
                 guard let work = state.work.removeValue(forKey: path), !work.failed,
                       !failed.contains(work.volume)
@@ -710,7 +720,6 @@ extension LibraryIndexer.Run {
                     ),
                 )))
             }
-            state.summary.foldersRemoved += topmost.count
             return items
         }
         await batcher.add(items)
@@ -731,7 +740,8 @@ extension LibraryIndexer.Run {
             state.summary.photosInserted += outcome.inserted.count
             state.summary.photosUpdated += outcome.updated.count - outcome.moved
             state.summary.photosMoved += outcome.moved
-            state.summary.photosRemoved += outcome.removed.count
+            state.summary.photosMissing += outcome.missing.count
+            state.summary.foldersRemoved += outcome.foldersRemoved
             state.summary.foldersIndexed += outcome.completed.count
             state.stale += outcome.stale
         }
@@ -745,8 +755,8 @@ extension LibraryIndexer.Run {
         if !outcome.updated.isEmpty || !outcome.ended.isEmpty {
             events.yield(.photosUpdated(outcome.updated + outcome.ended))
         }
-        if !outcome.removed.isEmpty {
-            events.yield(.photosRemoved(outcome.removed))
+        if !outcome.missing.isEmpty {
+            events.yield(.photosMissing(outcome.missing))
         }
         for folder in outcome.completed {
             events.yield(.folderIndexed(folder))

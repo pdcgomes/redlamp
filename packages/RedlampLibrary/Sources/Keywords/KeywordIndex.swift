@@ -14,7 +14,8 @@ public struct KeywordCount: Sendable, Hashable {
 
 public extension IndexQueries {
     /// Every keyword the index has a row for, with its counts. A photo is counted once for a keyword
-    /// however many of the keywords inside it it has.
+    /// however many of the keywords inside it it has; photos missing from their folders, which only
+    /// Library Health's Missing check lists (DEC-59), aren't counted.
     func keywordCounts() throws -> [KeywordPath: KeywordCount] {
         var paths: [Int64: KeywordPath] = [:]
         for (id, text) in try keywordPaths() {
@@ -39,6 +40,14 @@ public extension IndexQueries {
         var own: [Int64: Int] = [:]
         try database.cached("SELECT keyword, count(*) FROM photo_keywords GROUP BY keyword").forEachRow { row in
             own[row.int64(at: 0)] = row.int(at: 1)
+        }
+        let missing = try missingPhotoIDs()
+        if !missing.isEmpty {
+            try database.cached("""
+            SELECT keyword, count(*) FROM photo_keywords WHERE photo IN (\(Self.missingPhotos)) GROUP BY keyword
+            """).forEachRow { row in
+                own[row.int64(at: 0), default: 0] -= row.int(at: 1)
+            }
         }
         for (id, photos) in own {
             if let first = chains[id]?.first {
@@ -65,6 +74,7 @@ public extension IndexQueries {
         }
         try database.cached("SELECT photo, keyword FROM photo_keywords ORDER BY photo").forEachRow { row in
             let photo = row.int64(at: 0)
+            guard !missing.contains(photo) else { return }
             if photo != current, current != nil {
                 countPhoto()
             }
@@ -99,11 +109,18 @@ public extension IndexQueries {
         return ids.sorted()
     }
 
-    /// Each photo's path: its folder's path, a slash and its name.
+    /// Each photo's path, the photo whose sidecar a change writes: its folder's path, a slash and its name. Photos
+    /// missing
+    /// from their folders (DEC-59) are left out, as photos the index doesn't have are: changes leave them as they are.
     func photoPaths(_ ids: [Int64]) throws -> [Int64: String] {
+        let statement = try database.cached("""
+        SELECT f.path || '/' || p.name FROM photos p JOIN folders f ON f.id = p.folder
+        WHERE p.id = ? AND p.state & \(PhotoRecord.State.missing.rawValue) = 0
+        """)
         var paths: [Int64: String] = [:]
         for id in ids {
-            paths[id] = try photoPath(id: id)
+            try statement.bind(id, at: 1)
+            paths[id] = try statement.first { $0.string(at: 0) } ?? nil
         }
         return paths
     }

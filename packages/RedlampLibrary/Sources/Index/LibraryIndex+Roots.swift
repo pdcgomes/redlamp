@@ -191,10 +191,16 @@ public extension IndexQueries {
         return roots
     }
 
-    /// A condition on photos, by their folder column `folder`, that leaves out those of the roots marked removed,
-    /// for a query of photos the column store doesn't answer: `1` while nothing is being removed, at the cost of
-    /// one lookup.
-    func inLibrary(folder column: String = "folder") throws -> String {
+    /// A condition on photos, by their folder and state columns, that leaves out what lists leave out, for a query of
+    /// photos the column store doesn't answer: photos missing from their folders, which only Library Health's Missing
+    /// check lists (DEC-59), and those of the roots marked removed (`notRemoved(folder:)`).
+    func inLibrary(folder column: String = "folder", state: String = "state") throws -> String {
+        try "\(state) & \(PhotoRecord.State.missing.rawValue) = 0 AND \(notRemoved(folder: column))"
+    }
+
+    /// A condition on photos, by their folder column `folder`, that leaves out those of the roots marked removed:
+    /// `1` while nothing is being removed, at the cost of one lookup.
+    func notRemoved(folder column: String = "folder") throws -> String {
         guard try !removedRoots().isEmpty else { return "1" }
         let prefix = LibraryIndex.Writer.removingPrefix
         return """

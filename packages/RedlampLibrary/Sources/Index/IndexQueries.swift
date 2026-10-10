@@ -155,11 +155,21 @@ public extension IndexQueries {
         return try statement.first { $0.int(at: 0) } ?? 0
     }
 
-    /// Photos per folder, for folders with any.
+    /// Photos per folder, for folders with any, but those missing from their folders, which only Library Health's
+    /// Missing check lists (DEC-59).
     func photoCountsByFolder() throws -> [Int64: Int] {
         var counts: [Int64: Int] = [:]
         try database.cached("SELECT folder, count(*) FROM photos GROUP BY folder").forEachRow { row in
             counts[row.int64(at: 0)] = row.int(at: 1)
+        }
+        // The missing photos are few, and indexed apart: counting the rest would read every row.
+        let missing = try database.cached("""
+        SELECT folder, count(*) FROM photos WHERE state & \(PhotoRecord.State.missing.rawValue) != 0 GROUP BY folder
+        """)
+        try missing.forEachRow { row in
+            let folder = row.int64(at: 0)
+            let left = (counts[folder] ?? 0) - row.int(at: 1)
+            counts[folder] = left > 0 ? left : nil
         }
         return counts
     }
@@ -278,6 +288,7 @@ enum IndexColumns {
         "rating", "flag", "label", "marked", "edited", "sidecar_modified", "xmp_modified", "title", "caption", "state",
         "indexed", "custom_label", "creator", "copyright", "sublocation", "city", "province", "country", "country_code",
         "stack", "stack_top", "other_fields", "xmp_signature", "camera_captured", "camera_offset", "stack_position",
+        "missing_since",
     ]
 
     static func photo(prefix: String) -> String {
@@ -343,7 +354,7 @@ extension PhotoRecord {
             ),
             stack: Self.storedStack(id: row.string(at: 40), top: row.bool(at: 41), position: row.optionalInt(at: 46)),
             otherFields: Self.fields(code: row.int(at: 42)), xmpSignature: row.optionalInt64(at: 43),
-            cameraCaptured: date(44), cameraOffset: row.optionalInt(at: 45),
+            cameraCaptured: date(44), cameraOffset: row.optionalInt(at: 45), missingSince: date(47),
         )
     }
 

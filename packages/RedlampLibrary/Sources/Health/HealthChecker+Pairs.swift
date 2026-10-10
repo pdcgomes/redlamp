@@ -91,12 +91,13 @@ extension HealthChecker {
     }
 
     /// The halves `rule` drops of `pair`, if it holds a raw and a JPEG or HEIC, each with the half kept
-    /// beside it: the JPEG, or the HEIC where there's none, to keep the JPEG.
+    /// beside it: the JPEG, or the HEIC where there's none, to keep the JPEG. A pair with a half that can't
+    /// be read, or is missing from its folder, is none.
     static func drops(_ rule: PairRule, of pair: [Int64], store: ColumnStore) -> [(dropped: Int64, kept: Int64)] {
-        let unreadable = UInt8(PhotoRecord.State.unreadable.rawValue)
+        let leftOut = UInt8(PhotoRecord.State([.unreadable, .missing]).rawValue)
         let (raw, jpeg) = (UInt8(PhotoRecord.Kind.raw.rawValue), UInt8(PhotoRecord.Kind.jpeg.rawValue))
         let rows = pair.compactMap { photo in store.row(of: photo).map { (photo, $0) } }
-        guard rows.count == pair.count, rows.allSatisfy({ store.states[$0.1] & unreadable == 0 }) else { return [] }
+        guard rows.count == pair.count, rows.allSatisfy({ store.states[$0.1] & leftOut == 0 }) else { return [] }
         let raws = rows.filter { store.kinds[$0.1] == raw }.map(\.0)
         let others = rows.filter { store.kinds[$0.1] != raw }.map(\.0)
         guard let first = raws.first, !others.isEmpty else { return [] }

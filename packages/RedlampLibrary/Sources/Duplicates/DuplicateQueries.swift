@@ -37,7 +37,7 @@ extension IndexQueries {
         let statement = try database.cached("""
         SELECT \(IndexColumns.photo(prefix: "p.")), f.path, r.path, v.uuid FROM photos p
         JOIN folders f ON f.id = p.folder JOIN roots r ON r.id = f.root JOIN volumes v ON v.id = r.volume
-        WHERE p.id = ? AND \(inLibrary(folder: "p.folder"))
+        WHERE p.id = ? AND \(inLibrary(folder: "p.folder", state: "p.state"))
         """)
         var rows: [Int64: DuplicateRow] = [:]
         for photo in photos {

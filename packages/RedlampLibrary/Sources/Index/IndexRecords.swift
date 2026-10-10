@@ -124,7 +124,7 @@ public struct PhotoRecord: Sendable, Hashable {
             self.rawValue = rawValue
         }
 
-        /// Gone from its folder.
+        /// Gone from its folder outside Redlamp (DEC-59): listed only by Library Health's Missing check.
         public static let missing = State(rawValue: 1 << 0)
         /// On a volume that isn't connected.
         public static let offline = State(rawValue: 1 << 1)
@@ -197,6 +197,8 @@ public struct PhotoRecord: Sendable, Hashable {
     /// the camera's own.
     public var cameraCaptured: Date?
     public var cameraOffset: Int?
+    /// When change tracking found its file gone, while `state` has `.missing`.
+    public var missingSince: Date?
 
     public init(
         id: Int64 = 0, folder: Int64, name: String, kind: Kind? = nil, size: Int64 = 0,
@@ -209,7 +211,7 @@ public struct PhotoRecord: Sendable, Hashable {
         title: String? = nil, caption: String? = nil, state: State = [], indexed: Int = 0,
         customLabel: String? = nil, creator: String? = nil, copyright: String? = nil,
         location: PhotoLocation? = nil, stack: PhotoStack? = nil, otherFields: Set<XMPField> = [],
-        xmpSignature: Int64? = nil, cameraCaptured: Date? = nil, cameraOffset: Int? = nil,
+        xmpSignature: Int64? = nil, cameraCaptured: Date? = nil, cameraOffset: Int? = nil, missingSince: Date? = nil,
     ) {
         self.id = id
         self.folder = folder
@@ -252,6 +254,7 @@ public struct PhotoRecord: Sendable, Hashable {
         self.xmpSignature = xmpSignature
         self.cameraCaptured = cameraCaptured
         self.cameraOffset = cameraOffset
+        self.missingSince = missingSince
     }
 
     /// The `other_fields` column: a bit for each field, in `XMPField`'s order.

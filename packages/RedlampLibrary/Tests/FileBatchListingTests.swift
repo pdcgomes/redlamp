@@ -158,15 +158,16 @@ struct FileBatchListingTests {
         read.rating = 5
         let late: [LibraryIndexer.Batcher.Item] = [
             .photo(LibraryIndexer.PendingPhoto(folder: rootPath, record: read, isNew: false)),
-            .delete([(row.id, rootFolder.id)]),
+            .missing([(row.id, rootFolder.id)]),
         ]
         let writing = index.photoWrites
         let outcome = try await index.write { try LibraryIndexer.Batcher.apply(late, $0, writing: writing) }
-        #expect(outcome.inserted.isEmpty && outcome.updated.isEmpty && outcome.removed.isEmpty, "\(outcome)")
+        #expect(outcome.inserted.isEmpty && outcome.updated.isEmpty && outcome.missing.isEmpty, "\(outcome)")
         let rows = try await library.sandbox.rows()
         #expect(rows["A.JPG"] == nil, "no row where the photo was")
         #expect(try await library.kept(["A.JPG"], in: library.picked) == before)
         #expect(rows["Picked/A.JPG"]?.rating == row.rating, "the photo's row as the batch left it")
+        #expect(rows["Picked/A.JPG"]?.state.contains(.missing) == false, "not missing: the batch moved it")
     }
 }
 

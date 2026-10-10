@@ -43,6 +43,8 @@ public extension FileOperations {
         var removing: [FileStep] = []
         var trashed: [(step: FileStep, places: [String?])] = []
         var trashing: [FileStep] = []
+        // Rows taken out, put back and relinked with nothing moved (DEC-59), last first.
+        var rows: [FileStep] = []
         for (index, step) in done {
             switch step.kind {
             case .move:
@@ -75,6 +77,8 @@ public extension FileOperations {
                 }
             case .clearOriginalNames, .copy, .detachCopies:
                 break
+            case .removeFromLibrary, .returnToLibrary, .relink, .unlink:
+                rows.insert(step.inverse(trashed: []), at: 0)
             }
         }
         let moves = order.compactMap { id -> PhotoMove? in
@@ -91,6 +95,7 @@ public extension FileOperations {
             removing,
             trashed,
             trashing,
+            rows,
         ] in
             let planner = FilePlanner(fileSystem: fileSystem, locator: locator)
             var gone: [String] = []
@@ -122,7 +127,7 @@ public extension FileOperations {
                 return step.items.contains(where: \.isRequired) ? step : nil
             }
             let moved = Self.clearingOriginalNames(planner.moveSteps(present), recorded: recorded)
-            return (making + folders + moved + files + removing + back + again, gone)
+            return (making + folders + moved + files + removing + back + again + rows, gone)
         }
         guard !planned.isEmpty else {
             // Nothing it did is where it left it: the batch stays as it is, for when it is.

@@ -72,6 +72,35 @@ public extension LibraryIndex.Writer {
         return stale
     }
 
+    /// Moves missing photo `photo` to the file it was found as (DEC-59), named `name` in `folder`, with that file's
+    /// identifier, size and date: found again, and read again from the file when its folder is next listed. A row of
+    /// another photo holding the place is of the file, indexed as new meanwhile, and is removed; returns those removed.
+    @discardableResult
+    func relinkPhoto(
+        _ photo: Int64, toFolder folder: Int64, name: String, fileID: UInt64?, size: Int64?, modified: Date?,
+    ) throws -> [Int64] {
+        var removed: [Int64] = []
+        if let holder = try self.photo(folder: folder, name: name), holder.id != photo {
+            try deletePhotos([holder.id])
+            removed.append(holder.id)
+        }
+        let statement = try database.cached("""
+        UPDATE photos SET folder = ?1, name = ?2, kind = ?3, file_id = ?4, size = coalesce(?5, size),
+          modified = coalesce(?6, modified), state = state & ~?7, missing_since = NULL, indexed = 0 WHERE id = ?8
+        """)
+        try statement.bind(folder, at: 1)
+        try statement.bind(name, at: 2)
+        try statement.bind(PhotoRecord.Kind(pathExtension: (name as NSString).pathExtension).rawValue, at: 3)
+        try statement.bind(fileID.map { Int64(bitPattern: $0) }, at: 4)
+        try statement.bind(size, at: 5)
+        try statement.bind(modified?.timeIntervalSince1970, at: 6)
+        try statement.bind(PhotoRecord.State([.missing, .offline]).rawValue, at: 7)
+        try statement.bind(photo, at: 8)
+        try statement.run()
+        try writeText(replacing: [photo])
+        return removed
+    }
+
     func setFileID(_ fileID: UInt64?, forPhoto photo: Int64) throws {
         let statement = try database.cached("UPDATE photos SET file_id = ? WHERE id = ?")
         try statement.bind(fileID.map { Int64(bitPattern: $0) }, at: 1)

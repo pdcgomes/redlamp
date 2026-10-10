@@ -33,11 +33,18 @@ public enum PhotoSource: Sendable, Hashable {
         default: false
         }
     }
+
+    /// Whether it's Library Health's Missing check, the one source of the photos missing from their folders, which
+    /// every other leaves out (DEC-59).
+    var findsMissing: Bool {
+        self == .health(.missing)
+    }
 }
 
 extension QueryEngine {
-    /// The rows of `store` that `source` holds: without the photos that can't be read, unless
-    /// `unreadable` asks for them or the source is of them (LIB-40).
+    /// The rows of `store` that `source` holds: without the photos missing from their folders, unless the source is
+    /// Library Health's Missing check (DEC-59), and without those that can't be read, unless `unreadable` asks for them
+    /// or the source is of them (LIB-40).
     func rows(
         of source: PhotoSource, in store: ColumnStore, vocabulary: QueryVocabulary, generation: Int,
         unreadable: Bool = false,
@@ -45,7 +52,8 @@ extension QueryEngine {
         let rows = try await allRows(
             of: source, in: store, vocabulary: vocabulary, generation: generation, unreadable: unreadable,
         )
-        return unreadable || source.findsUnreadable ? rows : store.readable(rows)
+        guard !source.findsMissing else { return rows }
+        return store.listed(rows, unreadable: unreadable || source.findsUnreadable)
     }
 
     private func allRows(

@@ -32,7 +32,7 @@ extension LibraryCommand {
         let clock = ContinuousClock()
         let started = clock.now
         var reported = started
-        var photos = (added: 0, updated: 0, removed: 0)
+        var photos = (added: 0, updated: 0, removed: 0, missing: 0)
         var indexed = 0
         var failures = 0
         var summary = LibraryIndexerSummary()
@@ -45,6 +45,9 @@ extension LibraryCommand {
             if photos.removed > 0 {
                 line += ", \(count(photos.removed)) removed"
             }
+            if photos.missing > 0 {
+                line += ", \(count(photos.missing)) missing"
+            }
             line += "; \(count(indexed)) folders indexed; \(count(Int(Double(photos.added) / seconds))) photos a second"
             FileHandle.standardError.write(Data((line + "\n").utf8))
         }
@@ -53,6 +56,7 @@ extension LibraryCommand {
             case let .photosInserted(ids): photos.added += ids.count
             case let .photosUpdated(ids): photos.updated += ids.count
             case let .photosRemoved(ids): photos.removed += ids.count
+            case let .photosMissing(ids): photos.missing += ids.count
             case .folderIndexed: indexed += 1
             case let .failed(path, message):
                 failures += 1
@@ -81,9 +85,16 @@ extension LibraryCommand {
             "  folders: \(count(summary.foldersListed)) listed, \(count(summary.foldersIndexed)) indexed, "
                 + "\(count(summary.foldersRemoved)) removed",
             "  photos: \(count(summary.photosInserted)) added, \(count(summary.photosUpdated)) updated, "
-                + "\(count(summary.photosMoved)) renamed or moved, \(count(summary.photosRemoved)) removed; "
+                + "\(count(summary.photosMoved)) renamed or moved, \(count(summary.photosRemoved)) removed, "
+                + "\(count(summary.photosMissing)) missing; "
                 + "\(count(summary.headsRead)) read, \(count(Int(Double(summary.headsRead) / seconds))) a second",
         ]
+        if summary.photosMissing > 0 {
+            lines.append(
+                "  \(count(summary.photosMissing)) gone from their folders, kept as missing: `redlamp library health` "
+                    + "lists them",
+            )
+        }
         if summary.photosUnreadable > 0 {
             lines.append(
                 "  \(count(summary.photosUnreadable)) unreadable, left out of lists: `redlamp library health` says why",

@@ -23,7 +23,8 @@ public extension IndexQueries {
         return found
     }
 
-    /// How many photos each collection holds itself, by path.
+    /// How many photos each collection holds itself, by path, but those missing from their folders, which only Library
+    /// Health's Missing check lists (DEC-59).
     func collectionCounts() throws -> [CollectionPath: Int] {
         var counts: [CollectionPath: Int] = [:]
         try database.cached("""
@@ -32,6 +33,14 @@ public extension IndexQueries {
         """).forEachRow { row in
             if let path = row.string(at: 0).flatMap(CollectionPath.init) {
                 counts[path] = row.int(at: 1)
+            }
+        }
+        try database.cached("""
+        SELECT c.path, count(*) FROM collection_photos cp JOIN collections c ON c.id = cp.collection
+        WHERE c.path IS NOT NULL AND cp.photo IN (\(Self.missingPhotos)) GROUP BY c.id
+        """).forEachRow { row in
+            if let path = row.string(at: 0).flatMap(CollectionPath.init) {
+                counts[path, default: 0] -= row.int(at: 1)
             }
         }
         return counts

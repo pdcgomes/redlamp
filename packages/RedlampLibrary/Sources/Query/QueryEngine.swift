@@ -571,9 +571,7 @@ extension QueryEngine {
         var matches = try await matches(
             for: query, in: store, vocabulary: vocabulary, generation: generation, moments: moments,
         )
-        if query?.findsUnreadable != true {
-            matches = store.readable(matches)
-        }
+        matches = store.listed(matches, unreadable: query?.findsUnreadable == true)
         let count = matches.count
         let order = store.order(sort.key)
         var ids = ContiguousArray<Int64>()

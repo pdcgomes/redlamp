@@ -372,6 +372,7 @@ public struct IndexLaunchScenario: BenchScenario {
 
     private static func changed(_ summary: LibraryIndexerSummary) -> Int {
         summary.photosInserted + summary.photosUpdated + summary.photosMoved + summary.photosRemoved
+            + summary.photosMissing
     }
 }
 

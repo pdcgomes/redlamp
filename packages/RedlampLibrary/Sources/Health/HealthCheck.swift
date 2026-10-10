@@ -11,12 +11,15 @@ public enum HealthCheck: Sendable, Hashable {
     case pairs(PairRule)
     /// Files that can't be read, are empty or end early.
     case damaged
+    /// Photos whose files went from their folders outside Redlamp (DEC-59), the one list that shows them: found again
+    /// with Locate…, or taken out of the library with Remove.
+    case missing
     /// Files whose first bytes hold another family's format than their extension says.
     case extensions
 
     /// What it checks, without a pair rule: as Keep Anyway's file and the command line name it.
     public enum Kind: String, Sendable, Hashable, CaseIterable, Codable {
-        case duplicates, pairs, damaged, extensions
+        case duplicates, pairs, damaged, missing, extensions
     }
 
     public var kind: Kind {
@@ -24,13 +27,14 @@ public enum HealthCheck: Sendable, Hashable {
         case .duplicates: .duplicates
         case .pairs: .pairs
         case .damaged: .damaged
+        case .missing: .missing
         case .extensions: .extensions
         }
     }
 
     /// The checks in the order Library Health lists them, with pairs under `rule`.
     public static func all(pairs rule: PairRule = .keepBoth) -> [HealthCheck] {
-        [.duplicates, .pairs(rule), .damaged, .extensions]
+        [.duplicates, .pairs(rule), .damaged, .missing, .extensions]
     }
 
     /// Its name, as Library Health lists it.
@@ -39,13 +43,14 @@ public enum HealthCheck: Sendable, Hashable {
         case .duplicates: "Exact duplicates"
         case .pairs: "Raw and JPEG pairs"
         case .damaged: "Damaged files"
+        case .missing: "Missing photos"
         case .extensions: "Wrong extensions"
         }
     }
 
     /// Whether its photos include those that can't be read, which other lists leave out.
     var findsUnreadable: Bool {
-        self == .damaged
+        self == .damaged || self == .missing
     }
 }
 
@@ -133,19 +138,31 @@ public enum HealthReason: Sendable, Hashable, CustomStringConvertible {
     /// The half of a pair the rule drops, beside `kept`, the name of the half it keeps.
     case pairHalf(PhotoRecord.Kind, beside: String)
     case damage(PhotoHealth.Damage)
+    /// Gone from `folder`, where it was, since change tracking found its file gone at `since` (DEC-59).
+    case missing(from: String, since: Date?)
     /// Named with `ext`, holding `format`, which takes another extension.
     case wrongExtension(named: String, holds: PhotoFormat)
 
     /// "byte-identical to /Photos/A/IMG_1.JPG", "the JPEG beside IMG_1.ARW", "can't be read:
-    /// Input/output error", "named .JPG, holds HEIC".
+    /// Input/output error", "gone from /Photos/A since 2026-10-10 11:08", "named .JPG, holds HEIC".
     public var description: String {
         switch self {
         case let .duplicate(path): "byte-identical to \(path)"
         case let .keeper(keeper): "the copy kept: \(keeper)"
         case let .pairHalf(kind, kept): "the \(Self.name(of: kind)) beside \(kept)"
         case let .damage(damage): damage.description
+        case let .missing(folder, since):
+            "gone from \(folder)" + (since.map { " since " + Self.time($0) } ?? "")
         case let .wrongExtension(ext, format): "named .\(ext), holds \(format.title)"
         }
+    }
+
+    /// `2026-10-10 11:08`, in this Mac's zone.
+    static func time(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: date)
     }
 
     static func name(of kind: PhotoRecord.Kind) -> String {

@@ -19,6 +19,12 @@ public extension LibraryHealth {
         switch findings.check {
         case .duplicates:
             return try await duplicatesPlan(findings, picked: picked, leftOut: leftOut)
+        case .missing:
+            // It proposes nothing: Locate… and Remove act on the photos the user chooses.
+            return HealthPlan(
+                check: .missing, batch: FileBatch(kind: .remove, title: "", steps: []), findings: [],
+                leftOut: findings.findings, expected: [:], chosen: [],
+            )
         case .pairs, .damaged:
             let found = try await expected(picked)
             var batch = try await operations.planTrash(picked.map { PhotoFiles(id: $0.photo) })
@@ -51,14 +57,15 @@ public extension LibraryHealth {
     /// What stops `plan` before it moves anything, as the library is now: each photo it acts on
     /// where it was found, with the size and date it had, its finding still there, and not rated,
     /// flagged or labelled since unless the user chose it; and for a pair's half, the half kept beside
-    /// it still there. Empty when it can run.
+    /// it still there. A missing photo's finding is its row's mark, which a photo found again has lost
+    /// before any list hears of it. Empty when it can run.
     func check(_ plan: HealthPlan) async throws -> [String] {
         if let duplicates = plan.duplicates {
             let finder = try await finder()
             return try await finder.check(duplicates, plan.batch, operations: operations, hashing: false)
                 .map(\.description)
         }
-        let now = try await findings(plan.check)
+        let now = plan.check == .missing ? HealthFindings(check: .missing) : try await findings(plan.check)
         let ids = plan.findings.map(\.photo) + plan.findings.compactMap { finding -> Int64? in
             guard case let .pair(kept)? = finding.group else { return nil }
             return kept
@@ -73,6 +80,12 @@ public extension LibraryHealth {
                   photo.size == expected.size, LibraryIndexer.Run.same(photo.modified, expected.modified)
             else {
                 differences.append("\(expected.path) has changed since the check")
+                continue
+            }
+            if plan.check == .missing {
+                if !photo.state.contains(.missing) {
+                    differences.append("\(expected.path) has been found since the check")
+                }
                 continue
             }
             if now.finding(for: finding.photo) == nil {
@@ -136,7 +149,7 @@ public extension LibraryHealth {
     }
 
     /// Each finding's photo as the index has it: its path, size and date.
-    private func expected(_ findings: [HealthFinding]) async throws -> [Int64: HealthPlan.Expected] {
+    internal func expected(_ findings: [HealthFinding]) async throws -> [Int64: HealthPlan.Expected] {
         let ids = findings.map(\.photo)
         return try await index.read { reader in
             try Dictionary(reader.photosWithPaths(ids).map { photo, folder in

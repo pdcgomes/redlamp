@@ -43,6 +43,7 @@ extension LibraryIndexer.Run {
             record.edited = sidecar.summary.hasEdits
             record.sidecarModified = sidecar.modified
             record.state = []
+            record.missingSince = nil
             record.fileID = job.entry.fileIdentifier
             var photo = LibraryIndexer.PendingPhoto(
                 folder: job.folder, record: record, keywords: changed.keywords,
@@ -54,6 +55,7 @@ extension LibraryIndexer.Run {
         case .refresh:
             guard var record = job.existing else { return }
             record.state = []
+            record.missingSince = nil
             record.fileID = job.entry.fileIdentifier
             var photo = LibraryIndexer.PendingPhoto(folder: job.folder, record: record, isNew: false)
             photo.listed = job.existing

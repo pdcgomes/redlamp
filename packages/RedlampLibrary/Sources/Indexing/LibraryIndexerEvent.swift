@@ -9,8 +9,11 @@ public enum LibraryIndexerEvent: Sendable, Hashable {
     /// Photos whose rows changed, keeping their IDs: read again, organised in another app, renamed
     /// or moved.
     case photosUpdated([Int64])
-    /// Photos gone from their folders, and so from the index.
+    /// Photos taken out of the index: those of a root removed from the library.
     case photosRemoved([Int64])
+    /// Photos whose files went from their folders outside Redlamp, kept in the index as missing (DEC-59): every list
+    /// but Library Health's Missing check leaves them out.
+    case photosMissing([Int64])
     /// A volume stopped answering: its photos are marked offline. By the index's name for it
     /// (`VolumeRecord.uuid`).
     case volumeOffline(String)
@@ -28,6 +31,7 @@ public struct FolderIndexed: Sendable, Hashable {
     public var path: String
     public var inserted: Int
     public var updated: Int
+    /// Photos that left it outside Redlamp, now missing.
     public var removed: Int
 
     public init(path: String, inserted: Int = 0, updated: Int = 0, removed: Int = 0) {
@@ -49,7 +53,10 @@ public struct LibraryIndexerSummary: Sendable, Hashable {
     public var photosUpdated = 0
     /// Photos renamed or moved, found by their file identifiers and kept with their IDs.
     public var photosMoved = 0
+    /// Photos of roots removed from the library, taken out of the index.
     public var photosRemoved = 0
+    /// Photos whose files went from their folders, kept as missing (DEC-59).
+    public var photosMissing = 0
     /// Photos whose first `PhotoMetadataReader.headLength` bytes were read.
     public var headsRead = 0
     /// Photos written as unreadable (LIB-40): their read failed, though they're there and their volume

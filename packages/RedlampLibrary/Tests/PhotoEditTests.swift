@@ -119,7 +119,7 @@ struct PhotoEditTests {
             .appending(path: "redlamp-photo-edits-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appending(path: "Index.sqlite")
-        #expect(LibraryIndex.schemaVersion == 10)
+        let current = LibraryIndex.schemaVersion
         let older = try await LibraryIndex.open(at: url, migrations: Array(LibraryIndex.migrations.prefix(8)))
         #expect(try await older.read { try $0.database.userVersion } == 8)
         await older.close()
@@ -133,16 +133,17 @@ struct PhotoEditTests {
         }
         #expect(columns.contains("stack_position"), "version 9")
         #expect(tables.contains("photo_edits"), "version 10")
-        #expect(try await index.read { try $0.database.userVersion } == 10)
+        #expect(columns.contains("missing_since"), "version 11")
+        #expect(try await index.read { try $0.database.userVersion } == current)
         await index.close()
 
-        for version in [9, 8] {
+        for version in [10, 9, 8] {
             do {
                 let rewound = try SQLiteDatabase(path: url.path)
                 try rewound.setUserVersion(version)
             }
             let again = try await LibraryIndex.open(at: url)
-            #expect(try await again.read { try $0.database.userVersion } == 10, "from version \(version) again")
+            #expect(try await again.read { try $0.database.userVersion } == current, "from version \(version) again")
             await again.close()
         }
     }

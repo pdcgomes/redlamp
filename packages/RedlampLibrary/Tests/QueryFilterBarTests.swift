@@ -33,16 +33,18 @@ struct QueryFilterBarTests {
         Dictionary(uniqueKeysWithValues: (column?.values ?? []).map { ($0.name, $0.count) })
     }
 
-    @Test func `missing and offline photos are filters, in the column store and in SQL alike`() async throws {
+    @Test func `offline photos are a filter, and missing photos are in no search, in the column store and in SQL alike`(
+    ) async throws {
         let library = try await Self.library()
         defer { library.remove() }
         for loaded in [true, false] {
             let engine = try await library.engine(loaded: loaded)
             #expect(try await library.numbers(engine.ids("offline:yes")).sorted() == [2, 7], "\(loaded)")
-            #expect(try await library.numbers(engine.ids("missing:yes")) == [4])
+            #expect(try await engine.ids("missing:yes").isEmpty, "only Library Health's Missing check lists them")
             #expect(try await library.numbers(engine.ids("-offline:yes -missing:yes")).sorted() == [1, 3, 5, 6, 8])
-            #expect(try await library.numbers(engine.ids("missing:yes OR offline:yes")).sorted() == [2, 4, 7])
-            #expect(try await engine.ids("offline:no").count == 6)
+            #expect(try await library.numbers(engine.ids("missing:yes OR offline:yes")).sorted() == [2, 7])
+            #expect(try await engine.ids("offline:no").count == 5)
+            #expect(try await library.numbers(engine.ids("")).sorted() == [1, 2, 3, 5, 6, 7, 8])
         }
         #expect(try LibraryQuery(parsing: "missing:yes -offline:yes").description == "missing:yes -offline:yes")
         #expect(throws: LibraryQueryError.self) { try LibraryQuery(parsing: "offline:maybe") }

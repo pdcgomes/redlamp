@@ -444,11 +444,16 @@ extension ColumnStore {
         }
     }
 
-    /// `rows` without the photos that can't be read, which lists leave out (LIB-40).
-    func readable(_ rows: RowBits) -> RowBits {
-        var readable = rows
-        readable.subtract(self.rows(matching: .leaf(.state(UInt8(PhotoRecord.State.unreadable.rawValue))), sets: [:]))
-        return readable
+    /// `rows` without the photos lists leave out: those missing from their folders, which only Library Health's Missing
+    /// check lists (DEC-59), and, unless `unreadable`, those that can't be read (LIB-40).
+    func listed(_ rows: RowBits, unreadable: Bool = false) -> RowBits {
+        var state = PhotoRecord.State.missing
+        if !unreadable {
+            state.insert(.unreadable)
+        }
+        var listed = rows
+        listed.subtract(self.rows(matching: .leaf(.state(UInt8(state.rawValue))), sets: [:]))
+        return listed
     }
 
     /// The rows of the photos `ids`, leaving out those the store doesn't hold.

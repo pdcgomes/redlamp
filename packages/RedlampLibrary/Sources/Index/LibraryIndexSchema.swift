@@ -8,6 +8,7 @@ extension LibraryIndex {
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
         migrateToVersion6, migrateToVersion7, migrateToVersion8, migrateToVersion9, migrateToVersion10,
+        migrateToVersion11,
     ]
 
     /// The version of the schema this build makes and opens.
@@ -57,6 +58,15 @@ extension LibraryIndex {
 
     static func migrateToVersion10(_ database: SQLiteDatabase) throws {
         try database.execute(schemaVersion10)
+    }
+
+    /// Adds no column to an index that has it already, one set back to an earlier version.
+    static func migrateToVersion11(_ database: SQLiteDatabase) throws {
+        let column = try database.prepare("SELECT 1 FROM pragma_table_info('photos') WHERE name = 'missing_since'")
+        if try column.first({ _ in true }) == nil {
+            try database.execute(schemaVersion11)
+        }
+        try database.execute(schemaVersion11Index)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -249,5 +259,18 @@ extension LibraryIndex {
     static let schemaVersion10 = """
     CREATE TABLE IF NOT EXISTS photo_edits (photo INTEGER PRIMARY KEY, sidecar_modified REAL NOT NULL,
       digest BLOB NOT NULL, renderer INTEGER NOT NULL);         -- photo is photos.id
+    """
+
+    /// Photos whose files went outside Redlamp are kept with the state's missing bit rather than removed (DEC-59): when
+    /// change tracking found each file gone, for Library Health's Missing check, the one list that shows them, and the
+    /// missing photos by folder, so the check and Locate…'s look beside a found file read only theirs. Adding the
+    /// column
+    /// rewrites no row.
+    static let schemaVersion11 = """
+    ALTER TABLE photos ADD COLUMN missing_since REAL;            -- while state has the missing bit
+    """
+
+    static let schemaVersion11Index = """
+    CREATE INDEX IF NOT EXISTS photos_missing ON photos (folder) WHERE state & 1 != 0;
     """
 }
