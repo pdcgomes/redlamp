@@ -64,6 +64,7 @@ public enum ThemeMapping {
             accent: tint > 0 && roles.contains(.accent) ? palette.primary : nil,
             caution: .caution(dark: isDark),
             info: .info(foreground: foreground, dark: isDark),
+            isDark: isDark,
         )
     }
 

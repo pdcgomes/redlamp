@@ -149,8 +149,9 @@ public struct PaletteTokens: Sendable, Hashable {
         label: RGBA, labelHover: RGBA, secondaryLabel: RGBA, tertiaryLabel: RGBA, value: RGBA,
         divider: RGBA, track: RGBA, well: RGBA, selection: RGBA, panelBackground: RGBA,
         trackFill: RGBA, thumb: RGBA, thumbStroke: RGBA, thumbShadow: RGBA, editedDot: RGBA,
-        accent: RGBA?, nativeTint: RGBA? = nil, caution: NoticeColors, info: NoticeColors,
+        accent: RGBA?, nativeTint: RGBA? = nil, caution: NoticeColors, info: NoticeColors, isDark: Bool = true,
     ) {
+        self.isDark = isDark
         self.label = label
         self.labelHover = labelHover
         self.secondaryLabel = secondaryLabel
@@ -172,10 +173,8 @@ public struct PaletteTokens: Sendable, Hashable {
         self.info = info
     }
 
-    /// Whether the panels are dark: their background's luminance is below half.
-    public var isDark: Bool {
-        0.2126 * panelBackground.red + 0.7152 * panelBackground.green + 0.0722 * panelBackground.blue < 0.5
-    }
+    /// Whether the panels are dark: the appearance the set was made for.
+    public var isDark: Bool
 
     public var wellRest: RGBA {
         well.opacity(0.55)
@@ -244,5 +243,6 @@ public struct PaletteTokens: Sendable, Hashable {
         accent: nil,
         caution: .caution(dark: false),
         info: .info(foreground: RGBA(white: 0), dark: false),
+        isDark: false,
     )
 }
