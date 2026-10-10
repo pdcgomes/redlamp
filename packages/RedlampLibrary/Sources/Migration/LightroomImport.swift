@@ -136,14 +136,7 @@ public final class LightroomImport: Sendable {
             }
             let slice = Array(photos[min(part * partSize, photos.count) ..< min((part + 1) * partSize, photos.count)])
             let start = part * partSize
-            let title = Self.title(
-                plan.name,
-                photos: photos.count,
-                part: part,
-                of: parts,
-                from: start,
-                count: slice.count,
-            )
+            let title = Self.title(plan.name, photos: photos.count, part: part, of: parts, count: slice.count)
             let report: @Sendable (Double) -> Void = { fraction in
                 progress?(Progress(
                     done: start + Int(Double(slice.count) * fraction), total: photos.count, part: part, parts: parts,
@@ -193,7 +186,7 @@ public final class LightroomImport: Sendable {
     }
 
     /// `1,200 photos from “Lightroom Catalog”`, and which part when there are several.
-    static func title(_ name: String, photos: Int, part: Int, of parts: Int, from _: Int, count: Int) -> String {
+    static func title(_ name: String, photos: Int, part: Int, of parts: Int, count: Int) -> String {
         let whole = "\(LibraryMetadata.count(parts == 1 ? count : photos)) from “\(name)”"
         guard parts > 1 else { return whole }
         return "\(whole), part \(part + 1) of \(parts)"
