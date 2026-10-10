@@ -152,6 +152,9 @@ public final class EditorModel {
             if newValue.pointCurve != old.pointCurve {
                 withMutation(keyPath: \.pointCurve) {}
             }
+            if newValue.panelsOff != old.panelsOff {
+                withMutation(keyPath: \.panelsOff) {}
+            }
             if newValue.masks != old.masks {
                 withMutation(keyPath: \.masks) {}
                 if newValue.masks.map(MaskOutline.init) != old.masks.map(MaskOutline.init) {
@@ -209,6 +212,12 @@ public final class EditorModel {
     public var masks: [MaskLayer] {
         access(keyPath: \.masks)
         return storedRecipe.masks
+    }
+
+    /// The panels switched off from their headers (UX-30).
+    public var panelsOff: Set<SwitchablePanel> {
+        access(keyPath: \.panelsOff)
+        return storedRecipe.panelsOff
     }
 
     /// The masks without their adjustment values: views that list masks and components
@@ -1694,16 +1703,37 @@ public final class EditorModel {
         return panel.parameters.contains(where: isEdited)
     }
 
-    /// Resets a panel from its header, in one step: the Tone Curve's point curve with its sliders.
+    /// Resets a panel from its header, in one step: the Tone Curve's point curve with its sliders,
+    /// and the panel's switch back on.
     public func resetPanel(_ panel: PanelID) {
-        guard panel == .toneCurve else {
+        guard let switchable = panel.switchable else {
             resetParameters(panel.parameters, name: "Reset \(panel.title)")
             return
         }
         var next = recipe
         next.reset(panel.parameters)
-        next.pointCurve = EditRecipe.linearPointCurve
+        if panel == .toneCurve {
+            next.pointCurve = EditRecipe.linearPointCurve
+        }
+        next.setPanel(switchable, on: true)
         commit(next, .reset, "Reset \(panel.title)")
+    }
+
+    /// Whether a panel's switch is on; Basic has none.
+    public func isOn(_ panel: PanelID) -> Bool {
+        panel.switchable.map { !panelsOff.contains($0) } ?? true
+    }
+
+    /// Turns a panel off or on from its header's switch (UX-30), as one step: "Detail Off".
+    public func setPanel(_ panel: PanelID, on: Bool) {
+        guard let switchable = panel.switchable, isOn(panel) != on else { return }
+        var next = recipe
+        next.setPanel(switchable, on: on)
+        commit(next, .edit, Self.switchStepTitle(panel, on: on))
+    }
+
+    static func switchStepTitle(_ panel: PanelID, on: Bool) -> String {
+        "\(panel.title) \(on ? "On" : "Off")"
     }
 
     public func togglePanel(_ panel: PanelID, solo: Bool) {

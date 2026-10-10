@@ -109,6 +109,11 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The panel's switch in the edit (UX-30); Basic has none.
+    public var switchable: SwitchablePanel? {
+        SwitchablePanel(rawValue: rawValue)
+    }
+
     /// Camera-style controls that Fujifilm-style recipe cards map onto, in the Effects panel.
     public static let cameraRecipeParameters: [ParameterID] = [
         .dynamicRange, .colorChrome, .colorChromeBlue, .wbShiftRed, .wbShiftBlue,

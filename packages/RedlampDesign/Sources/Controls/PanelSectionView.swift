@@ -1,27 +1,36 @@
 import AppKit
 
-/// A collapsible Develop panel: a header (chevron, glyph, title, optional badge, and a dot when
-/// the panel has edits), its rows, and a divider.
+/// A collapsible Develop panel: a header (an optional on/off switch, chevron, glyph, title,
+/// optional badge, and a dot when the panel has edits), its rows, and a divider.
 ///
 /// Click the header to expand or collapse (Option-click for Solo Mode), double-click to
-/// reset the panel. A collapsed panel's rows leave the window, so they cost nothing.
+/// reset the panel. Clicking the switch turns the panel off or on without expanding it; while
+/// it's off, its title and rows are dimmed and stay usable. A collapsed panel's rows leave the
+/// window, so they cost nothing.
 public final class PanelSectionView: NSView, HeightProviding {
     public struct Actions {
         public var isExpanded: @MainActor () -> Bool
         public var isEdited: @MainActor () -> Bool
         public var toggle: @MainActor (_ solo: Bool) -> Void
         public var reset: @MainActor () -> Void
+        /// Whether the panel is on, for a panel with a switch.
+        public var isOn: (@MainActor () -> Bool)?
+        public var setOn: (@MainActor (Bool) -> Void)?
 
         public init(
             isExpanded: @escaping @MainActor () -> Bool,
             isEdited: @escaping @MainActor () -> Bool,
             toggle: @escaping @MainActor (_ solo: Bool) -> Void,
             reset: @escaping @MainActor () -> Void,
+            isOn: (@MainActor () -> Bool)? = nil,
+            setOn: (@MainActor (Bool) -> Void)? = nil,
         ) {
             self.isExpanded = isExpanded
             self.isEdited = isEdited
             self.toggle = toggle
             self.reset = reset
+            self.isOn = isOn
+            self.setOn = setOn
         }
     }
 
@@ -31,6 +40,7 @@ public final class PanelSectionView: NSView, HeightProviding {
     private let actions: Actions
     private var trackers: [Tracker] = []
     private(set) var isExpanded = false
+    private(set) var isOn = true
 
     /// The rows' padding inside a panel.
     public static let bodyInsets = NSEdgeInsets(
@@ -38,17 +48,26 @@ public final class PanelSectionView: NSView, HeightProviding {
     )
 
     /// `accessory` (a button) sits at the header's trailing edge. Rows that pad themselves (a
-    /// list whose highlight reaches past its text) can be given other `insets`.
+    /// list whose highlight reaches past its text) can be given other `insets`. With
+    /// `switchSlot`, the header keeps room for a switch at its leading edge, so titles line up
+    /// whether a panel has one (`actions.isOn`) or not.
     public init(
         title: String,
         symbol: String? = nil,
         badge: String? = nil,
         accessory: NSView? = nil,
+        switchSlot: Bool = false,
         insets: NSEdgeInsets = PanelSectionView.bodyInsets,
         rows: [NSView],
         actions: Actions,
     ) {
-        header = PanelHeaderView(title: title, symbol: symbol, badge: badge, accessory: accessory)
+        let panelSwitch = actions.isOn.map { _ in
+            PanelSwitchView(title: title) { on in actions.setOn?(on) }
+        }
+        header = PanelHeaderView(
+            title: title, symbol: symbol, badge: badge, accessory: accessory,
+            panelSwitch: panelSwitch, switchSlot: switchSlot || panelSwitch != nil,
+        )
         body = ColumnView(spacing: Metrics.panelRowSpacing, insets: insets, views: rows)
         self.actions = actions
         super.init(frame: CGRect(x: 0, y: 0, width: 316, height: Metrics.panelHeaderHeight))
@@ -74,6 +93,7 @@ public final class PanelSectionView: NSView, HeightProviding {
     public func identify(as identifier: String) {
         setAccessibilityIdentifier(identifier)
         header.setAccessibilityIdentifier("\(identifier).header")
+        header.panelSwitch?.setAccessibilityIdentifier("\(identifier).switch")
     }
 
     override public var isFlipped: Bool {
@@ -123,6 +143,24 @@ public final class PanelSectionView: NSView, HeightProviding {
                 header.isEdited = actions.isEdited()
             },
         ]
+        if let isOn = actions.isOn {
+            trackers.append(Tracker { [weak self] in
+                guard let self else { return }
+                setOn(isOn())
+            })
+        }
+    }
+
+    private var bodyAlpha: CGFloat {
+        isOn ? 1 : Metrics.switchedOffOpacity
+    }
+
+    private func setOn(_ on: Bool) {
+        isOn = on
+        header.isOn = on
+        if body.superview != nil, body.alphaValue > 0 {
+            body.alphaValue = bodyAlpha
+        }
     }
 
     private func setExpanded(_ expanded: Bool) {
@@ -134,7 +172,7 @@ public final class PanelSectionView: NSView, HeightProviding {
             if body.superview == nil {
                 addSubview(body, positioned: .below, relativeTo: divider)
             }
-            body.alphaValue = animated ? 0 : 1
+            body.alphaValue = animated ? 0 : bodyAlpha
         }
         invalidateColumnLayout()
         guard animated else {
@@ -148,7 +186,7 @@ public final class PanelSectionView: NSView, HeightProviding {
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             context.allowsImplicitAnimation = true
-            body.animator().alphaValue = expanded ? 1 : 0
+            body.animator().alphaValue = expanded ? bodyAlpha : 0
             enclosingColumnHost?.layoutSubtreeIfNeeded()
         } completionHandler: { [weak self] in
             MainActor.assumeIsolated {
@@ -170,13 +208,15 @@ public final class PanelSectionView: NSView, HeightProviding {
     }
 }
 
-/// The panel title bar: chevron, glyph, title and badge, then at the trailing edge the edited dot
-/// or an accessory.
+/// The panel title bar: the switch or its slot, chevron, glyph, title and badge, then at the
+/// trailing edge the edited dot or an accessory.
 final class PanelHeaderView: NSView {
     let title: String
     let symbol: String?
     let badge: String?
     let accessory: NSView?
+    let panelSwitch: PanelSwitchView?
+    let switchSlot: Bool
     var onClick: (_ solo: Bool) -> Void = { _ in }
     var onDoubleClick: () -> Void = {}
     var menuProvider: (@MainActor () -> NSMenu)?
@@ -202,6 +242,15 @@ final class PanelHeaderView: NSView {
         }
     }
 
+    var isOn = true {
+        didSet {
+            if isOn != oldValue {
+                panelSwitch?.isOn = isOn
+                needsDisplay = true
+            }
+        }
+    }
+
     private var isHovering = false {
         didSet {
             if isHovering != oldValue {
@@ -212,16 +261,24 @@ final class PanelHeaderView: NSView {
 
     private var hoverArea: NSTrackingArea?
 
-    init(title: String, symbol: String?, badge: String?, accessory: NSView? = nil) {
+    init(
+        title: String, symbol: String?, badge: String?, accessory: NSView? = nil, panelSwitch: PanelSwitchView? = nil,
+        switchSlot: Bool = false,
+    ) {
         self.title = title
         self.symbol = symbol
         self.badge = badge
         self.accessory = accessory
+        self.panelSwitch = panelSwitch
+        self.switchSlot = switchSlot
         super.init(frame: .zero)
         wantsLayer = true
         layerContentsRedrawPolicy = .onSetNeedsDisplay
         if let accessory {
             addSubview(accessory)
+        }
+        if let panelSwitch {
+            addSubview(panelSwitch)
         }
     }
 
@@ -234,9 +291,15 @@ final class PanelHeaderView: NSView {
         true
     }
 
-    /// Where the edited dot would be.
+    /// The switch at the leading edge; an accessory where the edited dot would be.
     override func layout() {
         super.layout()
+        if let panelSwitch {
+            let size = Metrics.panelSwitchSize
+            panelSwitch.frame = PixelGrid.centered(
+                size, at: CGPoint(x: Metrics.panelPadding + size.width / 2, y: bounds.height / 2), scale: backingScale,
+            )
+        }
         guard let accessory else { return }
         let size = accessory.intrinsicContentSize
         accessory.frame = PixelGrid.centered(
@@ -250,6 +313,9 @@ final class PanelHeaderView: NSView {
         let scale = backingScale
         var x = Metrics.panelPadding
         let midY = bounds.height / 2
+        if switchSlot {
+            x += Metrics.panelSwitchSize.width + 8
+        }
 
         // Turned about its frame's center, as SwiftUI's `rotationEffect` does.
         let chevron = Symbol.layoutSize("chevron.right", pointSize: 9, weight: .bold)
@@ -270,9 +336,11 @@ final class PanelHeaderView: NSView {
         }
 
         let titleWidth = TextLine.width(title, font: Typography.panelTitle)
+        let titleColor = isOn ? (isHovering ? Palette.labelHover : Palette.value)
+            : (isHovering ? Palette.secondaryLabel : Palette.tertiaryLabel)
         TextLine.draw(
             title, font: Typography.panelTitle,
-            color: (isHovering ? Palette.labelHover : Palette.value).nsColor,
+            color: titleColor.nsColor,
             in: CGRect(x: x, y: 0, width: titleWidth, height: bounds.height), scale: scale,
         )
         x += titleWidth + 8
@@ -324,6 +392,93 @@ final class PanelHeaderView: NSView {
         } else if event.clickCount == 1 {
             onClick(event.modifierFlags.contains(.option))
         }
+    }
+}
+
+/// A panel header's on/off switch: a small toggle that turns the panel off or on with a click,
+/// without expanding it, and acts as a switch for VoiceOver.
+final class PanelSwitchView: NSView {
+    let title: String
+    let onChange: (Bool) -> Void
+
+    var isOn = true {
+        didSet {
+            if isOn != oldValue {
+                needsDisplay = true
+                toolTip = Self.toolTip(title, on: isOn)
+                NSAccessibility.post(element: self, notification: .valueChanged)
+            }
+        }
+    }
+
+    init(title: String, onChange: @escaping (Bool) -> Void) {
+        self.title = title
+        self.onChange = onChange
+        super.init(frame: CGRect(origin: .zero, size: Metrics.panelSwitchSize))
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+        toolTip = Self.toolTip(title, on: true)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    static func toolTip(_ title: String, on: Bool) -> String {
+        "Turn \(title) \(on ? "off" : "on")"
+    }
+
+    override var isFlipped: Bool {
+        true
+    }
+
+    override var intrinsicContentSize: NSSize {
+        Metrics.panelSwitchSize
+    }
+
+    override func draw(_: NSRect) {
+        let track = bounds.insetBy(dx: 0.5, dy: 0.5)
+        let radius = track.height / 2
+        (isOn ? Palette.trackFill : Palette.track).nsColor.setFill()
+        NSBezierPath(roundedRect: track, xRadius: radius, yRadius: radius).fill()
+        let knob = track.height - 4
+        let knobX = isOn ? track.maxX - 2 - knob : track.minX + 2
+        Palette.thumb.nsColor.setFill()
+        NSBezierPath(ovalIn: CGRect(x: knobX, y: track.minY + 2, width: knob, height: knob)).fill()
+    }
+
+    override func mouseDown(with _: NSEvent) {
+        onChange(!isOn)
+    }
+
+    override func accessibilityRole() -> NSAccessibility.Role? {
+        .checkBox
+    }
+
+    override func accessibilitySubrole() -> NSAccessibility.Subrole? {
+        .switch
+    }
+
+    override func isAccessibilityElement() -> Bool {
+        true
+    }
+
+    override func accessibilityLabel() -> String? {
+        title
+    }
+
+    override func accessibilityHelp() -> String? {
+        toolTip
+    }
+
+    override func accessibilityValue() -> Any? {
+        isOn ? 1 : 0
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        onChange(!isOn)
+        return true
     }
 }
 

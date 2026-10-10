@@ -42,6 +42,18 @@ enum Theme {
         Palette.editedDot.color
     }
 
+    static var track: Color {
+        Palette.track.color
+    }
+
+    static var trackFill: Color {
+        Palette.trackFill.color
+    }
+
+    static var thumb: Color {
+        Palette.thumb.color
+    }
+
     static var accent: Color {
         Palette.current.accent?.color ?? .accentColor
     }
@@ -62,6 +74,8 @@ enum Theme {
     static let rowHeight = Metrics.rowHeight
     static let panelPadding = Metrics.panelPadding
     static let panelSymbolSlot = Metrics.panelSymbolSlot
+    static let panelSwitchSize = Metrics.panelSwitchSize
+    static let switchedOffOpacity = Metrics.switchedOffOpacity
     static let thumbSize = Metrics.thumbSize
 }
 

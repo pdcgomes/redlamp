@@ -79,6 +79,7 @@ public extension EditorModel {
                 carried: SettingsSelection(
                     items: selection.items, masks: !pasted.isEmpty,
                     excludedMasks: Set(recipe.masks.map(\.id)).subtracting(pasted),
+                    panelSwitches: selection.panelSwitches,
                 ),
             )
         }

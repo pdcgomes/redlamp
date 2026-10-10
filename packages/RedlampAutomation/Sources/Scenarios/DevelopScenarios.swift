@@ -16,6 +16,7 @@
             detail,
             lensAndTransform,
             effectsAndCalibration,
+            panelSwitches,
             histogram,
         ]
 
@@ -335,6 +336,48 @@
             try app.press(.toggleZoom)
             try app.choose(.resetAll)
             app.covered([.feature("develop.sharpening"), .feature("develop.noise-reduction")], via: .model)
+        }
+
+        /// UX-30: a panel's switch turns its settings off and on, each a History step, without
+        /// expanding the panel; Undo takes it back, and a change in the panel turns it on.
+        static let panelSwitches = Scenario(
+            "develop.panel-switches",
+            "Panel switches: Effects' switch turns its vignette off and on in the photo, as History steps with Undo",
+            claims: [.feature("workspace.panels"), .feature("develop.effects")],
+        ) { app in
+            try app.openWorking()
+            try app.choose(.resetAll)
+            try app.main { $0.expandedPanels = [] }
+            try app.set(.vignetteAmount, -80)
+            app.pause(0.3)
+            let vignetted = try app.main { $0.histogram }
+            try app.expectRenders("Effects off") {
+                try app.click(.identifier("panel.effects.switch"))
+            }
+            try app.wait("Effects off, as one History step, without opening the panel") { model in
+                !model.isOn(.effects) && model.history.last?.name == "Effects Off" && model.expandedPanels.isEmpty
+                    && model.value(.vignetteAmount) == -80
+            }
+            try app.wait("the photo without its vignette") { $0.histogram != vignetted }
+            let plain = try app.main { $0.histogram }
+            try app.expectRenders("Undo turning Effects back on") {
+                try app.press(.undo)
+            }
+            try app.wait("Effects on again") { $0.isOn(.effects) }
+            try app.wait("the vignette back") { $0.histogram != plain }
+            try app.click(.identifier("panel.effects.switch"))
+            try app.wait("Effects off again") { !$0.isOn(.effects) }
+            try app.click(.identifier("panel.effects.switch"))
+            try app.wait("Effects On, as a History step") { $0.isOn(.effects) && $0.history.last?.name == "Effects On" }
+            // The header's menu has the switch too, and changing a setting of a panel that's off
+            // turns it back on.
+            try app.rightClick(.panelHeader(.detail), choosing: "Turn Detail Off")
+            try app.wait("Detail off from the header's menu") { !$0.isOn(.detail) }
+            try app.set(.sharpenAmount, 60)
+            try app.wait("Detail on again with the change") { $0.isOn(.detail) }
+            try app.choose(.resetAll)
+            try app.wait("every panel on after Reset All") { $0.panelsOff.isEmpty }
+            app.covered([.feature("workspace.panels"), .feature("develop.effects")], via: .mouse)
         }
 
         static let lensAndTransform = Scenario(
