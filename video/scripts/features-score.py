@@ -12,14 +12,17 @@ It writes every arrangement as score-<arrangement>.wav, so they can be compared 
 (the composition's `score` prop), and the chosen one as score.wav, which the cut plays: drive until
 the owner picks (docs/plans/2026-10-10-feature-videos.md, Sound). Beside them it writes score.json,
 the chosen score's level at every frame for the storyboard sheet, and cues.json, the cue sheet with
-every sound on screen added as a cue, for scripts/score-report.py. Needs numpy, Pillow and pixelkit
-(the boards draw with it).
+every sound on screen added as a cue, for scripts/score-report.py. It also writes the opener's sound,
+public/features/opener.wav, which every video shares. Needs numpy, Pillow and pixelkit (the boards
+draw with it).
 """
 
 import argparse
 import importlib.util
 import json
+import subprocess
 import sys
+import wave
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +42,8 @@ def load(path, name):
 
 theme = load(w.VIDEO / "scripts/features-theme.py", "features_theme")
 CLICK_UP = 0.07
+# The whole video's loudness, as the platforms measure it, in LUFS.
+TARGET = -14.0
 
 
 def press(velocity):
@@ -60,6 +65,35 @@ SOUNDS = {
     "key up": (lambda: s.key(0.8, up=True), 0.28, 0.06),
     "flip": (lambda: s.tick(0.7), 0.2, 0.1),
 }
+
+
+def read(path):
+    with wave.open(str(path)) as f:
+        return np.frombuffer(f.readframes(f.getnframes()), "<i2").reshape(-1, f.getnchannels()) / 32768
+
+
+def opener(episode):
+    """
+    The opener's sound: the Introducing short's score under its opening scene (scripts/score.py short),
+    as far below the episode's score as it sits below the rest of the short, and faded out over its
+    last three frames, where the episode's first hit cuts in. Its length is the scene's bars on the
+    film's 72 BPM grid (src/introducing/cuts.json), as FeatureVideo's OPENER is.
+    """
+    short = w.VIDEO / "public/film/score-short.wav"
+    if not short.exists():
+        subprocess.run([sys.executable, "scripts/score.py", "short"], cwd=w.VIDEO, check=True)
+    cuts = json.loads((w.VIDEO / "src/introducing/cuts.json").read_text())
+    scene, bars = cuts["short"][0]
+    assert scene == "safelight", f"the short opens on {scene}, not the safelight"
+    seconds = bars * 4 * 60 / 72
+    x = read(short)
+    n = int(round(seconds * s.SR))
+    head, after = x[:n], x[n:n + len(episode)]
+    gap = s.loudness(after) - s.loudness(head)
+    out = head * 10 ** ((s.loudness(episode) - gap - s.loudness(head)) / 20)
+    ramp = int(round(3 / w.FPS * s.SR))
+    out[-ramp:] *= np.linspace(1, 0, ramp)[:, None]
+    return out
 
 
 def on_screen(events):
@@ -91,13 +125,23 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     for name, arrange in theme.ARRANGEMENTS.items():
         buses, mastering = arrange(sounds=on_screen(events))
-        # The last 1.6 s fade out with the picture, as the last chord dies away.
-        each = s.master(buses, seconds=theme.TOTAL, target=-14.0, ceiling=-1.0, fade=1.6, **mastering)
+        # The last 1.6 s fade out with the picture, as the last chord dies away. What's mastered to the
+        # target is the whole video, opener and all; the opener is the quieter, so the score sits a
+        # little above the target.
+        target = TARGET
+        for _ in range(2):
+            each = s.master(buses, seconds=theme.TOTAL, target=target, ceiling=-1.0, fade=1.6, **mastering)
+            target += TARGET - s.loudness(np.concatenate([opener(each), each]))
         s.write(out / f"score-{name}.wav", each)
         print(f"    score-{name}.wav: {s.loudness(each):.1f} LUFS, true peak {s.true_peak(each):.1f} dBFS")
         if name == args.arrangement:
             mix = each
     s.write(out / "score.wav", mix)
+    head = opener(mix)
+    s.write(w.VIDEO / "public/features/opener.wav", head)
+    whole = np.concatenate([head, mix])
+    print(f"    opener.wav: {len(head) / s.SR:.2f} s; with the score, {s.loudness(whole):.1f} LUFS, "
+          f"true peak {s.true_peak(whole):.1f} dBFS")
 
     per = s.SR // w.FPS
     frames = len(mix) // per

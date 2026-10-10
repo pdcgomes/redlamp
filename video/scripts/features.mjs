@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Renders a feature video (docs/plans/2026-10-10-feature-videos.md) into ~/src/redlamp-social/renders/,
-// named by its post's file in docs/social/posts.json (e01-a.mp4), as H.264 at 1080 × 1920 with its
-// score, and the cover each post uses (its coverMs) as a JPEG beside it. Draws the frames and writes the
-// score first if either is missing.
+// named by its post's file in docs/social/posts.json (e01-a.mp4), as H.264 at 1080 × 1920: the opener,
+// then the episode with its score, and the cover each post uses (its coverMs) as a JPEG beside it.
+// Draws the frames and writes the scores first if any is missing.
 //   npm run features -- --episode=e01            every hook the episode posts with
 //   npm run features -- --episode=e01 --hook=b   one hook
 //   npm run features -- --episode=e01 --draft    half size, for a quick look on a phone (…-draft.mp4)
@@ -43,7 +43,8 @@ if (chosen.length === 0) {
 
 const python = (script, ...rest) => execFileSync("python3", [script, "--episode", episode, ...rest], { cwd: root, stdio: "inherit" });
 if (fresh || !existsSync(path.join(root, `public/features/${episode}/frames.json`))) python("scripts/features-frames.py");
-if (fresh || !existsSync(path.join(root, `public/features/${episode}/score.wav`))) python("scripts/features-score.py");
+const scored = ["public/features/opener.wav", `public/features/${episode}/score.wav`].every((f) => existsSync(path.join(root, f)));
+if (fresh || !scored) python("scripts/features-score.py");
 const manifest = JSON.parse(readFileSync(path.join(root, `public/features/${episode}/frames.json`), "utf8"));
 for (const post of chosen) {
   if (!manifest.frames[post.hook]) {
@@ -64,7 +65,7 @@ env.NO_PROXY = env.no_proxy = ["localhost", "127.0.0.1", "::1", env.NO_PROXY].fi
 const remotion = (...a) => execFileSync("npx", ["remotion", ...a], { cwd: root, stdio: "inherit", env });
 mkdirSync(out, { recursive: true });
 for (const post of chosen) {
-  const props = JSON.stringify({ episode, hook: post.hook, score, guides: false });
+  const props = JSON.stringify({ episode, hook: post.hook, score, opener: true, guides: false });
   const variant = score === "score" ? "" : `-${score.replace(/^score-/, "")}`;
   const name = post.file.replace(/\.mp4$/, `${variant}${draft ? "-draft" : ""}`);
   const scale = draft ? ["--scale=0.5"] : [];

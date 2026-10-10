@@ -1,6 +1,6 @@
 # Redlamp feature videos for Instagram and TikTok
 
-Ten vertical videos, each 19.2 seconds long and each about one Redlamp feature. In every video a pixel-art Redlamp editor shows the feature step by step, the real photo edited in Redlamp follows, and the video ends with "Download free" and "redlamp.app". They are made in the promo studio (`.cursor/skills/redlamp-promo-studio/SKILL.md`) and run from the social room (`.cursor/skills/redlamp-social/SKILL.md`).
+Ten vertical videos, each about one Redlamp feature and 25.9 seconds long with Redlamp's opener. In every video a pixel-art Redlamp editor shows the feature step by step, the real photo edited in Redlamp follows, and the video ends with "Download free" and "redlamp.app". They are made in the promo studio (`.cursor/skills/redlamp-promo-studio/SKILL.md`) and run from the social room (`.cursor/skills/redlamp-social/SKILL.md`).
 
 The captions, posting times and alt text are in [`docs/social/posts.json`](../social/posts.json). The social room shows them, and the Instagram publisher posts from them, so the file is the one place they change.
 
@@ -11,7 +11,7 @@ The captions, posting times and alt text are in [`docs/social/posts.json`](../so
 | Goal | Downloads of Redlamp from redlamp.app, read as release downloads per day from the GitHub API, beside each post's views and profile visits. |
 | Audience | Lightroom users, both those who edit every day and those who edit now and then, and people who use phone filter apps or other photo editors. |
 | Platforms | Instagram Reels and TikTok, 9:16 at 1080 × 1920. |
-| Length | 19.2 s: 8 bars at 100 BPM. |
+| Length | 25.9 s: Redlamp's opener (6.7 s), then 8 bars at 100 BPM (19.2 s). |
 | The message | One feature per video, shown so that it is understood at once. |
 | The ask | Download free at redlamp.app. The captions add "link in bio". |
 | Tone | Simple and direct (the owner, 10 October 2026). The words say what is on screen. |
@@ -34,7 +34,9 @@ The owner asked for simple, direct language: nothing that reads as written by AI
 
 ## The format
 
-Every video follows one cue sheet, `video/src/features/cues.json`: 100 BPM at 30 fps, a beat every 18 frames, a bar every 2.4 s.
+Every video opens with Redlamp's opener, as the Introducing film does, so the series looks and sounds like the rest of Redlamp's videos (the owner, 10 October 2026): the film's opening scene, in which the safelight warms up in the dark, "In the darkroom, there's one light you can work by." appears, and the lens settles into the logo over "A raw photo editor for the Mac.", with the short cut's own sound under it, for the 6.7 s the short holds it. The episode cuts in on its first hit.
+
+The episode follows one cue sheet, `video/src/features/cues.json`: 100 BPM at 30 fps, a beat every 18 frames, a bar every 2.4 s. The times below are the episode's own, from its first frame, 6.7 s into the video.
 
 | Bar | Time | What happens |
 | --- | --- | --- |
@@ -49,7 +51,7 @@ Every video follows one cue sheet, `video/src/features/cues.json`: 100 BPM at 30
 - **Safe zones:** nothing to read in the top 260 px, the bottom 480 px, or the right-hand 160 px between 700 and 1600 px down, where TikTok and Instagram put their own controls.
 - **Header:** a strip with Redlamp's safelight mark and the feature: REDLAMP · SUBJECT MASK.
 - **Values on screen** are the real edit's own: the pixel sliders move to the values the real result was made with, so the two match.
-- **Covers:** the first frame, which carries the hook. Its words sit inside the middle 3:4 of the frame, which Instagram's profile grid shows.
+- **Covers:** the episode's first frame, which carries the hook, 6.7 s into the video (each post's `coverMs`, 6667), chosen as the cover on both platforms. Its words sit inside the middle 3:4 of the frame, which Instagram's profile grid shows.
 - **The real results** are Redlamp's own renders of the owner's photos, from the `redlamp` CLI, or captures of the app from `scripts/capture-promo.sh`. What each episode needs, and what already exists, is listed under [Real results](#real-results).
 
 ### How a video is built
@@ -60,7 +62,7 @@ E01 set the template, and every episode is built the same way in `video/`:
 - **The real result**, through `scripts/features/results.py`, is rendered by the `redlamp` CLI (`$REDLAMP_CLI`, or `build/cli/redlamp`) from the owner's sidecar beside the raw: AFTER with his edit, BEFORE with its crop alone, and each step of a drag with the sliders moved so far, so the pixel photo changes as the real one does. Renders are kept in `public/features/<episode>/results/` and made again only when something that went into them changes.
 - **The frames**, `npm run features-frames -- --episode e01`: every frame drawn by pixelkit at 216 × 384, or at 1080 × 1920 while the real photo is on screen, where it shows at full resolution through the ordered dither that resolves it out of the pixel photo. A picture that comes out the same as another is written once, and `frames.json` lists each hook's frames.
 - **The score**, `npm run features-score -- --episode e01`: the theme in the chosen arrangement with the episode's sounds on their frames, with `score.json` for the storyboard sheet and a cue sheet of every sound for `scripts/score-report.py`.
-- **The composition**, `FeatureVideo` in Remotion Studio's Features folder, plays them, with `episode`, `hook` and `guides` props.
+- **The composition**, `FeatureVideo` in Remotion Studio's Features folder, plays the opener (`src/introducing/scenes/Safelight.tsx`, as long as the short holds it) and then the episode, with `episode`, `hook`, `score`, `opener` and `guides` props. With `opener` off it plays the episode alone, on its cue sheet's own frames, as `scripts/storyboard.mjs` and the review stills expect.
 - **The render**, `npm run features -- --episode e01 [--hook a] [--draft]`, writes `~/src/redlamp-social/renders/<the post's file>` and its cover, once the owner has approved the cut. A draft is half the size, named `…-draft.mp4`.
 
 ## Sound
@@ -71,7 +73,8 @@ One theme for the series, in the same shape in every video so the series sounds 
 - **Arrangements:** two for the owner to choose between against the picture, in `video/scripts/features-theme.py`. Drive is electronic: a four-on-the-floor kick, a rolling bass that opens through the build, offbeat chord stabs and an arpeggio from the drop, and the riff on two detuned saws. Pulse is cinematic, after the star promo: spiccato strings, a ticking watch, taiko, a film snare, a Shepard tone into the drop and the trailer's low brass on it. Drive is the lean. Their sketches are `video/public/features/theme-drive.wav` and `theme-pulse.wav`.
 - **Sync:** every click, key and slider move on screen has its sound on the same frame. The sound comes from the cue sheet, as the picture does.
 - **Each video's score** is the chosen arrangement, drive until the owner picks, with the video's own clicks, ticks and keys on the frames their pictures land on (`video/scripts/features-score.py`). It writes every arrangement, and the composition's `score` prop plays any of them, so they can be compared in Studio.
-- **Mastering:** each video is mastered to −14 LUFS integrated with a true peak at or under −1 dBFS, with no more than about a quarter of its energy under 60 Hz, which phones don't play.
+- **The opener's sound** is the Introducing short's own score under its opening scene (`scripts/score.py short`), kept as far below the episode as it sits below the rest of the short (3 LU), written by `video/scripts/features-score.py` to `video/public/features/opener.wav`.
+- **Mastering:** each video, opener and all, is mastered to −14 LUFS integrated with a true peak at or under −1 dBFS, so the episode's score sits at about −13.5 LUFS; no more than about a quarter of the energy is under 60 Hz, which phones don't play.
 - **Audio name:** on both platforms, "Redlamp theme".
 
 ## The episodes
@@ -404,6 +407,7 @@ The first cut, for the owner's review in Studio, with hook A or B and the stand-
 - **Picture:** every frame was drawn with no warning from the kit or the safe zones (179 pictures for 576 frames, both hooks), and stills with the `guides` prop show every word clear of the apps' zones in each bar. Captions are 70 px tall. The hook's seven words are on screen for 2.4 s, under the 2.6 s the checklist's rule of thumb asks for; DOWNLOAD FREE / REDLAMP.APP stays 3.6 s. The storyboard sheet (`out/features/e01-storyboard.jpg`) shows every cue's frame over the score's level.
 - **Sound, first cut (felt):** −14.0 LUFS integrated and a true peak of −1.8 dBFS by ffmpeg; the result's bar the loudest (−11.9 LUFS).
 - **Sound, second cut:** by ffmpeg, drive measures −14.0 LUFS with a true peak of −1.2 dBFS, and pulse −13.9 LUFS and −1.1 dBFS. Both climb to the drop, the loudest bar: drive from −18.8 LUFS under the hook to −12.0 on the drop, pulse from −20.8 to −11.2. Under 60 Hz sits 23% of drive's energy and 22% of pulse's, with 33% and 22% in the mids. Above 2.5 kHz the presses, ticks, keys and the flip land within 5 ms of their beats; two button releases are covered by a hat or the watch's tick on the same sixteenth. In both drafts the audio is 0 ms from the score.
+- **With the opener:** 25.9 s. The episode's score starts exactly 200 frames (6667 ms) in, by cross-correlating each draft's audio with it. The whole measures −14.1 LUFS in both drafts by ffmpeg, with true peaks of −1.5 dBFS (drive) and −1.4 dBFS (pulse). Stills through the opener show it as the short has it, every word clear of the apps' zones, and a hard cut to the hook at 6.7 s.
 - **Not checked:** how it plays at full speed and size, and how the ticks and the key sit in the mix on a phone. Those are for the owner's viewing in Studio.
 
 ## For the owner to decide

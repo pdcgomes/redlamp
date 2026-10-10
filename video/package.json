@@ -22,6 +22,7 @@
     "pixelkit": "node scripts/pixelkit.mjs",
     "pixelkit-frames": "python3 scripts/pixelkit-frames.py --hooks",
     "pixelkit-score": "python3 scripts/pixelkit-score.py",
+    "prefeatures": "npm run sync-assets",
     "features": "node scripts/features.mjs",
     "features-frames": "python3 scripts/features-frames.py",
     "features-score": "python3 scripts/features-score.py",
