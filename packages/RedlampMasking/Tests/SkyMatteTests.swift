@@ -95,6 +95,40 @@ struct SkyMatteTests {
         #expect(matte[200, 260] < 20, "the ground: \(matte[200, 260])")
     }
 
+    /// A leaning trunk 20 px wide, its edges blurred as a lens blurs them (sigma 0.8 px), so the
+    /// pixels just inside it hold a little sky. The trunk's colour learnt from those holds some
+    /// too, and every pixel at its edge would come out less sky than it is.
+    @Test func `pixels at a trunk's blurred edge are as much sky as they are`() throws {
+        let (width, height, ground) = (400, 300, 220)
+        func trunk(_ x: Int, _ y: Int) -> Float {
+            guard y < ground else { return 1 }
+            guard y >= 40 else { return 0 }
+            let left = 178 + 0.02 * Double(y)
+            let spread = 0.8 * 2.squareRoot()
+            let share = (0 ..< 8).map { sample in
+                let u = Double(x) + (Double(sample) + 0.5) / 8
+                return (erf((u - left) / spread) - erf((u - left - 20) / spread)) / 2
+            }
+            return Float(share.reduce(0, +) / 8)
+        }
+        let photo = try image(width: width, height: height) { x, y in mix(Self.bark, Self.sky, trunk(x, y)) }
+        let coarse = GrayMask(width: width / 4, height: height / 4, pixels: (0 ..< width * height / 16).map { index in
+            trunk(index % (width / 4) * 4 + 2, index / (width / 4) * 4 + 2) > 0.5 ? 0 : 255
+        })
+        let matte = SkyMatte.refine(coarse, image: photo)
+        var errors: [Float] = []
+        for y in 60 ..< 200 {
+            for x in 170 ..< 210 {
+                let sky = 1 - trunk(x, y)
+                if sky > 0.15, sky < 0.5 {
+                    errors.append(Float(matte[x, y]) / 255 - sky)
+                }
+            }
+        }
+        let bias = errors.reduce(0, +) / Float(errors.count)
+        #expect(abs(bias) < 0.015, "pixels mostly trunk come out \(bias) off in sky, over \(errors.count)")
+    }
+
     /// A foreground the colour of the sky can't be told from it: the coarse mask stays.
     @Test func `where sky and foreground look alike, the coarse mask stays`() throws {
         let width = 200

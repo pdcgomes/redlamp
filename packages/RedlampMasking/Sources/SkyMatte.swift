@@ -7,10 +7,11 @@ import simd
 /// Sky coverage per pixel from a coarse sky mask: every twig, leaf gap, wire and hair edge.
 ///
 /// Sky is smooth, so the sky colour behind any pixel can be estimated from the sure sky around
-/// it, and the foreground's from the sure foreground. A pixel's coverage is then where its colour
-/// lies between the two in linear light, where light mixes: blue-screen matting with a known,
-/// smoothly varying backing (Smith and Blinn, 1996), the colours spread by pull-push (Gortler et
-/// al., 1996). Solved: an uncertain band around the coarse edge; sky-coloured pixels further into
+/// it, and the foreground's from the sure foreground clear of the edge (within a pixel or two of
+/// it, every pixel holds some sky). A pixel's coverage is then where its colour lies between the
+/// two in linear light, where light mixes: blue-screen matting with a known, smoothly varying
+/// backing (Smith and Blinn, 1996), the colours spread by pull-push (Gortler et al., 1996).
+/// Solved: an uncertain band around the coarse edge; sky-coloured pixels further into
 /// the foreground that connect to the sky (a crown the coarse mask cut out whole); and, inside
 /// the coarse sky, pixels clearly not sky (twigs and wires the model never saw). Where the two
 /// colours are too close to tell apart, the coarse mask stays.
@@ -32,6 +33,13 @@ public enum SkyMatte {
     static let walledOffLine: Float = 0.12
     /// The coarse sky above which the models saw some: half a step of an 8-bit mask.
     static let walledPrior: Float = 0.5 / 255
+    /// Pixels more sky than this hold some; the foreground's colour is learnt only from pixels
+    /// more than `clearance` pixels from any of them.
+    static let mixed: Float = 0.15
+    static let clearance = 2
+    /// A colour within `start` of either end of the line from the foreground's colour to the sky's
+    /// is noise on a pure pixel; from `end` in, its place on the line is its coverage.
+    static let deadZone: (start: Float, end: Float) = (0.04, 0.12)
 
     /// What each pixel takes part in.
     struct Regions {
@@ -98,14 +106,20 @@ public enum SkyMatte {
                 return regions.near[index] || (regions.far[index] && edged[index]) || intrusion
                     ? refined[index] : mask[index]
             }
-            // The next pass learns the colours from what this one found.
+            // The next pass learns the colours from what this one found: the foreground's only from
+            // pixels clear of any that hold some sky. The nearest to an edge hold a little, and would
+            // teach it a colour short of the foreground's.
             let solved = result
             Parallel.fill(&sky) { index in
                 (solved[index] > 0.97 && confidence[index] > 0.5)
                     || (mask[index] > 0.9 && !regions.near[index] && solved[index] > 0.9)
             }
+            var holdsSky = [Bool](repeating: false, count: count)
+            Parallel.fill(&holdsSky) { solved[$0] > Self.mixed }
+            let besideSky = RemovalRegion.dilated(holdsSky, width: width, height: height, radius: Self.clearance)
             Parallel.fill(&solid) { index in
-                solved[index] < 0.03 && (confidence[index] > 0.5 || !(regions.near[index] || regions.far[index]))
+                solved[index] < 0.03 && !besideSky[index]
+                    && (confidence[index] > 0.5 || !(regions.near[index] || regions.far[index]))
             }
         }
         return GrayMask(width: width, height: height, coverage: result)
@@ -174,7 +188,7 @@ public enum SkyMatte {
                             let difference = behind.at(index) - f
                             let span = simd_length_squared(difference)
                             let projected = simd_dot(linear[index] - f, difference) / max(span, 1e-8)
-                            let alpha = min(max((projected - 0.04) / 0.92, 0), 1)
+                            let alpha = Self.coverage(projected)
                             let sure = min(
                                 max((span.squareRoot() - tolerance.low) / (tolerance.high - tolerance.low), 0),
                                 1,
@@ -189,6 +203,21 @@ public enum SkyMatte {
             }
         }
         return (refined, confidence, offLine)
+    }
+
+    /// Coverage from where a colour lies on the line from the foreground's colour (0) to the
+    /// sky's (1): nought or whole within `deadZone.start` of either end, the same from
+    /// `deadZone.end` in, and eased between by a cubic that meets both with the same slope.
+    static func coverage(_ projected: Float) -> Float {
+        func eased(_ p: Float) -> Float {
+            let (start, end) = deadZone
+            guard p > start else { return 0 }
+            guard p < end else { return p }
+            let t = (p - start) / (end - start)
+            return end * t * t * (3 - 2 * t) + (end - start) * t * t * (t - 1)
+        }
+        let p = min(max(projected, 0), 1)
+        return p < 0.5 ? eased(p) : 1 - eased(1 - p)
     }
 
     // MARK: - Colours

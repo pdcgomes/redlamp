@@ -119,7 +119,7 @@ struct MatteQualityTests {
             SkyMatte.refine(coarse, image: image), truth: truth,
             thin: branches.indices.map { branches[$0] > 0.5 && $0 / width < ground },
         )
-        #expect(result.band < 0.025, "error along the branches: \(result.band)")
+        #expect(result.band < 0.02, "error along the branches: \(result.band)")
         #expect(result.recall > 0.98, "branches kept out of the sky: \(result.recall)")
     }
 
