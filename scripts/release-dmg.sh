@@ -5,11 +5,11 @@
 # runs from the image, or from Downloads, where a zip unpacks. Its window takes its picture and
 # Finder's layout from scripts/dmg (background.tiff and DS_Store; scripts/dmg/layout.sh).
 #
-# Whatever runs the release can tag each file it writes with com.apple.provenance. A disk image
-# keeps the tags, Finder copies them into /Applications, and Gatekeeper on macOS 26 then refuses
-# the app (#333). So the app is copied into a read-write image and cleared of extended attributes
-# there, and the compressed image is converted from it block for block, so nothing in it is
-# written again.
+# The build tags the app's files with com.apple.provenance. A disk image keeps the tags, Finder
+# copies them into /Applications, and Gatekeeper on macOS 26 then refuses the app (#333). Copied
+# into the image, the files kept their tags through ditto --noextattr and xattr -c (0.2.8's run),
+# so the app is unpacked into a read-write image from a zip that holds no attributes, and the
+# compressed image is converted from it block for block, so nothing in it is written again.
 #
 #   scripts/release-dmg.sh build/release/Redlamp.app build/release/Redlamp-<version>.dmg
 #
@@ -47,7 +47,8 @@ MOUNTED=1
 # The picture goes in first, as scripts/dmg/layout.sh puts it, and the window's layout last.
 mkdir "$MOUNT/.background"
 cp "$LAYOUT/background.tiff" "$MOUNT/.background/"
-ditto --norsrc --noextattr --noacl "$APP" "$MOUNT/$NAME"
+ditto -c -k --norsrc --noextattr --noacl --keepParent "$APP" "$WORK/app.zip"
+ditto -x -k --norsrc --noextattr --noacl "$WORK/app.zip" "$MOUNT"
 ln -s /Applications "$MOUNT/Applications"
 cp "$LAYOUT/DS_Store" "$MOUNT/.DS_Store"
 xattr -crs "$MOUNT/$NAME" "$MOUNT/Applications" "$MOUNT/.background" "$MOUNT/.DS_Store"
