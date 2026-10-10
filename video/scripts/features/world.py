@@ -38,6 +38,13 @@ POSTS = json.loads((REPO / "docs/social/posts.json").read_text())
 # it; this one sits on the line over the bottom three rows, as a 5 × 7 comma does.
 FONTS["large"]._glyphs = {**FONTS["large"]._glyphs, ",": "../../../../.#/.#/#."}
 FONTS["large"]._cache.pop(",", None)
+# The Mac's own keys, which the fonts don't have: Command, Return and Shift, and Option in the small font.
+FONTS["small"]._glyphs = {**FONTS["small"]._glyphs, "⌘": "##.##/#####/.#.#./#####/##.##",
+                          "↵": "...#/...#/.#.#/####/.#..", "⇧": "..#../.#.#./##.##/.#.#./.###.",
+                          "⌥": "##.##/..#../..#../...#./...##"}
+FONTS["large"]._glyphs = {**FONTS["large"]._glyphs, "⌘": ".#...#./#.#.#.#/.#####./..#.#../.#####./#.#.#.#/.#...#.",
+                          "↵": "....#/....#/..#.#/.##.#/#####/.##../..#..",
+                          "⇧": "...#.../..#.#../.#...#./###.###/..#.#../..#.#../..###.."}
 
 # ---------------------------------------------------------------- the grid
 
@@ -950,10 +957,13 @@ def dusk(width, height):
 
 def edited(lin, values):
     """A scene as a raw opens it, flat and dark, then developed by Basic sliders' values (EXPOSURE,
-    HIGHLIGHTS, SHADOWS, VIBRANCE, by label) in linear light. A drawing of what they do, for pixel art."""
+    CONTRAST, HIGHLIGHTS, SHADOWS, VIBRANCE, by label) in linear light. A drawing of what they do, for
+    pixel art: Contrast steepens each channel about middle grey, as a tone curve does."""
     grey = lin @ [0.2126, 0.7152, 0.0722]
     v = (grey[..., None] + (lin - grey[..., None]) * 0.5) * 0.4
     v = v * 2 ** values.get("EXPOSURE", 0)
+    if values.get("CONTRAST"):
+        v = 0.18 * (v / 0.18) ** (1 + values["CONTRAST"] / 100)
     v = v * (1 + values.get("HIGHLIGHTS", 0) / 100 * 0.6 * np.clip((v - 0.3) / 0.7, 0, 1))
     v = np.clip(v * (1 + values.get("SHADOWS", 0) / 100 * 0.7 * np.clip(1 - v / 0.22, 0, 1)), 0, 1)
     grey = v @ [0.2126, 0.7152, 0.0722]

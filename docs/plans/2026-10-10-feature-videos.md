@@ -360,11 +360,11 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The dashboard: a pixel-art photo as opened, its histogram and level, and the Basic panel's sliders as meters at zero. | COMMAND PALETTE (the title, held from the opener) | A deep hit on the first frame, then the track's first bar. |
-| 2 | 2.4 s | ⌘ and K go down on the beat as keycaps, and the palette opens over the photo: its search field, actions with their shortcuts beside them, sliders with their values, and the pickers. | PRESS COMMAND K | A key click for each key; the riff starts. |
-| 3 | 4.8 s | E, X and P are typed, one a beat; the list narrows to EXPOSURE with its value, above the actions that match. | EVERY SLIDER / AND ACTION | A key click a letter. |
-| 4 | 7.2 s | ↵ shrinks the palette to a slider bar over the photo; → steps EXPOSURE up a beat at a time, and the photo brightens. | STEP IT WITH / THE ARROW KEYS | A key click and a slider tick a beat; the full beat comes in. |
-| 5 | 9.6 s | ↓ moves the bar to CONTRAST, and 20 is typed and set with ↵; a card: ONE HISTORY STEP. | NEXT SLIDER, / TYPE A VALUE | Key clicks on the beats; toms fall into the stop. |
+| 1 | 0.0 s | The dashboard: a pixel-art tulip field as opened (TULIPS.NEF), its histogram and level, and the Basic panel's Exposure, Contrast and Highlights at zero. | COMMAND PALETTE (the title, held from the opener) | A deep hit on the first frame, then the track's first bar. |
+| 2 | 2.4 s | ⌘ and K go down on the beat as keycaps in a Keyboard panel, which takes the Basic panel's place, and the palette unrolls over the photo: its search field, pickers, sliders with their values, and actions with their shortcuts beside them. | PRESS COMMAND K | A key click for each key; the riff starts. |
+| 3 | 4.8 s | E, X and P are typed, one a beat; the list narrows to EXPOSURE with its value, above the actions that match (Calibrate from Target, Export…, Export with Previous), as the app ranks them. | EVERY SLIDER / AND ACTION | A key click a letter. |
+| 4 | 7.2 s | ↵ rolls the palette up into a slider bar over the photo; with ⇧ held, → steps EXPOSURE up half a stop a beat, to +1.50, and the field brightens. A plain → steps 0.05, too little to show in pixel art. | STEP IT WITH / THE ARROW KEYS | A key click and a slider tick a beat; the full beat comes in. |
+| 5 | 9.6 s | ↓ moves the bar to CONTRAST, and 20 is typed and set with ↵; a HISTORY card shows the three presses as one step. | NEXT SLIDER, / TYPE A VALUE | Key clicks on the beats; toms fall into the stop. |
 | 6 | 12.0 s | The photo fills the stage as opened, then develops into the edit at 13.2 s. | ALL FROM THE / KEYBOARD | The drop and the sting. |
 | 7 | 14.4 s | The end card. | A COMMAND PALETTE / FOR YOUR PHOTOS, then DOWNLOAD FREE / REDLAMP.APP | The track's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
