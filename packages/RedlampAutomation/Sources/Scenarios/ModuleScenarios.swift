@@ -137,7 +137,7 @@
 
     enum ModuleScenarios {
         static let all: [Scenario] = [switching, picker, grid, palette] + GridScenarios.all + FilterScenarios.all
-            + CullingScenarios.all
+            + CullingScenarios.all + CompareScenarios.all
 
         static let switching = Scenario(
             "modules.switching",
@@ -161,9 +161,10 @@
             try app.expect(try app.exists(.identifier("library.grid")), "The grid isn't on screen")
             try app.expect(try app.main(state) == before, "Library shows another source or selection")
             try app.expect(try app.main { $0.info?.url } == open, "Develop let go of its photo in Library")
-            for action in [ShortcutAction.loupeView, .compareView, .surveyView] {
+            // C comes last: Compare keeps the selection to the two photos it compares.
+            for (action, view) in [(ShortcutAction.loupeView, LibraryView.loupe), (.surveyView, .survey)] {
                 try app.press(action)
-                try app.wait("\(action.title): the loupe") { $0.module == .library && $0.libraryView == .loupe }
+                try app.wait("\(action.title): \(view)") { $0.module == .library && $0.libraryView == view }
                 try app.press(KeyCombo(.escape))
                 try app.wait("Esc: the grid again") { $0.libraryView == .grid }
             }
@@ -185,8 +186,12 @@
             try app.choose(.developModule)
             try app.wait("Develop") { $0.module == .develop }
             app.covered(.feature("library.modules"), via: .key)
+            try app.press(.compareView)
+            try app.wait("C: Compare") { $0.module == .library && $0.libraryView == .compare }
+            try app.press(KeyCombo(.escape))
+            try app.wait("Esc: the grid") { $0.libraryView == .grid }
             try app.main { $0.deselectOtherPhotos() }
-            try app.settle()
+            try app.backToDevelop()
         }
 
         static let picker = Scenario(
