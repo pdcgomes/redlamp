@@ -165,7 +165,7 @@ public struct FilterPreset: Sendable, Hashable, Codable, Identifiable {
         ("Rejected", LibraryFilter(text: "flag:reject", sections: [.attribute])),
         ("Edited", LibraryFilter(text: "edited:yes", sections: [.attribute])),
         ("Raw Files", LibraryFilter(text: "ext:raw", sections: [.attribute])),
-        ("Missing or Offline", LibraryFilter(text: "missing:yes OR offline:yes", sections: [.text])),
+        ("Offline", LibraryFilter(text: "offline:yes", sections: [.attribute])),
         (
             "Location Columns",
             LibraryFilter(sections: [.metadata], columns: [.folder, .date, .keyword, .camera]),

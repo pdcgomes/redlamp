@@ -94,6 +94,10 @@ extension ShortcutAction {
         ],
         .keepAnyway: ["library health", "keep", "dismiss", "ignore", "not a duplicate", "proposal", "library"],
         .listAgain: ["library health", "kept anyway", "take back", "list again", "undismiss", "library"],
+        .locateMissingPhoto: [
+            "library health", "missing", "find", "relink", "moved", "deleted", "where", "library",
+        ],
+        .removeMissingPhotos: ["library health", "missing", "remove", "forget", "deleted", "gone", "library"],
         .beforeAfter: ["compare", "before", "after", "original"],
         .nextCompareLayout: ["compare", "side by side", "split", "layout"],
         .previousCompareLayout: ["compare", "side by side", "split", "layout"],
@@ -260,6 +264,8 @@ extension ShortcutAction {
         case .acceptHealthProposals: "checkmark.rectangle.stack"
         case .keepAnyway: "checkmark.seal"
         case .listAgain: "arrow.uturn.backward.circle"
+        case .locateMissingPhoto: "magnifyingglass"
+        case .removeMissingPhotos: "minus.circle"
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout: "rectangle.2.swap"
         case .toggleZoom: "1.magnifyingglass"
         case .zoomIn: "plus.magnifyingglass"

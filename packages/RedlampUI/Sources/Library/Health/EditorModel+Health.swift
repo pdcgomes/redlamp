@@ -86,8 +86,10 @@ public extension EditorModel {
         return true
     }
 
+    /// Missing photos aren't kept anyway: they're found again or removed.
     internal var canKeepAnyway: Bool {
-        !isModalDialogOpen && shownHealthCheck != nil && selection != nil && healthProposals.offer?.hasFindings == true
+        !isModalDialogOpen && shownHealthCheck.map { $0 != .missing } == true && selection != nil
+            && healthProposals.offer?.hasFindings == true
     }
 
     /// List Again in Library Health: what keeps `photo`, or the selection it's in, taken back from Kept Anyway, so the

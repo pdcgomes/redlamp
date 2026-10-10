@@ -45,7 +45,7 @@ public final class KeywordPainter {
     public var isAvailable: Bool {
         guard let model else { return false }
         return model.module == .library && !model.isModalDialogOpen && model.library.service?.isReady == true
-            && !model.library.showsRecentlyTrashed
+            && !model.library.showsRecentlyTrashed && !model.showsMissingPhotos
     }
 
     /// Takes the painter out, showing the grid, or puts it away; false when it can't come out.

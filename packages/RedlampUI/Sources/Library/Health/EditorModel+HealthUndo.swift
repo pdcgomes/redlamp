@@ -111,7 +111,7 @@ extension EditorModel {
     /// Takes `step` back, or makes it again, in the library's changes' turn.
     private func take(_ step: HealthStep, back: Bool, core: LibraryCore, health: LibraryHealth) async throws {
         switch step.kind {
-        case let .batch(check, photos, chosen):
+        case .batch, .remove, .relink:
             if back {
                 guard let batch = step.batch else { throw FileOperationError.nothingToUndo }
                 _ = try await core.change { () -> Result<FileOutcome, any Error> in
@@ -122,20 +122,19 @@ extension EditorModel {
                     }
                 }.get()
             } else {
-                let wanted = Set(photos)
+                let kind = step.kind
                 step.batch = try await core.change { () -> Result<UUID, any Error> in
                     do {
-                        let found = try await health.findings(check)
-                        let again = HealthFindings(check: check, findings: found.findings.filter {
-                            wanted.contains($0.photo)
-                        })
-                        return try await .success(health.run(health.plan(again, choosing: chosen)).batch)
+                        return try await .success(health.run(Self.plan(again: kind, health: health)).batch)
                     } catch {
                         return .failure(error)
                     }
                 }.get()
             }
             library.countFolders()
+            if case let .relink(relinks) = step.kind {
+                library.service?.look(at: Self.folders(of: relinks))
+            }
         case let .keptAnyway(entries), let .listedAgain(entries):
             let keeping = if case .keptAnyway = step.kind {
                 !back
@@ -154,6 +153,26 @@ extension EditorModel {
                     return .failure(error)
                 }
             }.get()
+        }
+    }
+
+    /// The batch that makes a step of `kind` again, from its check's findings now, for the same photos.
+    private nonisolated static func plan(
+        again kind: HealthStep.Kind,
+        health: LibraryHealth,
+    ) async throws -> HealthPlan {
+        switch kind {
+        case let .batch(check, photos, chosen):
+            let found = try await health.findings(check)
+            let wanted = Set(photos)
+            let again = HealthFindings(check: check, findings: found.findings.filter { wanted.contains($0.photo) })
+            return try await health.plan(again, choosing: chosen)
+        case let .remove(photos):
+            return try await health.planRemoval(photos, in: health.findings(.missing))
+        case let .relink(relinks):
+            return try await health.planRelink(relinks, in: health.findings(.missing))
+        case .keptAnyway, .listedAgain:
+            throw FileOperationError.nothingToUndo
         }
     }
 
@@ -181,7 +200,7 @@ extension EditorModel {
         case .listAgain: listAgain()
         case .undo where healthUndoIsNewest: undoHealth()
         case .redo where healthRedoIsNewest: redoHealth()
-        default: nil
+        default: performMissingShortcut(action)
         }
     }
 
@@ -192,7 +211,7 @@ extension EditorModel {
         case .keepAnyway: canKeepAnyway
         case .listAgain: canListAgain
         case .undo where healthUndoIsNewest, .redo where healthRedoIsNewest: true
-        default: nil
+        default: canPerformMissingShortcut(action)
         }
     }
 }
@@ -231,6 +250,10 @@ final class HealthStep {
     enum Kind {
         /// A batch carrying out `check`'s proposals for `photos`, those `chosen` among them chosen though listed apart.
         case batch(check: HealthCheck, photos: [Int64], chosen: Set<Int64>)
+        /// Missing photos taken out of the library (DEC-59).
+        case remove([Int64])
+        /// Missing photos relinked to the files they were found as (DEC-59).
+        case relink([PhotoRelink])
         /// Findings kept anyway, by what Keep Anyway added.
         case keptAnyway([KeptAnyway])
         /// What kept photos anyway, taken back by List Again.

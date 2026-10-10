@@ -48,7 +48,7 @@ extension LibraryGridView {
     private func beginDrag(_ press: PhotoPress, event: NSEvent) {
         let library = model.library
         let selection = model.photoSelection
-        let fromLibrary = library.service?.isReady == true && !library.showsRecentlyTrashed
+        let fromLibrary = library.service?.isReady == true && !library.showsRecentlyTrashed && !model.showsMissingPhotos
         let photos = selection.count > 1 && library.photoID(of: press.url).map(selection.contains) == true
             ? DraggedPhotos(
                 selection: selection, items: library.items, ids: library.photoIDs, source: library.rowSource,
@@ -116,7 +116,7 @@ extension LibraryGridView {
     private func keywordTarget(at location: NSPoint) -> KeywordTarget? {
         let library = model.library
         guard library.service?.isReady == true, library.isShownFromLibrary || model.librarySources.shown != nil,
-              !library.showsRecentlyTrashed
+              !library.showsRecentlyTrashed, !model.showsMissingPhotos
         else { return nil }
         let point = content.convert(location, from: nil)
         guard let index = gridLayout.item(at: point), index < shownCount, let row = row(ofItem: index),

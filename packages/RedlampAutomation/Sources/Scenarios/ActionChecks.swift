@@ -146,6 +146,11 @@
                     action: action,
                     unavailable: "needs a Library Health check with findings: checked on copies by library.health",
                 )
+            case .locateMissingPhoto, .removeMissingPhotos:
+                ActionCheck(
+                    action: action,
+                    unavailable: "needs photos missing from their folders: checked on copies by library.missing-photos",
+                )
             case .toggleStack, .stackPhotos, .unstackPhotos, .moveToStackTop, .openAllStacks, .closeAllStacks:
                 ActionCheck(
                     action: action,

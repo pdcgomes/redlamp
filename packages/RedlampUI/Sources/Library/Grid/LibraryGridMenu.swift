@@ -173,6 +173,17 @@ enum LibraryGridMenu {
             found.setAccessibilityIdentifier("library.menu.healthFinding")
             items.append(found)
         }
+        if offer.check == .missing {
+            let locate = item(ShortcutAction.locateMissingPhoto.title, key: nil, enabled: model.canLocateMissingPhoto) {
+                model.locateMissingPhoto(photo)
+            }
+            locate.setAccessibilityIdentifier("library.menu.\(ShortcutAction.locateMissingPhoto.rawValue)")
+            let remove = item(
+                ShortcutAction.removeMissingPhotos.title, key: nil, enabled: model.canRemoveMissingPhotos,
+            ) { model.removeMissingPhotos(photo) }
+            remove.setAccessibilityIdentifier("library.menu.\(ShortcutAction.removeMissingPhotos.rawValue)")
+            return items + [locate, remove]
+        }
         let check = HealthProposals.check(offer.check, pairs: model.librarySources.pairRule)
         let proposed = model.healthProposals.tally?.proposed ?? 0
         let title = proposed > 0

@@ -41,7 +41,7 @@ enum HealthWords {
                 + size
         case .damaged:
             return "\(number(count)) file\(count == 1 ? "" : "s"), \(size)"
-        case .pairs, .extensions:
+        case .pairs, .missing, .extensions:
             return "\(number(count)) photo\(count == 1 ? "" : "s"), \(size)"
         }
     }
@@ -62,6 +62,9 @@ enum HealthWords {
         case .damaged:
             "They can't be read, are empty, aren't images or end before their data does. Nothing is repaired, and "
                 + "each file's sidecar and .xmp go with it."
+        case .missing:
+            "Their files went from their folders outside Redlamp. Locate… finds each again, and Remove from Library "
+                + "takes it out."
         case .extensions:
             "Each gets the extension of the format it holds, as IMG_1.JPG holding HEIC becomes IMG_1.HEIC, its "
                 + "sidecar, .xmp and pair following."
@@ -163,6 +166,31 @@ enum HealthWords {
         "List \(number(photos)) Photo\(photos == 1 ? "" : "s") Again"
     }
 
+    /// Locate…'s offer of the others: "Relink the 3 other missing photos found beside it?"
+    static func relinkOthers(_ count: Int) -> String {
+        count == 1 ? "Relink the other missing photo found beside it?"
+            : "Relink the \(number(count)) other missing photos found beside it?"
+    }
+
+    /// Why: "IMG_0002.ARW and 2 others, missing from Shoot, are in Found under their names, with the same content."
+    static func foundBeside(_ names: [String], from folder: String, in found: String) -> String {
+        let first = names.first ?? ""
+        let named = names.count == 1 ? first : "\(first) and \(number(names.count - 1)) other\(names.count == 2 ? "" : "s")"
+        return "\(named), missing from \(folder), \(names.count == 1 ? "is" : "are") in \(found) under "
+            + "\(names.count == 1 ? "its name" : "their names"), with the same content."
+    }
+
+    /// Locate…'s alert when the file chosen isn't the photo: "IMG_0001.ARW wasn't relinked".
+    static func notRelinked(_ name: String) -> String {
+        "“\(name)” wasn't relinked"
+    }
+
+    /// Why, from what Locate… found: "The file chosen, “A.ARW”, can't be it: it isn't the same photo: its content
+    /// differs."
+    static func notRelinked(because problem: MissingLocation.Problem, file: String) -> String {
+        "The file chosen, “\(file)”, can't be it: \(problem)."
+    }
+
     /// What a batch that stopped did, in a sentence.
     static func failure(_ error: any Error) -> String {
         switch error as? HealthError {
@@ -182,7 +210,7 @@ enum HealthWords {
         switch check {
         case .duplicates: return one ? "copy" : "copies"
         case .damaged: return one ? "damaged file" : "damaged files"
-        case .extensions: return one ? "photo" : "photos"
+        case .missing, .extensions: return one ? "photo" : "photos"
         case .pairs:
             switch kinds {
             case [.jpeg]: return one ? "JPEG" : "JPEGs"

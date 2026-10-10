@@ -40,10 +40,10 @@ struct HealthMark: Hashable, Sendable {
         case .keep: (proposal, word) = (.keep, "Keep")
         case let .rename(name): (proposal, word) = (.rename, "→ ." + (name as NSString).pathExtension)
         case nil:
-            if case .wrongExtension = finding.reason {
-                (proposal, word) = (.none, "Name Taken")
-            } else {
-                (proposal, word) = (.none, damage ?? "Found")
+            switch finding.reason {
+            case .wrongExtension: (proposal, word) = (.none, "Name Taken")
+            case .missing: (proposal, word) = (.none, "Missing")
+            default: (proposal, word) = (.none, damage ?? "Found")
             }
         }
     }
@@ -69,10 +69,14 @@ struct HealthMark: Hashable, Sendable {
             }
             return "\(reason): left out of the batch, as \(why)"
         case .none:
-            if case .wrongExtension = finding.reason {
+            switch finding.reason {
+            case .wrongExtension:
                 return "\(reason): nothing is proposed, as its format's name is taken in its folder"
+            case .missing:
+                return "\(reason): Locate… finds it again, and Remove from Library takes it out"
+            default:
+                return "\(reason): nothing is proposed, as it isn't damaged"
             }
-            return "\(reason): nothing is proposed, as it isn't damaged"
         }
     }
 

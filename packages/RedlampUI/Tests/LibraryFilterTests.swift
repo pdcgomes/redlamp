@@ -637,7 +637,7 @@ extension LibraryFilterTests {
         filters.setText("sunset flag:pick rating>=3 label:red,blue camera:X-T5 offline:yes")
         let attributes = filters.attributes
         #expect(attributes.flags == [.pick] && attributes.rating == .init(comparison: .greaterOrEqual, stars: 3))
-        #expect(attributes.labels == [.color(.red), .color(.blue)] && attributes.offline && !attributes.missing)
+        #expect(attributes.labels == [.color(.red), .color(.blue)] && attributes.offline)
         #expect(FilterColumnRow.choice(in: filters.filter.rules, column: .camera)?.values == [.text("X-T5")])
         filters.toggle(.reject)
         #expect(filters.filter.text == "sunset flag:pick,reject rating>=3 label:red,blue camera:X-T5 offline:yes")
@@ -781,9 +781,6 @@ extension LibraryFilterTests {
         filters.clear()
         filters.toggle(.offline)
         #expect(filters.filter.text == "offline:yes")
-        filters.toggle(.missing)
-        try await eventually { model.items.isEmpty }
-        #expect(filters.filter.text == "offline:yes missing:yes", "nothing is missing")
         try await core.index.write { try $0.setOffline(false, onVolume: volume, uuid: uuid) }
         try await core.live.photosChanged(core.engine.photosWithChangedState())
         try await filtered(model, "-offline:yes")

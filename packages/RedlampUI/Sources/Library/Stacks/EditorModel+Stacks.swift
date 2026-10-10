@@ -146,6 +146,7 @@ public extension EditorModel {
     /// A click on a cell's stars, flag, label or mark, or its context menu: `change` on the selection when the cell
     /// is in it, else on every photo the cell stands for, as `cull(_:from:)` does for a photo.
     func cull(_ change: CullingChange, fromCell photo: URL) {
+        guard !showsMissingPhotos else { return }
         guard module == .library, let id = library.photoID(of: photo), let stacked = libraryViews.stacks?.list,
               !photoSelection.contains(id), photo != selection
         else { return cull(change, from: photo) }

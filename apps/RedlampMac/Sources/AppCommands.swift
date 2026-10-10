@@ -101,6 +101,8 @@ struct AppCommands: Commands {
         item(.putBackBatch)
         item(.keepAnyway)
         item(.listAgain)
+        item(.locateMissingPhoto)
+        item(.removeMissingPhotos)
         mouseItem(.renamePhotos)
         item(.moveToFolder)
         item(.copyToFolder)

@@ -4,9 +4,9 @@ import RedlampDocument
 import RedlampLibrary
 
 /// The filter bar's Attribute section, as Lightroom Classic's: flags, the rating with its comparison,
-/// colour labels, edited or not, kinds of file, marked photos, missing, offline and damaged ones (LIB-40),
-/// and the moments without a pick (LIB-41). Each button sets its field's filter in the query, which the
-/// text shows.
+/// colour labels, edited or not, kinds of file, marked photos, offline and damaged ones (LIB-40), and the
+/// moments without a pick (LIB-41). Each button sets its field's filter in the query, which the text shows.
+/// Missing photos have none: only Library Health's Missing check lists them (DEC-59).
 final class FilterAttributeRow: NSView {
     private let model: EditorModel
     private var tracker: Tracker?
@@ -19,7 +19,6 @@ final class FilterAttributeRow: NSView {
     private let unedited: FilterToggle
     private let kinds: [PhotoRecord.Kind: FilterToggle]
     private let marked: FilterToggle
-    private let missing: FilterToggle
     private let offline: FilterToggle
     private let damaged = FilterToggle(
         title: "Damaged", identifier: "library.filter.damaged",
@@ -55,11 +54,6 @@ final class FilterAttributeRow: NSView {
         }
         self.kinds = kinds
         marked = FilterToggle(title: "Marked", identifier: "library.filter.marked", tip: "Marked (B)")
-        missing = FilterToggle(
-            title: "Missing",
-            identifier: "library.filter.missing",
-            tip: "Missing from their folders",
-        )
         offline = FilterToggle(title: "Offline", identifier: "library.filter.offline", tip: "On volumes not connected")
         super.init(frame: .zero)
         for (choice, toggle) in flags {
@@ -81,7 +75,6 @@ final class FilterAttributeRow: NSView {
             toggle.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(kind) }
         }
         marked.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.marked) }
-        missing.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.missing) }
         offline.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.offline) }
         damaged.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.damaged) }
         unpicked.onPress = { [weak self] _ in self?.model.libraryFilters?.toggle(.unpickedMoment) }
@@ -94,7 +87,7 @@ final class FilterAttributeRow: NSView {
             (filterLabel("Label"), FilterAttributes.LabelChoice.all.compactMap { labels[$0] }),
             (filterLabel("Edit"), [edited, unedited]),
             (filterLabel("Kind"), FilterAttributes.offeredKinds.compactMap { kinds[$0] }),
-            (filterLabel("Status"), [marked, missing, offline, damaged]),
+            (filterLabel("Status"), [marked, offline, damaged]),
             (filterLabel("Moment"), [unpicked]),
         ]
         for group in groups {
@@ -163,7 +156,6 @@ final class FilterAttributeRow: NSView {
             toggle.isOn = attributes.kinds.contains(kind)
         }
         marked.isOn = attributes.marked
-        missing.isOn = attributes.missing
         offline.isOn = attributes.offline
         damaged.isOn = attributes.damaged
         unpicked.isOn = attributes.unpickedMoments

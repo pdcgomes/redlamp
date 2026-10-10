@@ -127,10 +127,10 @@ public extension LibrarySources {
     }
 
     /// Whether the selection's photos can go in a collection now: there's a collection, and photos selected that
-    /// aren't in the Trash.
+    /// aren't in the Trash or missing.
     var canAdd: Bool {
         guard let model, model.library.service?.isReady == true, model.selection != nil else { return false }
-        return !model.library.showsRecentlyTrashed
+        return !model.library.showsRecentlyTrashed && !model.showsMissingPhotos
     }
 
     /// The index's IDs of the photos selected now, found when they're asked for: a source's are their own IDs,

@@ -124,7 +124,7 @@ public extension EditorModel {
     /// A click on a cell's stars, flag, label or mark, or a photo's context menu: `change` on `photo`, or on
     /// the selection when `photo` is in it.
     func cull(_ change: CullingChange, from photo: URL) {
-        guard module == .library, let row = library.index(of: photo) else { return }
+        guard module == .library, !showsMissingPhotos, let row = library.index(of: photo) else { return }
         let inSelection = library.photoID(of: photo).map(photoSelection.contains) == true || photo == selection
         if inSelection, library.items.readsOnRequest {
             cull(change, photos: selectedIDs)

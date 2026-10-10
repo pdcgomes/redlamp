@@ -400,6 +400,11 @@ extension LibraryService {
         core?.tracker.show(folders)
     }
 
+    /// Lists `folders` again, for what the library changed in them that the disk doesn't show.
+    func look(at folders: [URL]) {
+        core?.tracker.look(at: folders)
+    }
+
     /// What following the roots found.
     enum Progress: Sendable, Equatable {
         /// Change tracking caught up with these roots' volume.
@@ -447,7 +452,8 @@ extension LibraryService {
         case let .indexer(.volumeOffline(volume)):
             await report(.offline(rootPaths(onVolume: volume, core: core)))
         case let .indexer(.finished(summary)):
-            if summary.photosInserted + summary.photosUpdated + summary.photosMoved + summary.photosRemoved > 0 {
+            if summary.photosInserted + summary.photosUpdated + summary.photosMoved + summary.photosRemoved
+                + summary.photosMissing > 0 {
                 core.snapshotIfDue()
             }
         default:

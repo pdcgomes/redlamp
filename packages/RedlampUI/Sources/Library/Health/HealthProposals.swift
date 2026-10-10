@@ -131,6 +131,7 @@ public final class HealthProposals {
         case .duplicates: .duplicates
         case .pairs: .pairs(rule)
         case .damaged: .damaged
+        case .missing: .missing
         case .extensions: .extensions
         }
     }

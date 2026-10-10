@@ -124,7 +124,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case keywordSet9
     case importKeywords, exportKeywords, editCaptureTime
     case renamePhotos, moveToFolder, copyToFolder, keywordPainter, moveEditsAndMetadata
-    case acceptHealthProposals, keepAnyway, listAgain
+    case acceptHealthProposals, keepAnyway, listAgain, locateMissingPhoto, removeMissingPhotos
 
     // View
     case beforeAfter, nextCompareLayout, previousCompareLayout
@@ -189,7 +189,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
              .keywordSet8, .keywordSet9, .importKeywords, .exportKeywords, .editCaptureTime, .renamePhotos,
              .moveToFolder, .copyToFolder, .keywordPainter, .moveEditsAndMetadata, .acceptHealthProposals, .keepAnyway,
-             .listAgain:
+             .listAgain, .locateMissingPhoto, .removeMissingPhotos:
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
@@ -301,6 +301,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .acceptHealthProposals: "Accept Health Proposals…"
         case .keepAnyway: "Keep Anyway"
         case .listAgain: "List Again in Library Health"
+        case .locateMissingPhoto: "Locate…"
+        case .removeMissingPhotos: "Remove from Library"
         case .beforeAfter: "Before / After"
         case .nextCompareLayout: "Next Before / After Layout"
         case .previousCompareLayout: "Previous Before / After Layout"
@@ -459,7 +461,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .moveUpInStack: [.char("[", shift: true)]
         case .moveDownInStack: [.char("]", shift: true)]
         case .renamePhotos: [KeyCombo(.function(2))]
-        case .moveToFolder, .copyToFolder, .moveEditsAndMetadata, .acceptHealthProposals, .keepAnyway, .listAgain: []
+        case .moveToFolder, .copyToFolder, .moveEditsAndMetadata, .acceptHealthProposals, .keepAnyway, .listAgain,
+             .locateMissingPhoto, .removeMissingPhotos: []
         // Lightroom Classic's Enable Painting.
         case .keywordPainter: [.char("k", option: true, command: true)]
         case .beforeAfter: [.char("\\")]

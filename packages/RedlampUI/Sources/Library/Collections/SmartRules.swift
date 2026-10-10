@@ -289,8 +289,9 @@ public extension SmartRules {
 
     // swiftlint:enable cyclomatic_complexity
 
-    /// The fields a row offers, free text first.
-    static let fields: [Field] = [.text] + LibraryQuery.Field.allCases.map(Field.filter)
+    /// The fields a row offers, free text first; not whether a photo is missing, which only Library Health's Missing
+    /// check lists (DEC-59).
+    static let fields: [Field] = [.text] + LibraryQuery.Field.allCases.filter { $0 != .missing }.map(Field.filter)
 
     static func title(of field: Field) -> String {
         switch field {

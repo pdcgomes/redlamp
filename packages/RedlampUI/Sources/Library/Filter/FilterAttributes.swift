@@ -3,10 +3,10 @@ import RedlampDocument
 import RedlampLibrary
 
 /// What the Attribute section shows of a filter's rules, and the filters it writes back (LIB-18):
-/// flags, the rating and its comparison, colour labels, edited or not, kinds of file, marked, missing,
-/// offline and damaged photos (LIB-40), and the moments without a pick (LIB-41). Each is the first filter
-/// on its field at the top of the rules that keeps photos and that the section can show; anything else
-/// stays in the text as typed.
+/// flags, the rating and its comparison, colour labels, edited or not, kinds of file, marked, offline and
+/// damaged photos (LIB-40), and the moments without a pick (LIB-41). Each is the first filter on its field
+/// at the top of the rules that keeps photos and that the section can show; anything else stays in the
+/// text as typed, `missing:` among it, which no list but Library Health's Missing check finds (DEC-59).
 struct FilterAttributes: Equatable {
     var flags: Set<FlagChoice> = []
     var rating: Rating?
@@ -14,7 +14,6 @@ struct FilterAttributes: Equatable {
     var edited: Bool?
     var kinds: Set<PhotoRecord.Kind> = []
     var marked = false
-    var missing = false
     var offline = false
     /// `is:damaged` alone in a filter at the top.
     var damaged = false
@@ -105,7 +104,6 @@ struct FilterAttributes: Equatable {
             })
         }
         marked = Self.values(rules, .marked) == [.bool(true)]
-        missing = Self.values(rules, .missing) == [.bool(true)]
         offline = Self.values(rules, .offline) == [.bool(true)]
         let traits = rules.filters(on: .trait).map(\.filter)
         damaged = traits.contains(Self.filter(.damaged))
@@ -195,12 +193,11 @@ public extension LibraryFilters {
         edit { $0.replacingFilters(on: .ext, with: FilterAttributes.filter(kinds: kinds)) }
     }
 
-    /// Marked, missing or offline photos only, or not.
+    /// Marked or offline photos only, or not.
     func toggle(_ field: LibraryQuery.Field) {
         let attributes = attributes
         let on: Bool = switch field {
         case .marked: attributes.marked
-        case .missing: attributes.missing
         case .offline: attributes.offline
         default: true
         }

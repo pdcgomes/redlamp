@@ -36,6 +36,7 @@ public enum LibrarySource: Sendable, Hashable {
         case .health(.duplicates): "Exact Duplicates"
         case .health(.pairs): "Raw and JPEG Pairs"
         case .health(.damaged): "Damaged Files"
+        case .health(.missing): "Missing Photos"
         case .health(.extensions): "Wrong Extensions"
         case .unreadable: "Unreadable Files"
         case .keptAnyway: "Kept Anyway"
@@ -52,6 +53,7 @@ public enum LibrarySource: Sendable, Hashable {
         case .health(.duplicates): "plus.square.on.square"
         case .health(.pairs): "square.on.square"
         case .health(.damaged): "exclamationmark.triangle"
+        case .health(.missing): "questionmark.folder"
         case .health(.extensions): "textformat"
         case .unreadable: "eye.slash"
         case .keptAnyway: "checkmark.seal"
@@ -69,6 +71,9 @@ public enum LibrarySource: Sendable, Hashable {
         case .health(.duplicates): "Copies of a photo, byte for byte, found from their full SHA-256"
         case .health(.pairs): "The halves of raw and JPEG pairs the rule chosen for pairs would drop"
         case .health(.damaged): "Files that can't be read, are empty or end early"
+        case .health(.missing):
+            "Photos whose files went from their folders outside Redlamp, which no other list shows: Locate… finds one "
+                + "again, and Remove from Library takes it out"
         case .health(.extensions): "Files whose extension names another format than the one they hold"
         case .unreadable: "Files whose read failed: every other list leaves them out"
         case .keptAnyway: "The photos Library Health's checks found that were kept anyway"
@@ -94,6 +99,7 @@ public enum LibrarySource: Sendable, Hashable {
         case .health(.duplicates): .health(.duplicates)
         case .health(.pairs): .health(.pairs(rule))
         case .health(.damaged): .health(.damaged)
+        case .health(.missing): .health(.missing)
         case .health(.extensions): .health(.extensions)
         case .unreadable: .query(.filter(LibraryQuery.Filter(.unreadable, .equal, [.bool(true)])))
         case .keptAnyway: .keptAnyway
