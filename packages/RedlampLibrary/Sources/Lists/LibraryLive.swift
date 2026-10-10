@@ -112,6 +112,11 @@ public final class LibraryLive: Sendable {
         waiter?.resume(returning: nil)
     }
 
+    /// How many updates list `id` has taken, with the one waiting for it.
+    func handed(_ id: UUID) -> Int {
+        state.withLock { state in state.lists[id].map { $0.version + ($0.waiting == nil ? 0 : 1) } ?? 0 }
+    }
+
     /// Makes list `id` again from the store, and hands it over if it changed since the list the view
     /// took, `changed` naming the photos changed since the store was last read for it.
     private func refresh(_ id: UUID, changed: Set<Int64>) async {
@@ -290,6 +295,12 @@ public struct PhotoListUpdates: AsyncSequence, Sendable {
     /// Stops keeping the list current: the next update is nil.
     public func close() {
         live.close(id)
+    }
+
+    /// How many updates the list has been handed, counting one that waits to be taken: once it has taken that many,
+    /// it has every change `LibraryLive.settle` applied before this was read.
+    public var handed: Int {
+        live.handed(id)
     }
 
     public struct Iterator: AsyncIteratorProtocol {

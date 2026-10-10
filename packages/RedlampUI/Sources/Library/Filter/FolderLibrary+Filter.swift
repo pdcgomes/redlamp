@@ -49,6 +49,7 @@ extension FolderLibrary {
         positions = ordered.positions
         photoIDs = ids
         fromLibrary.keys = ordered.keys
+        fromLibrary.ahead = MovesAhead()
         scheduler.submit(.background) { withExtendedLifetime(replaced) {} }
         isListing = false
         isOpenFolderUnavailable = false

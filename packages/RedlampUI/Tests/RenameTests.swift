@@ -25,6 +25,9 @@ struct RenameTests {
         private(set) var service: LibraryService!
         private(set) var model: EditorModel!
         private(set) var diffs: [LibraryDiff] = []
+        /// The most photos shown after any change, and whether a photo was ever shown twice at once.
+        private(set) var mostShown = 0
+        private(set) var shownTwice = false
         private var observation: LibraryObservation?
 
         var root: URL {
@@ -76,7 +79,31 @@ struct RenameTests {
             }
             try #require(library.isShownFromLibrary && model.items.count == Self.photos.count)
             model.showModule(.library)
-            observation = library.observe { [weak self] diff in self?.diffs.append(diff) }
+            observation = library.observe { [weak self] diff in
+                guard let self else { return }
+                diffs.append(diff)
+                let ids = library.photoIDs
+                mostShown = max(mostShown, ids.count)
+                shownTwice = shownTwice || Set(ids).count < ids.count
+            }
+        }
+
+        /// Gives photos `ids` `rating` in the index, where it has them, and tells the library's lists, as change
+        /// tracking does once it has read their sidecars again.
+        func rate(_ ids: [Int64], _ rating: Int) async throws {
+            let core = try #require(service.core)
+            try await core.index.write { writer in
+                for id in ids {
+                    guard var row = try writer.photo(id: id) else { continue }
+                    row.rating = rating
+                    _ = try writer.upsertPhotos([row])
+                }
+            }
+            core.live.photosChanged(ids)
+        }
+
+        func rating(_ name: String) -> Int? {
+            library.item(for: url(name))?.metadata.rating
         }
 
         /// The sheet's model for the photos selected, with presets of its own, its photos read.
@@ -385,6 +412,83 @@ extension RenameTests {
         #expect(model.selection == folder.url("Party-2.JPG"))
         #expect(folder.diffs.allSatisfy { !$0.reset })
         #expect(try await folder.indexAgain() == 0, "the index follows without reading a photo again")
+    }
+
+    /// Renames IMG_0002 and IMG_0004 to Party-1 and Party-2, and returns their IDs and the names shown before.
+    private func renameTwo(_ folder: RenameFolder) async throws -> (ids: [Int64], names: [String]) {
+        let model = try #require(folder.model)
+        try folder.stopChangeTracking()
+        let names = folder.shownNames()
+        model.select(folder.url("IMG_0002.JPG"))
+        model.click(folder.url("IMG_0004.JPG"), toggling: true)
+        let sheet = try await folder.sheet()
+        sheet.setText("Party-{sequence}")
+        #expect(await model.rename(sheet) == nil)
+        await model.filesMade()
+        let ids = ["Party-1.JPG", "Party-2.JPG"].compactMap { model.library.photoID(of: folder.url($0)) }
+        try #require(ids.count == 2)
+        return (ids, names)
+    }
+
+    @Test func `a change the folder's list hands over late reaches the photos where an Undo shows them, never twice`(
+    ) async throws {
+        let folder = RenameFolder()
+        defer { folder.cleanUp() }
+        try await folder.open()
+        let model = try #require(folder.model)
+        let (ids, names) = try await renameTwo(folder)
+        // The list held back, as a busy index holds it: the photos' changed rows wait to reach the main thread.
+        let list = try #require(folder.library.fromLibrary.list)
+        await list.caughtUp()
+        let gate = Gate()
+        gate.hold()
+        list.holding.withLock { $0 = { await gate.pass() } }
+        defer { gate.release() }
+        try await folder.rate(ids, 4)
+        try await folder.eventually { gate.arrived > 0 }
+        try #require(gate.arrived > 0)
+
+        #expect(model.perform(.undo))
+        try await folder.eventually { folder.shownNames() == names }
+        #expect(folder.shownNames() == names, "Undo shows the names back at once")
+        list.holding.withLock { $0 = nil }
+        gate.release()
+        await model.filesMade()
+        #expect(folder.mostShown == names.count && !folder.shownTwice, "\(folder.mostShown) photos shown at most")
+        #expect(folder.shownNames() == names)
+        #expect(folder.rating("IMG_0002.JPG") == 4 && folder.rating("IMG_0004.JPG") == 4)
+    }
+
+    @Test func `a change the library makes while a batch waits its turn reaches the photos where it shows them, never twice`(
+    ) async throws {
+        let folder = RenameFolder()
+        defer { folder.cleanUp() }
+        try await folder.open()
+        let model = try #require(folder.model)
+        let (ids, names) = try await renameTwo(folder)
+        await folder.library.fromLibrary.list?.caughtUp()
+        // The library's changes held: the Undo's batch waits its turn, after the photos are shown where it puts them.
+        let core = try #require(folder.service.core)
+        let gate = Gate()
+        gate.hold()
+        defer { gate.release() }
+        let turn = Task { await core.change { await gate.pass() } }
+        try await folder.eventually { gate.arrived > 0 }
+
+        #expect(model.perform(.undo))
+        try await folder.eventually { folder.shownNames() == names }
+        #expect(folder.shownNames() == names, "Undo shows the names back at once")
+        // The index still has the new names: the photos' rows change there, as change tracking writes what it read.
+        try await folder.rate(ids, 4)
+        try await folder.eventually { folder.rating("IMG_0002.JPG") == 4 && folder.rating("IMG_0004.JPG") == 4 }
+        #expect(folder.mostShown == names.count && !folder.shownTwice, "\(folder.mostShown) photos shown at most")
+        #expect(folder.rating("IMG_0002.JPG") == 4, "the change reaches the photo where it's shown")
+        gate.release()
+        await turn.value
+        await model.filesMade()
+        #expect(folder.mostShown == names.count && !folder.shownTwice, "\(folder.mostShown) photos shown at most")
+        #expect(folder.shownNames() == names)
+        #expect(folder.rating("IMG_0002.JPG") == 4 && folder.rating("IMG_0004.JPG") == 4)
     }
 
     @Test func `undoing takes back the newest of a rename and a culling change first, and redoing makes them in turn`(

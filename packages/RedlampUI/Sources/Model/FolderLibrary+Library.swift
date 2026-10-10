@@ -24,6 +24,8 @@ struct FromLibrary {
     var settling = false
     /// The content keys of the photos shown from the library, for their thumbnails.
     var keys: [URL: ContentKey] = [:]
+    /// The photos a batch moves, shown where it puts them before the list has them there.
+    var ahead = MovesAhead()
     /// The opening whose list didn't deliver within `libraryPatience`: it stays listed here.
     var gaveUp: Int?
     /// The photos of the Library panel's entry or collection shown, as the query engine knows them, and their
@@ -199,6 +201,7 @@ extension FolderLibrary {
         }
         fromLibrary.awaitingFirst = false
         fromLibrary.keys = change.keys
+        fromLibrary.ahead = MovesAhead()
         let opened = fromLibrary.opened
         fromLibrary.opened = nil
         if let opened {
@@ -228,6 +231,7 @@ extension FolderLibrary {
         fromLibrary.awaitingFirst = false
         fromLibrary.indexIDs = true
         fromLibrary.keys = [:]
+        fromLibrary.ahead = MovesAhead()
         fromLibrary.rowReader = fromLibrary.list?.largeRows
         take(change)
         guard let opened = fromLibrary.opened else { return }
@@ -314,8 +318,10 @@ extension FolderLibrary {
         return kept
     }
 
-    /// LibraryLive's change to the open folder's photos, as a `LibraryDiff`: each photo looked up once.
+    /// LibraryLive's change to the open folder's photos, as a `LibraryDiff`: each photo looked up once, those a batch
+    /// moves where they're shown.
     private func apply(library change: LibraryFolderList.Change) {
+        let change = fromLibrary.ahead.isEmpty ? change : fromLibrary.ahead.translate(change)
         for url in change.removed {
             fromLibrary.keys[url] = nil
         }

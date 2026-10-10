@@ -13,12 +13,123 @@ struct LibraryMoves: Sendable {
         var from: URL
         /// Nil for a photo going where the folders shown don't reach.
         var to: URL?
+        /// The photo's ID in the index, for a move a batch is about to make (`MovesAhead`).
+        var id: Int64?
     }
 
     var moves: [Move]
-    /// Photos to show again that the folder no longer lists, a move's Undo, with their content keys.
+    /// Photos to show again that the folder no longer lists, a move's Undo, with their content keys and their IDs in
+    /// the index.
     var restoring: [LibraryItem] = []
     var keys: [URL: ContentKey] = [:]
+    var ids: [URL: Int64] = [:]
+}
+
+/// The photos a batch moves, shown where it puts them before the open folder's list from the library has them there
+/// (`LibraryMoves`), by their IDs in the index. The list's changes to them, made from the index before the batch wrote
+/// it, are made where the photos are shown, so none is shown twice or back where it was; each leaves once the list has
+/// it where it's shown, and the others once the list has handed over the batch's own change (`FolderLibrary.caughtUp`).
+struct MovesAhead {
+    struct Photo {
+        /// Where the list has it; nil while it has it in none of the folders shown.
+        var listed: URL?
+        /// Where it's shown; nil for a photo moved out of the folders shown.
+        var shown: URL?
+        /// Its row and content key as the list last handed them over.
+        var item: LibraryItem?
+        var key: ContentKey?
+    }
+
+    private(set) var photos: [Int64: Photo] = [:]
+    /// The photos' IDs, by the URL the list has each at.
+    private var listed: [URL: Int64] = [:]
+
+    var isEmpty: Bool {
+        photos.isEmpty
+    }
+
+    /// Photo `id`, at `from` in the list unless it's ahead already, is shown at `to`.
+    mutating func show(_ id: Int64, from: URL?, at to: URL?) {
+        if photos[id] != nil {
+            photos[id]?.shown = to
+            return
+        }
+        photos[id] = Photo(listed: from, shown: to)
+        if let from {
+            listed[from] = id
+        }
+    }
+
+    /// `change` as it changes the photos shown: the rows of photos ahead go where they're shown, or nowhere; one the
+    /// list no longer has stays shown until the batch's change is in (`FolderLibrary.caughtUp`), and one the list has
+    /// where it's shown is no longer ahead.
+    mutating func translate(_ change: LibraryFolderList.Change) -> LibraryFolderList.Change {
+        var translated = change
+        translated.removed = []
+        translated.inserted = []
+        translated.updated = []
+        var arrived: [Int64: (item: LibraryItem, inserted: Bool)] = [:]
+        for (items, inserted) in [(change.inserted, true), (change.updated, false)] {
+            for item in items {
+                if let id = change.ids[item.url], photos[id] != nil {
+                    arrived[id] = (item, inserted)
+                } else if inserted {
+                    translated.inserted.append(item)
+                } else {
+                    translated.updated.append(item)
+                }
+            }
+        }
+        for url in change.removed {
+            guard let id = listed.removeValue(forKey: url), var photo = photos[id] else {
+                translated.removed.append(url)
+                continue
+            }
+            photo.listed = nil
+            photos[id] = photo
+            // Moved out of the folders shown, as it's shown.
+            if arrived[id] == nil, photo.shown == nil {
+                photos[id] = nil
+            }
+        }
+        for (id, arrival) in arrived {
+            guard var photo = photos[id] else { continue }
+            let url = arrival.item.url
+            let key = translated.keys.removeValue(forKey: url)
+            translated.ids[url] = nil
+            if let before = photo.listed, listed[before] == id {
+                listed[before] = nil
+            }
+            guard photo.shown != url else {
+                photos[id] = nil
+                if arrival.inserted {
+                    translated.inserted.append(arrival.item)
+                } else {
+                    translated.updated.append(arrival.item)
+                }
+                translated.ids[url] = id
+                translated.keys[url] = key
+                continue
+            }
+            photo.listed = url
+            photo.item = arrival.item
+            photo.key = key ?? photo.key
+            listed[url] = id
+            photos[id] = photo
+            if let shown = photo.shown {
+                translated.updated.append(FolderLibrary.item(arrival.item, at: shown))
+                translated.ids[shown] = id
+                translated.keys[shown] = key
+            }
+        }
+        return translated
+    }
+
+    /// Takes every photo out, returning those the list has elsewhere than they're shown.
+    mutating func takeAll() -> [Photo] {
+        defer { self = MovesAhead() }
+        return photos.values.filter { $0.listed != $0.shown }
+    }
 }
 
 /// The URLs the open folder's list gives photos by their paths, as `LibraryFolderList` makes them, its folder's own
@@ -62,6 +173,8 @@ extension FolderLibrary {
         var diff: LibraryDiff
         /// The rows' order changed, or rows came or went.
         var reordered: Bool
+        /// The photos changed in place, the library's filtered list putting them in order.
+        var filtered = false
     }
 
     /// The URL the open folder's list gives a photo at `path` (a folder's path, a slash and a name), as
@@ -119,6 +232,18 @@ extension FolderLibrary {
         if !moves.restoring.isEmpty {
             fromLibrary.indexIDs = false
         }
+        if fromLibrary.list != nil, !moved.filtered {
+            for move in moves.moves {
+                if let id = move.id {
+                    fromLibrary.ahead.show(id, from: move.from, at: move.to)
+                }
+            }
+            for item in moves.restoring {
+                if let id = moves.ids[item.url] {
+                    fromLibrary.ahead.show(id, from: nil, at: item.url)
+                }
+            }
+        }
         items = LibraryItems(moved.items)
         photoIDs = moved.photoIDs
         positions = moved.positions
@@ -162,7 +287,7 @@ extension FolderLibrary {
             }
             return Moved(
                 revision: revision, items: items, photoIDs: photoIDs, positions: positions,
-                diff: LibraryDiff(updated: IndexSet(renamed.map(\.0))), reordered: false,
+                diff: LibraryDiff(updated: IndexSet(renamed.map(\.0))), reordered: false, filtered: true,
             )
         }
         typealias Row = (item: LibraryItem, id: Int64, old: Int)
@@ -230,23 +355,33 @@ extension FolderLibrary {
         return paths.id(of: url).flatMap { fromLibrary.sourceKeys[$0] }
     }
 
-    /// Returns once the open folder's list from the library has handed over every change the library had for
-    /// it: the content key of `photo`'s row (its index ID and URL) is taken out, the library hears the photo
-    /// changed, and the list's change for it gives the key back, as it does every photo it hands over. A
-    /// change made before it would otherwise reach a list a rename or a move has since changed, and show the
-    /// photos where they were. A filtered list keeps its photos' IDs by their places, so it isn't waited for.
-    func caughtUp(with photo: (id: Int64, url: URL), live: LibraryLive) async {
-        guard fromLibrary.list != nil, !isFiltered, let key = fromLibrary.keys.removeValue(forKey: photo.url) else {
-            return
-        }
-        live.photosChanged([photo.id])
-        await live.settle()
-        for _ in 0 ..< 400 where fromLibrary.keys[photo.url] == nil && fromLibrary.list != nil {
+    /// Returns once the open folder's list from the library has handed over every change the library had for its
+    /// photos, however long that takes; a batch's own among them, once it has run. The photos a batch moved that are
+    /// still ahead of the list are then shown where the list has them: a batch that stopped, or a photo another app
+    /// moved meanwhile.
+    func caughtUp() async {
+        guard let list = fromLibrary.list else { return }
+        await list.caughtUp()
+        while fromLibrary.adopting, fromLibrary.list === list {
             try? await Task.sleep(for: .milliseconds(5))
         }
-        if fromLibrary.keys[photo.url] == nil, positions[photo.url] != nil {
-            fromLibrary.keys[photo.url] = key
+        guard fromLibrary.list === list, !fromLibrary.ahead.isEmpty, !isFiltered else {
+            fromLibrary.ahead = MovesAhead()
+            return
         }
+        var moves: [LibraryMoves.Move] = []
+        var restoring: [LibraryItem] = []
+        var keys: [URL: ContentKey] = [:]
+        for photo in fromLibrary.ahead.takeAll() {
+            if let shown = photo.shown, positions[shown] != nil {
+                moves.append(LibraryMoves.Move(from: shown, to: photo.listed))
+            } else if let listed = photo.listed, positions[listed] == nil, let item = photo.item {
+                restoring.append(item)
+                keys[listed] = photo.key
+            }
+        }
+        guard !moves.isEmpty || !restoring.isEmpty else { return }
+        await show(LibraryMoves(moves: moves, restoring: restoring, keys: keys))
     }
 
     /// `item` at `url`, the same photo: its badges, its file's size and date, and its sidecar's.

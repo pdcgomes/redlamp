@@ -285,27 +285,13 @@ extension EditorModel {
     private func show(
         _ moves: [(id: Int64, from: String, to: String)], of step: LibraryFileStep, undoing: Bool,
     ) async -> [URL] {
-        // What was asked for before reaches the lists first: culling's batches, then the list's changes.
+        // Culling's batches asked for before reach the lists first; the list's changes made before or meanwhile
+        // reach the photos where they're shown (`MovesAhead`).
         await cullingTail?.value
-        if let core = library.service?.core {
-            var sentinel = moves.lazy.compactMap { move -> (id: Int64, url: URL)? in
-                guard let url = self.library.listedURL(ofPath: move.from), self.library.contentKey(of: url) != nil
-                else { return nil }
-                return (move.id, url)
-            }.first
-            if sentinel == nil,
-               let url = items.indices.lazy.compactMap(items.row)
-               .first(where: { library.contentKey(of: $0.url) != nil })?.url,
-               let id = await LibraryService.indexIDs(of: [url], in: core.index)[url] {
-                sentinel = (id, url)
-            }
-            if let sentinel {
-                await library.caughtUp(with: sentinel, live: core.live)
-            }
-        }
         var shown: [LibraryMoves.Move] = []
         var restoring: [LibraryItem] = []
         var keys: [URL: ContentKey] = [:]
+        var ids: [URL: Int64] = [:]
         var saving: [URL] = []
         let urls = await listedURLs(of: moves)
         for (move, url) in zip(moves, urls) {
@@ -315,6 +301,7 @@ extension EditorModel {
                 if let to, let item = step.items[move.id] {
                     restoring.append(FolderLibrary.item(item, at: to))
                     keys[to] = step.keys[move.id]
+                    ids[to] = move.id
                 }
                 continue
             }
@@ -323,7 +310,7 @@ extension EditorModel {
                 step.items[move.id] = item
                 step.keys[move.id] = library.contentKey(of: from)
             }
-            shown.append(LibraryMoves.Move(from: from, to: to))
+            shown.append(LibraryMoves.Move(from: from, to: to, id: move.id))
         }
         if !undoing, step.active == nil {
             step.selected = Set(selectedPhotos)
@@ -337,7 +324,7 @@ extension EditorModel {
             next = items[(row + 1)...].first { !leaving.contains($0.url) }?.url
                 ?? items[..<row].last { !leaving.contains($0.url) }?.url
         }
-        await library.show(LibraryMoves(moves: shown, restoring: restoring, keys: keys)) { [self] in
+        await library.show(LibraryMoves(moves: shown, restoring: restoring, keys: keys, ids: ids)) { [self] in
             if let destination {
                 if let to = destination.to {
                     select(to, keepingSelection: true)
@@ -379,26 +366,31 @@ extension EditorModel {
     }
 
     /// Once a batch has run: each photo shown where the index has it, should the batch have stopped, been rolled
-    /// back or left some out.
+    /// back or left some out; then, once the open folder's list has handed over the batch's change, as the list has
+    /// it.
     private func follow(
         _ moves: [(id: Int64, from: String, to: String)], of step: LibraryFileStep, paths: [Int64: String],
     ) async {
         var corrections: [LibraryMoves.Move] = []
         var restoring: [LibraryItem] = []
         var keys: [URL: ContentKey] = [:]
+        var ids: [URL: Int64] = [:]
         let listed = library.listedURLs
         for move in moves {
             guard let path = paths[move.id], path != move.to else { continue }
             let actual = listed.url(ofPath: path)
             if let shown = listed.url(ofPath: move.to), library.index(of: shown) != nil {
-                corrections.append(LibraryMoves.Move(from: shown, to: actual))
+                corrections.append(LibraryMoves.Move(from: shown, to: actual, id: move.id))
             } else if let actual, library.index(of: actual) == nil, let item = step.items[move.id] {
                 restoring.append(FolderLibrary.item(item, at: actual))
                 keys[actual] = step.keys[move.id]
+                ids[actual] = move.id
             }
         }
-        guard !corrections.isEmpty || !restoring.isEmpty else { return }
-        await library.show(LibraryMoves(moves: corrections, restoring: restoring, keys: keys))
+        if !corrections.isEmpty || !restoring.isEmpty {
+            await library.show(LibraryMoves(moves: corrections, restoring: restoring, keys: keys, ids: ids))
+        }
+        await library.caughtUp()
     }
 
     /// Runs `body` with its batch's progress and Stop in the grid's toolbar, as a drop's move shows them, for Undo

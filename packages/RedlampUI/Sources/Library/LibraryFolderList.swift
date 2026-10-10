@@ -66,6 +66,7 @@ final class LibraryFolderList: Sendable {
     let largestRead: Int
     /// A large folder's rows, read as they're asked for.
     let largeRows: LargeListRows
+    private let live: LibraryLive
     private let state = Mutex(State())
 
     private struct State {
@@ -74,7 +75,13 @@ final class LibraryFolderList: Sendable {
         var closed = false
         var filter = LibraryListFilter()
         var events: AsyncStream<Event>.Continuation?
+        /// LibraryLive's updates taken and handed over, each once its change reached the main thread.
+        var handedOver = 0
     }
+
+    /// What each change waits for before it's handed to the main thread: nothing, but in tests that hold the list
+    /// back as a busy index does.
+    let holding = Mutex<(@Sendable () async -> Void)?>(nil)
 
     private enum Event: Sendable {
         case update(PhotoListUpdate)
@@ -108,6 +115,7 @@ final class LibraryFolderList: Sendable {
         let rows = LargeListRows(index: core.index, firstRead: firstRead)
         largeRows = rows
         let (live, index, engine) = (core.live, core.index, core.engine)
+        self.live = live
         let (events, continuation) = AsyncStream.makeStream(of: Event.self)
         state.withLock { state in
             state.filter = filter
@@ -139,6 +147,12 @@ final class LibraryFolderList: Sendable {
             var mapping = Mapping(folder: folder, includesSubfolders: includingSubfolders)
             var handed = Handed()
             var large: Large?
+            let handOver: (Change) async -> Void = { change in
+                if let hold = self.holding.withLock({ $0 }) {
+                    await hold()
+                }
+                await deliver(change)
+            }
             for await event in events {
                 let filter = state.withLock { $0.filter }
                 let update: PhotoListUpdate? = if case let .update(update) = event {
@@ -155,7 +169,7 @@ final class LibraryFolderList: Sendable {
                     let change = try? await taking.change(taking: update, filter: filter)
                     large = taking
                     if let change {
-                        await deliver(Change(large: change))
+                        await handOver(Change(large: change))
                     }
                 } else {
                     if !filter.isEmpty, !handed.isOrdered, mapping.hasList {
@@ -166,7 +180,7 @@ final class LibraryFolderList: Sendable {
                         let change = try? await mapping.change(for: update, index: index)
                         if let change, filter.isEmpty, !handed.isOrdered {
                             handed.filter = filter
-                            await deliver(change)
+                            await handOver(change)
                             orders = false
                         } else {
                             orders = change != nil
@@ -177,15 +191,34 @@ final class LibraryFolderList: Sendable {
                     if orders, let ordered = try? await handed.next(
                         filter, from: &mapping, engine: engine, source: source, changed: event.isUpdate,
                     ) {
-                        await deliver(Change(ordered: ordered))
+                        await handOver(Change(ordered: ordered))
                     }
                 }
                 if event.isUpdate {
+                    state.withLock { $0.handedOver += 1 }
                     handing.yield()
                 }
             }
         }
         state.withLock { $0.task = task }
+    }
+
+    /// Returns once the list has handed over every change the library had for its photos when it was called: what
+    /// LibraryLive has gathered is applied, and each update that makes for the list has reached the main thread,
+    /// however long the index takes to read their rows. At once once the list is closed.
+    func caughtUp() async {
+        await live.settle()
+        var wanted = Int.max
+        while true {
+            let (closed, updates, handedOver) = state.withLock { ($0.closed, $0.updates, $0.handedOver) }
+            // Before the list opens, its first update; one waiting can give way to none, the list having changed
+            // back before it was taken.
+            wanted = min(wanted, updates?.handed ?? 1)
+            if closed || handedOver >= wanted {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(2))
+        }
     }
 
     /// What the list is filtered and sorted by.
