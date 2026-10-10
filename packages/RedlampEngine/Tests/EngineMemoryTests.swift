@@ -659,6 +659,50 @@ struct EngineMemoryTests {
         #expect(retouched == nil)
     }
 
+    /// An older edit of a photo that clipped renders from a variant built at its raw revision
+    /// (`RevisionStage`), retouched and masked, without the photo being built again. Once the edit's
+    /// process is updated nothing keeps the variant, nor once the photo is closed.
+    @Test(.enabled(if: EngineSmokeTests.canRender && closed != nil && next != nil))
+    func `an older edit's variant is let go of once no frame needs it, and with its photo`() async throws {
+        let engine = try RedlampEngine()
+        let closed = try #require(Self.closed)
+        var older = try Self.removalEdit()
+        older.processVersion = 14
+        var updated = older
+        updated.processVersion = EditRecipe.currentProcessVersion
+        weak var photo: ImageSession?
+        weak var variant: ImageSession?
+        do {
+            _ = try await engine.open(closed)
+            try await Self.frame(engine, older)
+            photo = engine.currentSession()
+            variant = engine.revisions.keptVariants.first
+            #expect(variant != nil && variant?.photo === photo, "the sample clipped, so its older edits have a variant")
+            #expect(engine.renderQueue.sync { engine.retouch.retouchedSessions.contains { $0.original === variant } })
+            try await Self.frame(engine, updated, generation: 2)
+            #expect(engine.revisions.keptVariants.isEmpty)
+            #expect(engine.currentSession() === photo && engine.revisions.variantsBuilt == 1)
+        }
+        // A retouched copy's maps are made in the background after its frame.
+        for _ in 0 ..< 150 where variant != nil {
+            engine.renderQueue.sync {}
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(variant == nil, "the variant outlived the edit that rendered from it")
+        try await Self.frame(engine, older, generation: 3)
+        variant = engine.revisions.keptVariants.first
+        #expect(variant != nil)
+        _ = try await engine.open(#require(Self.next))
+        try await Self.frame(engine, EditRecipe(), generation: 4)
+        engine.sessions.invalidate(closed)
+        for _ in 0 ..< 150 where photo != nil || variant != nil {
+            engine.renderQueue.sync {}
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(photo == nil)
+        #expect(variant == nil, "the variant outlived its photo")
+    }
+
     /// The editor window closed after a retouched, masked photo and the next one, which is
     /// prefetched with it: the engine keeps no photo, and no texture for one.
     @Test(.enabled(if: EngineSmokeTests.canRender && closed != nil && next != nil))

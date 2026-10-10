@@ -82,8 +82,11 @@ public struct EditRecipe: Sendable, Hashable {
     /// 14: a Sky mask's per-pixel adjustments reach only the sky's share of an edge pixel's light
     /// (`MaskColors`), so twigs and leaves keep their own colour and brightness; an AI mask's
     /// Feather and Edge shape its body and keep its stray hairs and wisps (`GrayMask.shaped`).
+    /// 15: highlights the camera clipped in one or two colours are rebuilt with the colour around
+    /// them, and areas clipped in every colour fade to neutral (`RawRevision.second`), so a sky
+    /// clipped in green and blue no longer turns lilac when pulled below white.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 14
+    public static let currentProcessVersion = 15
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.
