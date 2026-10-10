@@ -46,43 +46,6 @@ def thumbs(size):
     return cached(("thumbs", size), lambda: [w.pixel_photo(SHOOT / name, *size) for name in NAMES])
 
 
-def readout(c, cx, y, text):
-    """A measured figure over the canvas in the large font, centred on cx. Returns its rect."""
-    tw = c.measure(text, "large")
-    r = w.Rect(cx - (tw + 12) // 2, y, tw + 12, 15)
-    c.rect(r.x + 1, r.y + 1, r.w, r.h, "shadow")
-    c.rect(*r, w.GREY["raised"])
-    c.box(*r, w.GREY["light"])
-    c.text(r.x + 6, r.y + 4, text, w.GREY["value"], font="large")
-    c.claim(r, "readout")
-    return r
-
-
-def finder(c, rect, title, names, *, badges=None, mark=None):
-    """A Finder window listing files in the large font, the row `mark` selected, with a dim badge
-    right-aligned on a row (NEW, UNCHANGED)."""
-    x, y, ww, hh = rect
-    c.rect(x + 1, y + 1, ww, hh, "shadow")
-    c.rect(x, y, ww, hh, w.GREY["panel"])
-    c.box(x, y, ww, hh, w.GREY["rim"])
-    c.rect(x + 1, y + 1, ww - 2, 9, w.GREY["chrome"])
-    for i in range(3):
-        c.rect(x + 4 + i * 5, y + 4, 3, 3, w.GREY["light"])
-    c.icon(x + 22, y + 2, "folder", w.GREY["fill"])
-    c.text(x + 34, y + 3, title, w.GREY["label"])
-    for i, name in enumerate(names):
-        ry = y + 15 + i * 13
-        on = i == mark
-        if on:
-            c.rect(x + 2, ry - 3, ww - 4, 13, w.GREY["light"])
-        c.icon(x + 5, ry - 1, "file", w.GREY["value"] if on else w.GREY["fill"])
-        c.text(x + 16, ry, name, w.GREY["thumb"] if on else w.GREY["label"], font="large")
-        if badges and badges[i]:
-            c.text(x + ww - 5, ry, badges[i], w.GREY["value"] if on else w.GREY["dim"], font="large",
-                   align="right")
-    c.claim(w.Rect(*rect), "finder")
-
-
 def edit(c, *, folder=False, listed=False, photo=False, press=False):
     """The editor: empty, then with the folder added, its photos listed, and DSC02372.JPG open."""
     w.header(c, FEATURE)
@@ -113,7 +76,7 @@ def add(c):
 
 def listed(c):
     ed = edit(c, folder=True, listed=True)
-    readout(c, ed.canvas.cx, ed.canvas.cy - 7, "50,000 PHOTOS · 0.2 S")
+    w.readout(c, ed.canvas.cx, ed.canvas.cy - 7, "50,000 PHOTOS · 0.2 S")
     w.caption(c, ["50,000 PHOTOS", "LISTED IN 0.2 S"])
 
 
@@ -124,7 +87,7 @@ def files(c, badges, mark):
     names = [FILE, SIDECAR, NAMES[i + 1].upper()]
     rect = w.Rect(ed.canvas.x + 3, ed.panel.y - 5 - (15 + 13 * len(names)), w.READ_RIGHT - 4 - (ed.canvas.x + 3),
                   14 + 13 * len(names))
-    finder(c, rect, FOLDER, names, badges=badges, mark=mark)
+    w.finder(c, rect, FOLDER, names, badges=badges, mark=mark, large=True)
 
 
 def sidecar(c):

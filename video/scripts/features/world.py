@@ -34,6 +34,11 @@ from pixelkit import FONTS, Canvas, Rect, load_theme, lock  # noqa: E402
 THEME = load_theme()
 POSTS = json.loads((REPO / "docs/social/posts.json").read_text())
 
+# The large font's comma hangs a row under the line, which at a caption's size reads as sitting below
+# it; this one sits on the line over the bottom three rows, as a 5 × 7 comma does.
+FONTS["large"]._glyphs = {**FONTS["large"]._glyphs, ",": "../../../../.#/.#/#."}
+FONTS["large"]._cache.pop(",", None)
+
 # ---------------------------------------------------------------- the grid
 
 W, H, SCALE = 216, 384, 5
@@ -457,6 +462,100 @@ def mask_overlay(c, photo, mask, *, amount=0.5):
     c.img.paste(Image.fromarray(a), (0, 0))
 
 
+def readout(c, cx, y, text):
+    """A measured figure in the large font, centred on cx, as the canvas toolbar shows a render's time.
+    Returns its rect."""
+    tw = c.measure(text, "large")
+    r = Rect(cx - (tw + 12) // 2, y, tw + 12, 15)
+    c.rect(r.x + 1, r.y + 1, r.w, r.h, "shadow")
+    c.rect(*r, GREY["raised"])
+    c.box(*r, GREY["light"])
+    c.text(r.x + 6, r.y + 4, text, GREY["value"], font="large")
+    c.claim(r, "readout")
+    return r
+
+
+def finder(c, rect, title, names, *, badges=None, mark=None, large=False):
+    """A Finder window listing files, the row `mark` selected, with a dim badge right-aligned on a row
+    (NEW, UNCHANGED). `large` lists them in the large font under a folder's title, to be read at once."""
+    x, y, ww, hh = rect
+    bar, dot = (9, 3) if large else (8, 2)
+    c.rect(x + 1, y + 1, ww, hh, "shadow")
+    c.rect(x, y, ww, hh, GREY["panel"])
+    c.box(x, y, ww, hh, GREY["rim"])
+    c.rect(x + 1, y + 1, ww - 2, bar, GREY["chrome"])
+    for i in range(3):
+        c.rect(x + 3 + int(large) + i * (dot + 2), y + 4, dot, dot, GREY["light"])
+    if not large:
+        c.text(x + 16, y + 3, title, GREY["label"])
+        files(c, x + 4, y + 13, ww - 8, names, badges=badges, mark=mark)
+    else:
+        c.icon(x + 22, y + 2, "folder", GREY["fill"])
+        c.text(x + 34, y + 3, title, GREY["label"])
+        for i, name in enumerate(names):
+            ry = y + 15 + i * 13
+            on = i == mark
+            if on:
+                c.rect(x + 2, ry - 3, ww - 4, 13, GREY["light"])
+            c.icon(x + 5, ry - 1, "file", GREY["value"] if on else GREY["fill"])
+            c.text(x + 16, ry, name, GREY["thumb"] if on else GREY["label"], font="large")
+            if badges and badges[i]:
+                c.text(x + ww - 5, ry, badges[i], GREY["value"] if on else GREY["dim"], font="large", align="right")
+    c.claim(Rect(*rect), "finder")
+
+
+def drag_ghost(c, x, y, count):
+    """Files being dragged, a little below and right of the pointer at (x, y)."""
+    for i in reversed(range(count)):
+        fx, fy = x + 7 + 2 * i, y + 9 + 2 * i
+        c.rect(fx - 1, fy - 1, 9, 11, GREY["edge"])
+        c.rect(fx, fy, 7, 9, GREY["key"])
+        c.icon(fx, fy, "file", GREY["dim"])
+
+
+def crop_frame(c, r):
+    """Redlamp's crop overlay on the whole photo: the frame, its rule-of-thirds guide and the handles at
+    the corners and the middle of each edge."""
+    for k in (1, 2):
+        c.dots(r.x + 1, r.y + round(k * r.h / 3), r.w - 2, GREY["key"])
+        c.vdots(r.x + round(k * r.w / 3), r.y + 1, r.h - 2, GREY["key"])
+    c.box(*r, GREY["thumb"])
+    for hx in (r.x, r.x2 - 1):
+        for hy in (r.y, r.y2 - 1):
+            c.rect(hx - 1, hy - 1, 3, 3, GREY["thumb"])
+    c.rect(r.cx - 2, r.y - 1, 5, 2, GREY["thumb"])
+    c.rect(r.cx - 2, r.y2 - 1, 5, 2, GREY["thumb"])
+    c.rect(r.x - 1, r.cy - 2, 2, 5, GREY["thumb"])
+    c.rect(r.x2 - 1, r.cy - 2, 2, 5, GREY["thumb"])
+
+
+def brush_ring(c, cx, cy, r=9):
+    """The brush's pointer: its size as a ring, its feather as a fainter ring inside, and its centre."""
+    c.circle(cx + 0.5, cy + 0.5, r + 0.5, None, outline=GREY["thumb"])
+    c.circle(cx + 0.5, cy + 0.5, r * 0.6 + 0.5, None, outline=GREY["fill"])
+    c.hline(cx - 1, cy, 3, GREY["thumb"])
+    c.vline(cx, cy - 1, 3, GREY["thumb"])
+
+
+def grow(mask, r):
+    """`mask` (h × w booleans) widened by r pixels each way."""
+    h, wd = mask.shape
+    pad = np.pad(mask, r)
+    out = mask.copy()
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            out |= pad[r + dy:r + dy + h, r + dx:r + dx + wd]
+    return out
+
+
+def outline(c, photo, mask, color=GREY["thumb"]):
+    """The outline Find draws round a thing it found in `photo` (a Rect): a rim a pixel out from `mask`."""
+    ring = grow(mask, 1) & ~mask
+    a = np.asarray(c.img).copy()
+    a[photo.y:photo.y2, photo.x:photo.x2][ring] = THEME.rgb(color)
+    c.img.paste(Image.fromarray(a), (0, 0))
+
+
 # ---------------------------------------------------------------- the result
 
 def bayer(n=8):
@@ -491,6 +590,48 @@ def result_frame(c, ed, real, *, label=REAL_PHOTO, mark=None, progress=1.0):
     if mark:
         tag(c, ed.photo, mark)
     return [Overlay(ed.photo, real, ed.pixels, progress)]
+
+
+def pair(ed, gap=4):
+    """Two frames the photo's size side by side on the canvas, centred left of the side buttons."""
+    ph = ed.photo
+    x = ed.canvas.x + (READ_RIGHT - ed.canvas.x - (2 * ph.w + gap)) // 2
+    return Rect(x, ph.y, ph.w, ph.h), Rect(x + ph.w + gap, ph.y, ph.w, ph.h)
+
+
+def placeholder(c, frame, lines, note=(), *, mark=None):
+    """The frame a Redlamp render goes in until it arrives: dashed, with what's to come in it, a dim
+    note of what it shows under that, and a tag such as AFTER at its top."""
+    c.rect(*frame, GREY["well"])
+    for x0, y0, length, vertical in ((frame.x, frame.y, frame.w, False), (frame.x, frame.y2 - 1, frame.w, False),
+                                     (frame.x, frame.y, frame.h, True), (frame.x2 - 1, frame.y, frame.h, True)):
+        c.dashes(x0, y0, length, GREY["dim"], vertical=vertical)
+    top = frame.cy - (8 * (len(lines) + len(note)) + (3 if note else 0)) // 2
+    for i, line in enumerate(lines):
+        c.text(frame.cx, top + i * 8, line, GREY["value"], align="center")
+    for i, line in enumerate(note):
+        c.text(frame.cx, top + 3 + (len(lines) + i) * 8, line, GREY["dim"], align="center")
+    if mark:
+        tag(c, frame, mark)
+
+
+def compare(c, feature, file, real, lines, note=(), *, progress=1.0):
+    """Redlamp's before and after view across the stage: the owner's photo as it is, labelled BEFORE,
+    and beside it the frame Redlamp's render goes in, labelled AFTER. Returns the overlay that resolves
+    the pixel photo into the real one."""
+    header(c, feature)
+    ed = editor(c, None, file=file, panel=8)
+    pw, ph, gap = 100, 150, 3
+    cv = ed.canvas
+    before = Rect(cv.x + (cv.w - 2 * pw - gap) // 2, cv.y + (cv.h - ph) // 2, pw, ph)
+    after = Rect(before.x2 + gap, before.y, pw, ph)
+    c.img.paste(pixel_photo(real, pw, ph), (before.x, before.y))
+    pixels = np.asarray(c.img)[before.y:before.y2, before.x:before.x2].copy()
+    placeholder(c, after, lines, note)
+    tag(c, before, "BEFORE")
+    tag(c, after, "AFTER")
+    caption(c, REAL_PHOTO)
+    return [Overlay(before, real, pixels, progress)]
 
 
 def render(c, scale=SCALE, overlays=()):

@@ -111,26 +111,6 @@ def edit(c, step, *, shown=None, active=None, press=None, mark=None, sliders=Tru
     return ed
 
 
-def placeholder(c, r, lines, mark):
-    """An empty frame where a render still to come from Redlamp goes: dashed, with what goes there."""
-    c.rect(*r, w.GREY["well"])
-    for y in (r.y, r.y2 - 1):
-        c.dashes(r.x, y, r.w, w.GREY["light"])
-    for x in (r.x, r.x2 - 1):
-        c.dashes(x, r.y, r.h, w.GREY["light"], vertical=True)
-    top = r.cy - (7 * len(lines) - 2) // 2
-    for i, line in enumerate(lines):
-        c.text(r.cx, top + 7 * i, line, w.GREY["label"] if i == 0 else w.GREY["dim"], align="center")
-    w.tag(c, r, mark)
-
-
-def pair(ed):
-    """Two frames the photo's size side by side on the canvas, centred left of the side buttons."""
-    ph, gap = ed.photo, 4
-    x = ed.canvas.x + (w.READ_RIGHT - ed.canvas.x - (2 * ph.w + gap)) // 2
-    return w.Rect(x, ph.y, ph.w, ph.h), w.Rect(x + ph.w + gap, ph.y, ph.w, ph.h)
-
-
 def hook(c):
     edit(c, 0)
     w.caption(c, EPISODE["hooks"]["a"])
@@ -168,8 +148,8 @@ def result(c, progress=1.0):
     """The before and after side by side: Redlamp's render of the raw at its defaults still to come at
     the left, and the owner's finished photo, resolving out of the pixel one, at the right."""
     ed = edit(c, 3, photo=False)
-    before, after = pair(ed)
-    placeholder(c, before, ["REDLAMP'S", "RENDER OF", "THE RAW", "GOES HERE"], "BEFORE")
+    before, after = w.pair(ed)
+    w.placeholder(c, before, ["REDLAMP'S", "RENDER", "GOES HERE"], ["THE RAW AT", "ITS DEFAULTS"], mark="BEFORE")
     c.img.paste(pixel(3, (after.w, after.h)), (after.x, after.y))
     pixels = np.asarray(c.img)[after.y:after.y2, after.x:after.x2].copy()
     w.tag(c, after, "AFTER")

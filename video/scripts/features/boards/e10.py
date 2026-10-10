@@ -167,40 +167,8 @@ def develop(c):
     w.caption(c, ["EDIT IT LIKE", "A RAW"])
 
 
-def placeholder(c, frame, lines, note=()):
-    """The frame a Redlamp render goes in until it arrives: dashed, with what's to come in it."""
-    c.rect(*frame, w.GREY["well"])
-    for x0, y0, length, vertical in ((frame.x, frame.y, frame.w, False), (frame.x, frame.y2 - 1, frame.w, False),
-                                     (frame.x, frame.y, frame.h, True), (frame.x2 - 1, frame.y, frame.h, True)):
-        c.dashes(x0, y0, length, w.GREY["dim"], vertical=vertical)
-    top = frame.cy - (8 * (len(lines) + len(note)) + (3 if note else 0)) // 2
-    for i, line in enumerate(lines):
-        c.text(frame.cx, top + i * 8, line, w.GREY["value"], align="center")
-    for i, line in enumerate(note):
-        c.text(frame.cx, top + 3 + (len(lines) + i) * 8, line, w.GREY["dim"], align="center")
-
-
-def compare(c, file, real, lines, note=(), *, progress=1.0):
-    """Redlamp's before and after view across the stage: the owner's photo as it is, labelled BEFORE,
-    and beside it the frame Redlamp's render goes in, labelled AFTER. Returns the overlay that resolves
-    the pixel photo into the real one."""
-    w.header(c, FEATURE)
-    ed = w.editor(c, None, file=file, panel=8)
-    pw, ph, gap = 100, 150, 3
-    cv = ed.canvas
-    before = w.Rect(cv.x + (cv.w - 2 * pw - gap) // 2, cv.y + (cv.h - ph) // 2, pw, ph)
-    after = w.Rect(before.x2 + gap, before.y, pw, ph)
-    c.img.paste(w.pixel_photo(real, pw, ph), (before.x, before.y))
-    pixels = np.asarray(c.img)[before.y:before.y2, before.x:before.x2].copy()
-    placeholder(c, after, lines, note)
-    w.tag(c, before, "BEFORE")
-    w.tag(c, after, "AFTER")
-    w.caption(c, w.REAL_PHOTO)
-    return [w.Overlay(before, real, pixels, progress)]
-
-
 def result(c, progress=1.0):
-    return compare(c, frame_name(0), REAL, ["REDLAMP'S", "MERGE", "GOES HERE"], [f"{FRAMES} FRAMES"],
+    return w.compare(c, FEATURE, frame_name(0), REAL, ["REDLAMP'S", "MERGE", "GOES HERE"], [f"{FRAMES} FRAMES"],
                    progress=progress)
 
 

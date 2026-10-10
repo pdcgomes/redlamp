@@ -66,61 +66,6 @@ def photos(size):
     return _photos[size]
 
 
-def placeholder(c, frame, lines, note=()):
-    """The frame a Redlamp render goes in until it arrives: dashed, with what's to come in it."""
-    c.rect(*frame, w.GREY["well"])
-    for x0, y0, length, vertical in ((frame.x, frame.y, frame.w, False), (frame.x, frame.y2 - 1, frame.w, False),
-                                     (frame.x, frame.y, frame.h, True), (frame.x2 - 1, frame.y, frame.h, True)):
-        c.dashes(x0, y0, length, w.GREY["dim"], vertical=vertical)
-    top = frame.cy - (8 * (len(lines) + len(note)) + (3 if note else 0)) // 2
-    for i, line in enumerate(lines):
-        c.text(frame.cx, top + i * 8, line, w.GREY["value"], align="center")
-    for i, line in enumerate(note):
-        c.text(frame.cx, top + 3 + (len(lines) + i) * 8, line, w.GREY["dim"], align="center")
-
-
-def compare(c, real, lines, note=(), *, progress=1.0):
-    """Redlamp's before and after view across the stage: the owner's photo as it is, labelled BEFORE,
-    and beside it the frame Redlamp's render goes in, labelled AFTER. Returns the overlay that resolves
-    the pixel photo into the real one."""
-    w.header(c, FEATURE)
-    ed = w.editor(c, None, file=FILE, panel=8)
-    pw, ph, gap = 100, 150, 3
-    cv = ed.canvas
-    before = w.Rect(cv.x + (cv.w - 2 * pw - gap) // 2, cv.y + (cv.h - ph) // 2, pw, ph)
-    after = w.Rect(before.x2 + gap, before.y, pw, ph)
-    c.img.paste(w.pixel_photo(real, pw, ph), (before.x, before.y))
-    pixels = np.asarray(c.img)[before.y:before.y2, before.x:before.x2].copy()
-    placeholder(c, after, lines, note)
-    w.tag(c, before, "BEFORE")
-    w.tag(c, after, "AFTER")
-    w.caption(c, w.REAL_PHOTO)
-    return [w.Overlay(before, real, pixels, progress)]
-
-
-def finder(c, rect, title, names, *, mark=None):
-    """A Finder window holding files: its title bar and a file per row, the row `mark` selected."""
-    x, y, ww, hh = rect
-    c.rect(x + 1, y + 1, ww, hh, "shadow")
-    c.rect(x, y, ww, hh, w.GREY["panel"])
-    c.box(x, y, ww, hh, w.GREY["rim"])
-    c.rect(x + 1, y + 1, ww - 2, 8, w.GREY["chrome"])
-    for i in range(3):
-        c.rect(x + 3 + i * 4, y + 4, 2, 2, w.GREY["light"])
-    c.text(x + 16, y + 3, title, w.GREY["label"])
-    w.files(c, x + 4, y + 13, ww - 8, names, mark=mark)
-    c.claim(w.Rect(*rect), "finder")
-
-
-def ghost(c, x, y, count):
-    """Files being dragged, a little below and right of the pointer at (x, y)."""
-    for i in reversed(range(count)):
-        fx, fy = x + 7 + 2 * i, y + 9 + 2 * i
-        c.rect(fx - 1, fy - 1, 9, 11, w.GREY["edge"])
-        c.rect(fx, fy, 7, 9, w.GREY["key"])
-        c.icon(fx, fy, "file", w.GREY["dim"])
-
-
 def recipes(c, p, imported=(), *, selected=None, drop=False):
     """The Recipes panel: the Imported group, open with what has been imported, and the bundled groups
     under it. `selected` names the highlighted item; `drop` marks the panel as a drop target."""
@@ -159,7 +104,7 @@ def files_window(c, ed, title, names, *, mark=None):
     """The Finder window, on the canvas left of the photo."""
     cv = ed.canvas
     rect = w.Rect(cv.x + 3, cv.y + 4, ed.photo.x - cv.x - 6, 13 + 10 * len(names))
-    finder(c, rect, title, names, mark=mark)
+    w.finder(c, rect, title, names, mark=mark)
 
 
 def hook(c):
@@ -173,7 +118,7 @@ def drop(c):
     files_window(c, ed, "PRESETS", PRESETS)
     r = rows["IMPORTED"]
     px, py = r.x2 + 14, r.y + 2
-    ghost(c, px, py, len(PRESETS))
+    w.drag_ghost(c, px, py, len(PRESETS))
     w.pointer(c, px, py)
     w.caption(c, ["DROP IN .XMP", "PRESETS"])
 
@@ -212,7 +157,7 @@ def apply(c):
 
 
 def result(c, progress=1.0):
-    return compare(c, REAL, ["REDLAMP'S", "RENDER", "GOES HERE"], ["WITH PARADE"], progress=progress)
+    return w.compare(c, FEATURE, FILE, REAL, ["REDLAMP'S", "RENDER", "GOES HERE"], ["WITH PARADE"], progress=progress)
 
 
 def end_line(c):

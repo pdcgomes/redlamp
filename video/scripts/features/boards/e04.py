@@ -100,30 +100,6 @@ def edit(c, photo=AFTER, *, pressed=None):
     return ed
 
 
-def crop_frame(c, r):
-    """Redlamp's crop overlay on the whole photo: the frame, its rule-of-thirds guide and the handles at
-    the corners and the middle of each edge."""
-    for k in (1, 2):
-        c.dots(r.x + 1, r.y + round(k * r.h / 3), r.w - 2, w.GREY["key"])
-        c.vdots(r.x + round(k * r.w / 3), r.y + 1, r.h - 2, w.GREY["key"])
-    c.box(*r, w.GREY["thumb"])
-    for hx in (r.x, r.x2 - 1):
-        for hy in (r.y, r.y2 - 1):
-            c.rect(hx - 1, hy - 1, 3, 3, w.GREY["thumb"])
-    c.rect(r.cx - 2, r.y - 1, 5, 2, w.GREY["thumb"])
-    c.rect(r.cx - 2, r.y2 - 1, 5, 2, w.GREY["thumb"])
-    c.rect(r.x - 1, r.cy - 2, 2, 5, w.GREY["thumb"])
-    c.rect(r.x2 - 1, r.cy - 2, 2, 5, w.GREY["thumb"])
-
-
-def brush_ring(c, cx, cy, r=9):
-    """The brush's pointer: its size as a ring, its feather as a fainter ring inside, and its centre."""
-    c.circle(cx + 0.5, cy + 0.5, r + 0.5, None, outline=w.GREY["thumb"])
-    c.circle(cx + 0.5, cy + 0.5, r * 0.6 + 0.5, None, outline=w.GREY["fill"])
-    c.hline(cx - 1, cy, 3, w.GREY["thumb"])
-    c.vline(cx, cy - 1, 3, w.GREY["thumb"])
-
-
 def hook(c):
     edit(c)
     w.caption(c, EPISODE["hooks"]["a"])
@@ -131,14 +107,14 @@ def hook(c):
 
 def crop(c):
     ed = edit(c, pressed=0)
-    crop_frame(c, ed.photo)
+    w.crop_frame(c, ed.photo)
     w.caption(c, "R  CROP")
 
 
 def brush(c):
     ed = edit(c, pressed=1)
     ph = ed.photo
-    brush_ring(c, ph.x + round(ph.w * 0.3), ph.y + round(ph.h * 0.72))
+    w.brush_ring(c, ph.x + round(ph.w * 0.3), ph.y + round(ph.h * 0.72))
     w.caption(c, "K  BRUSH")
 
 

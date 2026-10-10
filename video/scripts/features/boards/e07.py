@@ -74,18 +74,6 @@ def value(reach, v):
     return f"{v:+.2f}" if reach < 10 else f"{v:+.0f}"
 
 
-def readout(c, cx, y, text):
-    """A measured figure in the large font, centred on cx, as the canvas toolbar shows a render's time."""
-    tw = c.measure(text, "large")
-    r = w.Rect(cx - (tw + 12) // 2, y, tw + 12, 15)
-    c.rect(r.x + 1, r.y + 1, r.w, r.h, "shadow")
-    c.rect(*r, w.GREY["raised"])
-    c.box(*r, w.GREY["light"])
-    c.text(r.x + 6, r.y + 4, text, w.GREY["value"], font="large")
-    c.claim(r, "readout")
-    return r
-
-
 def edit(c, key="shop", *, exposure=None, active=None, press=None, readout_text=RENDER, sliders=True):
     """The editor with `key`'s photo open at `exposure` (its own by default), the Basic sliders, and the
     render time under the photo. `press` is "EXPOSURE" or a thumbnail's index. Returns the editor."""
@@ -107,7 +95,7 @@ def edit(c, key="shop", *, exposure=None, active=None, press=None, readout_text=
         knobs[name] = w.slider(c, p.x, y + i * 10, p.w, name, value(reach, v), 0.5 + v / (2 * reach),
                                active=name == active)
     if readout_text:
-        readout(c, ed.canvas.cx, ed.canvas.y2 - 18, readout_text)
+        w.readout(c, ed.canvas.cx, ed.canvas.y2 - 18, readout_text)
     if isinstance(press, int):
         r = cells[press]
         w.pointer(c, r.cx, r.cy, pressed=True)
@@ -151,40 +139,8 @@ def measured(c):
     w.caption(c, ["MEASURED ON", "AN M1 ULTRA"])
 
 
-def placeholder(c, frame, lines, note=()):
-    """The frame a Redlamp render goes in until it arrives: dashed, with what's to come in it."""
-    c.rect(*frame, w.GREY["well"])
-    for x0, y0, length, vertical in ((frame.x, frame.y, frame.w, False), (frame.x, frame.y2 - 1, frame.w, False),
-                                     (frame.x, frame.y, frame.h, True), (frame.x2 - 1, frame.y, frame.h, True)):
-        c.dashes(x0, y0, length, w.GREY["dim"], vertical=vertical)
-    top = frame.cy - (8 * (len(lines) + len(note)) + (3 if note else 0)) // 2
-    for i, line in enumerate(lines):
-        c.text(frame.cx, top + i * 8, line, w.GREY["value"], align="center")
-    for i, line in enumerate(note):
-        c.text(frame.cx, top + 3 + (len(lines) + i) * 8, line, w.GREY["dim"], align="center")
-
-
-def compare(c, file, real, lines, note=(), *, progress=1.0):
-    """Redlamp's before and after view across the stage: the owner's photo as it is, labelled BEFORE,
-    and beside it the frame Redlamp's render goes in, labelled AFTER. Returns the overlay that resolves
-    the pixel photo into the real one."""
-    w.header(c, FEATURE)
-    ed = w.editor(c, None, file=file, panel=8)
-    pw, ph, gap = 100, 150, 3
-    cv = ed.canvas
-    before = w.Rect(cv.x + (cv.w - 2 * pw - gap) // 2, cv.y + (cv.h - ph) // 2, pw, ph)
-    after = w.Rect(before.x2 + gap, before.y, pw, ph)
-    c.img.paste(w.pixel_photo(real, pw, ph), (before.x, before.y))
-    pixels = np.asarray(c.img)[before.y:before.y2, before.x:before.x2].copy()
-    placeholder(c, after, lines, note)
-    w.tag(c, before, "BEFORE")
-    w.tag(c, after, "AFTER")
-    w.caption(c, w.REAL_PHOTO)
-    return [w.Overlay(before, real, pixels, progress)]
-
-
 def result(c, progress=1.0):
-    return compare(c, PHOTOS["shop"][0], REAL, ["REDLAMP'S", "RENDERS", "GO HERE"], ["EXPOSURE", "+1.00 TO -0.50"],
+    return w.compare(c, FEATURE, PHOTOS["shop"][0], REAL, ["REDLAMP'S", "RENDERS", "GO HERE"], ["EXPOSURE", "+1.00 TO -0.50"],
                    progress=progress)
 
 
