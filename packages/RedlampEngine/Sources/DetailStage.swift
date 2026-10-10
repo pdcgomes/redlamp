@@ -449,6 +449,16 @@ final class DetailStage {
         cachedPhoto = photo
     }
 
+    /// Lets go of what the stage keeps for a variant no edit renders from any more
+    /// (`RevisionStage`), and of its retouched copies.
+    func letGo(ofVariant variant: ImageSession) {
+        let drops = { (owner: ImageSession) in owner.original === variant }
+        entries.removeAll { drops($0.session) }
+        sharpenCache.removeAll(where: drops)
+        ladderCache.removeAll(where: drops)
+        clarityBases.removeAll { drops($0.owner) }
+    }
+
     /// The processed pyramid texels behind `region` rendered at `outputSize`, encoding the work
     /// into `commands` unless it's cached. Nil when the recipe needs none of the stage there.
     func process(

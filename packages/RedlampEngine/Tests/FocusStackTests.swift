@@ -20,15 +20,16 @@ struct FocusStackTests {
         kernels = try KernelLibrary(device: device)
     }
 
-    /// A stacking frame is exactly a session's full-resolution level: same normalisation, hot-pixel
-    /// repair, highlight reconstruction and demosaic, without mipmaps or analysis.
+    /// A stacking frame is exactly a session's full-resolution level at the first raw revision, which
+    /// stacks keep: same normalisation, hot-pixel repair, highlight reconstruction and demosaic,
+    /// without mipmaps or analysis.
     @Test(.enabled(if: !EngineSmokeTests.fixtures.isEmpty))
     func `a demosaiced frame matches the session's first level`() throws {
         let builder = SessionBuilder(device: device, queue: queue, kernels: kernels)
         for url in EngineSmokeTests.fixtures where SupportedFormats.isRaw(url) {
             let decoded = try ImageDecoder.decode(url)
             let frame = try builder.demosaic(decoded)
-            let session = try builder.build(decoded)
+            let session = try builder.build(decoded, revision: .first)
             #expect(frame.balance == session.balanceMultipliers, "\(url.lastPathComponent)")
             let a = try halves(frame.texture, level: 0)
             let b = try halves(session.pyramid, level: 0)

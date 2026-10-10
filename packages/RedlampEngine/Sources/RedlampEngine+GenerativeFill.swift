@@ -185,6 +185,7 @@ public extension RedlampEngine {
     private func readCrop(
         of recipe: EditRecipe, base: ImageSession, level: Int, origin: SIMD2<Int>, width: Int, height: Int,
     ) throws -> [Float] {
+        let base = try revisions.session(for: recipe, base: base)
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         let buffer = try encoding(commands) {
             let pyramid = try retouch.session(for: recipe, base: base, commands: commands).pyramid

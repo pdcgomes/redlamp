@@ -485,22 +485,30 @@ final class MaskResources {
         edgeMaps.removeAll { $0.session == nil || kept == nil }
         colorMaps.removeAll { $0.session == nil || kept == nil }
         pruneRecordings()
-        guard let session, session.original !== kept?.original else { return }
+        guard let session, session.photo !== kept?.photo else { return }
         if kept != nil {
             park(session, queue: queue)
         }
         clearCurrent()
     }
 
-    /// Lets go of what is kept for `photo`, rendered last or kept aside, without keeping it
-    /// aside: after a still of a photo that isn't open.
+    /// Lets go of what is kept for `photo` and its variants, rendered last or kept aside, without
+    /// keeping it aside: after a still of a photo that isn't open.
     func letGo(of photo: ImageSession) {
-        let original = photo.original
-        parked.removeAll { $0.session == nil || $0.session?.original === original }
-        edgeMaps.removeAll { $0.session == nil || $0.session?.original === original }
-        colorMaps.removeAll { $0.session == nil || $0.session?.original === original }
+        letGo { $0.photo === photo.photo }
+    }
+
+    /// Lets go of what is kept for a variant no edit renders from any more (`RevisionStage`).
+    func letGo(ofVariant variant: ImageSession) {
+        letGo { $0.original === variant }
+    }
+
+    private func letGo(where drops: (ImageSession) -> Bool) {
+        parked.removeAll { $0.session.map(drops) ?? true }
+        edgeMaps.removeAll { $0.session.map(drops) ?? true }
+        colorMaps.removeAll { $0.session.map(drops) ?? true }
         pruneRecordings()
-        if session?.original === original {
+        if let session, drops(session) {
             clearCurrent()
         }
     }

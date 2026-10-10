@@ -65,6 +65,7 @@ public extension RedlampEngine {
         sensitivity: Double,
         session base: ImageSession,
     ) throws -> [ShootDust.Sighting] {
+        let base = try revisions.session(for: recipe, base: base)
         guard let commands = queue.makeCommandBuffer() else { throw EngineError.gpuUnavailable }
         let (session, buffer, width, height) = try encoding(commands) {
             let session = try retouch.session(for: recipe, base: base, commands: commands)
@@ -121,6 +122,7 @@ public extension RedlampEngine {
         recipe: EditRecipe,
         session base: ImageSession,
     ) throws -> ImagePoint? {
+        let base = try revisions.session(for: recipe, base: base)
         // Placed on the original, which the retouched copy matches in shape, before the spots go into a
         // command buffer: a return once they had would drop the buffer without rolling it back.
         let pyramid = base.original.pyramid

@@ -1,4 +1,5 @@
 import Foundation
+import RedlampEngineAPI
 
 /// How to rebuild sensor-clipped photosites, fitted per image.
 ///
@@ -17,12 +18,14 @@ public struct HighlightModel: Sendable, Hashable {
     /// 2: only (c + 2) % 3), at index c * 3 + s: x intercept, yzw weights on the cube roots of
     /// the R, G and B neighbourhood means.
     public var coefficients: [SIMD4<Float>]
+    /// The raw revision it was fitted for, which also says how the kernels rebuild.
+    public var revision: RawRevision
 
     /// Photosites at or above this fraction of the white level count as clipped.
     public static let clipFraction: Float = 0.99
 
     /// Nil when nothing in the image clipped, or it isn't a mosaic.
-    public static func fit(_ image: DecodedImage, balance: SIMD3<Float>) -> HighlightModel? {
+    public static func fit(_ image: DecodedImage, balance: SIMD3<Float>, revision: RawRevision) -> HighlightModel? {
         guard case let .mosaic(pattern) = image.layout else { return nil }
         let block = pattern.width % 3 == 0 ? 3 : 2
         let grid = BlockGrid(image: image, pattern: pattern, balance: balance, block: block)
@@ -41,6 +44,7 @@ public struct HighlightModel: Sendable, Hashable {
         return HighlightModel(
             clip: SIMD4(clip, clip.max()),
             coefficients: coefficients(reference),
+            revision: revision,
         )
     }
 

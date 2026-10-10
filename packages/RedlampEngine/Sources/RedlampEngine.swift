@@ -113,6 +113,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     /// The last region frame's overview and histogram, sent again while only the region moves.
     private var lastOverview: CachedOverview?
     private let detailStage: DetailStage
+    let revisions: RevisionStage
     let retouch: RetouchStage
     let masks: MaskResources
     private let baseLooks: BaseLookRegistry
@@ -176,6 +177,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         let builder = SessionBuilder(
             device: device, queue: buildQueue, kernels: kernels, lensProfiles: lensProfiles, files: files,
         )
+        revisions = RevisionStage(builder: builder)
         let signposter = signposts
         sessions = SessionCache(
             budget: min(Int(device.recommendedMaxWorkingSetSize) / 4, 3 << 30),
@@ -285,6 +287,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             detailStage.keepOnly(photo)
             retouch.keepOnly(photo)
             masks.keepOnly(photo, queue: queue)
+            revisions.keepOnly(photo)
             if comparison?.session.original !== photo {
                 comparison = nil
             }
@@ -369,6 +372,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
             guard let current = session.withLock({ $0 }) else { continue }
             do {
                 let frame = try renderFrame(request, session: current)
+                letGo(of: revisions.keep(for: [request.recipe] + [request.comparison].compactMap(\.self), of: current))
                 continuation.withLock { _ = $0?.yield(frame) }
             } catch {
                 Logger(subsystem: "app.redlamp.engine", category: "render").error("Render failed: \(error)")
@@ -474,6 +478,16 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         )
     }
 
+    /// Lets go of variants no edit renders from any more (an edit's process updated), and of what
+    /// the stages kept for them.
+    private func letGo(of variants: [ImageSession]) {
+        for variant in variants {
+            retouch.letGo(ofVariant: variant)
+            masks.letGo(ofVariant: variant)
+            detailStage.letGo(ofVariant: variant)
+        }
+    }
+
     /// `session` with the recipe's spots in, and from process 10 the maps `maps` asks for; the
     /// photo's before.
     func retouched(
@@ -504,7 +518,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         pointColorCoverage: Int? = nil,
         retouchMaps: RetouchStage.Maps = .current,
     ) throws {
-        let photo = session
+        let photo = try revisions.session(for: recipe, base: session)
         let session = try retouched(recipe, session: photo, commands: commands, maps: retouchMaps)
         let maskBindings = try prepareMasks(
             recipe, session: photo, retouched: session, commands: commands,
@@ -576,6 +590,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         region: ImageRect,
         commands: any MTLCommandBuffer,
     ) throws {
+        let session = try revisions.session(for: recipe, base: session)
         guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
         var inputs = DevelopParameters.make(
             recipe: recipe, session: session, baseLook: baseLooks.resolve(recipe.baseLook), outputSize: size,
@@ -668,6 +683,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
                 let open = currentSession()
                 detailStage.keepOnly(open)
                 retouch.keepOnly(open)
+                revisions.keepOnly(open)
                 if open !== session {
                     masks.letGo(of: session)
                 }
@@ -742,8 +758,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     public func autoTone(for recipe: EditRecipe) async -> [ParameterID: Double] {
-        guard let current = session.withLock({ $0 }) else { return [:] }
-        return ImageAnalysis.autoTone(session: current, recipe: recipe.rendered)
+        guard let current = session.withLock({ $0 }), let photo = try? revisions.session(for: recipe, base: current)
+        else { return [:] }
+        return ImageAnalysis.autoTone(session: photo, recipe: recipe.rendered)
     }
 
     public func detectLines() async -> [DetectedLine] {

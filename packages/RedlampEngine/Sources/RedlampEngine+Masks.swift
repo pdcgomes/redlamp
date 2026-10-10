@@ -224,6 +224,7 @@ extension RedlampEngine {
 
     /// Reads the edit guide one level down (each texel averages four) at `point`.
     func sampleEditGuide(at point: CGPoint, recipe: EditRecipe, session: ImageSession) throws -> SIMD3<Double> {
+        let session = try revisions.session(for: recipe, base: session)
         guard let commands = queue.makeCommandBuffer(),
               let buffer = device.makeBuffer(length: 8, options: .storageModeShared)
         else { throw EngineError.gpuUnavailable }

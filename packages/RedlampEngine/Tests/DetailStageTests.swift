@@ -811,6 +811,7 @@ struct DetailStageTests {
         profile: NoiseModel = DetailStageTests.noise,
         spikes: [(SIMD2<Int>, Float)] = [],
         bayerDemosaic: BayerDemosaic = .menon,
+        revision: RawRevision = .current,
         signal: (Int, Int) -> Float = { _, _ in DetailStageTests.level },
     ) throws -> ImageSession {
         let layout: DecodedImage.Layout
@@ -864,7 +865,7 @@ struct DetailStageTests {
         decoded.banding = banding
         var builder = SessionBuilder(device: device, queue: queue, kernels: kernels)
         builder.bayerDemosaic = bayerDemosaic
-        return try builder.build(decoded)
+        return try builder.build(decoded, revision: revision)
     }
 
     /// One pyramid level read back as camera RGB.

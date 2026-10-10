@@ -45,43 +45,17 @@ struct SessionBuilder {
     /// ...and this many times as bright as the brightest.
     static let hotPixelRatio: Float = 2
 
-    func build(_ decoded: DecodedImage) throws -> ImageSession {
+    /// The photo's session, its raw stages at `revision`.
+    func build(_ decoded: DecodedImage, revision: RawRevision = .current) throws -> ImageSession {
         try Self.checkGainMaps(decoded)
         let url = decoded.info.url
         let files = files
         let mattes = Prefetch(on: .global(qos: .userInitiated)) { files.embeddedMattes(in: url) }
-        let width = decoded.width
-        let height = decoded.height
-        let levels = Int(log2(Double(max(width, height)))) + 1
-
-        let pyramidDescriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float, width: width, height: height, mipmapped: true,
-        )
-        pyramidDescriptor.mipmapLevelCount = levels
-        pyramidDescriptor.usage = [.shaderRead, .shaderWrite]
-        pyramidDescriptor.storageMode = .private
-        guard let pyramid = device.makeTexture(descriptor: pyramidDescriptor),
-              let commands = queue.makeCommandBuffer()
-        else {
-            throw EngineError.gpuUnavailable
-        }
-        commands.label = "Build pyramid"
-
         let balance = Self.balance(decoded)
         let noise = decoded.noise
         let noiseGain = try noiseGainTexture(decoded)
-        let repairedCount = try encodeBase(
-            decoded, balance: balance, noise: noise, noiseGain: noiseGain, into: pyramid, commands: commands,
-        )
-
-        guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
-        blit.generateMipmaps(for: pyramid)
-        blit.endEncoding()
-        commands.commit()
-        commands.waitUntilCompleted()
-        if let error = commands.error {
-            throw EngineError.renderFailed(error.localizedDescription)
-        }
+        let built = try pyramid(decoded, revision: revision, balance: balance, noise: noise, noiseGain: noiseGain)
+        let pyramid = built.pyramid
         let maps = try Self.maps(of: pyramid, airlight: nil, device: device, queue: queue, kernels: kernels)
         let colorModel = decoded.isRaw ? decoded.xyzToCamera.flatMap(CameraColorModel.init(xyzToCameraRowMajor:)) : nil
         var info = decoded.info
@@ -96,11 +70,13 @@ struct SessionBuilder {
             info: info,
             decoded: decoded,
             pyramid: pyramid,
+            rawRevision: revision,
+            rawSource: built.dependsOnRevision ? ImageSession.RawSource(decoded: decoded, noise: noise) : nil,
             colorModel: colorModel,
             balanceMultipliers: balance,
             analysis: maps.analysis,
             noise: noise,
-            repairedPixels: Int(repairedCount.contents().load(as: UInt32.self)),
+            repairedPixels: Int(built.repairedCount.contents().load(as: UInt32.self)),
             airlight: maps.airlight,
             hazeMap: maps.hazeMap,
             refinedHaze: maps.refinedHaze,
@@ -114,6 +90,54 @@ struct SessionBuilder {
             embeddedLook: embeddedLook,
             embeddedMattes: mattes.value(),
         )
+    }
+
+    /// `photo` built again at `revision` from its raw source, with its own pyramid and maps, for
+    /// the photo's edits at that revision (`RevisionStage`). Nil when every revision builds the
+    /// photo's own pyramid.
+    func variant(of photo: ImageSession, at revision: RawRevision) throws -> ImageSession? {
+        guard let source = photo.rawSource else { return nil }
+        let decoded = source.decoded
+        let built = try pyramid(
+            decoded, revision: revision, balance: Self.balance(decoded), noise: source.noise,
+            noiseGain: photo.noiseGain,
+        )
+        let maps = try Self.maps(of: built.pyramid, airlight: nil, device: device, queue: queue, kernels: kernels)
+        return ImageSession(variantOf: photo, revision: revision, pyramid: built.pyramid, maps: maps)
+    }
+
+    /// A mipmapped pyramid of `decoded` through the raw stages at `revision`; the buffer counting
+    /// repaired photosites, and whether a stage that differs between revisions changed the pyramid.
+    private func pyramid(
+        _ decoded: DecodedImage, revision: RawRevision, balance: SIMD3<Double>, noise: NoiseModel,
+        noiseGain: any MTLTexture,
+    ) throws -> (pyramid: any MTLTexture, repairedCount: any MTLBuffer, dependsOnRevision: Bool) {
+        let width = decoded.width
+        let height = decoded.height
+        let levels = Int(log2(Double(max(width, height)))) + 1
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: width, height: height, mipmapped: true,
+        )
+        descriptor.mipmapLevelCount = levels
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        descriptor.storageMode = .private
+        guard let pyramid = device.makeTexture(descriptor: descriptor), let commands = queue.makeCommandBuffer() else {
+            throw EngineError.gpuUnavailable
+        }
+        commands.label = "Build pyramid"
+        let (repairedCount, highlights) = try encodeBase(
+            decoded, revision: revision, balance: balance, noise: noise, noiseGain: noiseGain, into: pyramid,
+            commands: commands,
+        )
+        guard let blit = commands.makeBlitCommandEncoder() else { throw EngineError.gpuUnavailable }
+        blit.generateMipmaps(for: pyramid)
+        blit.endEncoding()
+        commands.commit()
+        commands.waitUntilCompleted()
+        if let error = commands.error {
+            throw EngineError.renderFailed(error.localizedDescription)
+        }
+        return (pyramid, repairedCount, highlights != nil)
     }
 
     /// The maps made from the photo's own pixels, from `pyramid` with its mipmaps: its analysis
@@ -180,7 +204,9 @@ struct SessionBuilder {
     }
 
     /// A frame for focus stacking: level 0 only (no mipmaps, analysis or haze map), full resolution,
-    /// in camera RGB balanced by `balance(_:)`, exactly as a session's pyramid holds it.
+    /// in camera RGB balanced by `balance(_:)`, exactly as a session's pyramid holds it. Its raw
+    /// stages are the first revision's: a stack's merge is cached and shared by all its edits, so
+    /// a later revision would change older edits whenever the cache is merged again.
     func demosaic(_ decoded: DecodedImage) throws -> DemosaicedFrame {
         try Self.checkGainMaps(decoded)
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -195,8 +221,8 @@ struct SessionBuilder {
         let balance = Self.balance(decoded)
         let noise = decoded.noise
         _ = try encodeBase(
-            decoded, balance: balance, noise: noise, noiseGain: noiseGainTexture(decoded), into: texture,
-            commands: commands,
+            decoded, revision: .first, balance: balance, noise: noise, noiseGain: noiseGainTexture(decoded),
+            into: texture, commands: commands,
         )
         commands.commit()
         commands.waitUntilCompleted()
@@ -226,36 +252,39 @@ struct SessionBuilder {
         return try NoiseGain.texture(field, device: device)
     }
 
-    /// Level 0 of `texture`: normalised, hot pixels repaired, highlights rebuilt and demosaiced.
-    /// Returns the buffer counting repaired photosites, readable once `commands` completes.
+    /// Level 0 of `texture`: normalised, hot pixels repaired, highlights rebuilt as `revision` does
+    /// and demosaiced. Returns the buffer counting repaired photosites, readable once `commands`
+    /// completes, and the highlight model, nil when nothing clipped.
     private func encodeBase(
         _ decoded: DecodedImage,
+        revision: RawRevision,
         balance: SIMD3<Double>,
         noise: NoiseModel,
         noiseGain: any MTLTexture,
         into texture: any MTLTexture,
         commands: any MTLCommandBuffer,
-    ) throws -> any MTLBuffer {
+    ) throws -> (repairedCount: any MTLBuffer, highlights: HighlightModel?) {
         let multipliers = SIMD4<Float>(SIMD3<Float>(balance), 1)
         guard let repairedCount = device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: .storageModeShared)
         else {
             throw EngineError.gpuUnavailable
         }
         memset(repairedCount.contents(), 0, repairedCount.length)
+        var highlights: HighlightModel?
         switch decoded.layout {
         case let .mosaic(pattern):
+            highlights = HighlightModel.fit(decoded, balance: SIMD3<Float>(balance), revision: revision)
             try encodeMosaic(
                 decoded, pattern: pattern, multipliers: multipliers,
                 noise: noise.scaled(by: SIMD3<Float>(balance)), noiseGain: noiseGain, repairedCount: repairedCount,
-                highlights: HighlightModel.fit(decoded, balance: SIMD3<Float>(balance)),
-                into: texture, commands: commands,
+                highlights: highlights, into: texture, commands: commands,
             )
         case .linearRGB:
             try encodeLinearRGB(decoded, multipliers: multipliers, into: texture, commands: commands)
         case .linearSRGBHalf, .balancedCameraHalf:
             try encodeHalves(decoded, into: texture, commands: commands)
         }
-        return repairedCount
+        return (repairedCount, highlights)
     }
 
     private func encodeMosaic(

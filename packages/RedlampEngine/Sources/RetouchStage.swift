@@ -292,21 +292,32 @@ final class RetouchStage: @unchecked Sendable {
         return entry.interim
     }
 
-    /// Lets go of the retouches and Remove fills of photos other than `session`'s, and of their
-    /// sessions; of every one, and of the generative fills' bitmaps and the regions' shapes, when
-    /// it's nil.
+    /// Lets go of the retouches and Remove fills of photos other than `session`'s (its variants'
+    /// are its own), and of their sessions; of every one, and of the generative fills' bitmaps and
+    /// the regions' shapes, when it's nil.
     func keepOnly(_ session: ImageSession?) {
-        let original = session?.original
-        let photo = original.map(ObjectIdentifier.init)
+        let photo = session?.photo
+        letGo(where: { $0.photo !== photo }, andStored: photo == nil)
+    }
+
+    /// Lets go of the retouches and Remove fills of a variant no edit renders from any more
+    /// (`RevisionStage`).
+    func letGo(ofVariant variant: ImageSession) {
+        letGo(where: { $0 === variant }, andStored: false)
+    }
+
+    /// Lets go of the retouches and fills of the photos as opened that `drops`, and with `stored`
+    /// of the generative fills' bitmaps and the regions' shapes.
+    private func letGo(where drops: (ImageSession) -> Bool, andStored stored: Bool) {
         let dropped = lock.withLock {
             let dropped = (
-                entries.filter { $0.original !== original }, fills.filter { $0.key.session != photo },
-                original == nil ? storedFills : [:],
+                entries.filter { drops($0.original) }, fills.filter { drops($0.value.owner) },
+                stored ? storedFills : [:],
             )
-            entries.removeAll { $0.original !== original }
-            fills = fills.filter { $0.key.session == photo }
-            fillOrder.removeAll { $0.session != photo }
-            if original == nil {
+            entries.removeAll { drops($0.original) }
+            fills = fills.filter { !drops($0.value.owner) }
+            fillOrder.removeAll { fills[$0] == nil }
+            if stored {
                 storedFills = [:]
                 storedOrder = []
                 regions = [:]

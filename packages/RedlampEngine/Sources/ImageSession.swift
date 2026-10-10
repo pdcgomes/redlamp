@@ -58,19 +58,46 @@ final class ImageSession: @unchecked Sendable {
     let embeddedLook: BaseLookDefinition?
     /// The mattes the file carries, found while the session was built so they're never probed on the main thread.
     let embeddedMattes: Set<EmbeddedMatte>
+    /// The raw revision its pyramid was built at (`RawRevision`).
+    let rawRevision: RawRevision
+    /// What another raw revision builds a different pyramid from, kept for the photo's edits at
+    /// that revision (`RevisionStage`); nil when every revision builds the same one.
+    let rawSource: RawSource?
     private let chromaticAberration: LateralChromaticAberration.Cache
     /// The session this one copies with Heal and Clone spots in its pyramid (see `RetouchStage`).
     private let retouchedFrom: ImageSession?
+    /// The session this one builds again at an older raw revision (see `RevisionStage`).
+    private let variantOf: ImageSession?
 
-    /// The photo as opened, without spots.
+    /// The decoded image and its noise model, as the photo's pyramid was built from them.
+    struct RawSource {
+        let decoded: DecodedImage
+        let noise: NoiseModel
+    }
+
+    /// The photo as opened, without spots: at an older raw revision, its variant.
     var original: ImageSession {
         retouchedFrom ?? self
+    }
+
+    /// The photo as opened at the current raw revision: the same for its variants and their
+    /// retouched copies.
+    var photo: ImageSession {
+        original.variantOf ?? original
+    }
+
+    /// Whether an edit at `revision` renders from this session's pixels.
+    func serves(_ revision: RawRevision) -> Bool {
+        let original = original
+        return revision == original.rawRevision || (original.rawSource == nil && original.variantOf == nil)
     }
 
     init(
         info: ImageInfo,
         decoded: DecodedImage,
         pyramid: any MTLTexture,
+        rawRevision: RawRevision,
+        rawSource: RawSource?,
         colorModel: CameraColorModel?,
         balanceMultipliers: SIMD3<Double>,
         analysis: AnalysisImage,
@@ -90,6 +117,8 @@ final class ImageSession: @unchecked Sendable {
         embeddedMattes: Set<EmbeddedMatte>,
     ) {
         self.embeddedMattes = embeddedMattes
+        self.rawRevision = rawRevision
+        self.rawSource = rawSource
         self.noiseGain = noiseGain
         dngProfile = decoded.isRaw ? decoded.dngProfile : nil
         self.hueSatMaps = decoded.isRaw ? hueSatMaps : nil
@@ -127,6 +156,47 @@ final class ImageSession: @unchecked Sendable {
         self.analysis = analysis
         chromaticAberration = LateralChromaticAberration.Cache()
         retouchedFrom = nil
+        variantOf = nil
+    }
+
+    /// `photo` built again at an older raw revision: `pyramid`, and the maps made from it, in place
+    /// of its own. The calibration, the noise model and the embedded profile are the photo's; what
+    /// is measured from its pixels (the airlight, the chromatic aberration) is its own.
+    init(variantOf photo: ImageSession, revision: RawRevision, pyramid: any MTLTexture, maps: ImageMaps) {
+        info = photo.info
+        isRaw = photo.isRaw
+        self.pyramid = pyramid
+        orientation = photo.orientation
+        orientedSize = photo.orientedSize
+        cameraToWorking = photo.cameraToWorking
+        dngColor = photo.dngColor
+        asShotTemperature = photo.asShotTemperature
+        colorModel = photo.colorModel
+        asShotMultipliers = photo.asShotMultipliers
+        balanceMultipliers = photo.balanceMultipliers
+        baselineExposure = photo.baselineExposure
+        analysis = maps.analysis
+        noise = photo.noise
+        sensor = photo.sensor
+        repairedPixels = photo.repairedPixels
+        airlight = maps.airlight
+        hazeMap = maps.hazeMap
+        refinedHaze = maps.refinedHaze
+        toneBase = maps.toneBase
+        clarityBase = maps.clarityBase
+        glowSource = maps.glowSource
+        glowLights = maps.glowLights
+        noiseGain = photo.noiseGain
+        dngProfile = photo.dngProfile
+        hueSatMaps = photo.hueSatMaps
+        gainTableMap = photo.gainTableMap
+        embeddedLook = photo.embeddedLook
+        embeddedMattes = photo.embeddedMattes
+        rawRevision = revision
+        rawSource = nil
+        chromaticAberration = LateralChromaticAberration.Cache()
+        retouchedFrom = nil
+        variantOf = photo
     }
 
     /// `session` with `pyramid` in place of its own, and `maps` made from it in place of the
@@ -164,8 +234,11 @@ final class ImageSession: @unchecked Sendable {
         gainTableMap = original.gainTableMap
         embeddedLook = original.embeddedLook
         embeddedMattes = original.embeddedMattes
+        rawRevision = original.rawRevision
+        rawSource = nil
         chromaticAberration = original.chromaticAberration
         retouchedFrom = original
+        variantOf = nil
     }
 
     /// The maps made from its pixels.
@@ -176,7 +249,7 @@ final class ImageSession: @unchecked Sendable {
         )
     }
 
-    /// What the session holds: each of its textures once, and its analysis copy.
+    /// What the session holds: each of its textures once, its analysis copy and its raw source.
     var allocatedBytes: Int {
         var textures: [any MTLTexture] = [
             pyramid, hazeMap, refinedHaze, toneBase, clarityBase, glowSource, glowLights, noiseGain,
@@ -184,7 +257,7 @@ final class ImageSession: @unchecked Sendable {
         textures += [hueSatMaps?.cool, hueSatMaps?.warm, gainTableMap?.texture].compactMap(\.self)
         var seen = Set<ObjectIdentifier>()
         return textures.filter { seen.insert(ObjectIdentifier($0)).inserted }.map(\.allocatedSize).reduce(0, +)
-            + analysis.pixels.withUnsafeBytes(\.count)
+            + analysis.pixels.withUnsafeBytes(\.count) + (rawSource?.decoded.samples.withUnsafeBytes(\.count) ?? 0)
     }
 
     /// The stops added to Exposure: a DNG's BaselineExposure or, under Redlamp Reproduction, the

@@ -84,6 +84,7 @@ extension RedlampEngine {
     func samplePointColorInput(
         at point: CGPoint, radius: Double, recipe: EditRecipe, session: ImageSession,
     ) throws -> OKLCh {
+        let session = try revisions.session(for: recipe, base: session)
         guard let commands = queue.makeCommandBuffer(),
               let buffer = device.makeBuffer(length: 8, options: .storageModeShared)
         else { throw EngineError.gpuUnavailable }
