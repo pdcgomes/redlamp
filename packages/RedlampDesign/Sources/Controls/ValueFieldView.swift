@@ -133,8 +133,11 @@ public final class ValueFieldView: LayerDrawnView, NSTextFieldDelegate {
 
     override public func drawContent(in _: CGRect) {
         let text = spec.formatted(value)
-        if let color = wellColor, let context = NSGraphicsContext.current?.cgContext {
-            context.addPath(CGPath(roundedRect: wellRect, cornerWidth: 3, cornerHeight: 3, transform: nil))
+        let well = wellRect
+        // Rounded corners need a rect at least twice their size.
+        if let color = wellColor, well.width >= 6, well.height >= 6,
+           let context = NSGraphicsContext.current?.cgContext {
+            context.addPath(CGPath(roundedRect: well, cornerWidth: 3, cornerHeight: 3, transform: nil))
             context.setFillColor(color.opacity(opacity).cgColor)
             context.fillPath()
         }
