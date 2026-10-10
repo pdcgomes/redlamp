@@ -42,6 +42,12 @@ FONTS["large"]._cache.pop(",", None)
 # ---------------------------------------------------------------- the grid
 
 W, H, SCALE = 216, 384, 5
+# A reel shows the grid at SHOWN times its size, centred in its 1080 × 1920 frame with MARGIN grid
+# pixels all round: tall phones crop a reel's sides to fill the screen, about 97 px each, and the
+# margin keeps 108 px clear (the owner, 10 October 2026).
+SHOWN = 4
+MARGIN = ((1080 // SHOWN - W) // 2, (1920 // SHOWN - H) // 2)
+FRAME = (W + 2 * MARGIN[0], H + 2 * MARGIN[1])
 # Every video's timings, in beats from the first frame (src/features/cues.json), read by the frames,
 # the score and the composition alike.
 SHEET = json.loads((VIDEO / "src/features/cues.json").read_text())
@@ -62,6 +68,8 @@ COVERED_PX = {
     "top bar": (0, 0, 1080, 260),
     "caption and buttons": (0, 1440, 1080, 480),
     "side buttons": (920, 700, 160, 900),
+    "cropped on tall phones, left": (0, 0, 100, 1920),
+    "cropped on tall phones, right": (980, 0, 100, 1920),
 }
 
 HEADER = Rect(0, 52, W, 12)
@@ -76,13 +84,15 @@ REAL_APP = ("THE REAL APP",)
 END_CARD = tuple(POSTS["standard"]["endCard"])
 
 
-def covered(w=W, h=H, scale=SCALE):
-    """The covered zones of a w × h grid shown `scale` times the size, widened to whole logical pixels."""
+def covered(w=W, h=H, scale=SHOWN, margin=MARGIN):
+    """The covered zones of a w × h grid shown `scale` times the size inside a margin of `margin` grid
+    pixels, as a reel is, widened to whole logical pixels; a zone that falls in the margin is left out."""
     zones = []
     for name, (x, y, zw, zh) in COVERED_PX.items():
-        x0, y0 = x // scale, y // scale
-        x1, y1 = min(w, -(-(x + zw) // scale)), min(h, -(-(y + zh) // scale))
-        zones.append((Rect(x0, y0, x1 - x0, y1 - y0), name))
+        x0, y0 = max(0, x // scale - margin[0]), max(0, y // scale - margin[1])
+        x1, y1 = min(w, -(-(x + zw) // scale) - margin[0]), min(h, -(-(y + zh) // scale) - margin[1])
+        if x1 > x0 and y1 > y0:
+            zones.append((Rect(x0, y0, x1 - x0, y1 - y0), name))
     return zones
 
 
@@ -179,7 +189,7 @@ def check(c, *, video=True):
     notes = c.check()
     for r, s in c.texts:
         if video:
-            for zone, name in covered(c.w, c.h, c.scale):
+            for zone, name in covered(c.w, c.h):
                 if r.intersects(zone):
                     notes.append(f"{s!r} is under the {name} at {tuple(r)}")
         if r.h >= 14 and len(s) > LINE_CHARS:

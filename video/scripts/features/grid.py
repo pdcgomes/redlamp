@@ -23,7 +23,7 @@ HOOK = ["BRING YOUR", "LIGHTROOM PRESETS"]
 
 def frame(gw, gh, scale):
     c = w.canvas(gw, gh, scale)
-    zones = w.covered(gw, gh, scale)
+    zones = w.covered(gw, gh, scale, margin=(0, 0))
     top = zones[0][0].y2
     bottom = zones[1][0].y
     side = zones[2][0]

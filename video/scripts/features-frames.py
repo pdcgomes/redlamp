@@ -3,11 +3,12 @@
 The feature videos' pictures (src/features/FeatureVideo.tsx): every frame drawn by pixelkit from the
 series' cue sheet (src/features/cues.json): first the opener every video starts with (world.opener),
 then the episode, by its board, scripts/features/boards/<episode>.py, whose frame(c, beat, hook) draws
-any moment of it. A frame is the 216 × 384 canvas, which the
-composition shows five times the size with nearest-neighbour scaling; while a real photo is on screen it
-is the whole 1080 × 1920 frame, with the photo at full resolution through the dither that reveals it
-(world.render). A picture that comes out the same as another is written once, and frames.json lists
-each frame's file for every hook.
+any moment of it. A frame is the 216 × 384 canvas in the reel's margin (world.MARGIN), 270 × 480,
+which the composition shows four times the size with nearest-neighbour scaling, so the picture keeps
+clear of the sides tall phones crop. The glows and fades that cover the whole canvas carry on into the
+margin, dithered in step with the canvas. While a real photo is on screen a frame is the whole
+1080 × 1920 frame, with the photo through the dither that reveals it (world.render). A picture that
+comes out the same as another is written once, and frames.json lists each frame's file for every hook.
 
     python3 scripts/features-frames.py --episode e01              # public/features/e01/frames/, every hook
     python3 scripts/features-frames.py --episode e01 --hook a     # one hook
@@ -43,16 +44,45 @@ def load(key):
 
 
 def draw(board, f, hook):
-    """Frame f with `hook`: the image to write (the canvas, or the whole frame when a real photo is on
-    it) and the kit's warnings."""
+    """Frame f with `hook`: the image to write (the framed canvas, or the whole frame when a real photo
+    is on it) and the kit's warnings."""
     c = w.canvas()
+    spread = []
+    for name in ("glow", "dissolve"):
+        def recorded(*args, _call=getattr(c, name), _name=name, **kwargs):
+            if kwargs.get("region") is None:
+                spread.append((_name, args, kwargs))
+            return _call(*args, **kwargs)
+        setattr(c, name, recorded)
     if f < w.OPENER_FRAMES:
         w.opener(c, f, board.EPISODE, board.EPISODE["hooks"][hook], board.FEATURE)
         overlays = []
     else:
         overlays = board.frame(c, (f - w.OPENER_FRAMES) / w.PER_BEAT, hook) or []
-    image = w.render(c, w.SCALE, overlays) if overlays else c.img
-    return image, w.check(c)
+    margin = framed(c.img, spread)
+    if not overlays:
+        return margin, w.check(c)
+    whole = margin.resize((margin.width * w.SHOWN, margin.height * w.SHOWN), 0)
+    whole.paste(w.render(c, w.SHOWN, overlays), (w.MARGIN[0] * w.SHOWN, w.MARGIN[1] * w.SHOWN))
+    return whole, w.check(c)
+
+
+def framed(image, spread):
+    """The canvas in the reel's margin. The glows and fades drawn over the whole canvas (`spread`) are
+    drawn again on the margin, whose origin falls on the 4 × 4 ordered dither's grid as the canvas's
+    does, so they carry on across the edge."""
+    mx, my = w.MARGIN
+    pad = -mx % 4
+    margin = w.canvas(w.W + 2 * (mx + pad), w.H + 2 * my)
+    for name, args, kwargs in spread:
+        if name == "glow":
+            cx, cy, *rest = args
+            margin.glow(cx + mx + pad, cy + my, *rest, **kwargs)
+        else:
+            getattr(margin, name)(*args, **kwargs)
+    out = margin.img.crop((pad, 0, pad + w.FRAME[0], w.FRAME[1]))
+    out.paste(image, (mx, my))
+    return out
 
 
 def main():
@@ -73,8 +103,8 @@ def main():
         out.mkdir(parents=True, exist_ok=True)
         for f in (int(x) for x in args.only.split(",")):
             image, notes = draw(board, f, hooks[0])
-            if image.size != (w.W * w.SCALE, w.H * w.SCALE):
-                image = image.resize((w.W * w.SCALE, w.H * w.SCALE), 0)
+            if image.size == w.FRAME:
+                image = image.resize((w.FRAME[0] * w.SHOWN, w.FRAME[1] * w.SHOWN), 0)
             print(f"wrote {w.save(image, out / f'{f:04d}.png')}")
             warnings.update(dict.fromkeys(notes))
     else:
@@ -96,7 +126,7 @@ def main():
                 warnings.update(dict.fromkeys(notes))
                 a = np.asarray(image)
                 digest = hashlib.sha1(a.tobytes() + str(a.shape).encode()).hexdigest()[:12]
-                name = f"{'px' if image.size == (w.W, w.H) else 'hd'}-{digest}.png"
+                name = f"{'px' if image.size == w.FRAME else 'hd'}-{digest}.png"
                 if name not in written:
                     if name.startswith("px"):
                         w.save(image, frames_dir / name)

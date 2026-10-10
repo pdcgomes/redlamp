@@ -4,10 +4,11 @@ import { AbsoluteFill, useVideoConfig } from "remotion";
  * Where the apps lay their own interface over a vertical video, at 1080 × 1920: the status bar
  * and tabs at the top, the caption, account and sound at the bottom, and the like, comment and
  * share buttons down the right. Conservative across TikTok, Instagram Reels and YouTube Shorts;
- * anything that must be read stays outside them. Square and feed shapes keep a plain margin.
+ * anything that must be read stays outside them. Tall phones also crop each side, about 97 px, to fill
+ * their screens. Square and feed shapes keep a plain margin.
  */
 export const safeZones = {
-  tall: { top: 260, bottom: 480, right: 160, rightFrom: 700, rightTo: 1600, left: 60 },
+  tall: { top: 260, bottom: 480, right: 160, rightFrom: 700, rightTo: 1600, left: 60, crop: 100 },
   feed: { margin: 60 },
 };
 
@@ -16,6 +17,8 @@ export function SafeZones() {
   const { width, height } = useVideoConfig();
   const fill = "rgba(80,160,255,0.22)";
   const edge = "1px dashed rgba(120,190,255,0.9)";
+  const cropped = "rgba(255,160,60,0.18)";
+  const crop = "1px dashed rgba(255,180,90,0.9)";
   const label = { position: "absolute" as const, font: "500 22px Inter, sans-serif", color: "rgba(190,220,255,0.95)", padding: 10 };
   if (height / width > 1.5) {
     const z = safeZones.tall;
@@ -42,6 +45,10 @@ export function SafeZones() {
           <span style={{ ...label, writingMode: "vertical-rl" }}>Like, comment, share</span>
         </div>
         <div style={{ position: "absolute", left: 0, width: z.left * s, top: z.top * s, bottom: z.bottom * s, borderRight: edge }} />
+        {[{ left: 0 }, { right: 0 }].map((side) => (
+          <div key={Object.keys(side)[0]} style={{ position: "absolute", ...side, top: 0, bottom: 0, width: z.crop * s, background: cropped, borderLeft: side.right === 0 ? crop : undefined, borderRight: side.left === 0 ? crop : undefined }} />
+        ))}
+        <span style={{ ...label, left: z.crop * s, top: z.top * s, color: "rgba(255,200,120,0.95)" }}>Cropped on tall phones</span>
       </AbsoluteFill>
     );
   }
