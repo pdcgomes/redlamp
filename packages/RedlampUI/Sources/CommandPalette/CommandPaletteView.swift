@@ -143,7 +143,7 @@ private struct PaletteList: View {
                     .foregroundStyle(colors.secondaryLabel)
                     .frame(width: 20)
                 if let page = palette.page {
-                    Text(page.title)
+                    Text(page == .actions ? palette.subject?.title ?? page.title : page.title)
                         .font(.system(size: 12, weight: .medium))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
@@ -162,6 +162,7 @@ private struct PaletteList: View {
                     onChange: { palette.setText($0) },
                     onKey: { palette.handle($0) },
                 )
+                .accessibilityIdentifier("palette.field")
             }
             .padding(.horizontal, 14)
             .frame(height: 50)

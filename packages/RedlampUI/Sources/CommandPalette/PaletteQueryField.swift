@@ -36,6 +36,9 @@ struct PaletteQueryField: NSViewRepresentable {
         field.isEditable = focuses
         field.isSelectable = focuses
         field.selectsAllOnFocus = selectsAll
+        field.onCommandReturn = { [weak coordinator = context.coordinator] in
+            coordinator?.parent.onKey(.rowActions) ?? false
+        }
         context.coordinator.revision = revision
         configure(field)
         return field
@@ -104,7 +107,7 @@ struct PaletteQueryField: NSViewRepresentable {
                  #selector(NSResponder.moveWordRight(_:)), #selector(NSResponder.moveWordRightAndModifySelection(_:)):
                 return parent.onKey(.right(modifiers))
             case #selector(NSResponder.insertNewline(_:)):
-                return parent.onKey(.submit)
+                return parent.onKey(flags.contains(.command) ? .rowActions : .submit)
             case #selector(NSResponder.cancelOperation(_:)):
                 return parent.onKey(.escape)
             case #selector(NSResponder.deleteBackward(_:)):
@@ -125,6 +128,16 @@ struct PaletteQueryField: NSViewRepresentable {
 final class PaletteTextField: NSTextField {
     var takesFocus = true
     var selectsAllOnFocus = true
+    /// ⌘↵, which reaches the field as a key equivalent before its editor sees it as a key.
+    var onCommandReturn: (() -> Bool)?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        guard event.type == .keyDown, [36, 76].contains(event.keyCode), modifiers == .command,
+              let editor = currentEditor(), window?.firstResponder === editor
+        else { return super.performKeyEquivalent(with: event) }
+        return onCommandReturn?() ?? false
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()

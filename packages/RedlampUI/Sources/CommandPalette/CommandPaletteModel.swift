@@ -16,7 +16,9 @@ public final class CommandPaletteModel {
 
     @ObservationIgnored public unowned let editor: EditorModel
     public private(set) var scope: PaletteScope
-    public private(set) var levels: [PaletteLevel]
+    public internal(set) var levels: [PaletteLevel]
+    /// The row whose actions the Actions page lists (⌘↵).
+    public internal(set) var subject: PaletteItem?
     /// The rows of the topmost list level.
     public internal(set) var sections: [PaletteSection] = []
     public internal(set) var rows: [PaletteItem] = []
@@ -116,7 +118,7 @@ public final class CommandPaletteModel {
         switch item.kind {
         case .filterPreset, .page(.filterPresets): return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
         case .customLabel: return editor.selection != nil && !editor.isModalDialogOpen
-        case .libraryName(.folder, _), .photo: return !editor.isModalDialogOpen
+        case .libraryName(.folder, _), .photo, .rowAction: return !editor.isModalDialogOpen
         case .libraryName, .photosNamed, .queryTerm: return PaletteCatalog.isAvailable(.filterPresets, editor: editor)
         case .queryField: return true
         default: break
@@ -199,6 +201,8 @@ public final class CommandPaletteModel {
             if let item = selectedItem {
                 activate(item)
             }
+        case .rowActions:
+            showRowActions()
         case .escape:
             back(.escape)
         case .deleteBackward:
@@ -229,6 +233,7 @@ public final class CommandPaletteModel {
             } else {
                 commitTyped(typed, to: parameter)
             }
+        case .rowActions: break
         case .escape: back(.escape)
         case .deleteBackward: back(.delete)
         case .reset:
@@ -284,6 +289,8 @@ public final class CommandPaletteModel {
         case let .queryField(field):
             setText(field)
             revealText(selectAll: false)
+        case let .rowAction(action):
+            perform(action)
         default:
             clearPreview()
             recordingStep { apply(item.kind) }
@@ -295,6 +302,7 @@ public final class CommandPaletteModel {
     private static let appActions: Set<ShortcutAction> = [.openFolder, .export, .exportWithPrevious, .filmLooks]
 
     private func run(_ action: ShortcutAction) {
+        recordRecent(.action(action))
         report(.ran(action))
         let performAppAction = performAppAction
         close(.ran)
@@ -305,9 +313,10 @@ public final class CommandPaletteModel {
         }
     }
 
-    private func push(_ page: PalettePage) {
+    func push(_ page: PalettePage) {
         endBurst()
         clearPreview()
+        recordRecent(.page(page))
         levels.append(.list(page: page, query: "", selection: 0))
         refresh()
         revealText(selectAll: true)
@@ -318,6 +327,7 @@ public final class CommandPaletteModel {
     public func openSlider(_ parameter: ParameterID) {
         endBurst()
         clearPreview()
+        recordRecent(.slider(parameter))
         levels.append(.slider(parameter, typed: ""))
         typedIsInvalid = false
         if !isSpecimen {
@@ -336,6 +346,9 @@ public final class CommandPaletteModel {
         }
         endBurst()
         clearPreview()
+        if page == .actions {
+            subject = nil
+        }
         levels.removeLast()
         refresh()
         revealText(selectAll: true)
@@ -343,7 +356,7 @@ public final class CommandPaletteModel {
         highlightChanged()
     }
 
-    private func close(_ reason: PaletteCloseReason) {
+    func close(_ reason: PaletteCloseReason) {
         guard !isSpecimen else { return }
         editor.closeCommandPalette(reason)
     }
@@ -365,9 +378,30 @@ public final class CommandPaletteModel {
 
     func refresh() {
         guard case let .list(page, query, _) = level else { return }
-        catalogSections = PaletteCatalog.sections(page: page, scope: scope, query: query, editor: editor)
-        lookUpLibrary(page: page, query: query)
+        if page == .actions {
+            // The library's rows for the search stay as they are, for the row to be there to go back to.
+            let words = SearchMatcher.words(query)
+            let items = rowActionItems()
+            catalogSections = [PaletteSection(
+                title: nil, items: words.isEmpty ? items : PaletteCatalog.rank(items, query: query, words: words),
+            )]
+        } else {
+            catalogSections = PaletteCatalog.sections(
+                page: page, scope: scope, query: query, editor: editor, recents: isSpecimen ? [] : recents.kinds,
+            )
+            lookUpLibrary(page: page, query: query)
+        }
         showSections()
+    }
+
+    /// The commands last run, kept for the field's empty state; specimens don't keep theirs.
+    var recents: PaletteRecents {
+        PaletteRecents.current
+    }
+
+    private func recordRecent(_ kind: PaletteItemKind) {
+        guard !isSpecimen else { return }
+        recents.record(kind)
     }
 
     func revealText(selectAll: Bool) {

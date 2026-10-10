@@ -6,17 +6,17 @@ import RedlampRecipes
 /// The palette's rows: what each level lists, and how a query ranks them.
 @MainActor
 enum PaletteCatalog {
-    /// The sections a level shows for `query`: browsable sections when it's empty, one
-    /// ranked list otherwise.
+    /// The sections a level shows for `query`: browsable sections when it's empty, the commands run last and
+    /// what can be done to the selection first, one ranked list otherwise.
     static func sections(
-        page: PalettePage?, scope: PaletteScope, query: String, editor: EditorModel,
+        page: PalettePage?, scope: PaletteScope, query: String, editor: EditorModel, recents: [PaletteItemKind] = [],
     ) -> [PaletteSection] {
         if let page {
             return pageSections(page, query: query, editor: editor)
         }
         let words = SearchMatcher.words(query)
         guard !words.isEmpty else {
-            return browsingSections(scope: scope, editor: editor)
+            return browsingSections(scope: scope, editor: editor, recents: recents)
         }
         var candidates = scope == .sliders ? sliderItems : searchableItems(editor: editor)
         candidates = rank(candidates, query: query, words: words)
@@ -61,11 +61,16 @@ enum PaletteCatalog {
 
     // MARK: - Browsing
 
-    private static func browsingSections(scope: PaletteScope, editor: EditorModel) -> [PaletteSection] {
+    private static func browsingSections(
+        scope: PaletteScope, editor: EditorModel, recents: [PaletteItemKind],
+    ) -> [PaletteSection] {
+        let top = scope == .all ? [recentSection(recents, editor: editor), selectionSection(editor: editor)] : []
+        // A row listed at the top isn't listed again below: the list's rows are told apart by what they do.
+        let listed = Set(top.flatMap(\.items).map(\.kind))
         let sliders = PanelID.allCases.compactMap { panel -> PaletteSection? in
             let items = sliderItems.filter { item in
                 if case let .slider(parameter) = item.kind {
-                    return panel.parameters.contains(parameter)
+                    return panel.parameters.contains(parameter) && !listed.contains(item.kind)
                 }
                 return false
             }
@@ -75,17 +80,52 @@ enum PaletteCatalog {
         let actions = ShortcutCategory.allCases.compactMap { category -> PaletteSection? in
             var items = actionItems.filter { item in
                 if case let .action(action) = item.kind {
-                    return action.category == category
+                    return action.category == category && !listed.contains(item.kind)
                 }
                 return false
             }
             if category == .rating {
-                items += customLabelItems(editor: editor)
+                items += customLabelItems(editor: editor).filter { !listed.contains($0.kind) }
             }
             return items.isEmpty ? nil : PaletteSection(title: category.rawValue, items: items)
         }
-        let pickers = PaletteSection(title: "Pickers", items: pageItems(editor: editor))
-        return [pickers].filter { !$0.items.isEmpty } + sliders.prefix(1) + actions + sliders.dropFirst()
+        let pickers = PaletteSection(
+            title: "Pickers", items: pageItems(editor: editor).filter { !listed.contains($0.kind) },
+        )
+        return (top + [pickers]).filter { !$0.items.isEmpty } + sliders.prefix(1) + actions + sliders.dropFirst()
+    }
+
+    /// The commands run last from the palette that it can still list (LIB-19).
+    static func recentSection(_ recents: [PaletteItemKind], editor: EditorModel) -> PaletteSection {
+        let candidates = actionItems + sliderItems + pageItems(editor: editor)
+        let items = recents.compactMap { kind in candidates.first { $0.kind == kind } }
+        return PaletteSection(title: "Recent", items: items)
+    }
+
+    /// What the menus can do to the selected photos, as the menus and keys do it: in Library to every photo
+    /// selected, in Develop to the active photo (LIB-19).
+    static let selectionActions: [ShortcutAction] = [
+        .rating1, .rating2, .rating3, .rating4, .rating5, .rating0, .flagPick, .flagReject, .unflag,
+        .labelRed, .labelYellow, .labelGreen, .labelBlue, .labelPurple, .clearLabel, .toggleMark,
+        .rotateLeft, .rotateRight, .stackPhotos, .unstackPhotos,
+        .addToTargetCollection, .addToCollection, .removeFromCollection,
+        .moveToFolder, .copyToFolder, .renamePhotos, .editCaptureTime, .showInFinder, .export, .exportWithPrevious,
+    ]
+
+    /// The selection's actions that can run now, with its custom labels beside the colour labels.
+    static func selectionSection(editor: EditorModel) -> PaletteSection {
+        let count = editor.selectedCount
+        guard count > 0, !editor.isModalDialogOpen else { return PaletteSection(title: "Selection", items: []) }
+        var items = selectionActions.filter(editor.canPerform).compactMap { action in
+            actionItems.first { $0.kind == .action(action) }
+        }
+        if let clear = items.firstIndex(where: { $0.kind == .action(.clearLabel) }) {
+            items.insert(contentsOf: customLabelItems(editor: editor), at: clear)
+        }
+        let title = count == 1
+            ? "Selection · \(editor.selection?.lastPathComponent ?? "1 photo")"
+            : "Selection · \(count.formatted()) photos"
+        return PaletteSection(title: title, items: items)
     }
 
     /// Everything the top-level search reaches.
@@ -190,6 +230,8 @@ enum PaletteCatalog {
         case .whiteBalance: editor.info?.supportsWhiteBalance == true
         case .snapshots, .history, .treatment, .baseLook, .recipes, .compare: editor.info != nil
         case .filterPresets: editor.libraryFilters != nil && editor.folder != nil
+        // Opened from a row with ⌘↵, never listed.
+        case .actions: false
         }
     }
 
@@ -225,6 +267,8 @@ enum PaletteCatalog {
     /// Every row of a page, in the page's order.
     static func choiceItems(_ page: PalettePage, editor: EditorModel) -> [PaletteItem] {
         switch page {
+        case .actions:
+            return []
         case .whiteBalance:
             let presets = WhiteBalanceMode.allCases.filter { $0 != .custom }.map { mode in
                 PaletteItem(

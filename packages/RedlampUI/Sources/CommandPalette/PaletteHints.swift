@@ -39,6 +39,9 @@ import Foundation
             }
             if let item = selectedItem {
                 hints.append(PaletteHint(item.kind.verb, ["↵"]))
+                if page != .actions, rowActions(for: item).count > 1 {
+                    hints.append(PaletteHint("Actions", ["⌘", "↵"]))
+                }
             }
             hints.append(PaletteHint(isNested ? "Back" : "Close", ["Esc"]))
             return hints

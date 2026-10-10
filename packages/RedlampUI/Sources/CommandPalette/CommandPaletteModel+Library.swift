@@ -114,6 +114,13 @@ extension CommandPaletteModel {
         showFilterText(filters)
     }
 
+    /// Makes `query` one of the source's filter's terms, with the bar's text showing it.
+    func filterLibrary(narrowingBy query: LibraryQuery) {
+        guard let filters = editor.libraryFilters else { return }
+        filters.narrow(by: query)
+        showFilterText(filters)
+    }
+
     private func showFilterText(_ filters: LibraryFilters) {
         if !filters.filter.sections.contains(.text) {
             filters.show(.text, adding: true)

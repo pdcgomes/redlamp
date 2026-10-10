@@ -224,6 +224,7 @@ final class PaletteSession {
         case let .photosNamed(text): "Photos Named “\(text)”"
         case let .queryTerm(term): term
         case let .queryField(field): field
+        case let .rowAction(action): action.rawValue
         }
     }
 

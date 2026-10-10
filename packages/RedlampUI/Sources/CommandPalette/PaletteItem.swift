@@ -10,6 +10,8 @@ import RedlampLibrary
 /// A page of choices the palette opens into.
 @_spi(Harness) public enum PalettePage: String, CaseIterable, Sendable, Hashable {
     case whiteBalance, treatment, baseLook, recipes, compare, snapshots, history, filterPresets
+    /// What else a row can do (⌘↵), for the row the palette keeps as `subject`.
+    case actions
 
     public var title: String {
         switch self {
@@ -21,6 +23,7 @@ import RedlampLibrary
         case .snapshots: "Snapshots"
         case .history: "History"
         case .filterPresets: "Filter Presets"
+        case .actions: "Actions"
         }
     }
 
@@ -34,6 +37,7 @@ import RedlampLibrary
         case .snapshots: "camera"
         case .history: "clock.arrow.circlepath"
         case .filterPresets: "line.3.horizontal.decrease.circle"
+        case .actions: "ellipsis.circle"
         }
     }
 
@@ -47,12 +51,13 @@ import RedlampLibrary
         case .snapshots: ["snapshot", "saved"]
         case .history: ["undo", "steps", "revert"]
         case .filterPresets: ["filter", "saved filter", "preset", "search", "library"]
+        case .actions: []
         }
     }
 
     /// Whether moving through the page previews each choice on the photo.
     var previews: Bool {
-        self != .compare && self != .filterPresets
+        self != .compare && self != .filterPresets && self != .actions
     }
 }
 
@@ -88,10 +93,13 @@ import RedlampLibrary
     /// A field of the query language whose name starts with the search, with its `:` (`orientation:`): ↵
     /// types it in the search, for its values to be completed.
     case queryField(String)
+    /// One of the things the palette's `subject` row can do, listed by ⌘↵ (LIB-19).
+    case rowAction(PaletteRowAction)
 
     /// What ↵ does, for the hint bar.
     var verb: String {
         switch self {
+        case let .rowAction(action): action.verb
         case .action: "Run"
         case .slider: "Adjust"
         case .page: "Open"
@@ -110,7 +118,7 @@ import RedlampLibrary
         case .setValue: 0
         case .page: 1
         case .slider: 2
-        case .action: 3
+        case .action, .rowAction: 3
         case .libraryName, .photo, .photosNamed, .queryTerm, .queryField: 5
         default: 4
         }
@@ -171,6 +179,8 @@ import RedlampLibrary
     case up, down
     case left(PaletteModifiers), right(PaletteModifiers)
     case submit
+    /// ⌘↵: what else the highlighted row can do.
+    case rowActions
     case escape
     /// ⌫ in an empty field.
     case deleteBackward

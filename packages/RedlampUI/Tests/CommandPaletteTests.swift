@@ -77,7 +77,9 @@ struct CommandPaletteTests: PaletteTesting {
         model.openCommandPalette()
         let palette = try palette(model)
         palette.setText("exposure")
-        #expect(palette.hints == [PaletteHint("Adjust", ["↵"]), PaletteHint("Close", ["Esc"])])
+        #expect(palette.hints == [
+            PaletteHint("Adjust", ["↵"]), PaletteHint("Actions", ["⌘", "↵"]), PaletteHint("Close", ["Esc"]),
+        ])
         palette.setText("auto settings")
         #expect(palette.hints.first == PaletteHint("Run", ["↵"]))
     }
