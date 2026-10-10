@@ -2,7 +2,7 @@ import Foundation
 import RedlampLibrary
 import Synchronization
 
-/// `redlamp library rename`, `move`, `trash`, `undo` and `journal`: the library's file operations
+/// `redlamp library rename`, `move`, `copy`, `trash`, `undo` and `journal`: the library's file operations
 /// (LIB-26), journaled, undoable and safe across a forced quit. Each finishes first a batch a forced
 /// quit left unfinished.
 extension LibraryCommand {
@@ -63,6 +63,24 @@ extension LibraryCommand {
                 try await operations.planMove(photos: photos(matching: query, in: operations.index), to: destination)
             }
             try await planned(batch, operations: operations, options: options)
+        }
+    }
+
+    static func copy(_ arguments: [String]) async throws {
+        let options = try Arguments(arguments, valued: ["--index", "--to"])
+        guard let path = options.value("--index"), let target = options.value("--to"), !options.positional.isEmpty
+        else {
+            throw CLIError(description: "copy needs a query, --to and --index\n\n\(usage)")
+        }
+        let destination = URL(fileURLWithPath: target, isDirectory: true).standardizedFileURL
+        let query = try parsedQuery(options.positional.joined(separator: " "))
+        try await withOperations(path) { operations in
+            let ids = try await photos(matching: query, in: operations.index)
+            try await planned(
+                operations.planCopy(photos: ids, to: destination),
+                operations: operations,
+                options: options,
+            )
         }
     }
 
@@ -184,8 +202,9 @@ extension LibraryCommand {
                 print("\(move.source) → \(move.destination ?? "the Trash")")
             }
             let files = count(batch.steps.flatMap(\.items).count)
+            let untouched = batch.kind == .copy ? "Nothing was copied." : "Nothing was moved."
             print("\(batch.title): \(count(batch.steps.count)) steps, \(files) files. "
-                + (conflicts.isEmpty ? "Nothing was moved." : "It can't start:"))
+                + (conflicts.isEmpty ? untouched : "It can't start:"))
             conflicts.prefix(50).forEach { print("  \($0)") }
             leftOut(gone: batch.gone, notInIndex: batch.notInIndex).forEach { print($0) }
         }

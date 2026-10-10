@@ -29,6 +29,7 @@ enum LibraryCommand {
                                   [--dry-run] [--json]
            redlamp library move <query> --to <folder> --index <path> [--dry-run] [--json]
            redlamp library move --folder <folder> --to <path> --index <path> [--dry-run] [--json]
+           redlamp library copy <query> --to <folder> --index <path> [--dry-run] [--json]
            redlamp library trash <query> --index <path> [--dry-run] [--json]
            redlamp library undo --index <path> [--json]
            redlamp library journal --index <path> [--finish | --roll-back] [--json]
@@ -134,11 +135,15 @@ enum LibraryCommand {
       rename   renames the photos <query> finds with <template>, as names shows them, each raw with its JPEG,
                its .redlamp sidecar and other apps' .xmp, recording each photo's original name. move takes
                photos, or a folder with --folder, to another folder; across volumes each file is copied and
-               checked before the original goes. trash moves photos to the Trash. Each is a batch in a
-               journal written before anything moves: nothing is ever overwritten, a collision stops it
-               before it starts, and --dry-run shows the plan. undo takes the last batch back; journal lists
-               the batches, and finishes (--finish) or rolls back (--roll-back) one a forced quit cut short,
-               which every command does first.
+               checked before the original goes. copy copies photos into a folder of the library, the folder
+               they're in too, each copy a photo of its own with its original's sidecars but none of its
+               collections, numbered as the Finder numbers a copy where its name is taken: a clone on the
+               photos' volume, and on another each file checked byte for byte. trash moves photos to the
+               Trash. Each is a batch in a journal written before anything moves: nothing is ever
+               overwritten, a collision stops it before it starts, and --dry-run shows the plan. undo takes
+               the last batch back, a copy's by moving its copies to the Trash; journal lists the batches,
+               and finishes (--finish) or rolls back (--roll-back) one a forced quit cut short, which every
+               command does first.
       trashed  lists what the batches moved to the Trash that's still there, newest first, from the
                journal: each photo where it was and where it is in the Trash, its batch, and the sidecars,
                other apps' .xmp and pair that went with it; --json prints JSON. put-back puts photos back
@@ -218,7 +223,7 @@ extension LibraryCommand {
         switch command {
         case "fixture", "bench", "index", "search", "stats", "sidecars", "names", "duplicates", "health", "xmp":
             try await runReading(command, rest)
-        case "rename", "move", "trash", "undo", "journal", "trashed", "put-back":
+        case "rename", "move", "copy", "trash", "undo", "journal", "trashed", "put-back":
             try await runFiles(command, rest)
         case "keywords", "stacks", "groups", "metadata", "collections", "import":
             try await runOrganising(command, rest)
@@ -243,11 +248,12 @@ extension LibraryCommand {
         }
     }
 
-    /// Renaming, moving and trashing photos, and taking it back.
+    /// Renaming, moving, copying and trashing photos, and taking it back.
     private static func runFiles(_ command: String, _ arguments: [String]) async throws {
         switch command {
         case "rename": try await rename(arguments)
         case "move": try await move(arguments)
+        case "copy": try await copy(arguments)
         case "trash": try await trash(arguments)
         case "undo": try await undo(arguments)
         case "journal": try await journal(arguments)
