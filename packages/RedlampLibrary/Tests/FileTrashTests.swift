@@ -211,6 +211,23 @@ struct FileTrashTests {
         return row
     }
 
+    /// The fields left nil in `value` when it holds one of Redlamp's own structs, a photo's stack or its location,
+    /// since a schema version's new field can be one of theirs; but the fields a newer Redlamp wrote, which only the
+    /// sidecar keeps.
+    private static func nilFields(in value: Any) -> [String] {
+        let optional = Mirror(reflecting: value)
+        guard optional.displayStyle == .optional, let held = optional.children.first?.value,
+              Mirror(reflecting: held).displayStyle == .struct, String(reflecting: type(of: held)).hasPrefix("Redlamp")
+        else { return [] }
+        return Mirror(reflecting: held).children.compactMap { field in
+            let mirror = Mirror(reflecting: field.value)
+            guard field.label != "unknownFields", mirror.displayStyle == .optional, mirror.children.isEmpty else {
+                return nil
+            }
+            return field.label
+        }
+    }
+
     @Test func `every field of a photo's row is carried through the journal and back`() throws {
         let row = Self.filled(PhotoRecord(
             id: 9, folder: 3, name: "IMG_0009.ARW", kind: .raw, size: 25_000_000, modified: FileSandbox.date(6),
@@ -225,6 +242,11 @@ struct FileTrashTests {
                 String(describing: field.value) != defaults[field.label ?? ""],
                 "\(field.label ?? "?") is left at its default: give it a value here, and carry it in IndexedPhoto",
             )
+            for inner in Self.nilFields(in: field.value) {
+                Issue.record(
+                    "\(field.label ?? "?").\(inner) is left unset: give it a value here, and carry it in IndexedPhoto",
+                )
+            }
         }
         #expect(IndexedPhoto(row).record(inFolder: row.folder) == row)
         let journaled = try JSONDecoder().decode(IndexedPhoto.self, from: JSONEncoder().encode(IndexedPhoto(row)))
