@@ -26,6 +26,8 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
     private var rootPaths: [Int: String] = [:]
     /// Closed while it imported, which carries on: the window goes once it's done.
     private var closedWhileBusy = false
+    /// The report the roots and the text show, and whether the roots' Locate… buttons were enabled.
+    private var shown: (report: LightroomReport?, locating: Bool)?
 
     init(model: LightroomImportModel) {
         self.model = model
@@ -68,7 +70,28 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
         roots.orientation = .vertical
         roots.alignment = .leading
         roots.spacing = 6
+        roots.edgeInsets = NSEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
         roots.setAccessibilityIdentifier("lightroom.roots")
+        roots.translatesAutoresizingMaskIntoConstraints = false
+        let rootsContainer = FlippedView()
+        rootsContainer.translatesAutoresizingMaskIntoConstraints = false
+        rootsContainer.addSubview(roots)
+        let rootsScroll = NSScrollView()
+        rootsScroll.documentView = rootsContainer
+        rootsScroll.hasVerticalScroller = true
+        rootsScroll.autohidesScrollers = true
+        rootsScroll.drawsBackground = false
+        NSLayoutConstraint.activate([
+            roots.topAnchor.constraint(equalTo: rootsContainer.topAnchor),
+            roots.leadingAnchor.constraint(equalTo: rootsContainer.leadingAnchor),
+            roots.trailingAnchor.constraint(equalTo: rootsContainer.trailingAnchor),
+            roots.bottomAnchor.constraint(equalTo: rootsContainer.bottomAnchor),
+            rootsContainer.widthAnchor.constraint(equalTo: rootsScroll.contentView.widthAnchor),
+            rootsScroll.heightAnchor.constraint(lessThanOrEqualToConstant: 150),
+            rootsScroll.heightAnchor.constraint(greaterThanOrEqualTo: rootsContainer.heightAnchor)
+                .with(priority: .defaultHigh),
+            rootsScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 24),
+        ])
 
         reportView.isEditable = false
         reportView.isSelectable = true
@@ -113,7 +136,7 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
 
         let line = NSBox()
         line.boxType = .separator
-        let content = NSStackView(views: [header, rootsHeading, roots, scroll, line, bar])
+        let content = NSStackView(views: [header, rootsHeading, rootsScroll, scroll, line, bar])
         content.orientation = .vertical
         content.alignment = .width
         content.spacing = 10
@@ -152,8 +175,11 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
 
     private func changed() {
         catalogLabel.stringValue = model.catalogURL?.path ?? "No catalog chosen"
-        showRoots(model.report?.roots ?? [])
-        reportView.string = model.report.map { $0.lines(roots: false).dropFirst().joined(separator: "\n") } ?? ""
+        if shown.map({ $0.report != model.report || $0.locating == model.isBusy }) ?? true {
+            shown = (model.report, !model.isBusy)
+            showRoots(model.report?.roots ?? [])
+            reportView.string = model.report.map { $0.lines(roots: false).dropFirst().joined(separator: "\n") } ?? ""
+        }
         status.stringValue = model.status
         chooseButton.isEnabled = !model.isBusy
         importButton.isEnabled = model.canImport
@@ -190,7 +216,7 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
             label.lineBreakMode = .byTruncatingMiddle
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             let state = NSTextField(labelWithString: Self.describe(root))
-            state.textColor = root.state == .missing ? .systemRed : .secondaryLabelColor
+            state.textColor = root.state == .missing || root.state == .offline ? .systemRed : .secondaryLabelColor
             state.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             let locate = NSButton(title: "Locate…", target: self, action: #selector(locateRoot(_:)))
             locate.tag = place
@@ -211,6 +237,7 @@ public final class LightroomWindowController: NSWindowController, NSWindowDelega
             + "\(LightroomImportModel.count(root.photos, "photo")) found"
         case .notInLibrary: "Not in the library yet: Import adds it (\(LightroomImportModel.count(root.photos, "photo")))"
         case .missing: "Not found: Locate… says where it is now"
+        case .offline: "On a disk that isn’t connected: connect it, then import"
         }
     }
 
@@ -266,5 +293,19 @@ enum LightroomActions {
         guard model.library.service?.isReady == true else { return false }
         LightroomWindowController.show(editor: model)
         return true
+    }
+}
+
+/// A document view laid out from the top, as a list scrolls.
+private final class FlippedView: NSView {
+    override var isFlipped: Bool {
+        true
+    }
+}
+
+private extension NSLayoutConstraint {
+    func with(priority: NSLayoutConstraint.Priority) -> NSLayoutConstraint {
+        self.priority = priority
+        return self
     }
 }

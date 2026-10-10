@@ -12,6 +12,8 @@ public struct LightroomReport: Sendable, Hashable, Codable {
             case notInLibrary
             /// Not where the catalog says, nor beside the catalog where it says: it has to be located.
             case missing
+            /// In a folder of the library on a disk that isn't connected: its photos come across once it is.
+            case offline
         }
 
         public var id: Int64
@@ -77,6 +79,8 @@ public struct LightroomReport: Sendable, Hashable, Codable {
     public var waiting = 0
     /// In root folders that weren't found.
     public var unlocated = 0
+    /// In the library's folders on disks that aren't connected.
+    public var offline = 0
     /// In the library's folders, but not on disk or not indexed: paths, the first `listed` of them.
     public var notFound = 0
     public var notFoundPaths: [String] = []
@@ -137,6 +141,7 @@ public extension LightroomReport {
         lines.append("  \(Self.count(photos)) photos; \(Self.count(found)) found in the library"
             + (waiting > 0 ? ", \(Self.count(waiting)) in folders it doesn't have yet" : "")
             + (unlocated > 0 ? ", \(Self.count(unlocated)) in folders not found" : "")
+            + (offline > 0 ? ", \(Self.count(offline)) on disks that aren't connected" : "")
             + (notFound > 0 ? ", \(Self.count(notFound)) not found" : ""))
         if showsRoots {
             lines.append("  root folders:")
@@ -146,6 +151,7 @@ public extension LightroomReport {
             case .inLibrary: "in the library, \(Self.count(root.found)) of \(Self.count(root.photos)) photos found"
             case .notInLibrary: "not in the library yet: importing adds it (\(Self.count(root.photos)) photos)"
             case .missing: "not found: --root \(root.lightroomPath)=<folder> says where it is"
+            case .offline: "in the library on a disk that isn't connected: connect it, and its photos come across"
             }
             let place = root.path.map { root.moved ? " → \($0)" : "" } ?? ""
             lines.append("    \(root.lightroomPath)\(place): \(state)")

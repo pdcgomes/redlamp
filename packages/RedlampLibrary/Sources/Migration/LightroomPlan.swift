@@ -157,14 +157,23 @@ struct LightroomPlanner {
                 }
             }
             var state = LightroomReport.Root.State.missing
+            func libraryRoot(of path: String) -> String? {
+                library.first { path == $0 || path.hasPrefix($0 == "/" ? $0 : $0 + "/") }
+            }
             if let path {
                 rootPaths[root.id] = path
-                if library.contains(where: { path == $0 || path.hasPrefix($0 == "/" ? $0 : $0 + "/") }) {
+                if libraryRoot(of: path) != nil {
                     state = .inLibrary
                     indexed.insert(root.id)
                 } else if Self.isFolder(path) {
                     state = .notInLibrary
                     foldersToAdd.append(URL(fileURLWithPath: path, isDirectory: true))
+                }
+            } else if root.path.hasPrefix("/") {
+                let own = LibraryIndexer.path(URL(fileURLWithPath: root.path, isDirectory: true))
+                if let covering = libraryRoot(of: own), !Self.isFolder(covering) {
+                    state = .offline
+                    path = own
                 }
             }
             report.roots.append(LightroomReport.Root(
@@ -210,6 +219,7 @@ struct LightroomPlanner {
             case .inLibrary: break
             case .notInLibrary: report.waiting += report.roots[place].photos
             case .missing: report.unlocated += report.roots[place].photos
+            case .offline: report.offline += report.roots[place].photos
             }
         }
         report.photos = catalog.photos.count

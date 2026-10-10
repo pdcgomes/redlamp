@@ -200,6 +200,28 @@ struct LightroomImportTests {
         #expect(notAdded.foldersToAdd.map(\.path) == [LibraryIndexer.path(elsewhere.url)])
     }
 
+    @Test func `a root in a library folder whose disk isn't connected is offline, one that's gone is missing`(
+    ) async throws {
+        let library = try await Self.library()
+        defer { library.remove() }
+        let offline = "/Volumes/Not Connected \(UUID().uuidString)/Photos"
+        try await library.sandbox.index.write { writer in
+            let volume = try writer.upsertVolume(VolumeRecord(uuid: "OFFLINE-\(UUID())", name: "Gone", kind: .ssd))
+            _ = try writer.upsertRoot(RootRecord(volume: volume, path: offline))
+        }
+        let maker = try LightroomCatalogMaker(at: library.folder.url.appending(path: "Two roots.lrcat"))
+        let first = try maker.root(offline + "/Trip/")
+        try maker.photo(maker.folder(first, ""), "A.JPG", rating: 3)
+        let second = try maker.root(library.sandbox.root.path + "/Deleted/")
+        try maker.photo(maker.folder(second, ""), "B.JPG", rating: 3)
+        maker.close()
+        let report = try await LightroomPlan.make(
+            LightroomCatalog.read(maker.url), index: library.sandbox.index, paths: library.paths,
+        ).report
+        #expect(report.roots.map(\.state) == [.offline, .missing])
+        #expect(report.offline == 1 && report.unlocated == 1 && report.found == 0)
+    }
+
     @Test func `an import in parts stops between them, and Undo takes back the parts it made`() async throws {
         let library = try await Self.library()
         defer { library.remove() }
