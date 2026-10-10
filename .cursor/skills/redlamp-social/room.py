@@ -3,6 +3,7 @@
     python3 .cursor/skills/redlamp-social/room.py status [--canvas PATH]
     python3 .cursor/skills/redlamp-social/room.py room [--canvas PATH]
     python3 .cursor/skills/redlamp-social/room.py thumbs [--canvas PATH]
+    python3 .cursor/skills/redlamp-social/room.py published POST [--at TIME] [--link URL] [--canvas PATH]
 
 status checks docs/social/posts.json: each part has the fields it needs and no others; times are ISO
 with an offset; platforms are instagram or tiktok; each post's episode and hook exist; every line on
@@ -17,6 +18,13 @@ and only when status's checks pass.
 
 thumbs writes the room's THUMBS block from video/out/features/boards/<episode>-hook.png and
 <episode>-result.png, as base64 PNG data URIs, leaving out the files that aren't there.
+
+published records a post that went out on Instagram without the publisher, posted by the owner by
+hand, at --at (ISO with an offset; now if it's left out) and with its --link when he gives it. The
+record is ~/src/redlamp-social/state/published.json, the publisher's record of what's on Instagram, so
+the room shows the post as posted and the publisher never posts it again. It then writes the room's
+PUBLISHED block from that record, as room does too, and status leaves Instagram out of the post's
+platforms still to come.
 
 Paths are this checkout's, so the script works in any worktree. Boards are rendered, not committed, so a
 board missing here is taken from the main checkout or another worktree that has it. The room is
@@ -39,6 +47,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SCHEDULE = "docs/social/posts.json"
 BOARDS = "video/out/features/boards"
 RENDERS = Path.home() / "src" / "redlamp-social" / "renders"
+PUBLISHED = Path.home() / "src" / "redlamp-social" / "state" / "published.json"
 
 PLATFORMS = {"instagram": "Instagram", "tiktok": "TikTok"}
 STAGES = ("storyboard", "building", "in review", "approved", "rendered")
@@ -333,6 +342,29 @@ def thumbs_block(found):
             "// THUMBS:END"]
 
 
+def published():
+    """What's on Instagram, by post ID: when it went out, who posted it, and its link when known."""
+    try:
+        return json.loads(PUBLISHED.read_text())
+    except FileNotFoundError:
+        return {}
+
+
+def published_block(record):
+    return ["// PUBLISHED:BEGIN (room.py writes this block from ~/src/redlamp-social/state/published.json)",
+            "const PUBLISHED: Record<string, Published> = " + json.dumps(record, indent=2, ensure_ascii=False) + ";",
+            "// PUBLISHED:END"]
+
+
+def written(lines, span, prefix):
+    """A block's value as the room holds it, or None when it can't be read."""
+    text = "\n".join(lines[span[0] + 1:span[1]]).strip()
+    try:
+        return json.loads(text[len(prefix):].rstrip(";")) if text.startswith(prefix) else None
+    except ValueError:
+        return None
+
+
 def room_state(canvas, schedule, found):
     """What the room holds against posts.json and the boards, in a line or two."""
     if not canvas.is_file():
@@ -341,17 +373,17 @@ def room_state(canvas, schedule, found):
     said = []
     if span is None:
         said.append("The room has no POSTS block.")
+    elif written(lines, span, "const POSTS: Schedule = ") == schedule:
+        said.append("The room's schedule matches posts.json.")
     else:
-        text = "\n".join(lines[span[0] + 1:span[1]]).strip()
-        prefix = "const POSTS: Schedule = "
-        try:
-            written = json.loads(text[len(prefix):].rstrip(";")) if text.startswith(prefix) else None
-        except ValueError:
-            written = None
-        if written == schedule:
-            said.append("The room's schedule matches posts.json.")
-        else:
-            said.append("The room's schedule differs from posts.json: run room.py room.")
+        said.append("The room's schedule differs from posts.json: run room.py room.")
+    lines, span = block(canvas, "PUBLISHED")
+    if span is None:
+        said.append("The room has no PUBLISHED block.")
+    elif written(lines, span, "const PUBLISHED: Record<string, Published> = ") == published():
+        said.append("Its Instagram posts match the publisher's record.")
+    else:
+        said.append("Its Instagram posts differ from the publisher's record: run room.py room.")
     lines, span = block(canvas, "THUMBS")
     if span is None:
         said.append("The room has no THUMBS block.")
@@ -432,12 +464,23 @@ def status(canvas):
 
     now = datetime.now(timezone.utc)
     titles = {e.get("id"): e.get("title") for e in episodes}
-    timed = [(moment(post.get("at")), post) for post in posts]
+    record = published()
+    if record:
+        print("\nOn Instagram:")
+        for pid, entry in record.items():
+            at = moment(entry.get("at"))
+            print(f"  {str(pid):<10}  {when(at, zone) if at else entry.get('at')}, by {entry.get('by')}"
+                  + (f", {entry['link']}" if entry.get("link") else ", no link yet"))
+
+    def to_come(post):
+        return [p for p in post.get("platforms", []) if not (p == "instagram" and post.get("id") in record)]
+
+    timed = [(moment(post.get("at")), post) for post in posts if to_come(post)]
     due = sorted([pair for pair in timed if pair[0] and pair[0] > now], key=lambda pair: pair[0])[:3]
     print("\nNext posts due:" + ("" if due else " none"))
     for at, post in due:
         hook = f"hook {str(post.get('hook')).upper()}" + (", trial reel" if post.get("trial") else "")
-        where = " and ".join(PLATFORMS.get(p, str(p)) for p in post.get("platforms", []))
+        where = " and ".join(PLATFORMS.get(p, str(p)) for p in to_come(post))
         print(f"  {when(at, zone)}  {str(post.get('id')):<10}  {titles.get(post.get('episode'), post.get('episode'))}, "
               f"{hook}; {where}")
     return 1 if errors else 0
@@ -452,7 +495,10 @@ def room(canvas):
             print(f"  {error}")
         return 1
     write_block(canvas, "POSTS", posts_block(schedule))
-    print(f"Wrote {len(schedule['episodes'])} episodes and {len(schedule['posts'])} posts into {canvas}")
+    record = published()
+    write_block(canvas, "PUBLISHED", published_block(record))
+    print(f"Wrote {len(schedule['episodes'])} episodes, {len(schedule['posts'])} posts and the {len(record)} on Instagram "
+          f"into {canvas}")
     return 0
 
 
@@ -468,12 +514,39 @@ def thumbs(canvas):
     return 0
 
 
+def by_hand(canvas, post, at, link):
+    schedule = load()
+    posts = {p.get("id"): p for p in schedule.get("posts", []) if isinstance(p, dict)}
+    if post not in posts:
+        sys.exit(f"posts.json has no post {post}: its posts are {', '.join(map(str, posts))}")
+    if "instagram" not in posts[post].get("platforms", []):
+        sys.exit(f"{post} doesn't go to Instagram")
+    posted_at = moment(at) if at else datetime.now(zone_of(schedule) or timezone.utc).replace(microsecond=0)
+    if posted_at is None:
+        sys.exit(f"--at {at} isn't ISO with an offset, such as 2026-10-10T15:53:00+01:00")
+    record = published()
+    record[post] = {"at": posted_at.isoformat(), "by": "hand", **({"link": link} if link else {})}
+    PUBLISHED.parent.mkdir(parents=True, exist_ok=True)
+    PUBLISHED.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n")
+    write_block(canvas, "PUBLISHED", published_block(record))
+    print(f"Recorded {post} on Instagram at {posted_at.isoformat()}, posted by hand" + (f", {link}" if link else "")
+          + f", in {PUBLISHED} and the room")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("status", "room", "thumbs"))
+    parser.add_argument("command", choices=("status", "room", "thumbs", "published"))
+    parser.add_argument("post", nargs="?", help="published: the post's ID in posts.json")
+    parser.add_argument("--at", help="published: when it went out, ISO with an offset; now if left out")
+    parser.add_argument("--link", help="published: its address on Instagram")
     parser.add_argument("--canvas", type=Path, help="the room's .canvas.tsx, if not the default one")
     args = parser.parse_args()
     canvas = args.canvas.expanduser() if args.canvas else default_canvas()
+    if args.command == "published":
+        if not args.post:
+            parser.error("published needs the post's ID, such as e01")
+        sys.exit(by_hand(canvas, args.post, args.at, args.link))
     sys.exit({"status": status, "room": room, "thumbs": thumbs}[args.command](canvas))
 
 

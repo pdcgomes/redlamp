@@ -13,13 +13,13 @@ Read `~/.cursor/skills-cursor/canvas/SKILL.md` once per session before the first
 
 | What | Where |
 | --- | --- |
-| The room | `~/.cursor/projects/Users-pedrogomes-src-darkroom/canvases/social-room.canvas.tsx`, from [template.tsx](template.tsx). Edit only its `room` object: `room.py room` writes its POSTS block and `room.py thumbs` its THUMBS block. |
+| The room | `~/.cursor/projects/Users-pedrogomes-src-darkroom/canvases/social-room.canvas.tsx`, from [template.tsx](template.tsx). Edit only its `room` object: `room.py room` writes its POSTS and PUBLISHED blocks and `room.py thumbs` its THUMBS block. |
 | The owner's marks | `social-room.canvas.data.json`, beside the room: his answers to Needs you, his approvals, and each TikTok post's state and link. Only the canvas writes it; agents never do. |
 | The schedule | `docs/social/posts.json`: the episodes, the posts with their times, platforms, captions and alt text, and the standard caption lines |
 | The campaign | `docs/plans/2026-10-10-feature-videos.md`: the format, each episode's hooks, beat sheet, captions and alt text, and the source of each claim |
 | Storyboards | `video/out/features/boards/`: `<episode>.png` is the sheet, and `<episode>-hook.png` and `<episode>-result.png` are the two frames the room shows. They are rendered, not committed, so `room.py` takes a board from the main checkout or another worktree when this one hasn't got it. |
 | The owner's photos | `~/src/redlamp-social/photos/`, outside the repository, which agents can read (they can't read `~/Pictures` or `~/Downloads`). Each photo keeps its `.redlamp` sidecar, so a result is the owner's edit. |
-| The publisher's records | `~/src/redlamp-social/state/`: what was posted, its links and numbers. No tokens. |
+| The publisher's records | `~/src/redlamp-social/state/`: what was posted, its links and numbers. No tokens. `published.json` is what's on Instagram, by post, whoever posted it; the room shows it, and the publisher never posts a post that's in it. |
 | Renders | `~/src/redlamp-social/renders/`, one file per post, named by its `file` (`e01-a.mp4`), outside every worktree. The publisher uploads from it, and the owner opens it in Finder for a TikTok sitting. |
 | Tokens and app secrets | The macOS Keychain, and nowhere else |
 | Where things stand | [room.py](room.py) `status` |
@@ -74,7 +74,7 @@ The owner asked for these on 10 Oct 2026: simple and direct, nothing that reads 
 ## Posting
 
 - **Nothing posts unless the owner has approved both its cut and the post in the room.** Agents never post by hand, on either platform.
-- **Instagram** is posted by the publisher: `room.py publish`, and `room.py tick`, which a launchd agent runs every 15 minutes to publish the approved posts that are due, read the numbers and comments, update the room and turn a failure into a Needs you item. Neither is built yet. `auth`, `publish`, `sync` and `tick` come next, with `room.py auth instagram` run by the owner in his own terminal. Until then, nothing goes to Instagram.
+- **Instagram** is posted by the publisher: `room.py publish`, and `room.py tick`, which a launchd agent runs every 15 minutes to publish the approved posts that are due, read the numbers and comments, update the room and turn a failure into a Needs you item. Neither is built yet. `auth`, `publish`, `sync` and `tick` come next, with `room.py auth instagram` run by the owner in his own terminal. Until then, the owner posts to Instagram himself when he chooses. Record each post he makes there with `room.py published <post> [--at <ISO time>] [--link <its address>]`, so the room shows it as posted and the publisher never posts it again; add the link with the same command once he gives it.
 - **TikTok** is scheduled by the owner in TikTok Studio on the web, from the captions in the room. He marks each post Scheduled, then Posted with its link.
 
 ## What the platforms allow

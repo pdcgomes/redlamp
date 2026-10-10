@@ -219,9 +219,15 @@ const THUMBS: Record<string, string> = {
 };
 // THUMBS:END
 
-// PUBLISHED: the Instagram publisher (room.py publish and tick, not built yet) will write what it has
-// posted here, in a block between PUBLISHED:BEGIN and PUBLISHED:END lines: each post's ID with its media
-// ID, permalink and time. instagramState() then reads it; until then every Instagram post is planned.
+// PUBLISHED: what's on Instagram, by post ID, from ~/src/redlamp-social/state/published.json, the
+// publisher's record: when each post went out, who posted it (the owner by hand, recorded with
+// room.py published, or the publisher once it's built) and its link when known. A post in it shows as
+// posted, and the publisher never posts it again.
+type Published = { at: string; by: "hand" | "publisher"; link?: string; mediaId?: string };
+
+// PUBLISHED:BEGIN (room.py writes this block from ~/src/redlamp-social/state/published.json)
+const PUBLISHED: Record<string, Published> = {};
+// PUBLISHED:END
 
 // ---------------------------------------------------------------- rendering (keys sit on wrapper divs)
 
@@ -480,9 +486,9 @@ function Facts({ rows, labelWidth = 72 }: { rows: [string, string][]; labelWidth
 
 // ---------------------------------------------------------------- platform states
 
-/** Planned until the publisher exists; it will record what it posts in a PUBLISHED block, by post ID. */
-function instagramState(_post: Post): PlatformState {
-  return "planned";
+/** Posted once the publisher's record has the post, whoever posted it; planned until then. */
+function instagramState(post: Post): PlatformState {
+  return PUBLISHED[post.id] ? "posted" : "planned";
 }
 
 function tiktokState(mark: TikTokMark | null): PlatformState {
