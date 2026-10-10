@@ -70,7 +70,7 @@
             try app.wait("the folder's row in the Folders panel") { _ in
                 Views.editorWindow.flatMap { Views.find(row, in: $0) } != nil
             }
-            try app.rightClickRow(row, choosing: "Remove from Folders")
+            try app.rightClick(.identifier(row), choosing: "Remove from Folders")
             try app.waitForSource("All Photographs without the folder's photos", timeout: 30) { model in
                 model.librarySources.shown == .allPhotographs
                     && Set(model.items.map(\.name)).isDisjoint(with: Set(names))
@@ -146,7 +146,10 @@
             try app.wait("the folder's row in the Folders panel") { _ in
                 Views.editorWindow.flatMap { Views.find(row, in: $0) } != nil
             }
-            try app.rightClickRow(row, choosing: "Remove from Folders")
+            try app.rightClick(.identifier(row), choosing: "Remove from Folders")
+            try app.wait("the folder's row to leave the Folders panel") { _ in
+                Views.editorWindow.flatMap { Views.find(row, in: $0) } == nil
+            }
             try app.run("the folder's rows swept", timeout: 120) { model in
                 await model.library.service?.removalsSwept()
             }
@@ -540,44 +543,6 @@
     }
 
     extension RunningApp {
-        /// Right-clicks the row carrying `identifier` where `frame(of:)` finds it, as the mouse does, and chooses
-        /// `title` in the menu that opens. The menu tracks inside the press, so the main thread is asked nothing
-        /// until the press has begun: a question queued with it would wait behind the menu, which waits for it.
-        func rightClickRow(_ identifier: String, choosing title: String) throws {
-            step("right-clicking \(identifier)")
-            let frame = try frame(of: .identifier(identifier))
-            let location = NSPoint(x: frame.midX, y: frame.midY)
-            let opened = OpenedMenu()
-            try main { _ in opened.watch() }
-            defer { try? main { _ in opened.stop() } }
-            let pressed = Flag()
-            post { _ in
-                pressed.set()
-                guard let window = Views.editorWindow else { return }
-                for type in [NSEvent.EventType.rightMouseDown, .rightMouseUp] {
-                    guard let event = NSEvent.mouseEvent(
-                        with: type, location: location, modifierFlags: [],
-                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .rightMouseUp ? 0 : 1,
-                    ) else { continue }
-                    window.sendEvent(event)
-                }
-            }
-            for _ in 0 ..< 1000 where !pressed.isSet {
-                pause(0.01)
-            }
-            try wait("\(identifier)'s context menu to open") { _ in opened.menu != nil }
-            try main { _ in
-                guard let menu = opened.menu else { return }
-                defer { menu.cancelTracking() }
-                guard let index = menu.items.firstIndex(where: { $0.title == title }) else {
-                    throw ScenarioFailure("\(identifier)'s menu has no \(title): \(menu.items.map(\.title))")
-                }
-                menu.performActionForItem(at: index)
-            }
-            try wait("\(identifier)'s context menu to close") { _ in opened.closed }
-        }
-
         /// How many photos the library finds for `query`; -1 when it can't search.
         func photosFound(_ query: String) throws -> Int {
             let found = Mutex(-1)
