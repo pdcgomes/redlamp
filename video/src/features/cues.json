@@ -3,6 +3,7 @@
   "fps": 30,
   "beatsPerBar": 4,
   "bars": 8,
+  "leadIn": 4,
   "chords": [
     ["Dm9", 0, 4],
     ["Bbmaj7", 4, 4],

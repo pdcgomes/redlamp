@@ -12,9 +12,10 @@ It writes every arrangement as score-<arrangement>.wav, so they can be compared 
 (the composition's `score` prop), and the chosen one as score.wav, which the cut plays: synthwave, the
 series' (docs/plans/2026-10-10-feature-videos.md, Sound). Beside them it writes score.json,
 the chosen score's level at every frame for the storyboard sheet, and cues.json, the cue sheet with
-every sound on screen added as a cue, for scripts/score-report.py. It also writes the opener's sound,
-public/features/opener.wav, which every video shares. Needs numpy, Pillow and pixelkit (the boards
-draw with it).
+every sound on screen added as a cue, for scripts/score-report.py. Each arrangement is written from
+the bar before the episode's first frame, its lead-in, which goes over the end of the opener's sound:
+opener.wav beside score.wav, and opener-<arrangement>.wav beside each of the others. Needs numpy,
+Pillow and pixelkit (the boards draw with it).
 """
 
 import argparse
@@ -46,6 +47,8 @@ theme = load(w.VIDEO / "scripts/features-theme.py", "features_theme")
 CLICK_UP = 0.07
 # The whole video's loudness, as the platforms measure it, in LUFS.
 TARGET = -14.0
+# The limiter's ceiling, a little under the platforms' -1 dBFS, which its soft knee can overshoot.
+CEILING = -1.2
 
 
 def press(velocity):
@@ -109,18 +112,23 @@ def film_opening():
     return out[: int(round(w.OPENER_FRAMES / w.FPS * s.SR))], short
 
 
-def opener(episode):
+def opener(episode, lead):
     """
     The opener's sound, as far below the episode's score as the short's opening sits below the rest of
-    the short, and faded out over its last three frames, where the episode's first hit cuts in.
+    the short, with the arrangement's lead-in (`lead`, its seconds before the episode's first frame)
+    over its end: the held chord eases down to half under it and fades out over the last three frames,
+    where the episode's first hit comes in.
     """
     sound, short = film_opening()
     n = int(round(w.OPENER["scene"] * w.SHEET["beatsPerBar"] * 60 / w.OPENER["bpm"] * s.SR))
     head, after = short[:n], short[n:n + len(episode)]
     gap = s.loudness(after) - s.loudness(head)
     out = sound * 10 ** ((s.loudness(episode) - gap - s.loudness(head)) / 20)
+    under = len(lead)
+    out[-under:] *= (1 - 0.3 * np.linspace(0, 1, under) ** 1.5)[:, None]
     ramp = int(round(3 / w.FPS * s.SR))
     out[-ramp:] *= np.linspace(1, 0, ramp)[:, None]
+    out[-under:] += lead
     return out
 
 
@@ -158,18 +166,19 @@ def main():
         # little above the target.
         target = TARGET
         for _ in range(2):
-            each = s.master(buses, seconds=theme.TOTAL, target=target, ceiling=-1.0, fade=1.6, **mastering)
-            target += TARGET - s.loudness(np.concatenate([opener(each), each]))
+            mastered = s.master(buses, seconds=theme.PRE + theme.TOTAL, target=target, ceiling=CEILING, fade=1.6, **mastering)
+            lead, each = theme.split(mastered)
+            head = opener(each, lead)
+            target += TARGET - s.loudness(np.concatenate([head, each]))
         s.write(out / f"score-{name}.wav", each)
-        print(f"    score-{name}.wav: {s.loudness(each):.1f} LUFS, true peak {s.true_peak(each):.1f} dBFS")
+        s.write(out / f"opener-{name}.wav", head)
+        whole = np.concatenate([head, each])
+        print(f"    score-{name}.wav: {s.loudness(each):.1f} LUFS; with opener-{name}.wav, {s.loudness(whole):.1f} LUFS, "
+              f"true peak {s.true_peak(whole):.1f} dBFS")
         if name == args.arrangement:
-            mix = each
+            mix, intro = each, head
     s.write(out / "score.wav", mix)
-    head = opener(mix)
-    s.write(w.VIDEO / "public/features/opener.wav", head)
-    whole = np.concatenate([head, mix])
-    print(f"    opener.wav: {len(head) / s.SR:.2f} s; with the score, {s.loudness(whole):.1f} LUFS, "
-          f"true peak {s.true_peak(whole):.1f} dBFS")
+    s.write(out / "opener.wav", intro)
 
     per = s.SR // w.FPS
     frames = len(mix) // per

@@ -2,7 +2,8 @@
 """
 The feature videos' theme (src/features/): one tune in D minor at 100 BPM, 8 bars and 19.2 seconds,
 in three arrangements, written from the series' cue sheet, src/features/cues.json, so every sound
-lands on the frame its picture does.
+lands on the frame its picture does. Each is written from the bar before the episode's first frame
+(the cue sheet's `leadIn`), which plays under the end of Redlamp's opener.
 
     python3 scripts/features-theme.py              # public/features/theme-synthwave.wav, theme-drive.wav, theme-pulse.wav
     python3 scripts/features-theme.py synthwave    # one of them
@@ -19,7 +20,12 @@ turning through A7 to D minor on the last hit, and the last chord dying away as 
 - synthwave: the series' (the owner, 10 October 2026). A sixteenth-note arpeggio through the chords
   from the first frame, wide detuned-saw pads that open through the build, an octave-jumping bass in
   eighths, a kick on every beat from the third step with the gated snare on 2 and 4, falling toms
-  into the drop, and the riff on the saw lead with a vibrato and an echo.
+  into the drop, and the riff on the saw lead with a vibrato and an echo. Its lead-in ramps up out of
+  the opener's held D major chord: the arpeggio grows out of nothing on the notes the two chords
+  share, over a drone on D and A and a kick muffled further than the first bar's, with the first
+  hit's reverb swelling up into it, so the music turns to D minor on the hit; the drone carries on
+  under the first bar until the bass comes in (the owner found the cut from the opener abrupt,
+  10 October 2026).
 - drive: electronic. A four-on-the-floor kick, a rolling bass in sixteenths that opens through the
   build, closed and open hats, a backbeat snare, dark chord stabs on the offbeats from the drop, an
   arpeggio, and the riff on two detuned saws with an echo.
@@ -52,10 +58,22 @@ DROP = cue["result"]
 # The rhythm stops for the half beat before the drop; what's sustained swells on through it.
 STOP = DROP - 0.5
 LAST = sheet["chords"][-1][1]
+# The bar before the first hit, under the opener's held chord: every arrangement is written from PRE
+# seconds before the episode's first frame, and features-score.py lays those seconds over the opener.
+LEAD_IN = sheet["leadIn"]
+PRE = LEAD_IN * BEAT
+LENGTH = PRE + TOTAL + 4
 
 
 def at(beat):
-    return beat * BEAT
+    return PRE + beat * BEAT
+
+
+def split(mix):
+    """A mastered arrangement as its lead-in, the seconds before the episode's first frame, and the
+    episode's score."""
+    n = int(round(PRE * s.SR))
+    return mix[:n], mix[n:]
 
 
 # Each chord: the bass's root, and the voicing above it, which moves as little as it can from chord to
@@ -153,13 +171,13 @@ def ui(fx):
 def drive(sounds=ui):
     start(43)
     room = s.reverb(1.6, 0.45, 0.018)
-    drums, low, pads, lead, fx = (s.Bus(TOTAL + 4) for _ in range(5))
+    drums, low, pads, lead, fx = (s.Bus(LENGTH) for _ in range(5))
     kicks = []
 
     # The first frame lands as a deep hit. The kick plays on every beat, muffled as if through a wall
     # under the hook, then full; it stops with the rhythm and comes back on the drop.
-    drums.add(0, s.deep_kick(0.9), gain=0.6, wet=0.1)
-    fx.add(0, s.boom(1.6, 0.8), gain=0.22, wet=0.3)
+    drums.add(at(0), s.deep_kick(0.9), gain=0.6, wet=0.1)
+    fx.add(at(0), s.boom(1.6, 0.8), gain=0.22, wet=0.3)
     for beat in playing(1, LAST, 1):
         kick = s.kick(0.95)
         if beat < S1:
@@ -256,7 +274,7 @@ def drive(sounds=ui):
     develop(fx, room)
     sounds(fx)
 
-    pump = s.sidechain(TOTAL + 4, kicks, depth=0.5, release=0.17)
+    pump = s.sidechain(LENGTH, kicks, depth=0.5, release=0.17)
     low.duck(1 - 0.55 * (1 - pump))
     pads.duck(1 - 0.35 * (1 - pump))
     trim(drums, 55)
@@ -281,13 +299,13 @@ CLUSTER = [26, 38, 45, 50, 53]
 def pulse(sounds=ui):
     start(47)
     room = s.reverb(3.0, 0.75, 0.025)
-    drums, low, bows, keys, fx = (s.Bus(TOTAL + 4) for _ in range(5))
+    drums, low, bows, keys, fx = (s.Bus(LENGTH) for _ in range(5))
     kicks = []
 
     # The first frame lands as a deep hit over a drone on D, which holds to the stop.
-    fx.add(0, s.boom(2.4, 1.0), gain=0.28, wet=0.35)
-    drums.add(0, s.taiko(0.6, 58, 1.6), gain=0.5, wet=0.3)
-    low.add(0, s.drone([38, 45, 50], at(STOP) - 0.02, cutoff=520, release=0.05, attack=0.2), gain=0.5, wet=0.3)
+    fx.add(at(0), s.boom(2.4, 1.0), gain=0.28, wet=0.35)
+    drums.add(at(0), s.taiko(0.6, 58, 1.6), gain=0.5, wet=0.3)
+    low.add(at(0), s.drone([38, 45, 50], at(STOP) - at(0) - 0.02, cutoff=520, release=0.05, attack=0.2), gain=0.5, wet=0.3)
 
     # Spiccato sixteenths from the first frame, from a murmur to full at the stop, and full after it.
     for i in range(int(LAST * 4)):
@@ -384,7 +402,7 @@ def pulse(sounds=ui):
     develop(fx, room)
     sounds(fx)
 
-    pump = s.sidechain(TOTAL + 4, kicks, depth=0.45, release=0.2)
+    pump = s.sidechain(LENGTH, kicks, depth=0.45, release=0.2)
     low.duck(1 - 0.45 * (1 - pump))
     bows.duck(1 - 0.25 * (1 - pump))
     trim(drums, 55)
@@ -401,12 +419,30 @@ def toms(beat):
 def synthwave(sounds=ui):
     start(53)
     room = s.reverb(2.2, 0.55, 0.02)
-    drums, low, pads, arps, lead, fx = (s.Bus(TOTAL + 4) for _ in range(6))
+    drums, low, pads, arps, lead, fx, bed = (s.Bus(LENGTH) for _ in range(7))
     kicks = []
 
+    # The lead-in, under the opener's held D major chord: the arpeggio comes in out of nothing on the
+    # notes D major and D minor share (A, D and E), opening as it grows into the first bar's, over a
+    # kick muffled further than the first bar's and growing too, and a drone on D and A that carries on
+    # under the first bar until the bass comes in. The first hit's reverb swells up into it, and the
+    # minor third comes in with the hit.
+    shared = [69, 74, 76, 81]
+    for i, beat in enumerate(np.arange(-LEAD_IN, 0, 0.25)):
+        grown = ((beat + LEAD_IN + 0.25) / LEAD_IN) ** 1.6
+        tone = s.pluck(shared[(0, 1, 2, 3, 2, 1, 3, 2)[i % 8]], 0.8, 0.18, bright=0.1 + 0.3 * grown)
+        arps.add(at(beat), tone, gain=0.13 * swell(0) * grown, pan_to=(-0.3, 0.3)[i % 2], wet=0.25)
+        arps.add(at(beat + 0.75), s.lowpass(tone, 2200), gain=0.05 * swell(0) * grown, pan_to=(0.4, -0.4)[i % 2], wet=0.4)
+    for beat in range(-LEAD_IN, 0):
+        drums.add(at(beat), s.lowpass(s.kick(0.9), 160), gain=0.45 * ((beat + LEAD_IN + 1) / LEAD_IN) ** 1.5, wet=0.02)
+        kicks.append(at(beat))
+    bed.add(at(-LEAD_IN), s.drone([38, 45, 50], at(S1) - at(-LEAD_IN), cutoff=400, release=1.2, attack=PRE), gain=0.55, wet=0.3)
+    fx.add(at(-LEAD_IN), s.riser(PRE, 250, 4000, curve=2.6), gain=0.08, wet=0.3)
+    fx.add(at(-2), s.swell_into(s.boom(1.4, 0.7), at(0) - at(-2), room), gain=0.3, wet=0.0)
+
     # The first frame lands as a deep hit; the pads come in slowly under the arpeggio.
-    drums.add(0, s.deep_kick(0.85), gain=0.6, wet=0.12)
-    fx.add(0, s.boom(1.4, 0.7), gain=0.2, wet=0.3)
+    drums.add(at(0), s.deep_kick(0.85), gain=0.6, wet=0.12)
+    fx.add(at(0), s.boom(1.4, 0.7), gain=0.2, wet=0.3)
     for name, first, length in sheet["chords"]:
         _, voicing = CHORDS[name]
         last = first == LAST
@@ -488,14 +524,15 @@ def synthwave(sounds=ui):
     develop(fx, room)
     sounds(fx)
 
-    pump = s.sidechain(TOTAL + 4, kicks, depth=0.5, release=0.18)
+    pump = s.sidechain(LENGTH, kicks, depth=0.5, release=0.18)
     low.duck(1 - 0.5 * (1 - pump))
     pads.duck(1 - 0.4 * (1 - pump))
     arps.duck(1 - 0.2 * (1 - pump))
     trim(drums, 55)
     trim(low, 60)
     trim(fx, 45)
-    return [drums, low, pads, arps, lead, fx], dict(room=room, wet=0.55, presence=3.0)
+    trim(bed, 45)
+    return [drums, low, pads, arps, lead, fx, bed], dict(room=room, wet=0.55, presence=3.0)
 
 
 # Each arrangement returns its buses and how they're mastered. `sounds` puts a video's own sounds on its
@@ -511,7 +548,8 @@ if __name__ == "__main__":
     out.mkdir(parents=True, exist_ok=True)
     for name in names:
         buses, mastering = ARRANGEMENTS[name]()
-        # The last 1.6 s fade out with the picture, as the last chord dies away.
-        mix = s.master(buses, seconds=TOTAL, target=-14.0, ceiling=-1.0, fade=1.6, **mastering)
+        # The last 1.6 s fade out with the picture, as the last chord dies away. The sketch keeps its
+        # lead-in, which starts out of nothing.
+        mix = s.master(buses, seconds=PRE + TOTAL, target=-14.0, ceiling=-1.0, fade=1.6, **mastering)
         s.write(out / f"theme-{name}.wav", mix)
-        print(f"==> public/features/theme-{name}.wav ({TOTAL:.1f} s, {s.loudness(mix):.1f} LUFS, true peak {s.true_peak(mix):.1f} dBFS)")
+        print(f"==> public/features/theme-{name}.wav ({PRE + TOTAL:.1f} s, {s.loudness(mix):.1f} LUFS, true peak {s.true_peak(mix):.1f} dBFS)")

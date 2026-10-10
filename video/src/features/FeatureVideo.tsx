@@ -5,19 +5,19 @@ import cueSheet from "./cues.json";
 
 /**
  * The feature videos (docs/plans/2026-10-10-feature-videos.md): Redlamp's opener in pixel art, then
- * one Redlamp feature shown in a pixel-art editor and on the owner's real photo, every picture drawn by
- * pixelkit. scripts/features-frames.py draws an episode's frames, the opener's first, into
+ * one Redlamp feature shown in a pixel-art editor and its result, every picture drawn by pixelkit.
+ * scripts/features-frames.py draws an episode's frames, the opener's first, into
  * public/features/<episode>/frames/ and lists each frame's file in frames.json: the 216 × 384 canvas,
  * shown five times the size with nearest-neighbour scaling, or the whole 1080 × 1920 frame while a
  * real photo is on screen. scripts/features-score.py writes the episode's score beside them, and the
- * opener's sound, Introducing Redlamp's own, in public/features/.
+ * opener's sound, Introducing Redlamp's own with the score's lead-in over its end: opener.wav for
+ * score.wav, opener-<arrangement>.wav for score-<arrangement>.wav.
  */
 const sheet = cueSheet as unknown as CueSheet & { opener: { bpm: number; bars: number } };
 const g = grid(sheet);
 
 /** The opener's frames: its bars on Introducing Redlamp's grid, at the series' frame rate. */
 export const OPENER = Math.round((sheet.opener.bars * sheet.beatsPerBar * 60 * sheet.fps) / sheet.opener.bpm);
-const OPENER_SCORE = "features/opener.wav";
 
 /** An episode's frames, without the opener. */
 export const EPISODE_FRAMES = g.frames;
@@ -67,13 +67,14 @@ export function FeatureVideo({ episode, hook, score, opener, guides, manifest }:
   const files = getStaticFiles();
   const has = (name: string) => files.some((f) => f.name === name);
   const start = opener ? OPENER : 0;
+  const openerScore = `features/${episode}/${score.replace(/^score/, "opener")}.wav`;
   return (
     <AbsoluteFill style={{ background: "#000" }}>
       <Frames episode={episode} hook={hook} manifest={manifest} skip={opener ? 0 : (manifest?.opener ?? 0)} />
-      {opener && has(OPENER_SCORE) ? (
+      {opener && has(openerScore) ? (
         <Sequence durationInFrames={OPENER} name="Opener">
           <Html5Audio
-            src={staticFile(OPENER_SCORE)}
+            src={staticFile(openerScore)}
             volume={(f) => interpolate(f, [0, 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })}
           />
         </Sequence>
@@ -82,7 +83,9 @@ export function FeatureVideo({ episode, hook, score, opener, guides, manifest }:
         {has(`features/${episode}/${score}.wav`) ? (
           <Html5Audio
             src={staticFile(`features/${episode}/${score}.wav`)}
-            volume={(f) => interpolate(f, [EPISODE_FRAMES - 3, EPISODE_FRAMES], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })}
+            volume={(f) =>
+              interpolate(f, [0, 2, EPISODE_FRAMES - 3, EPISODE_FRAMES], [opener ? 1 : 0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+            }
           />
         ) : null}
       </Sequence>

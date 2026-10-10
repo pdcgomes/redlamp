@@ -46,7 +46,7 @@ if (chosen.length === 0) {
 
 const python = (script, ...rest) => execFileSync("python3", [script, "--episode", episode, ...rest], { cwd: root, stdio: "inherit" });
 if (fresh || !existsSync(path.join(root, `public/features/${episode}/frames.json`))) python("scripts/features-frames.py");
-const scored = ["public/features/opener.wav", `public/features/${episode}/score.wav`].every((f) => existsSync(path.join(root, f)));
+const scored = [`public/features/${episode}/opener.wav`, `public/features/${episode}/score.wav`].every((f) => existsSync(path.join(root, f)));
 if (fresh || !scored) python("scripts/features-score.py");
 const manifest = JSON.parse(readFileSync(path.join(root, `public/features/${episode}/frames.json`), "utf8"));
 for (const post of chosen) {
