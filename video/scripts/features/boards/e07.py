@@ -8,13 +8,17 @@ The figures are the README's performance card (docs/images/performance-card.svg,
 docs/performance/history.jsonl, 29 Sep to 10 Oct 2026): 1.8 ms to render a slider change and 160 ms
 to open a 24 MP raw, on an Apple M1 Ultra with a Release build.
 
-The photos stand in until the owner's renders arrive. The dancer is DSC04439.ARW, from a Sony α7R V,
-as the app shows it in docs/images/hero.png at Exposure +0.75, Contrast +29 and Highlights +37,
-cropped to the photo above the canvas's toolbar; the pixel photo at the drag's other values is that
-render brightened or darkened in linear light by the difference. docs/images/hero-slider.png has it at
-+0.85, the next render, but its slider covers the top of the photo. The raw that opens is DSC_0750.NEF,
-from a Nikon Z 6 (24 MP), at its edit (Exposure +0.35, Highlights -45), from docs/images/before-after.png.
+The photo dragged is the owner's shopkeeper among her jars (DSC01584 (2).jpg in
+~/src/redlamp-social/photos), his finished JPEG, cropped in the editor to her and the shelves. Its
+sliders start at zero, since the JPEG is the starting point, and the pixel photo at the drag's values
+is it brightened or darkened in linear light, a drawing of what the renders will show. The raw that
+opens is still DSC_0750.NEF, from a Nikon Z 6 (24 MP), at its edit (Exposure +0.35, Highlights -45),
+from docs/images/before-after.png: the owner's α7R V raws are 61 MP, so the 24 MP figure needs a 24 MP
+raw. The result is the shopkeeper as she is, labelled BEFORE, in Redlamp's before and after view, beside
+the frame Redlamp's renders at each Exposure go in.
 """
+
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
@@ -23,29 +27,28 @@ from features import world as w
 
 EPISODE = w.episode("e07")
 FEATURE = "SPEED"
-PHOTO = ("DSC04439.ARW (SONY ILCE-7RM5) AT EXPOSURE +0.75, DOCS/IMAGES/HERO.PNG (+0.85 IN HERO-SLIDER.PNG); "
-         "DSC_0750.NEF (NIKON Z 6, 24 MP), DOCS/IMAGES/BEFORE-AFTER.PNG")
-DANCER = w.crop("docs/images/hero.png", (686, 78, 1627, 1405))
+SHOOT = Path.home() / "src/redlamp-social/photos"
+SOURCE = SHOOT / "DSC01584 (2).jpg"
+PHOTO = ("DSC01584 (2).JPG, THE OWNER'S SHOPKEEPER, IN BARS 1 TO 3 IN PIXEL ART (THE EXPOSURE DRAG IS DRAWN) "
+         "AND IN BAR 6 UNTOUCHED, AS BEFORE. THE 24 MP RAW OPENED IN BARS 4 AND 5 IS DSC_0750.NEF (NIKON Z 6) "
+         "FROM DOCS/IMAGES/BEFORE-AFTER.PNG, UNTIL ONE OF HIS. TO COME FROM REDLAMP: THE SHOPKEEPER RENDERED AT "
+         "EACH EXPOSURE OF THE DRAG, ONE A BEAT, FOR BAR 6")
+REAL = w.crop(SOURCE)
+SHOP = w.crop(SOURCE, (100, 280, 1300, 1780))
 RAW = w.crop("docs/images/before-after.png", (880, 275, 1577, 709))
-PANEL, STRIP = 50, 16
+PANEL, STRIP = 50, 18
 RENDER, OPEN = "RENDER 1.8 MS", "OPEN 0.16 S"
 
 # Each photo's file, its picture, the Exposure it was rendered at, and the edit's sliders: name, the
 # slider's reach either side of zero, the value.
 PHOTOS = {
-    "dancer": ("DSC04439.ARW", DANCER, 0.75, [("EXPOSURE", 5, 0.75), ("CONTRAST", 100, 29), ("HIGHLIGHTS", 100, 37)]),
+    "shop": ("DSC01584 (2).JPG", SHOP, 0.0, [("EXPOSURE", 5, 0.0), ("CONTRAST", 100, 0), ("HIGHLIGHTS", 100, 0)]),
     "raw": ("DSC_0750.NEF", RAW, 0.35, [("EXPOSURE", 5, 0.35), ("CONTRAST", 100, 0), ("HIGHLIGHTS", 100, -45)]),
 }
-THUMBS = [
-    ("docs/images/hero.png", (686, 78, 1627, 1405)),
-    ("docs/images/before-after.png", (880, 275, 1577, 709)),
-    ("docs/images/recipes.png", (300, 150, 1400, 800)),
-    ("docs/images/black-and-white.png", (300, 150, 1400, 800)),
-    ("docs/images/color-grading.png", (300, 150, 1400, 800)),
-    ("docs/images/proraw.png", (650, 250, 1150, 700)),
-    ("docs/images/film-editor.png", (300, 150, 1400, 800)),
-    ("docs/images/detail.png", (300, 150, 1400, 800)),
-]
+# The filmstrip: the shopkeeper, the raw, then the rest of the owner's photos.
+THUMBS = [SOURCE, "docs/images/before-after.png"] + sorted(
+    p for p in SHOOT.glob("*.jpg") if p != SOURCE)
+THUMB = (round((STRIP - 4) * 2 / 3), STRIP - 4)
 
 _cache = {}
 
@@ -83,7 +86,7 @@ def readout(c, cx, y, text):
     return r
 
 
-def edit(c, key="dancer", *, exposure=None, active=None, press=None, readout_text=RENDER, sliders=True):
+def edit(c, key="shop", *, exposure=None, active=None, press=None, readout_text=RENDER, sliders=True):
     """The editor with `key`'s photo open at `exposure` (its own by default), the Basic sliders, and the
     render time under the photo. `press` is "EXPOSURE" or a thumbnail's index. Returns the editor."""
     file, img, own, edit_sliders = PHOTOS[key]
@@ -94,8 +97,8 @@ def edit(c, key="dancer", *, exposure=None, active=None, press=None, readout_tex
     pixel = cached((key, ev, size), lambda: w.pixel_photo(exposed(img, ev - own) if ev != own else img, *size))
     ed = w.editor(c, pixel, file=file, panel=PANEL, strip=STRIP, aspect=aspect)
     shown = list(PHOTOS).index(key)
-    small = cached(("thumbs",), lambda: [w.pixel_photo(w.crop(p, b), 18, 12) for p, b in THUMBS])
-    cells = w.filmstrip(c, ed.strip, small, selected=shown)
+    small = cached(("thumbs",), lambda: [w.pixel_photo(RAW if i == 1 else p, *THUMB) for i, p in enumerate(THUMBS)])
+    cells = w.filmstrip(c, ed.strip, small, selected=shown, cell=THUMB[0])
     p = ed.panel
     y = w.panel_title(c, p.x, p.y, p.w, "BASIC")
     knobs = {}
@@ -148,9 +151,41 @@ def measured(c):
     w.caption(c, ["MEASURED ON", "AN M1 ULTRA"])
 
 
+def placeholder(c, frame, lines, note=()):
+    """The frame a Redlamp render goes in until it arrives: dashed, with what's to come in it."""
+    c.rect(*frame, w.GREY["well"])
+    for x0, y0, length, vertical in ((frame.x, frame.y, frame.w, False), (frame.x, frame.y2 - 1, frame.w, False),
+                                     (frame.x, frame.y, frame.h, True), (frame.x2 - 1, frame.y, frame.h, True)):
+        c.dashes(x0, y0, length, w.GREY["dim"], vertical=vertical)
+    top = frame.cy - (8 * (len(lines) + len(note)) + (3 if note else 0)) // 2
+    for i, line in enumerate(lines):
+        c.text(frame.cx, top + i * 8, line, w.GREY["value"], align="center")
+    for i, line in enumerate(note):
+        c.text(frame.cx, top + 3 + (len(lines) + i) * 8, line, w.GREY["dim"], align="center")
+
+
+def compare(c, file, real, lines, note=(), *, progress=1.0):
+    """Redlamp's before and after view across the stage: the owner's photo as it is, labelled BEFORE,
+    and beside it the frame Redlamp's render goes in, labelled AFTER. Returns the overlay that resolves
+    the pixel photo into the real one."""
+    w.header(c, FEATURE)
+    ed = w.editor(c, None, file=file, panel=8)
+    pw, ph, gap = 100, 150, 3
+    cv = ed.canvas
+    before = w.Rect(cv.x + (cv.w - 2 * pw - gap) // 2, cv.y + (cv.h - ph) // 2, pw, ph)
+    after = w.Rect(before.x2 + gap, before.y, pw, ph)
+    c.img.paste(w.pixel_photo(real, pw, ph), (before.x, before.y))
+    pixels = np.asarray(c.img)[before.y:before.y2, before.x:before.x2].copy()
+    placeholder(c, after, lines, note)
+    w.tag(c, before, "BEFORE")
+    w.tag(c, after, "AFTER")
+    w.caption(c, w.REAL_PHOTO)
+    return [w.Overlay(before, real, pixels, progress)]
+
+
 def result(c, progress=1.0):
-    ed = edit(c, active="EXPOSURE")
-    return w.result_frame(c, ed, DANCER, progress=progress)
+    return compare(c, PHOTOS["shop"][0], REAL, ["REDLAMP'S", "RENDERS", "GO HERE"], ["EXPOSURE", "+1.00 TO -0.50"],
+                   progress=progress)
 
 
 def end_line(c):

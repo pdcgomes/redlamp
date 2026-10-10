@@ -4,38 +4,34 @@ filmstrip fills with its photos at once, with the measured time to list 50,000 o
 saves IMG_1234.ARW.REDLAMP next to IMG_1234.ARW, which stays as it was; then the real app's window,
 and the end card.
 
-The photos stand in until the owner's own shoot arrives: the photo being edited is DSC04439.ARW, from
-a Sony α7R V, as the app shows it in docs/images/hero.png (cropped to the photo, above the canvas's
-toolbar), named IMG_1234.ARW as the README names a photo and its sidecar. The filmstrip's thumbnails
-are the photos in the repository's other captures. The real app is docs/images/editor.png, the window
-with its filmstrip. The time is the README's Measured performance: all 50,000 photos in 500 folders
-listed in 209 ms.
+The folder is the owner's: his eleven photos in ~/src/redlamp-social/photos, under their own file names,
+in name order. The filmstrip shows them all, and the one being edited is the cosplayer with orange hair,
+DSC02372.jpg, cropped to the head and shoulders; its sidecar is named as the README names one, the
+photo's name with .redlamp after it. The real app is docs/images/editor.png, the window with its
+filmstrip, until a capture of the app with his folder is taken. The time is the README's Measured
+performance: all 50,000 photos in 500 folders listed in 209 ms.
 """
+
+from pathlib import Path
 
 from features import world as w
 
 EPISODE = w.episode("e06")
 FEATURE = "FOLDERS"
 APP = "docs/images/editor.png"
-PHOTO = ("IMG_1234.ARW STANDS IN FOR DSC04439.ARW (SONY ILCE-7RM5), DOCS/IMAGES/HERO.PNG; "
-         "THE REAL APP IS DOCS/IMAGES/EDITOR.PNG")
-FILE = "IMG_1234.ARW"
-SIDECAR = "IMG_1234.ARW.REDLAMP"
+SHOOT = Path.home() / "src/redlamp-social/photos"
+PHOTO = ("THE FOLDER IS THE OWNER'S ELEVEN PHOTOS UNDER THEIR OWN NAMES: ALL OF THEM IN THE FILMSTRIP, AND "
+         "DSC02372.JPG, THE COSPLAYER, OPEN IN BARS 4 AND 5. THE REAL APP IS DOCS/IMAGES/EDITOR.PNG, A STAND-IN "
+         "UNTIL A CAPTURE OF THE APP WITH HIS FOLDER IS TAKEN WITH SCRIPTS/CAPTURE-PROMO.SH")
+OPEN = "DSC02372.jpg"
+NAMES = sorted(p.name for p in SHOOT.glob("*.jpg"))
+FILE = OPEN.upper()
+SIDECAR = f"{FILE}.REDLAMP"
 FOLDER = "PHOTOS"
-EDITED = w.crop("docs/images/hero.png", (686, 78, 1627, 1405))
+EDITED = w.crop(SHOOT / OPEN, (200, 300, 1300, 1950))
 ASPECT = EDITED.width / EDITED.height
-PANEL, STRIP = 40, 18
-# The other photos in the repository's captures, cropped inside each window's canvas.
-THUMBS = [
-    ("docs/images/hero.png", (686, 78, 1627, 1405)),
-    ("docs/images/before-after.png", (880, 275, 1577, 709)),
-    ("docs/images/recipes.png", (300, 150, 1400, 800)),
-    ("docs/images/black-and-white.png", (300, 150, 1400, 800)),
-    ("docs/images/color-grading.png", (300, 150, 1400, 800)),
-    ("docs/images/proraw.png", (650, 250, 1150, 700)),
-    ("docs/images/film-editor.png", (300, 150, 1400, 800)),
-    ("docs/images/detail.png", (300, 150, 1400, 800)),
-]
+PANEL, STRIP = 40, 22
+THUMB = (round((STRIP - 4) * 2 / 3), STRIP - 4)
 
 _cache = {}
 
@@ -47,7 +43,7 @@ def cached(key, make):
 
 
 def thumbs(size):
-    return cached(("thumbs", size), lambda: [w.pixel_photo(w.crop(p, box), *size) for p, box in THUMBS])
+    return cached(("thumbs", size), lambda: [w.pixel_photo(SHOOT / name, *size) for name in NAMES])
 
 
 def readout(c, cx, y, text):
@@ -88,13 +84,13 @@ def finder(c, rect, title, names, *, badges=None, mark=None):
 
 
 def edit(c, *, folder=False, listed=False, photo=False, press=False):
-    """The editor: empty, then with the folder added, its photos listed, and IMG_1234.ARW open."""
+    """The editor: empty, then with the folder added, its photos listed, and DSC02372.JPG open."""
     w.header(c, FEATURE)
     lay = w.layout(panel=PANEL, strip=STRIP, aspect=ASPECT)
     image = cached(("photo", lay.photo[2:]), lambda: w.pixel_photo(EDITED, *lay.photo[2:])) if photo else None
     ed = w.editor(c, image, file=FILE if photo else "REDLAMP", panel=PANEL, strip=STRIP, aspect=ASPECT)
     if listed:
-        w.filmstrip(c, ed.strip, thumbs((round((STRIP - 4) * 1.5), STRIP - 4)), selected=0 if photo else None)
+        w.filmstrip(c, ed.strip, thumbs(THUMB), selected=NAMES.index(OPEN) if photo else None, cell=THUMB[0])
     p = ed.panel
     y = w.panel_title(c, p.x, p.y, p.w - 12, "FOLDERS")
     add = w.button(c, p.x2 - 9, p.y - 1, "+", w=9, pressed=press)
@@ -122,10 +118,12 @@ def listed(c):
 
 
 def files(c, badges, mark):
+    """The folder in the Finder around the photo being edited, with its sidecar after it."""
     ed = edit(c, folder=True, listed=True, photo=True)
-    names = [FILE, SIDECAR, "IMG_1235.ARW"]
+    i = NAMES.index(OPEN)
+    names = [FILE, SIDECAR, NAMES[i + 1].upper()]
     rect = w.Rect(ed.canvas.x + 3, ed.panel.y - 5 - (15 + 13 * len(names)), w.READ_RIGHT - 4 - (ed.canvas.x + 3),
-                  12 + 13 * len(names))
+                  14 + 13 * len(names))
     finder(c, rect, FOLDER, names, badges=badges, mark=mark)
 
 

@@ -3,23 +3,33 @@ E05, Presets and LUTs: Lightroom develop presets dropped on the Recipes panel, t
 across exactly, approximately or not at all, a .cube LUT dropped the same way, then a click on an
 imported preset; then the real photo with it, and the end card.
 
-The photo stands in until the owner's own photo and preset arrive: DSC04439.ARW, from a Sony α7R V, in
-Redlamp's before and after view (docs/images/hero-compare.png), cropped below the view's Before and
-After labels. The preset clicked is the edit that view shows. The report's rows are real Camera Raw
+The photo is the owner's two girls on a scooter (DSC03201 (2).jpg in ~/src/redlamp-social/photos), his
+finished JPEG. The editor shows it cropped to the girls and the scooter; the preset's look in bar 5 is
+drawn, a warmer, firmer pixel photo, since the owner's preset hasn't arrived. The result is the photo
+as it is, labelled BEFORE, in Redlamp's before and after view, beside the frame Redlamp's render with
+the preset goes in. The preset and LUT names stand in for his. The report's rows are real Camera Raw
 settings and the outcome docs/recipes/lightroom-presets.md gives each: Exposure, Contrast and
 Highlights map one to one, a Color Priority vignette style renders as Highlight Priority, and a
 profile isn't converted.
 """
 
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
 from features import world as w
 
 EPISODE = w.episode("e05")
 FEATURE = "PRESETS AND LUTS"
-SOURCE = "docs/images/hero-compare.png"
-PHOTO = "DSC04439.ARW (SONY ILCE-7RM5) IN REDLAMP'S BEFORE AND AFTER VIEW, DOCS/IMAGES/HERO-COMPARE.PNG"
-FILE = "DSC04439.ARW"
-BEFORE = w.crop(SOURCE, (399, 272, 1151, 1346))
-AFTER = w.crop(SOURCE, (1162, 272, 1914, 1346))
+SOURCE = Path.home() / "src/redlamp-social/photos/DSC03201 (2).jpg"
+PHOTO = ("DSC03201 (2).JPG, THE OWNER'S TWO GIRLS ON A SCOOTER, IN EVERY PANEL: BARS 1 TO 5 IN PIXEL ART, "
+         "CROPPED TO THE GIRLS (THE PRESET'S LOOK IN BAR 5 IS DRAWN), AND BAR 6 THE WHOLE JPEG UNTOUCHED, AS "
+         "BEFORE. TO COME FROM REDLAMP: THE PHOTO WITH THE OWNER'S .XMP PRESET, FOR AFTER. THE PRESET AND "
+         "LUT NAMES STAND IN FOR HIS")
+FILE = "DSC03201 (2).JPG"
+REAL = w.crop(SOURCE)
+BEFORE = w.crop(SOURCE, (180, 620, 1080, 1820))
 ASPECT = BEFORE.width / BEFORE.height
 PANEL = 70
 
@@ -38,11 +48,54 @@ OUTCOME = {"EXACT": "green.light", "APPROXIMATE": "yellow.light", "NOT AT ALL": 
 _photos = {}
 
 
+def drawn_look(img):
+    """A stand-in for the preset in the pixel photo only: warmer, a little firmer and richer."""
+    a = np.asarray(img, np.float64) / 255
+    a = a * [1.06, 1.0, 0.88] + [0.02, 0.0, -0.01]
+    a = np.clip(a, 0, 1)
+    a = a + 0.35 * (a - 0.5) * (1 - np.abs(2 * a - 1))
+    y = a @ [0.2126, 0.7152, 0.0722]
+    a = y[..., None] + (a - y[..., None]) * 1.25
+    return Image.fromarray(np.rint(np.clip(a, 0, 1) * 255).astype(np.uint8))
+
+
 def photos(size):
     """The pixel photo before and after the preset."""
     if size not in _photos:
-        _photos[size] = [w.pixel_photo(img, *size) for img in (BEFORE, AFTER)]
+        _photos[size] = [w.pixel_photo(img, *size) for img in (BEFORE, drawn_look(BEFORE))]
     return _photos[size]
+
+
+def placeholder(c, frame, lines, note=()):
+    """The frame a Redlamp render goes in until it arrives: dashed, with what's to come in it."""
+    c.rect(*frame, w.GREY["well"])
+    for x0, y0, length, vertical in ((frame.x, frame.y, frame.w, False), (frame.x, frame.y2 - 1, frame.w, False),
+                                     (frame.x, frame.y, frame.h, True), (frame.x2 - 1, frame.y, frame.h, True)):
+        c.dashes(x0, y0, length, w.GREY["dim"], vertical=vertical)
+    top = frame.cy - (8 * (len(lines) + len(note)) + (3 if note else 0)) // 2
+    for i, line in enumerate(lines):
+        c.text(frame.cx, top + i * 8, line, w.GREY["value"], align="center")
+    for i, line in enumerate(note):
+        c.text(frame.cx, top + 3 + (len(lines) + i) * 8, line, w.GREY["dim"], align="center")
+
+
+def compare(c, real, lines, note=(), *, progress=1.0):
+    """Redlamp's before and after view across the stage: the owner's photo as it is, labelled BEFORE,
+    and beside it the frame Redlamp's render goes in, labelled AFTER. Returns the overlay that resolves
+    the pixel photo into the real one."""
+    w.header(c, FEATURE)
+    ed = w.editor(c, None, file=FILE, panel=8)
+    pw, ph, gap = 100, 150, 3
+    cv = ed.canvas
+    before = w.Rect(cv.x + (cv.w - 2 * pw - gap) // 2, cv.y + (cv.h - ph) // 2, pw, ph)
+    after = w.Rect(before.x2 + gap, before.y, pw, ph)
+    c.img.paste(w.pixel_photo(real, pw, ph), (before.x, before.y))
+    pixels = np.asarray(c.img)[before.y:before.y2, before.x:before.x2].copy()
+    placeholder(c, after, lines, note)
+    w.tag(c, before, "BEFORE")
+    w.tag(c, after, "AFTER")
+    w.caption(c, w.REAL_PHOTO)
+    return [w.Overlay(before, real, pixels, progress)]
 
 
 def finder(c, rect, title, names, *, mark=None):
@@ -159,8 +212,7 @@ def apply(c):
 
 
 def result(c, progress=1.0):
-    ed, _ = edit(c, after=True, imported=[*PRESETS, LUT], selected="PARADE")
-    return w.result_frame(c, ed, AFTER, mark="AFTER", progress=progress)
+    return compare(c, REAL, ["REDLAMP'S", "RENDER", "GOES HERE"], ["WITH PARADE"], progress=progress)
 
 
 def end_line(c):

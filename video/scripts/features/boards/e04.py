@@ -1,15 +1,18 @@
 """
 E04, Lightroom shortcuts: Lightroom Classic's keyboard shortcuts, panel order and slider names, working
-in Redlamp. The editor has the dancer open with four keys under the photo; each bar presses one and the
+in Redlamp. The editor has a portrait open with four keys under the photo; each bar presses one and the
 editor does what Lightroom does: R the crop frame, K the brush, backslash before and after, V black and
 white; then the real Redlamp window, its panels in Lightroom's order, then its shortcut list, and the
 end card.
 
-The photo is DSC04439.ARW, from a Sony α7R V, the README's hero, with its edit (docs/images/hero.png);
-the before is the same photo in Redlamp's before and after view (docs/images/hero-compare.png). The
-black and white stands in for Redlamp's: the edit's own luminance. The result is the app itself, its
-window captured by scripts/capture-promo.sh (video/public/promo/panels.png and shortcuts.png).
+The photo is the owner's man in the green shirt (DSC03301 (2).jpg, in ~/src/redlamp-social/photos),
+cropped to 4:5 about him. His JPEG is his finished photo and stands in for the edit. The before and the
+black and white on the pixel photo are drawings of it: the before flatter, darker and with less colour,
+the black and white its luminance. The result is the app itself, its window captured by
+scripts/capture-promo.sh (video/public/promo/panels.png and shortcuts.png).
 """
+
+from pathlib import Path
 
 import numpy as np
 from PIL import Image
@@ -18,29 +21,36 @@ from features import world as w
 
 EPISODE = w.episode("e04")
 FEATURE = "LIGHTROOM SHORTCUTS"
-PHOTO = ("DSC04439.ARW (SONY ILCE-7RM5) WITH ITS EDIT, DOCS/IMAGES/HERO.PNG; "
-         "ITS BEFORE FROM DOCS/IMAGES/HERO-COMPARE.PNG; THE BLACK AND WHITE IS THE EDIT'S LUMINANCE, STANDING IN FOR REDLAMP'S. THE REAL APP: "
-         "VIDEO/PUBLIC/PROMO/PANELS.PNG, THEN SHORTCUTS.PNG")
-FILE = "DSC04439.ARW"
-AFTER = w.crop("docs/images/hero.png", (686, 78, 1627, 1477))
-BEFORE = w.crop("docs/images/hero-compare.png", (387, 220, 1160, 1346))
-ASPECT = AFTER.width / AFTER.height
-PANEL = 70
+SOURCE = Path.home() / "src/redlamp-social/photos/DSC03301 (2).jpg"
+PHOTO = ("THE OWNER'S DSC03301 (2).JPG (THE MAN IN THE GREEN SHIRT), CROPPED TO 4:5, IN EVERY EDITOR PANEL; ITS "
+         "BEFORE AND ITS BLACK AND WHITE ON THE PIXEL PHOTO ARE DRAWINGS. THE REAL APP: VIDEO/PUBLIC/PROMO/PANELS.PNG, "
+         "THEN SHORTCUTS.PNG, CAPTURED WITH THE README'S DANCER OPEN")
+FILE = "DSC03301.ARW"
+# A 4:5 crop about the man, in the photo's own pixels.
+BOX = (165, 80, 1365, 1580)
+AFTER = Image.open(SOURCE).convert("RGB").crop(BOX)
+ASPECT = 4 / 5
+PANEL = 64
 
 # The keys the video presses, in order, and what each does (README, Keyboard shortcuts).
 KEYS = [("R", "CROP"), ("K", "BRUSH"), ("\\", "BEFORE / AFTER"), ("V", "BLACK & WHITE")]
-KEY, PITCH = 15, 16
+KEY, PITCH = 13, 14
 
 
-def mono(img):
-    """`img` in black and white: its luminance in linear light, back in sRGB."""
-    a = np.asarray(img, dtype=np.float64) / 255
-    lin = np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4) @ [0.2126, 0.7152, 0.0722]
+def drawn(img, *, ev=0.0, contrast=1.0, colour=1.0):
+    """`img` redrawn for the pixel photo only: `ev` stops of exposure, contrast about the middle grey
+    and colour toward grey (0 is its luminance, in linear light)."""
+    a = np.asarray(img.resize((img.width // 4, img.height // 4), Image.BOX), dtype=np.float64) / 255
+    lin = np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4) * 2 ** ev
+    grey = lin @ [0.2126, 0.7152, 0.0722]
+    lin = np.clip(grey[..., None] + (lin - grey[..., None]) * colour, 0, 1)
     v = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * lin ** (1 / 2.4) - 0.055)
-    return Image.fromarray(np.rint(np.repeat(v[..., None], 3, axis=2) * 255).astype(np.uint8))
+    v = 0.4 + (v - 0.4) * contrast
+    return Image.fromarray(np.rint(np.clip(v, 0, 1) * 255).astype(np.uint8))
 
 
-MONO = mono(AFTER)
+BEFORE = drawn(AFTER, ev=-0.3, contrast=0.75, colour=0.6)
+MONO = drawn(AFTER, colour=0.0, contrast=1.1)
 
 
 def capture(path):
@@ -52,13 +62,28 @@ def capture(path):
 
 APP = capture("video/public/promo/panels.png")
 
+
+def photo_palette(images, colors=40):
+    """A palette taken from the photos themselves, with the editor's greys, so the skin, the green
+    shirt and the grey hair keep their own colours in the pixel photo."""
+    tiles = [img.resize((96, 120), Image.BOX) for img in images]
+    sheet = Image.new("RGB", (96 * len(tiles), 120))
+    for i, tile in enumerate(tiles):
+        sheet.paste(tile, (96 * i, 0))
+    flat = sheet.quantize(colors=colors, method=Image.Quantize.MEDIANCUT).getpalette()[:3 * colors]
+    found = [tuple(flat[i:i + 3]) for i in range(0, len(flat), 3)]
+    return list(dict.fromkeys(found + [w.THEME.rgb(g) for g in w.GREY.values()]))
+
+
+PALETTE = photo_palette([AFTER, BEFORE, MONO])
+
 _photos = {}
 
 
 def pixel(img, size):
     key = (id(img), size)
     if key not in _photos:
-        _photos[key] = w.pixel_photo(img, *size)
+        _photos[key] = w.lock(w.fit(img, *size, Image.BOX), PALETTE, dither=0.4).convert("RGB")
     return _photos[key]
 
 
@@ -113,7 +138,7 @@ def crop(c):
 def brush(c):
     ed = edit(c, pressed=1)
     ph = ed.photo
-    brush_ring(c, ph.x + round(ph.w * 0.42), ph.y + round(ph.h * 0.66))
+    brush_ring(c, ph.x + round(ph.w * 0.3), ph.y + round(ph.h * 0.72))
     w.caption(c, "K  BRUSH")
 
 
@@ -136,7 +161,7 @@ def result(c, progress=1.0):
     r = w.Rect(st.x, st.y + (st.h - h) // 2, st.w, h)
     c.claim(r, "the app")
     c.rect(r.x + 2, r.y + 2, r.w, r.h, "shadow")
-    c.img.paste(pixel(APP, (r.w, r.h)), (r.x, r.y))
+    c.img.paste(w.pixel_photo(APP, r.w, r.h), (r.x, r.y))
     pixels = np.asarray(c.img)[r.y:r.y2, r.x:r.x2].copy()
     ed = w.Editor(r, r, r, None, r, pixels)
     return w.result_frame(c, ed, APP, label=w.REAL_APP, progress=progress)

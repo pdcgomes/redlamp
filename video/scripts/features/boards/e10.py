@@ -1,97 +1,58 @@
 """
 E10, Focus stacking: Redlamp finds a focus stack and merges it into one sharp photo that edits like a
-raw. The editor opens the first of 25 near-identical close-ups of a flower, the filmstrip showing the
-others; the banner FOCUS STACK DETECTED · 25 FRAMES · MERGE slides in, the pointer clicks Merge, the
-frames' sharp bands combine into one photo a band a beat, and the Basic sliders move on the result;
-then the real stack, merged in Redlamp, and the end card.
+raw. The editor opens the first of 25 near-identical close-ups of a snail on a leaf, the filmstrip
+showing the others; the banner FOCUS STACK DETECTED · 25 FRAMES · MERGE slides in, the pointer clicks
+Merge, the frames' sharp bands combine into one photo a band a beat, and the Basic sliders move on the
+result; then the real photo, and the end card.
 
-There is no stack yet: the flower is drawn here, seen from the side so its depth runs up the picture,
-and each frame is it with the focus on a different band, front (the bottom) to back (the top), and
-the background out of focus in all of them. The result is a placeholder until the owner's stack
-arrives; the number of frames, the file names and the slider values are to match it.
+The subject is the owner's snail on a leaf (DSC00983.jpg in ~/src/redlamp-social/photos), his finished
+JPEG, cropped square in the editor to the snail. There is no focus-bracketed series of it yet, so the
+frames are drawn from it: each is the pixel photo blurred away from one band of focus, front (the
+bottom) to back (the top), and the merge takes each band from its sharp frame. The result is the photo
+as it is, labelled BEFORE, in Redlamp's before and after view, beside the frame Redlamp's merge goes in.
+The number of frames, the frames' file names after the first and the slider values stand in for the
+owner's stack.
 """
 
-import math
+from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageFilter
 
 from features import world as w
 
 EPISODE = w.episode("e10")
 FEATURE = "FOCUS STACKING"
+SOURCE = Path.home() / "src/redlamp-social/photos/DSC00983.jpg"
 FRAMES = 25
-FIRST = 401
-PHOTO = ("NONE YET: THE FLOWER AND ITS 25 FRAMES ARE DRAWN IN PIXEL ART, AND THE RESULT IS A PLACEHOLDER UNTIL "
-         "THE OWNER'S STACK ARRIVES. ITS FRAME COUNT, FILE NAMES AND SLIDER VALUES ARE TO MATCH IT")
+FIRST = 983
+PHOTO = ("DSC00983.JPG, THE OWNER'S SNAIL ON A LEAF, IN EVERY PANEL: BARS 1 TO 5 IN PIXEL ART, CROPPED SQUARE TO "
+         "THE SNAIL (THE 25 FRAMES, THE MERGE AND THE EDIT ARE DRAWN FROM IT), AND BAR 6 THE WHOLE JPEG "
+         "UNTOUCHED, AS BEFORE. TO COME FROM REDLAMP: THE MERGE OF A FOCUS-BRACKETED SERIES, FOR AFTER. ITS "
+         "FRAME COUNT, FILE NAMES AND SLIDER VALUES ARE TO MATCH IT")
+REAL = w.crop(SOURCE)
+CROP = w.crop(SOURCE, (60, 160, 1365, 1465))
 PANEL, STRIP = 40, 18
-ASPECT = 1.5
+ASPECT = CROP.width / CROP.height
 BANDS = 4
 UP = 4
-STACK_FILE = f"DSC_0{FIRST}.REDLAMPSTACK"
+STACK_FILE = f"DSC{FIRST:05d}.REDLAMPSTACK"
 # The Basic sliders moved on the merge: name, reach either side of zero, value. Stand-ins for the edit
 # the owner makes on his stack.
 SLIDERS = [("EXPOSURE", 5, 0.30), ("VIBRANCE", 100, 20)]
 
 
 def frame_name(i):
-    return f"DSC_0{FIRST + i}.NEF"
+    return f"DSC{FIRST + i:05d}.JPG"
 
 
-def flower(size):
-    """The flower in focus everywhere over its blurred background, and its depth: 0 at the front (the
-    bottom of the picture) to 1 at the back, and None where there is only background."""
+def subject(size):
+    """The photo, sharp everywhere it is in the JPEG, at UP times the photo's size, and its depth: 0 at
+    the front (the bottom of the picture) to 1 at the back (the top)."""
     W, H = size[0] * UP, size[1] * UP
-    bg = Image.new("RGB", (W, H))
-    d = ImageDraw.Draw(bg)
-    for y in range(H):
-        t = y / H
-        d.line([(0, y), (W, y)], fill=(int(46 + 30 * t), int(74 + 40 * (1 - t)), int(44 + 10 * t)))
-    rng = np.random.default_rng(3)
-    for _ in range(14):
-        x, y, r = rng.uniform(0, W), rng.uniform(0, H), rng.uniform(H * 0.05, H * 0.14)
-        tone = rng.choice([(120, 150, 80), (90, 120, 64), (160, 170, 110)])
-        d.ellipse([x - r, y - r, x + r, y + r], fill=tuple(int(v) for v in tone))
-    bg = bg.filter(ImageFilter.GaussianBlur(H * 0.06))
-
-    img = bg.copy()
-    d = ImageDraw.Draw(img)
-    mask = Image.new("L", (W, H))
-    m = ImageDraw.Draw(mask)
-    cx, cy = W * 0.5, H * 0.50
-    stem = [(cx - W * 0.01, cy), (cx + W * 0.02, H * 0.80), (cx + W * 0.01, H)]
-    for draw_, fill in ((d, (64, 110, 52)), (m, 255)):
-        draw_.line(stem, fill=fill, width=int(W * 0.025))
-        draw_.polygon([(cx + W * 0.02, H * 0.86), (cx + W * 0.24, H * 0.74), (cx + W * 0.30, H * 0.80),
-                       (cx + W * 0.04, H * 0.92)], fill=fill)
-
-    def petal(a, length, width):
-        tip = (cx + length * math.cos(a), cy + length * 0.5 * math.sin(a))
-        side = a + math.pi / 2
-        mid = (cx + 0.55 * length * math.cos(a), cy + 0.55 * length * 0.5 * math.sin(a))
-        dx, dy = width * math.cos(side), width * 0.5 * math.sin(side) + width * 0.25
-        return [(cx, cy), (mid[0] + dx, mid[1] + dy), tip, (mid[0] - dx, mid[1] - dy)], tip
-
-    angles = [2 * math.pi * k / 14 + 0.1 for k in range(14)]
-    for a in sorted(angles, key=math.sin):
-        shape, tip = petal(a, W * 0.36, W * 0.055)
-        shade = 0.82 + 0.18 * math.sin(a)
-        d.polygon(shape, fill=(int(218 * shade), int(210 * shade), int(242 * shade)), outline=(118, 104, 170))
-        d.line([(cx, cy), tip], fill=(150, 136, 200), width=max(1, UP // 2))
-        m.polygon(shape, fill=255)
-    r = W * 0.085
-    d.ellipse([cx - r, cy - r * 0.55, cx + r, cy + r * 0.55], fill=(196, 150, 40), outline=(110, 74, 20))
-    m.ellipse([cx - r, cy - r * 0.55, cx + r, cy + r * 0.55], fill=255)
-    for i in range(-6, 7):
-        for j in range(-4, 5):
-            x, y = cx + i * r / 6, cy + j * r * 0.55 / 4
-            if ((x - cx) / r) ** 2 + ((y - cy) / (r * 0.55)) ** 2 < 0.8 and (i + j) % 2 == 0:
-                d.rectangle([x, y, x + UP / 2, y + UP / 2], fill=(110, 70, 24))
-
-    top, bottom = cy - W * 0.18, cy + W * 0.18
-    v = np.clip((bottom - np.arange(H)[:, None]) / (bottom - top), 0, 1) + np.zeros((1, W))
-    depth = np.where(np.asarray(mask) > 0, v, np.nan)
-    return img, depth, (top / UP, bottom / UP)
+    img = CROP.resize((W, H), Image.LANCZOS)
+    depth = np.repeat(np.linspace(1, 0, H)[:, None], W, axis=1)
+    return img, depth
 
 
 _stacks = {}
@@ -112,13 +73,13 @@ def stack(size):
     """Each frame at the photo's size, sharp in its band, and the merge after each band."""
     if size in _stacks:
         return _stacks[size]
-    sharp, depth, rows = flower(size)
-    radii = [0, 3, 6, 10, 14]
+    sharp, depth = subject(size)
+    radii = [0, 2, 4, 7, 10]
     blurred = [np.asarray(sharp.filter(ImageFilter.GaussianBlur(r)) if r else sharp, np.float64) for r in radii]
 
     def at(focus):
         dist = np.nan_to_num(np.abs(depth - focus), nan=1.0)
-        k = np.clip(np.rint(dist * 8), 0, len(radii) - 1).astype(int)
+        k = np.clip(np.rint(dist * 6), 0, len(radii) - 1).astype(int)
         out = np.choose(k[..., None], blurred)
         return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
 
@@ -136,9 +97,8 @@ def stack(size):
     _stacks[size] = {
         "edited": small(develop_like_raw(merges[-1]), *size),
         "frames": [small(f, *size) for f in frames[:1]],
-        "thumbs": [small(f, round(th * 1.5), th) for f in frames],
+        "thumbs": [small(f, th, th) for f in frames],
         "merges": [small(m_, *size) for m_ in merges],
-        "rows": rows,
     }
     return _stacks[size]
 
@@ -157,7 +117,7 @@ def edit(c, photo="frame", *, merged=0, file=None, sliders=False, active=None, s
     s = stack(size)
     img = s["frames"][0] if photo == "frame" else s["edited"] if sliders else s["merges"][merged]
     ed = w.editor(c, img, file=file or frame_name(0), aspect=ASPECT, panel=PANEL, strip=STRIP)
-    w.filmstrip(c, ed.strip, s["thumbs"], selected=0 if strip else None)
+    w.filmstrip(c, ed.strip, s["thumbs"], selected=0 if strip else None, cell=STRIP - 4)
     p = ed.panel
     y = w.panel_title(c, p.x, p.y, p.w, "BASIC")
     knobs = {}
@@ -197,8 +157,7 @@ def merge(c):
 
 def merging(c):
     ed = edit(c, "merge", merged=2, file=STACK_FILE, strip=False)
-    top, bottom = stack(ed.photo[2:])["rows"]
-    c.dots(ed.photo.x, ed.photo.y + round((top + bottom) / 2), ed.photo.w, w.GREY["thumb"])
+    c.dots(ed.photo.x, ed.photo.y + ed.photo.h // 2, ed.photo.w, w.GREY["thumb"])
     w.tag(c, ed.photo, f"MERGING {FRAMES} FRAMES")
     w.caption(c, "ONE SHARP PHOTO")
 
@@ -208,20 +167,41 @@ def develop(c):
     w.caption(c, ["EDIT IT LIKE", "A RAW"])
 
 
-def placeholder(c, photo, lines):
-    """Where the real photo goes until it arrives: the photo's frame, dashed, with what's to come."""
-    c.rect(*photo, w.GREY["well"])
-    for x0, y0, length, vertical in ((photo.x, photo.y, photo.w, False), (photo.x, photo.y2 - 1, photo.w, False),
-                                     (photo.x, photo.y, photo.h, True), (photo.x2 - 1, photo.y, photo.h, True)):
+def placeholder(c, frame, lines, note=()):
+    """The frame a Redlamp render goes in until it arrives: dashed, with what's to come in it."""
+    c.rect(*frame, w.GREY["well"])
+    for x0, y0, length, vertical in ((frame.x, frame.y, frame.w, False), (frame.x, frame.y2 - 1, frame.w, False),
+                                     (frame.x, frame.y, frame.h, True), (frame.x2 - 1, frame.y, frame.h, True)):
         c.dashes(x0, y0, length, w.GREY["dim"], vertical=vertical)
+    top = frame.cy - (8 * (len(lines) + len(note)) + (3 if note else 0)) // 2
     for i, line in enumerate(lines):
-        c.text(photo.cx, photo.cy - 6 + i * 8, line, w.GREY["label"], align="center")
+        c.text(frame.cx, top + i * 8, line, w.GREY["value"], align="center")
+    for i, line in enumerate(note):
+        c.text(frame.cx, top + 3 + (len(lines) + i) * 8, line, w.GREY["dim"], align="center")
 
 
-def result(c):
-    ed = edit(c, "merge", merged=BANDS, file=STACK_FILE, sliders=True, strip=False)
-    placeholder(c, ed.photo, ["OWNER'S STACK", "TO COME"])
+def compare(c, file, real, lines, note=(), *, progress=1.0):
+    """Redlamp's before and after view across the stage: the owner's photo as it is, labelled BEFORE,
+    and beside it the frame Redlamp's render goes in, labelled AFTER. Returns the overlay that resolves
+    the pixel photo into the real one."""
+    w.header(c, FEATURE)
+    ed = w.editor(c, None, file=file, panel=8)
+    pw, ph, gap = 100, 150, 3
+    cv = ed.canvas
+    before = w.Rect(cv.x + (cv.w - 2 * pw - gap) // 2, cv.y + (cv.h - ph) // 2, pw, ph)
+    after = w.Rect(before.x2 + gap, before.y, pw, ph)
+    c.img.paste(w.pixel_photo(real, pw, ph), (before.x, before.y))
+    pixels = np.asarray(c.img)[before.y:before.y2, before.x:before.x2].copy()
+    placeholder(c, after, lines, note)
+    w.tag(c, before, "BEFORE")
+    w.tag(c, after, "AFTER")
     w.caption(c, w.REAL_PHOTO)
+    return [w.Overlay(before, real, pixels, progress)]
+
+
+def result(c, progress=1.0):
+    return compare(c, frame_name(0), REAL, ["REDLAMP'S", "MERGE", "GOES HERE"], [f"{FRAMES} FRAMES"],
+                   progress=progress)
 
 
 def end_line(c):

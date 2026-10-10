@@ -47,7 +47,7 @@ Every video follows one cue sheet, `video/src/features/cues.json`: 100 BPM at 30
 - **Picture:** pixelkit, as the Redlamp architecture series uses it: a dark navy background, bitmap capitals, one accent per meaning. The editor is drawn in neutral greys, as the app is. The only red is the lamp's light and the editor's own red mask overlay.
 - **Grid:** 216 × 384 logical pixels at ×5 (or 180 × 320 at ×6, settled with test frames).
 - **Safe zones:** nothing to read in the top 260 px, the bottom 480 px, or the right-hand 160 px between 700 and 1600 px down, where TikTok and Instagram put their own controls.
-- **Header:** a strip with Redlamp's safelight mark and the feature: REDLAMP · SKY MASK.
+- **Header:** a strip with Redlamp's safelight mark and the feature: REDLAMP · SUBJECT MASK.
 - **Values on screen** are the real edit's own: the pixel sliders move to the values the real result was made with, so the two match.
 - **Covers:** the first frame, which carries the hook. Its words sit inside the middle 3:4 of the frame, which Instagram's profile grid shows.
 - **The real results** are Redlamp's own renders of the owner's photos, from the `redlamp` CLI, or captures of the app from `scripts/capture-promo.sh`. What each episode needs, and what already exists, is listed under [Real results](#real-results).
@@ -92,29 +92,30 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 7 | 14.4 s | The end card. | RAW PHOTO EDITOR / FOR MAC, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
-### E02 Sky mask
+### E02 Subject mask
 
-- **Shows:** the sky selected in one click by an AI mask that runs on the Mac, then darkened without changing the trees.
-- **For:** people who edit now and then, landscape photographers, people used to phone filter apps.
-- **Source:** README, Masking: the AI masks (Sky); process version 14 ("a Sky mask's edit reaches only the sky's share of each pixel along its edge, so twigs and leaves keep their own colour and brightness"); Models on demand ("Every model runs on the Mac; photos are never uploaded").
+- **Shows:** the person selected in one click by an AI mask that runs on the Mac, the mask inverted to select the background, and the background darkened so the subject stands out.
+- **For:** people who edit now and then, portrait and family photographers, people used to phone filter apps.
+- **Source:** README, Masking: the AI masks (Subject, "with Apple Vision's built-in models and nothing to download"), Invert ("as Lightroom's"), Subject edges "solved per pixel too ..., which brings back stray hairs", and the mask presets (Darken Background); Models on demand ("Every model runs on the Mac; photos are never uploaded").
+- **Photo:** the owner's son at a colour run (`IMG_3557.jpg`), in mirrored sunglasses against a soft park background. It replaces the sky mask on trees, whose result wasn't good enough to show (the owner, 10 October 2026).
 - **Posts:** Fri 30 Oct, 18:00 (A); Sun 1 Nov, Instagram trial reel (B).
 
 | ID | Hook |
 | --- | --- |
-| a | SELECT THE SKY / IN ONE CLICK |
-| b | AI SKY MASK / ON YOUR MAC |
-| c | ONE CLICK / SELECTS THE SKY |
-| d | DARKEN THE SKY / IN ONE CLICK |
-| e | MASK THE SKY / WITHOUT BRUSHING |
+| a | SELECT THE PERSON / IN ONE CLICK |
+| b | AI SUBJECT MASK / ON YOUR MAC |
+| c | MAKE YOUR SUBJECT / STAND OUT |
+| d | ONE CLICK SELECTS / THE SUBJECT |
+| e | MASKS THAT FIND / PEOPLE FOR YOU |
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a landscape open, trees against a pale sky; the Masks panel shows SUBJECT, SKY, BACKGROUND and PEOPLE. | SELECT THE SKY / IN ONE CLICK | A soft chord and a gentle hit. |
-| 2 | 2.4 s | The pointer clicks SKY. | CLICK SKY | The motif starts; a click on the beat. |
-| 3 | 4.8 s | The red overlay fills the sky; the trees stay clear. | THE SKY IS / SELECTED | A soft rising blip as the overlay fills. |
-| 4 | 7.2 s | The mask's EXPOSURE moves to −0.80; the sky darkens. | DARKEN IT | Slider ticks; the drums come in. |
-| 5 | 9.6 s | Closer on the branches against the darker sky. | THE TREES STAY / AS THEY WERE | The motif's answer. |
-| 6 | 12.0 s | The real landscape, before, then after at 13.2 s. | REAL PHOTO, / EDITED IN REDLAMP | The sting. |
+| 1 | 0.0 s | The editor with the photo open; the Masks panel shows SUBJECT, SKY, BACKGROUND and PEOPLE. | SELECT THE PERSON / IN ONE CLICK | A soft chord and a gentle hit. |
+| 2 | 2.4 s | The pointer clicks SUBJECT. | CLICK SUBJECT | The motif starts; a click on the beat. |
+| 3 | 4.8 s | The red overlay covers the boy, hair included; the background stays clear. | HE IS SELECTED, / HAIR INCLUDED | A soft rising blip as the overlay fills. |
+| 4 | 7.2 s | INVERT is clicked; the overlay moves to the background. | INVERT IT FOR / THE BACKGROUND | A click; the drums come in. |
+| 5 | 9.6 s | The mask's EXPOSURE moves down; the background darkens and the boy stands out. | DARKEN THE / BACKGROUND | Slider ticks; the motif's answer. |
+| 6 | 12.0 s | The real photo, before, then after at 13.2 s. | REAL PHOTO, / EDITED IN REDLAMP | The sting. |
 | 7 | 14.4 s | The end card. | AI MASKS THAT RUN / ON YOUR MAC, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
@@ -342,7 +343,7 @@ All times are 18:00 London time. The second hook of each goes out two days later
 | Date | Video | Platforms |
 | --- | --- | --- |
 | Tue 27 Oct | E01 Free | Instagram, TikTok |
-| Fri 30 Oct | E02 Sky mask | Instagram, TikTok |
+| Fri 30 Oct | E02 Subject mask | Instagram, TikTok |
 | Tue 3 Nov | E03 Film looks | Instagram, TikTok |
 | Fri 6 Nov | E04 Lightroom shortcuts | Instagram, TikTok |
 | Tue 10 Nov | E05 Presets and LUTs | Instagram, TikTok |
@@ -369,18 +370,18 @@ The owner's photos go in `~/src/redlamp-social/photos/`, outside the repository,
 
 | Video | Photo | Result |
 | --- | --- | --- |
-| E01 Free | The dancer at the street parade (Sony α7R V raw, the README's hero), with its edit | The dancer before and after |
-| E02 Sky mask | A landscape with a big sky behind bare branches or trees | The sky darkened with a Sky mask, before and after |
-| E03 Film looks | The dancer | The dancer in Portra 400, Tri-X 400, CineStill 800T, Velvia 50 and HP5 Plus |
-| E04 Lightroom shortcuts | The dancer, open in the app | The app window with the dancer, then its shortcut list |
-| E05 Presets and LUTs | A photo, and a `.xmp` develop preset the owner made | The photo with the imported preset, before and after |
-| E06 Folders | A folder from one shoot, such as the parade | The Folders panel and the filmstrip of that shoot |
-| E07 Speed | The dancer, and a 24 MP raw for the open step (the dancer is 61 MP, so it can't stand for "a 24 MP raw opens in 0.16 s") | The dancer as Exposure moves, one real render a beat |
-| E08 Camera recipes | A Fujifilm raw: the README's X-T3 raw `AFXT2720.RAF`, or another (the `fujifilm` captures in `video/public/promo` are a Sony JPEG, so they can't stand in) | Chrome Street on it, before and after |
-| E09 Remove by name | A street photo crossed by power lines or cables | Before and after the lines are removed |
-| E10 Focus stacking | A focus-bracketed series of a close subject, 10 to 30 frames | One frame against the merged stack |
+| E01 Free | The cosplayer with orange hair (`DSC02372.jpg`) | Before and after |
+| E02 Subject mask | The owner's son at a colour run (`IMG_3557.jpg`) | The background darkened with an inverted Subject mask, before and after |
+| E03 Film looks | The street-food cook at the grill (`DSC03230 (2).jpg`) | The photo in Portra 400, Tri-X 400, CineStill 800T, Velvia 50 and HP5 Plus |
+| E04 Lightroom shortcuts | The man in the green shirt (`DSC03301 (2).jpg`) for the black-and-white step, and a capture of the app | The app window, then its shortcut list |
+| E05 Presets and LUTs | The two girls on a scooter (`DSC03201 (2).jpg`), and a `.xmp` preset the owner made | The photo with the imported preset, before and after |
+| E06 Folders | All of the owner's photos in one folder, as the filmstrip | The Folders panel and the filmstrip, captured from the app |
+| E07 Speed | The shopkeeper among her jars (`DSC01584 (2).jpg`), and a 24 MP raw for the open step | The photo as Exposure moves, one real render a beat |
+| E08 Camera recipes | A Fujifilm raw: the README's X-T3 raw `AFXT2720.RAF`, or one of the owner's | Chrome Street on it, before and after |
+| E09 Remove by name | The flooded street with power lines (`DSC01898.jpg`) | Before and after the power lines are removed |
+| E10 Focus stacking | The snail on a leaf (`DSC00983.jpg`) as the subject; the real result needs a focus-bracketed series | One frame against the merged stack |
 
-The dancer carries four videos (E01, E03, E04, E07), as it carries the README, the website and the manual's cover, so the series opens on Redlamp's best-known picture. The other six are the owner's photos chosen for the feature.
+The photos are the owner's JPEGs, 1365 × 2048 from a Sony α7R V and 1536 × 2048 from an iPhone, all portrait, so they crop to 9:16 without losing much. The raws and their Redlamp edits would give the sharpest results and keep "raw photo editor" literally true; the JPEGs work until then. The watch (`DSC00959.jpg`), the leaf with a drop (`DSC00973.jpg`) and the man on the motorbike (`DSC03213.jpg`) are spare. The dancer can still replace any of these.
 
 ## For the owner to decide
 
