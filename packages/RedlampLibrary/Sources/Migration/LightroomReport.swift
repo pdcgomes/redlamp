@@ -130,15 +130,18 @@ public struct LightroomReport: Sendable, Hashable, Codable {
 }
 
 public extension LightroomReport {
-    /// The report in lines, as `redlamp library lightroom` prints it.
-    func lines() -> [String] {
+    /// The report in lines, as `redlamp library lightroom` prints it; without `roots`, the root folders left
+    /// out, for a window that shows them itself.
+    func lines(roots showsRoots: Bool = true) -> [String] {
         var lines = ["\(catalog): Lightroom Classic catalog\(version.map { " version \($0)" } ?? "")"]
         lines.append("  \(Self.count(photos)) photos; \(Self.count(found)) found in the library"
             + (waiting > 0 ? ", \(Self.count(waiting)) in folders it doesn't have yet" : "")
             + (unlocated > 0 ? ", \(Self.count(unlocated)) in folders not found" : "")
             + (notFound > 0 ? ", \(Self.count(notFound)) not found" : ""))
-        lines.append("  root folders:")
-        for root in roots {
+        if showsRoots {
+            lines.append("  root folders:")
+        }
+        for root in roots where showsRoots {
             let state = switch root.state {
             case .inLibrary: "in the library, \(Self.count(root.found)) of \(Self.count(root.photos)) photos found"
             case .notInLibrary: "not in the library yet: importing adds it (\(Self.count(root.photos)) photos)"

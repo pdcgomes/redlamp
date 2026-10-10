@@ -82,6 +82,11 @@ public struct LightroomPlan: Sendable {
     /// The root folders on this Mac the library doesn't have: importing adds them first.
     public let foldersToAdd: [URL]
 
+    /// The library's photos found in the catalog, pairs' JPEGs among them.
+    public var photoCount: Int {
+        photos.count
+    }
+
     /// The plan for `catalog` against the library whose index is `index`, the roots `moved` names (by the
     /// catalog's paths) looked for where they went.
     public static func make(

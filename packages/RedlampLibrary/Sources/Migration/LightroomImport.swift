@@ -96,6 +96,13 @@ public final class LightroomImport: Sendable {
         public var total: Int
         public var part: Int
         public var parts: Int
+
+        public init(done: Int, total: Int, part: Int, parts: Int) {
+            self.done = done
+            self.total = total
+            self.part = part
+            self.parts = parts
+        }
     }
 
     /// What an import did.
