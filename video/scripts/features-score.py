@@ -116,6 +116,17 @@ def swept(velocity):
     return out
 
 
+def unrolling(velocity):
+    """Air rising as E11's command palette unrolls over the photo, as quick as the six frames it takes."""
+    return s.whoosh(0.22, 700, 5000) * velocity
+
+
+def rolling_up(velocity):
+    """Air falling as E11's command palette rolls up into the slider bar, gone by the time Return comes up
+    a sixteenth later, so it doesn't cover the key."""
+    return s.whoosh(0.15, 5000, 700) * velocity
+
+
 # Each kind of sound on screen: what plays, how loud, and how much of it goes to the room.
 SOUNDS = {
     "press": (lambda: press(0.8), 0.2, 0.05),
@@ -128,6 +139,8 @@ SOUNDS = {
     "plot": (lambda: plotted(0.7), 0.26, 0.25),
     "look": (lambda: applied(0.7), 0.24, 0.2),
     "looks": (lambda: swept(0.7), 0.32, 0.25),
+    "unroll": (lambda: unrolling(0.8), 0.32, 0.3),
+    "roll up": (lambda: rolling_up(0.8), 0.28, 0.3),
 }
 
 

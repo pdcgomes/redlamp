@@ -25,7 +25,7 @@ export function RemotionRoot() {
   const pixelkit: PixelkitPromoProps = { hook: DEFAULT_HOOK, musicSrc: "pixelkit/score.wav" };
   const feature: FeatureVideoProps = { episode: "e01", hook: "a", score: "score", opener: true, guides: false, manifest: null };
   // The episodes built so far, each listed under Features on its own so it opens in one click.
-  const featureEpisodes = ["e01", "e02", "e03", "e04", "e08"];
+  const featureEpisodes = ["e01", "e02", "e03", "e04", "e08", "e11"];
   return (
     <>
       <Composition

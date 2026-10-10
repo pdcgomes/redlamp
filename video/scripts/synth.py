@@ -222,6 +222,23 @@ def tambourine(velocity=1.0):
     return (metal * np.exp(-t / 0.045) * 0.5 + hiss * strikes * 0.5) * np.clip(t / 0.0005, 0, 1) * velocity * 0.5
 
 
+def rimshot(velocity=1.0):
+    """A drum machine's rimshot: the stick's click on the hoop over two short ringing modes of the shell,
+    the higher the brighter, gone in a few hundredths of a second."""
+    t = times(0.07)
+    modes = np.sin(2 * np.pi * 1720 * t) * np.exp(-t / 0.008) + 0.7 * np.sin(2 * np.pi * 470 * t) * np.exp(-t / 0.011)
+    click = highpass(rng.standard_normal(len(t)) * np.exp(-t / 0.001), 2500) * 0.6
+    return saturate((modes + click) * np.clip(t / 0.0003, 0, 1), 1.6) * velocity * 0.5
+
+
+def shaker(velocity=1.0):
+    """A shaker: its beads thrown against the shell, a hiss that swells in over a few milliseconds and dies
+    away, softer at its start than a hat."""
+    t = times(0.1)
+    noise = bandpass(rng.standard_normal(len(t)), 6800, octaves=1.4)
+    return noise * np.clip(t / 0.007, 0, 1) ** 2 * np.exp(-t / 0.028) * velocity * 0.8
+
+
 # ---------------------------------------------------------------- tuned
 
 
@@ -489,6 +506,66 @@ def sweep_pad(notes, seconds, low=500, high=2400, period=2.4, resonance=1.8, att
                 tone += gain * np.sin(k * phase)
             out += pan(tone, (-spread, spread)[i])
     return out / (2 * len(notes) ** 0.5) * envelope(n, attack, 10, 1.0, release, hold=seconds)[:, None] * 0.5
+
+
+def seq_pluck(note, velocity=1.0, length=0.12, cutoff=700, accent=0.0, resonance=2.2):
+    """A step sequencer's note as a monosynth plays it: a saw and a square at the same pitch through a
+    resonant low-pass whose envelope snaps shut onto `cutoff` in a few hundredths of a second, opening
+    further and closing later on an accented step (`accent`, 0 to 1), so a line of sixteenths ticks and
+    bubbles; damped after `length` seconds."""
+    n = int(round((length + 0.03) * SR))
+    t = np.arange(n) / SR
+    f = float(hz(note))
+    sweep = cutoff * (1 + (2.5 + 4.5 * accent) * velocity * np.exp(-t / (0.025 + 0.025 * accent)))
+    phase = 2 * np.pi * phase_of(f, n)
+    tone = np.zeros(n)
+    partials = [(k, (1.0 if k % 2 else 0.5) / k) for k in range(1, 64) if k * f < 16000]
+    for k, gain in resonant(partials, f, sweep, resonance):
+        tone += gain * np.sin(k * phase)
+    return tone * envelope(n, 0.0015, 0.07 + 0.06 * accent, 0.3, 0.025, hold=length) * velocity * 0.3
+
+
+def sync_lead(note, length, velocity=1.0, glide=None, cutoff=2400, sweep=(3.0, 1.6), detune=5, vibrato=0.0):
+    """A hard-sync lead, stereo, as an eighties monosynth's: a saw restarted at every cycle of an
+    oscillator at the note's pitch, which runs `sweep[0]` times as fast at each note and settles to
+    `sweep[1]` times, so a bright peak falls through the harmonics as the note speaks; two voices a few
+    cents apart through a steep low-pass at `cutoff`, held for `length` seconds, with a `vibrato` (in
+    semitones) after the attack and, given `glide`, the note before it, a slide in from its pitch.
+    Drawn at eight times the rate and brought down band-limited, so the restarts don't alias."""
+    up = 8
+    n = int(round((length + 0.15) * SR))
+    t = np.arange(n * up) / (SR * up)
+    pitch = note + (0.0 if glide is None else (glide - note) * np.exp(-t / 0.03))
+    pitch = pitch + vibrato * np.sin(2 * np.pi * 5.2 * t) * np.clip((t - 0.15) / 0.2, 0, 1)
+    ratio = sweep[1] + (sweep[0] - sweep[1]) * np.exp(-t / 0.09)
+    taper = np.clip((n // 2 + 1 - np.arange(n // 2 + 1)) / (0.08 * n), 0, 1)
+    out = np.zeros((n, 2))
+    for i, cents in enumerate((-detune, detune)):
+        master = np.cumsum(hz(pitch + cents / 100)) / (SR * up) + rng.uniform(0, 1)
+        voice = 2 * ((master % 1.0) * ratio % 1.0) - 1
+        down = np.fft.irfft(np.fft.rfft(voice)[: n // 2 + 1] * taper, n) / up
+        out += pan(down, (-0.3, 0.3)[i])
+    # A restarted saw isn't centred, so what's under the note's pitch goes.
+    out = highpass(lowpass(out, cutoff, order=3), 120)
+    return out * envelope(n, 0.004, 0.25, 0.75, 0.12, hold=length)[:, None] * velocity * 0.32
+
+
+def fm_pad(notes, seconds, index=1.4, ratio=1.0, attack=0.35, release=0.4, bloom=0.8, detune=6):
+    """A digital poly-synth's pad, stereo, as an FM synthesiser plays one: for each note, two sines a few
+    cents apart, left and right, each with its phase pushed about by a sine `ratio` times its frequency,
+    by `index`; the push blooms by `bloom` as the chord swells in over `attack` and settles back as it
+    holds, so each chord opens bright and mellows to a soft, glassy tone; held for `seconds`. With no
+    `detune` it holds steady, without beating."""
+    n = int(round((seconds + release) * SR))
+    t = np.arange(n) / SR
+    depth = index * (1 + bloom * np.clip(t / attack, 0, 1) * np.exp(-np.maximum(t - attack, 0) / 0.5))
+    out = np.zeros((n, 2))
+    for j, note in enumerate(notes):
+        spread = 0.25 + 0.5 * j / max(1, len(notes) - 1)
+        for i, cents in enumerate((-detune, detune)):
+            phase = 2 * np.pi * phase_of(hz(note + cents / 100), n)
+            out += pan(np.sin(phase + depth * np.sin(ratio * phase)), (-spread, spread)[i])
+    return out / (2 * len(notes) ** 0.5) * envelope(n, attack, 10, 1.0, release, hold=seconds)[:, None]
 
 
 # ---------------------------------------------------------------- effects

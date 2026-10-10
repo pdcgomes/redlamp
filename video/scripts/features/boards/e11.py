@@ -544,14 +544,15 @@ def pan(x):
 
 
 def sounds():
-    """Each sound on screen, (beat, kind, pan): every key down and up, panned with its keycap, a tick
-    for each step of Exposure and as Return sets Contrast, panned with the knob, and a tick on the
-    flip to after."""
+    """Each sound on screen, (beat, kind, pan): every key down and up, panned with its keycap, air rising
+    as the palette unrolls and falling as it rolls up into the slider bar, a tick for each step of
+    Exposure and as Return sets Contrast, panned with the knob, and a tick on the flip to after."""
     out = []
     for _, bar in BARS:
         for key, x in zip(bar, keycap_xs(bar)):
             for d, u in key.presses:
                 out += [(d, "key", pan(x + KEYCAP // 2)), (u, "key up", pan(x + KEYCAP // 2))]
+    out += [(OPEN, "unroll", pan(FLOAT.x + FLOAT.w // 2)), (ADJUST, "roll up", pan(FLOAT.x + FLOAT.w // 2))]
     for k, (d, _) in enumerate(RIGHT.presses, 1):
         out.append((d, "tick", pan(meter_x(EXPOSURE_BAR, STEP * k))))
     out += [(SET_AT, "tick", pan(meter_x(CONTRAST_BAR, CONTRAST))), (CUE["flip"], "flip", 0.0)]
@@ -569,15 +570,16 @@ PANELS = [
             "A deep hit, then the track's first bar. The tulip field as opened, its histogram and level, and the "
             "Basic panel's Exposure, Contrast and Highlights at zero."),
     w.Panel(2, 2.4, at(s1 + 3.2), CAPTIONS[0][1],
-            "The riff starts; a key down for ⌘ a beat in and for K on the next, which opens the palette; K up, "
-            "then ⌘, in the bar's last beat."),
+            "The riff starts; a key down for ⌘ a beat in and for K on the next, and air rising as the palette "
+            "unrolls; K up, then ⌘, in the bar's last beat."),
     w.Panel(3, 4.8, at(s2 + 2.1), " / ".join(CAPTIONS[1][1]),
             "A key down and up for E, X and P, a beat apart from the bar's first beat; the list narrows with each."),
     w.Panel(4, 7.2, at(s3 + 3.2), " / ".join(CAPTIONS[2][1]),
-            "The full beat comes in; a key for ↵ on the bar's first beat, ⇧ down half a beat later, and a key and "
-            "a slider tick for each → a beat apart."),
+            "The full beat comes in; a key for ↵ on the bar's first beat and air falling as the palette rolls up, "
+            "⇧ down half a beat later, and a key and a slider tick for each → a beat apart."),
     w.Panel(5, 9.6, at(s4 + 3.2), " / ".join(CAPTIONS[3][1]),
-            "A key for ↓, 2, 0 and ↵ a beat apart, and a tick as ↵ sets Contrast; toms fall into the stop."),
+            "A key for ↓, 2, 0 and ↵ a beat apart, and a tick as ↵ sets Contrast; toms fall into the stop, and the "
+            "riff's E flat holds through it."),
     w.Panel(6, 12.0, at(CUE["flip"] + 0.6), " / ".join(CAPTION_RESULT) + "; before, then after at 13.2 s",
             "The drop and the sting; a tick and a burst of sparkles as the field develops on the flip."),
     w.Panel(7, 14.4, at(CUE["cta"] + 0.5), " / ".join(EPISODE["endLine"]) + ", then " + " / ".join(w.END_CARD),

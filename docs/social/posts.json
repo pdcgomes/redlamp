@@ -251,7 +251,7 @@
       "feature": "Every action and Develop slider from the keyboard: Command-K opens the command palette, a few letters find a setting, and Return turns it into a slider bar over the photo that the arrow keys step, with the next slider a key away and a value typed in.",
       "audience": "Lightroom users who edit from the keyboard, and people who use a command palette in other apps.",
       "source": "README: Workspace, Command palette (every action with its shortcut, every Develop slider and the pickers, from the keyboard; on a slider, a slider bar over the photo, stepped with the arrow keys, up and down for the next slider, a value or x+0.3 typed in, a run of presses one history step); Lightroom comparison, Command palette (Lightroom: No; Redlamp: Done).",
-      "stage": "building",
+      "stage": "in review",
       "hooks": {
         "a": [
           "EVERY SLIDER",
@@ -266,7 +266,7 @@
         "A COMMAND PALETTE",
         "FOR YOUR PHOTOS"
       ],
-      "result": "The pixel photo before and after an edit made from the keyboard, as dashboard panels."
+      "result": "A pixel-art tulip field with a windmill, before and after an edit made from the keyboard: Exposure +1.50 in three steps of Shift and the right arrow, and Contrast +20 typed in."
     }
   ],
   "posts": [
@@ -566,7 +566,7 @@
       "file": "e11-a.mp4",
       "coverMs": 3333,
       "caption": "The command palette (Command-K) reaches every action and Develop slider from the keyboard: step a slider with the arrow keys over the photo, move to the next and type a value. Lightroom has no command palette. Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Redlamp isn't affiliated with Adobe.\n\n#photoediting #rawphoto #keyboardshortcuts #macos #lightroom",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Command palette. Then a colourful photo editor with a pixel-art photo. Command and K are pressed and a palette opens over the photo; letters typed into it find the Exposure slider among actions shown with their shortcuts. Return turns it into a slider bar over the photo, and the arrow keys step Exposure up as the photo brightens, then move down to the next slider, where a value is typed in. Then the photo fills the frame, before and after. The video ends with A command palette for your photos, then Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Command palette. Then a colourful photo editor with a pixel-art photo of a tulip field and a windmill, and a keyboard panel showing each key as it's pressed; no pointer appears. Command and K are pressed and a palette opens over the photo; E, X and P typed into it find the Exposure slider above actions shown with their shortcuts. Return turns it into a slider bar over the photo, and with Shift held the right arrow steps Exposure up three times as the photo brightens. The down arrow moves the bar to Contrast, where 20 is typed and set with Return, as a card shows the three presses kept as one history step. Then the photo fills the frame, before and after. The video ends with A command palette for your photos, then Download free, redlamp.app."
     },
     {
       "id": "e11-trial",
@@ -580,7 +580,7 @@
       "file": "e11-b.mp4",
       "coverMs": 3333,
       "caption": "The command palette (Command-K) reaches every action and Develop slider from the keyboard: step a slider with the arrow keys over the photo, move to the next and type a value. Lightroom has no command palette. Redlamp is a free raw photo editor for Mac, with Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Redlamp isn't affiliated with Adobe.\n\n#photoediting #rawphoto #keyboardshortcuts #macos #lightroom",
-      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Command palette. Then a colourful photo editor with a pixel-art photo. Command and K are pressed and a palette opens over the photo; letters typed into it find the Exposure slider among actions shown with their shortcuts. Return turns it into a slider bar over the photo, and the arrow keys step Exposure up as the photo brightens, then move down to the next slider, where a value is typed in. Then the photo fills the frame, before and after. The video ends with A command palette for your photos, then Download free, redlamp.app."
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Command palette. Then a colourful photo editor with a pixel-art photo of a tulip field and a windmill, and a keyboard panel showing each key as it's pressed; no pointer appears. Command and K are pressed and a palette opens over the photo; E, X and P typed into it find the Exposure slider above actions shown with their shortcuts. Return turns it into a slider bar over the photo, and with Shift held the right arrow steps Exposure up three times as the photo brightens. The down arrow moves the bar to Contrast, where 20 is typed and set with Return, as a card shows the three presses kept as one history step. Then the photo fills the frame, before and after. The video ends with A command palette for your photos, then Download free, redlamp.app."
     }
   ]
 }
