@@ -406,7 +406,6 @@ final class PanelSwitchView: NSView {
             if isOn != oldValue {
                 needsDisplay = true
                 toolTip = Self.toolTip(title, on: isOn)
-                NSAccessibility.post(element: self, notification: .valueChanged)
             }
         }
     }
