@@ -38,6 +38,7 @@ Later notes, each behind tracker rows or another findings document:
 | [INF-11-app-store-privacy.md](INF-11-app-store-privacy.md) | App Store rules, privacy law, keys and provenance for sending work to a cloud provider, route by route (7 October 2026) |
 | [INF-11-comfyui-masks-denoise.md](INF-11-comfyui-masks-denoise.md) | ComfyUI as a route (its API, hosted services, removal workflows on commercially licensed weights), cloud masking and cloud denoise for raw photos (7 October 2026) |
 | [UX-17-masks-panel-audit.md](UX-17-masks-panel-audit.md) | The Masks panel, fourteen tasks step by step against Lightroom Classic's published workflow: where Redlamp's way is longer or hidden, and the redesign's findings ranked (7 October 2026) |
+| [UX-develop-panels.md](UX-develop-panels.md) | Switching Develop panels off and choosing which show: what Lightroom Classic, Photos, darktable and others do, the owner's decision, and the questions for the UX-30 and UX-41 builds (10 October 2026) |
 
 Some notes mention scratch scripts under `/tmp/`. Those were one-off measurement harnesses and are not
 kept; the reproducible prototypes are in [research/prototypes](../../../research/prototypes/README.md).
