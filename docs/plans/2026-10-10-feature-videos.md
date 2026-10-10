@@ -34,13 +34,13 @@ The owner asked for simple, direct language: nothing that reads as written by AI
 
 ## The format
 
-Every video opens with Redlamp's opener in pixel art, so the series looks and sounds like the rest of Redlamp's videos (the owner, 10 October 2026). It is the looks explainer's intro (`video/scripts/looks-frames.py` on the `promo/looks-explainer` branch), which redraws Introducing Redlamp's opening scene frame for frame, laid out for the vertical frame: the hook on the dark wall from the first frame, where the episode's caption stands; the lamp coming out of the dark and warming under it; the hook going as the lens settles into the logo; A RAW PHOTO EDITOR / FOR THE MAC. and FREE AND OPEN SOURCE. under the logo; then, where the hook was, the episode's subtitle, its title from `docs/social/posts.json` (FREE ALTERNATIVE / TO LIGHTROOM), so people know what this one is about and that it isn't one they've seen. The episodes aren't numbered, since there may be more (the owner, 10 October 2026). All of it holds for a bar to be read (the owner, 10 October 2026), then the logo rises to become the episode's header. The first two bars are the Introducing short's opening scene frame for frame, under its own sound; the third holds the scene's last chord, as the looks explainer and the app's welcome do: three bars of the film's 72 BPM grid, 10 s, as long as the film cut's own opening. The episode cuts in on its first hit, with the hook back in its place. Full-width lines can't sit under the lamp as they do in the 16:9 intro, where the apps' side buttons are, which is why the hook and the subtitle stand where the caption does.
+Every video opens with Redlamp's opener in pixel art, so the series looks and sounds like the rest of Redlamp's videos (the owner, 10 October 2026). It is the looks explainer's intro (`video/scripts/looks-frames.py` on the `promo/looks-explainer` branch), which redraws Introducing Redlamp's opening scene frame for frame, laid out for the vertical frame: the hook on the dark wall from the first frame, where the episode's caption stands; the lamp coming out of the dark and warming under it; the hook going as the lens settles into the logo; A RAW PHOTO EDITOR / FOR THE MAC. under the logo; then, where the hook was, the episode's title from `docs/social/posts.json` (FREE ALTERNATIVE / TO LIGHTROOM), so people know what this one is about and that it isn't one they've seen. The episodes aren't numbered, since there may be more (the owner, 10 October 2026). All of it holds for a bar to be read (the owner, 10 October 2026), then the logo and its line give way to the episode's header above the title, which stays as the caption of the episode's first bar. So the hook and the title are each seen once, and the brand's line says only what Redlamp is: the end card's DOWNLOAD FREE says the rest in every video (the owner found the word "free" used too often, 10 October 2026). The first two bars are the Introducing short's opening scene frame for frame, under its own sound; the third holds the scene's last chord, as the looks explainer and the app's welcome do: three bars of the film's 72 BPM grid, 10 s, as long as the film cut's own opening. The episode cuts in on its first hit, with the hook back in its place. Full-width lines can't sit under the lamp as they do in the 16:9 intro, where the apps' side buttons are, which is why the hook and the subtitle stand where the caption does.
 
 The episode follows one cue sheet, `video/src/features/cues.json`: 100 BPM at 30 fps, a beat every 18 frames, a bar every 2.4 s. The times below are the episode's own, from its first frame, 6.7 s into the video.
 
 | Bar | Time | What happens |
 | --- | --- | --- |
-| 1 | 0.0 s | The hook, on screen from the first frame, over the pixel editor with the photo it will work on. |
+| 1 | 0.0 s | The episode's title, held from the opener, over the pixel editor with the photo it will work on. |
 | 2 to 5 | 2.4 s to 12.0 s | The feature in the pixel editor, in two to four labelled steps, one a bar. Each click, key press and slider move lands on a beat. |
 | 6 | 12.0 s | The real result. The pixel photo resolves into the real render block by block, and before and after flip at 13.2 s. The label reads REAL PHOTO, / EDITED IN REDLAMP, or THE REAL APP when the result is the app's window. |
 | 7 | 14.4 s | The end line, then DOWNLOAD FREE / REDLAMP.APP from 15.6 s under the lamp mark. |
@@ -62,7 +62,7 @@ E01 set the template, and every episode is built the same way in `video/`:
 - **The real result**, through `scripts/features/results.py`, is rendered by the `redlamp` CLI (`$REDLAMP_CLI`, or `build/cli/redlamp`) from the owner's sidecar beside the raw: AFTER with his edit, BEFORE with its crop alone, and each step of a drag with the sliders moved so far, so the pixel photo changes as the real one does. Renders are kept in `public/features/<episode>/results/` and made again only when something that went into them changes.
 - **The frames**, `npm run features-frames -- --episode e01`: every frame drawn by pixelkit at 216 × 384, or at 1080 × 1920 while the real photo is on screen, where it shows at full resolution through the ordered dither that resolves it out of the pixel photo. A picture that comes out the same as another is written once, and `frames.json` lists each hook's frames.
 - **The score**, `npm run features-score -- --episode e01`: the theme in the chosen arrangement with the episode's sounds on their frames, with `score.json` for the storyboard sheet and a cue sheet of every sound for `scripts/score-report.py`.
-- **The opener** is `opener()` in `scripts/features/world.py`, timed by the cue sheet's `opener` section: three bars at 72 BPM, the first two (`scene`) the short's opening scene, which `scripts/features-score.py` checks against `src/introducing/cuts.json`, and the beats the hook goes, the lens settles, the brand's lines and the subtitle come in and the logo rises. The frames script draws it before each episode, with the episode's hook, its title and its feature.
+- **The opener** is `opener()` in `scripts/features/world.py`, timed by the cue sheet's `opener` section: three bars at 72 BPM, the first two (`scene`) the short's opening scene, which `scripts/features-score.py` checks against `src/introducing/cuts.json`, and the beats the hook goes, the lens settles, the brand's line and the title come in, and the header takes over. The frames script draws it before each episode, with the episode's hook, its title and its feature.
 - **The composition**, `FeatureVideo` in Remotion Studio's Features folder, plays the frames and the two scores, with `episode`, `hook`, `score`, `opener` and `guides` props. With `opener` off it plays the episode alone, on its cue sheet's own frames, as `scripts/storyboard.mjs` and the review stills expect.
 - **The render**, `npm run features -- --episode e01 [--hook a] [--draft]`, writes `~/src/redlamp-social/renders/<the post's file>` and its cover, once the owner has approved the cut. A draft is half the size, named `…-draft.mp4`.
 
@@ -99,7 +99,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a raw photo open, its sliders at zero. | A FREE RAW PHOTO / EDITOR FOR MAC | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with a raw photo open, its sliders at zero. | FREE ALTERNATIVE TO LIGHTROOM (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer drags EXPOSURE to the edit's value; the photo brightens. | NO SUBSCRIPTION | The motif starts; a slider tick on each beat of the drag. |
 | 3 | 4.8 s | HIGHLIGHTS and SHADOWS move to the edit's values. | NO CLOUD | The motif; ticks. |
 | 4 | 7.2 s | VIBRANCE moves to the edit's value; the photo gains colour. | OPEN SOURCE | The motif's answer; the drums come in. |
@@ -126,7 +126,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with the photo open; the Masks panel shows SUBJECT, SKY, BACKGROUND and PEOPLE. | SELECT THE PERSON / IN ONE CLICK | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with the photo open; the Masks panel shows SUBJECT, SKY, BACKGROUND and PEOPLE. | SUBJECT MASK (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer clicks SUBJECT. | CLICK SUBJECT | The motif starts; a click on the beat. |
 | 3 | 4.8 s | The red overlay covers the boy, hair included; the background stays clear. | HE IS SELECTED, / HAIR INCLUDED | A soft rising blip as the overlay fills. |
 | 4 | 7.2 s | INVERT is clicked; the overlay moves to the background. | INVERT IT FOR / THE BACKGROUND | A click; the drums come in. |
@@ -152,7 +152,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a photo open and the Base Look list showing film names. | LOOKS OF 30 REAL / FILM STOCKS | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with a photo open and the Base Look list showing film names. | FILM LOOKS (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | A datasheet's characteristic curve draws itself on a chart. | BUILT FROM EACH / FILM'S DATASHEET | The motif starts; a soft tone rising with the curve. |
 | 3 | 4.8 s | PORTRA 400 is chosen; the photo warms. | PORTRA 400 | A blip as the look applies. |
 | 4 | 7.2 s | TRI-X 400, then CINESTILL 800T two beats later. | TRI-X 400, then CINESTILL 800T | A blip for each; the drums come in. |
@@ -178,7 +178,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor, with a keyboard under it. | SAME SHORTCUTS / AS LIGHTROOM | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor, with a keyboard under it. | LIGHTROOM SHORTCUTS (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | R is pressed; the crop frame appears. | R  CROP | A key click; each key plays a note of the motif. |
 | 3 | 4.8 s | K is pressed; the brush ring appears. | K  BRUSH | A key click and the motif's next note. |
 | 4 | 7.2 s | Backslash is pressed; the photo shows before, then after. | \  BEFORE / AFTER | A key click; the drums come in. |
@@ -204,7 +204,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with the Recipes panel open, and three .XMP files beside it. | BRING YOUR / LIGHTROOM PRESETS | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with the Recipes panel open, and three .XMP files beside it. | PRESETS AND LUTS (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer drags the files onto the Recipes panel. | DROP IN .XMP / PRESETS | The motif starts; a soft drop sound on the beat. |
 | 3 | 4.8 s | The import report: settings marked EXACT, APPROXIMATE and NOT AT ALL. | IT SHOWS WHAT / CAME ACROSS | A tick for each row. |
 | 4 | 7.2 s | A .CUBE file is dropped and joins the list. | .CUBE AND .3DL / LUTS TOO | A drop sound; the drums come in. |
@@ -230,7 +230,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with an empty filmstrip and the Folders panel's + button. | NO IMPORT STEP. / OPEN A FOLDER. | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with an empty filmstrip and the Folders panel's + button. | FOLDERS (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer clicks +; a folder is added. | ADD A FOLDER | The motif starts; a click on the beat. |
 | 3 | 4.8 s | The filmstrip fills at once, with a readout: 50,000 PHOTOS · 0.2 S. | 50,000 PHOTOS / LISTED IN 0.2 S | A quick run of soft ticks as the thumbnails arrive. |
 | 4 | 7.2 s | A file list: after an edit, IMG_1234.ARW.REDLAMP appears next to IMG_1234.ARW. | EDITS SAVED NEXT / TO THE PHOTO | A soft click; the drums come in. |
@@ -256,7 +256,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a photo open, the EXPOSURE slider, and a readout: RENDER 1.8 MS. | A SLIDER CHANGE / RENDERS IN 1.8 MS | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with a photo open, the EXPOSURE slider, and a readout: RENDER 1.8 MS. | SPEED (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer drags EXPOSURE up to +1.00; the photo follows on each beat. | DRAG A SLIDER | The motif starts; a slider tick a beat. |
 | 3 | 4.8 s | The drag comes back down to −0.50; the readout stays at 1.8 MS. | 1.8 MS PER CHANGE | Ticks. |
 | 4 | 7.2 s | A raw opens from the filmstrip, with a readout: OPEN 0.16 S. | A 24 MP RAW OPENS / IN 0.16 S | A click; the drums come in. |
@@ -282,7 +282,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a Fujifilm raw open and the Recipes panel's camera recipes listed. | CAMERA-STYLE / RECIPES, BUILT IN | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with a Fujifilm raw open and the Recipes panel's camera recipes listed. | CAMERA RECIPES (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | The pointer moves over CHROME STREET; the photo previews it. | HOVER TO PREVIEW | The motif starts; a soft tick as the preview changes. |
 | 3 | 4.8 s | The pointer moves over BRIGHT SLIDE, then CINEMA TEAL, two more of the camera recipes; the preview follows. | ONE RECIPE / AT A TIME | A tick for each. |
 | 4 | 7.2 s | CHROME STREET is clicked. | CLICK TO APPLY | A click; the drums come in. |
@@ -308,7 +308,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a street photo crossed by power lines, and the Remove panel's FIND field. | FIND AND REMOVE / POWER LINES | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with a street photo crossed by power lines, and the Remove panel's FIND field. | REMOVE BY NAME (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | POWER LINES is typed into FIND. | TYPE WHAT TO / REMOVE | The motif starts; key clicks on the beats. |
 | 3 | 4.8 s | Each power line is outlined; a count reads 4 FOUND. | REDLAMP FINDS / EACH ONE | A blip for each outline. |
 | 4 | 7.2 s | The pointer clicks REMOVE ALL; the lines go, one a beat. | REMOVE ALL | A click, then a soft sound a line; the drums come in. |
@@ -334,7 +334,7 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The editor with a filmstrip of 25 near-identical close-ups of a flower. | FOCUS STACKING, / BUILT IN | A deep hit on the first frame, then sixteenths under a beat held back. |
+| 1 | 0.0 s | The editor with a filmstrip of 25 near-identical close-ups of a flower. | FOCUS STACKING (the title, held from the opener) | A deep hit on the first frame, then sixteenths under a beat held back. |
 | 2 | 2.4 s | A banner slides in: FOCUS STACK DETECTED · 25 FRAMES · MERGE. | IT FINDS THE / STACK FOR YOU | The motif starts; a soft chime with the banner. |
 | 3 | 4.8 s | The pointer clicks MERGE. | CLICK MERGE | A click on the beat. |
 | 4 | 7.2 s | Frames, each sharp in a different band, combine into one, a band a beat. | ONE SHARP PHOTO | A soft blip a band; the drums come in. |
@@ -408,7 +408,7 @@ The first cut, for the owner's review in Studio, with hook A or B and the stand-
 - **Picture:** every frame was drawn with no warning from the kit or the safe zones (179 pictures for 576 frames, both hooks), and stills with the `guides` prop show every word clear of the apps' zones in each bar. Captions are 70 px tall. The hook's seven words are on screen for 2.4 s, under the 2.6 s the checklist's rule of thumb asks for; DOWNLOAD FREE / REDLAMP.APP stays 3.6 s. The storyboard sheet (`out/features/e01-storyboard.jpg`) shows every cue's frame over the score's level.
 - **Sound, first cut (felt):** −14.0 LUFS integrated and a true peak of −1.8 dBFS by ffmpeg; the result's bar the loudest (−11.9 LUFS).
 - **Sound, second cut:** by ffmpeg, drive measures −14.0 LUFS with a true peak of −1.2 dBFS, and pulse −13.9 LUFS and −1.1 dBFS. Both climb to the drop, the loudest bar: drive from −18.8 LUFS under the hook to −12.0 on the drop, pulse from −20.8 to −11.2. Under 60 Hz sits 23% of drive's energy and 22% of pulse's, with 33% and 22% in the mids. Above 2.5 kHz the presses, ticks, keys and the flip land within 5 ms of their beats; two button releases are covered by a hat or the watch's tick on the same sixteenth. In both drafts the audio is 0 ms from the score.
-- **With the opener:** 29.2 s, its first 300 frames the pixel opener with its hold and subtitle (515 pictures for both hooks' 876 frames, with no warning from the kit or the safe zones). The opener's sound crosses into the held chord at the bar line with no step in the waveform. The episode's score starts exactly 300 frames (10 s) in, by cross-correlating each draft's audio with it. The whole measures −14.1 LUFS in both drafts by ffmpeg, with true peaks of −1.3 dBFS (drive) and −1.4 dBFS (pulse).
+- **With the opener:** 29.2 s, its first 300 frames the pixel opener with its hold and title (464 pictures for both hooks' 876 frames, with no warning from the kit or the safe zones). On screen, "free" is in the hook, the title and DOWNLOAD FREE, where it was in six places before. The opener's sound crosses into the held chord at the bar line with no step in the waveform. The episode's score starts exactly 300 frames (10 s) in, by cross-correlating each draft's audio with it. The whole measures −14.1 LUFS in both drafts by ffmpeg, with true peaks of −1.3 dBFS (drive) and −1.4 dBFS (pulse).
 - **Not checked:** how it plays at full speed and size, and how the ticks and the key sit in the mix on a phone. Those are for the owner's viewing in Studio.
 
 ## For the owner to decide

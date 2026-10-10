@@ -23,9 +23,8 @@
       "hookOut": 4.48,
       "settle": 5,
       "subline": 6.04,
-      "free": 6.52,
       "feature": 7,
-      "rise": 11
+      "header": 11
     }
   },
   "cues": {

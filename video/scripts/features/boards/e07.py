@@ -106,7 +106,7 @@ def edit(c, key="shop", *, exposure=None, active=None, press=None, readout_text=
 
 def hook(c):
     edit(c)
-    w.caption(c, EPISODE["hooks"]["a"])
+    w.caption(c, w.wrapped(EPISODE["title"].upper()))
 
 
 def up(c):
@@ -154,7 +154,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]),
+    w.Panel(1, 0.0, hook, " / ".join(w.wrapped(EPISODE["title"].upper())),
             "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, up, "DRAG A SLIDER", "The motif starts; a slider tick a beat as Exposure climbs to +1.00."),
     w.Panel(3, 4.8, down, "1.8 MS PER CHANGE", "Ticks on the beats as Exposure comes back to -0.50."),

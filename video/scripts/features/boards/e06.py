@@ -66,7 +66,7 @@ def edit(c, *, folder=False, listed=False, photo=False, press=False):
 
 def hook(c):
     edit(c)
-    w.caption(c, EPISODE["hooks"]["a"])
+    w.caption(c, w.wrapped(EPISODE["title"].upper()))
 
 
 def add(c):
@@ -125,7 +125,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]),
+    w.Panel(1, 0.0, hook, " / ".join(w.wrapped(EPISODE["title"].upper())),
             "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, add, "ADD A FOLDER", "The motif starts; a click on the beat."),
     w.Panel(3, 4.8, listed, "50,000 PHOTOS / LISTED IN 0.2 S",

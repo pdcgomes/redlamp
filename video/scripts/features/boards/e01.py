@@ -26,7 +26,7 @@ from features import results
 from features import world as w
 
 EPISODE = w.episode("e01")
-FEATURE = "FREE"
+FEATURE = "ALTERNATIVE TO LIGHTROOM"
 RAW = Path.home() / "src/redlamp-social/photos/DSC02372.ARW"
 FILE = RAW.name
 FOLDER = w.VIDEO / "public/features/e01/results"
@@ -87,6 +87,7 @@ KEY_DOWN, KEY_UP = s4, s4 + 2
 EASE = 3 / w.PER_BEAT
 # The pixel photo resolves into the real one over this many beats from the result's cue.
 REVEAL = 1.0
+TITLE = w.wrapped(EPISODE["title"].upper())
 CAPTIONS = [(s1, "NO SUBSCRIPTION"), (s2, "NO CLOUD"), (s3, "OPEN SOURCE"), (s4, ["FAMILIAR LAYOUT", "AND SHORTCUTS"]),
             (w.CUE["result"], w.REAL_PHOTO)]
 
@@ -212,8 +213,9 @@ def pointer_at(panel, b):
     return knob(panel, DRAGS[-1].slider, TARGET[DRAGS[-1].slider.label]), False
 
 
-def caption_at(b, hook):
-    lines = EPISODE["hooks"][hook]
+def caption_at(b):
+    """The caption at beat b: the title held from the opener, then each step's words."""
+    lines = TITLE
     for start, words in CAPTIONS:
         if b >= start:
             lines = words
@@ -222,7 +224,7 @@ def caption_at(b, hook):
 
 # ---------------------------------------------------------------- the picture
 
-def editing(c, b, hook):
+def editing(c, b):
     """Bars 1 to 5: the editor, the sliders moving to the edit's values, then backslash held down."""
     w.header(c, FEATURE)
     size = w.layout(aspect=ASPECT, panel=PANEL).photo[2:]
@@ -247,7 +249,7 @@ def editing(c, b, hook):
         at = pointer_at(p, b)
         if at:
             w.pointer(c, *at[0], pressed=at[1])
-    w.caption(c, caption_at(b, hook))
+    w.caption(c, caption_at(b))
     return []
 
 
@@ -272,9 +274,10 @@ def end_card(c, b):
 
 
 def frame(c, b, hook="a"):
-    """The picture at beat b with hook `hook`, drawn on c. Returns the overlays to render over it."""
+    """The picture at beat b, drawn on c; the hook is the opener's, so the episode is the same for each.
+    Returns the overlays to render over it."""
     if b < w.CUE["result"]:
-        return editing(c, b, hook)
+        return editing(c, b)
     if b < w.CUE["endLine"]:
         return result(c, b)
     return end_card(c, b)
@@ -312,7 +315,7 @@ def result_panel(c, progress=1.0):
 
 
 PANELS = [
-    w.Panel(1, 0.0, at(0), " / ".join(EPISODE["hooks"]["a"]),
+    w.Panel(1, 0.0, at(0), " / ".join(TITLE),
             "A deep hit on frame 0, then sixteenths under a beat held back. The pointer comes in from the right from 1.2 s."),
     w.Panel(2, 2.4, at(s1 + 3.2), "NO SUBSCRIPTION",
             "The motif starts; a click as Exposure's knob is pressed, then a tick on each beat of the drag."),

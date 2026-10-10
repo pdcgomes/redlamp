@@ -784,13 +784,13 @@ def appear(c, p, draw):
 # Every video opens with Redlamp's opener in pixel art: the looks explainer's intro, which redraws
 # Introducing Redlamp's Safelight scene frame for frame, laid out for the vertical frame. The lamp
 # warms in the dark under the hook, which stands in for the film's first line and goes as the lamp
-# settles into the logo; the brand's two lines come in under it, then where the hook was, the
-# episode's subtitle, its title. All of it holds to be read, then the logo rises to become the
-# episode's header. Full-width lines can't sit under the lamp here, where the apps' side buttons
+# settles into the logo; the brand's line comes in under it, then where the hook was, the episode's
+# title. All of it holds to be read, then the logo gives way to the episode's header above the title,
+# which stays as the caption of the episode's first bar. Full-width lines can't sit under the lamp here, where the apps' side buttons
 # are, so the hook and the subtitle stand where the episode's caption does.
 
 SHEEN = "#f4c2bb"  # the lens's highlight: soft and off-centre, never white in the middle
-BRAND_LINES = (("A RAW PHOTO EDITOR", "FOR THE MAC."), ("FREE AND OPEN SOURCE.",))
+BRAND_LINE = ("A RAW PHOTO EDITOR", "FOR THE MAC.")
 LAMP_Y, LAMP_R, LOGO_Y = 160, 18, 172
 
 
@@ -830,11 +830,6 @@ def safelight(c, cx, cy, r, warm):
             c.px(hx + dx, hy + dy, SHEEN)
 
 
-def header_x(c, feature):
-    """Where header() puts the mark for `feature`."""
-    return (c.w - (9 + 4 + c.measure(f"REDLAMP · {feature}", "large"))) // 2
-
-
 def wrapped(text, chars=LINE_CHARS):
     """`text` in lines of at most `chars` characters, broken between words."""
     lines = []
@@ -852,50 +847,34 @@ def subtitle(c, episode):
 
 
 def opener(c, f, episode, hook, feature):
-    """Frame f of the opener for `episode`, with its hook's lines, its title as the subtitle and its
-    feature in the header. As the film's scene goes: the lamp warms from frame 6 over 120 frames
-    under the hook, which goes from its cue, and settles into the logo's mark from the settle cue; the
-    flat logo lands on the frame after the score's bloom and REDLAMP comes in beside it; then the
-    brand's lines, and the subtitle from its cue. They hold, and from the rise cue the subtitle goes
-    and the logo rises into the header and gives way to it, the feature's name and all."""
+    """Frame f of the opener for `episode`, with its hook's lines, its title and its feature in the
+    header. As the film's scene goes: the lamp warms from frame 6 over 120 frames under the hook, which
+    goes from its cue, and settles into the logo's mark from the settle cue; the flat logo lands on the
+    frame after the score's bloom and REDLAMP comes in beside it; then the brand's line, and the title
+    from its cue. They hold, and from the header cue the logo, its line and the lamp's light give way
+    to the header, the feature's name and all, while the title stays for the episode's first bar."""
     cue = {name: beat * OPENER_PER_BEAT for name, beat in OPENER["cues"].items()}
-    lock, up = cue["settle"], cue["rise"]
+    lock = cue["settle"]
     warm = ramp(f, 6, 120)
     settle = ramp(f, lock, 34)
     lens = ramp(f, 0, 20) * (1 - ramp(f, lock + 28, 14))
     flat = ramp(f, lock + 26, 16)
     words = ramp(f, lock + 14, 30, ease_out)
-    rise = ramp(f, up, 17)
+    handed = ramp(f, cue["header"], 12)
     lx = (c.w - (24 + c.measure("REDLAMP", "large", 2))) // 2
     cx = c.w / 2 + (lx + 9 - c.w / 2) * settle
     cy = LAMP_Y + (LOGO_Y + 8 - LAMP_Y) * settle
     r = LAMP_R + (8.5 - LAMP_R) * settle
 
-    c.glow(cx, cy, 30 + 62 * warm, "red", amount=0.5 * warm * (1 - 0.35 * settle) * (1 - rise), levels=3)
+    def brand(c):
+        for i, line in enumerate(BRAND_LINE):
+            c.text(c.w // 2, LOGO_Y + 24 + 11 * i, line, "text", font="large", align="center")
+
+    c.glow(cx, cy, 30 + 62 * warm, "red", amount=0.5 * warm * (1 - 0.35 * settle) * (1 - handed), levels=3)
     appear(c, 1 - ramp(f, cue["hookOut"], 20), lambda c: caption(c, hook))
     appear(c, lens, lambda c: safelight(c, cx, cy, r, warm))
-    y = LOGO_Y + 24
-    for k, (cue_name, lines) in enumerate(zip(("subline", "free"), BRAND_LINES)):
-        top = y + k * 26
-
-        def brand(c, lines=lines, top=top):
-            for i, line in enumerate(lines):
-                c.text(c.w // 2, top + 11 * i, line, "text", font="large", align="center")
-
-        appear(c, ramp(f, cue[cue_name], 20) * (1 - rise), brand)
-    appear(c, ramp(f, cue["feature"], 20) * (1 - ramp(f, up, 8)), lambda c: subtitle(c, episode))
-    if f < up:
-        appear(c, flat, lambda c: c.sprite(lx, LOGO_Y, *LAMP_MARK, scale=2))
-        appear(c, words, lambda c: c.text(lx + 24, LOGO_Y + 1, "REDLAMP", "white", font="large", scale=2))
-        return
-    hx, hy = header_x(c, feature), HEADER.y + 2
-    base = c.img.copy()
-    x, y = round(lx + (hx - lx) * rise), round(LOGO_Y + (hy - LOGO_Y) * rise)
-    c.sprite(x, y, *LAMP_MARK, scale=2)
-    c.text(x + 24, y + 1, "REDLAMP", "white", font="large", scale=2, check=False)
-    swap = between(f, up + 17, up + 23)
-    if swap > 0:
-        big = c.img.copy()
-        c.img.paste(base)
-        header(c, feature)
-        develop(c, big, swap)
+    appear(c, ramp(f, cue["subline"], 20) * (1 - handed), brand)
+    appear(c, ramp(f, cue["feature"], 20), lambda c: subtitle(c, episode))
+    appear(c, flat * (1 - handed), lambda c: c.sprite(lx, LOGO_Y, *LAMP_MARK, scale=2))
+    appear(c, words * (1 - handed), lambda c: c.text(lx + 24, LOGO_Y + 1, "REDLAMP", "white", font="large", scale=2))
+    appear(c, handed, lambda c: header(c, feature))

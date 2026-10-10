@@ -139,7 +139,7 @@ def banner(c, ed, *, pressed=False):
 
 def hook(c):
     edit(c)
-    w.caption(c, EPISODE["hooks"]["a"])
+    w.caption(c, w.wrapped(EPISODE["title"].upper()))
 
 
 def detected(c):
@@ -182,7 +182,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A deep hit on frame 0, then sixteenths under a beat held back."),
+    w.Panel(1, 0.0, hook, " / ".join(w.wrapped(EPISODE["title"].upper())), "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, detected, "IT FINDS THE / STACK FOR YOU", "The motif starts; a soft chime with the banner."),
     w.Panel(3, 4.8, merge, "CLICK MERGE", "A click on beat 1."),
     w.Panel(4, 7.2, merging, "ONE SHARP PHOTO",

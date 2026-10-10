@@ -32,8 +32,6 @@ ASPECT = CHROME.width / CHROME.height
 RECIPES = ["CHROME STREET", "SNAPSHOT NEGATIVE", "NOSTALGIC SUMMER", "CINEMA TEAL", "GOLD STANDARD", "BRIGHT SLIDE"]
 SLUGS = {"BRIGHT SLIDE": "bright-slide@2", "CINEMA TEAL": "cinema-teal@1"}
 AMOUNT = 70
-# The caption's rows raised a pixel, so the comma's tail on the second line stays inside the caption.
-COMMA_ROWS = (66, 85)
 
 
 def features(rgb):
@@ -115,7 +113,7 @@ def edit(c, shown, *, hover=None, applied=None, amount=100, press=None, mark=Non
 
 def hook(c):
     edit(c, "OPENED")
-    w.caption(c, EPISODE["hooks"]["a"], rows=COMMA_ROWS)
+    w.caption(c, w.wrapped(EPISODE["title"].upper()))
 
 
 def hover(c):
@@ -153,7 +151,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A deep hit on frame 0, then sixteenths under a beat held back."),
+    w.Panel(1, 0.0, hook, " / ".join(w.wrapped(EPISODE["title"].upper())), "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, hover, "HOVER TO PREVIEW", "The motif starts; a soft tick as the preview changes."),
     w.Panel(3, 4.8, another, "ONE RECIPE / AT A TIME",
             "A tick for each: Bright Slide on beat 1 (drawn), Cinema Teal on beat 3."),

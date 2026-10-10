@@ -135,7 +135,7 @@ def edit(c, photo, *, pressed=None, chosen=False, inverted=False, exposure=None,
 
 def hook(c):
     edit(c, BEFORE)
-    w.caption(c, EPISODE["hooks"]["a"])
+    w.caption(c, w.wrapped(EPISODE["title"].upper()))
 
 
 def click(c):
@@ -183,7 +183,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A deep hit on frame 0, then sixteenths under a beat held back."),
+    w.Panel(1, 0.0, hook, " / ".join(w.wrapped(EPISODE["title"].upper())), "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, click, "CLICK SUBJECT", "The motif starts; a click on the beat."),
     w.Panel(3, 4.8, selected, "HE IS SELECTED, / HAIR INCLUDED", "A soft rising blip as the overlay fills."),
     w.Panel(4, 7.2, invert, "INVERT IT FOR / THE BACKGROUND", "A click; the drums come in."),

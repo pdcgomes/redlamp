@@ -110,7 +110,7 @@ def files_window(c, ed, title, names, *, mark=None):
 def hook(c):
     ed, _ = edit(c)
     files_window(c, ed, "PRESETS", PRESETS)
-    w.caption(c, EPISODE["hooks"]["a"])
+    w.caption(c, w.wrapped(EPISODE["title"].upper()))
 
 
 def drop(c):
@@ -170,7 +170,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]),
+    w.Panel(1, 0.0, hook, " / ".join(w.wrapped(EPISODE["title"].upper())),
             "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, drop, "DROP IN .XMP / PRESETS", "The motif starts; a soft drop sound on the beat."),
     w.Panel(3, 4.8, report, "IT SHOWS WHAT / CAME ACROSS", "A tick for each row of the report, one a beat."),

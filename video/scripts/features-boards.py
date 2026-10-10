@@ -4,7 +4,8 @@ The feature videos' storyboard sheets (docs/plans/2026-10-10-feature-videos.md).
 scripts/features/boards/<episode>.py, defines its eight panels, one a bar, drawn with the shared pieces
 in scripts/features/world.py. This lays them out in two rows of four at twice their size, with the bar,
 time, words and sound under each and the claim's source from docs/social/posts.json in the footer, and
-writes the first panel and the result at their own size for the social room.
+writes the cover (the opener's frame its first post names, the hook over the lit lamp) and the result
+at their own size for the social room.
 
     python3 scripts/features-boards.py --episode e01   # out/features/boards/e01.png, e01-hook.png, e01-result.png
     python3 scripts/features-boards.py --all
@@ -98,9 +99,12 @@ def episode(key, *, zones=False):
     for note in w.check(c, video=False):
         print(f"{key} sheet: warning: {note}")
     paths = [w.save(w.render(c, SHEET, overlays), OUT / f"{key}.png")]
-    for name, i in (("hook", 0), ("result", 5)):
-        pc, pov, _ = drawn[i]
-        paths.append(w.save(w.render(pc, 1, pov), OUT / f"{key}-{name}.png"))
+    post = next(p for p in w.POSTS["posts"] if p["episode"] == key and p["hook"] == "a")
+    cover = w.canvas()
+    w.opener(cover, round(post["coverMs"] / 1000 * w.FPS), board.EPISODE, board.EPISODE["hooks"]["a"], board.FEATURE)
+    paths.append(w.save(cover.img, OUT / f"{key}-hook.png"))
+    pc, pov, _ = drawn[5]
+    paths.append(w.save(w.render(pc, 1, pov), OUT / f"{key}-result.png"))
     result = board.PANELS[5].draw
     if "progress" in inspect.signature(result).parameters:
         pc, pov, _ = draw(board.PANELS[5], progress=0.5)

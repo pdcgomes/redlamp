@@ -102,7 +102,7 @@ def edit(c, photo=AFTER, *, pressed=None):
 
 def hook(c):
     edit(c)
-    w.caption(c, EPISODE["hooks"]["a"])
+    w.caption(c, w.wrapped(EPISODE["title"].upper()))
 
 
 def crop(c):
@@ -153,7 +153,7 @@ def held(c):
 
 
 PANELS = [
-    w.Panel(1, 0.0, hook, " / ".join(EPISODE["hooks"]["a"]), "A deep hit on frame 0, then sixteenths under a beat held back."),
+    w.Panel(1, 0.0, hook, " / ".join(w.wrapped(EPISODE["title"].upper())), "A deep hit on frame 0, then sixteenths under a beat held back."),
     w.Panel(2, 2.4, crop, "R  CROP", "A key click; each key plays a note of the motif."),
     w.Panel(3, 4.8, brush, "K  BRUSH", "A key click and the motif's next note."),
     w.Panel(4, 7.2, before_after, "\\  BEFORE / AFTER",
