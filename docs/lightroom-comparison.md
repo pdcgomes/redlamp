@@ -121,6 +121,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Refine AI mask edges | Yes | Done | Different | | MSK-07, MSK-26, MSK-31 | Refine Edges, which solves a mask's whole edge again per pixel, and a Refine Edge brush that solves an edge again where you paint; from process 13, coarse masks (iPhone mattes, face parts) refined at full resolution as the photo is drawn |
 | Feather and Edge sliders for AI masks | Yes | Done | | | MSK-18 | Lightroom Classic 15.5 added the sliders |
 | Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | UX-25 | On one photo or every selected photo at once, each one's AI masks made for it; save your own from any mask |
+| Effect presets for a mask's adjustments (Dodge, Burn, Soften Skin and others) | Yes | Done | | | UX-27 | Nine of Redlamp's own, with values of its own, which set a mask's sliders and Curves; the skin and teeth effects are named Smooth Skin and Whiten Teeth, as the mask presets are. Save your own from any mask |
 | Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | UX-24 | A component or the whole mask inverted; Duplicate and Invert inverts the copy as a whole |
 | A masks panel with a thumbnail of each mask, and its overlay on hover | Yes | Done | | | UX-20, UX-22, UX-23, UX-24 | One picker for every mask and component, a menu on each mask and component, pins where each mask covers most, and Option-click on an eye to show one mask alone |
 | Reorder masks and components, every overlay mode and its opacity | Yes | Done | | | MSK-21 | |
