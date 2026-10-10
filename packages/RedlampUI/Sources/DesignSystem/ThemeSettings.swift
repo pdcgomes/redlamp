@@ -27,10 +27,16 @@ public final class ThemeSettings {
     }
 
     /// The opacity of the theme's panel color over the glass. Reduce Transparency (in
-    /// Accessibility settings) makes the panels solid.
+    /// Accessibility settings) makes the panels solid. A light theme keeps at least
+    /// `lightPanelMinimumOpacity`: the glass shows the dark canvas behind the panels, which
+    /// would turn a light panel grey and its grey labels unreadable.
     public var panelOpacity: Double {
-        reducesTransparency ? 1 : 1 - panelTransparency
+        guard !reducesTransparency else { return 1 }
+        let opacity = 1 - panelTransparency
+        return selection.appearance == .light ? max(opacity, Self.lightPanelMinimumOpacity) : opacity
     }
+
+    public static let lightPanelMinimumOpacity = 0.85
 
     private var reducesTransparency = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
     @ObservationIgnored private let defaults: UserDefaults
