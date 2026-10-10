@@ -301,16 +301,16 @@ public extension EditorModel {
             showShortcuts = false
         } else if develop, drawingKind != nil || isRefiningEdges {
             cancelDrawing()
-        } else if peoplePicker != nil {
+        } else if develop, peoplePicker != nil {
             closePeoplePicker()
         } else if develop, landscapePicker != nil {
             closeLandscapePicker()
         } else if develop, eyedropperActive {
             eyedropperActive = false
-        } else if calibrationTargetActive || calibrationTarget != nil {
+        } else if develop, calibrationTargetActive || calibrationTarget != nil {
             calibrationTargetActive = false
             calibrationTarget = nil
-        } else if pointColorEyedropperActive {
+        } else if develop, pointColorEyedropperActive {
             pointColorEyedropperActive = false
         } else if develop, isPlacingGuides {
             isPlacingGuides = false

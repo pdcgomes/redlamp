@@ -143,8 +143,14 @@ extension LibraryGrouping {
 
     /// `codes` by their names, in the Finder's order.
     static func byName(_ codes: [Int64], _ names: [Int64: String]) -> [Int64] {
-        codes.map { code in (code: code, name: names[code] ?? "", key: FinderOrder.key(names[code] ?? "")) }
-            .sorted { $0.key == $1.key ? $0.name < $1.name : $0.key.lexicographicallyPrecedes($1.key) }.map(\.code)
+        let keyed: [(code: Int64, name: String, key: [UInt8])] = codes.map { code in
+            let name = names[code] ?? ""
+            return (code, name, FinderOrder.key(name))
+        }
+        return keyed.sorted { lhs, rhs in
+            guard lhs.key != rhs.key else { return lhs.name < rhs.name }
+            return lhs.key.lexicographicallyPrecedes(rhs.key)
+        }.map(\.code)
     }
 
     /// Each of `list`'s photos' row in the store, by its place; -1 for a photo the store doesn't hold.

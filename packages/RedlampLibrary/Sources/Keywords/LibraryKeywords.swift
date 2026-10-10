@@ -464,6 +464,7 @@ extension LibraryKeywords {
     static func describe(_ error: any Error) -> String {
         switch error {
         case SidecarStoreError.writtenByNewerVersion: "a newer Redlamp wrote its sidecar"
+        case SidecarStoreError.damaged: "its sidecar is damaged"
         case SidecarStoreError.unreadable: "its sidecar can't be read"
         case SidecarStoreError.lossy: "saving its sidecar would lose what's in it"
         default: error.localizedDescription

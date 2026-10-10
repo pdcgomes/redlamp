@@ -24,9 +24,11 @@ public extension MomentFinder {
         precondition(captured.count == names.count, "every photo has a name")
         let times = captured.map { $0.map { ColumnEncoding.captured($0.timeIntervalSince1970) } ?? .min }
         func byName(_ places: some Sequence<Int>) -> [Int] {
-            places.map { (place: $0, key: FinderOrder.key(names[$0])) }
-                .sorted { $0.key == $1.key ? $0.place < $1.place : $0.key.lexicographicallyPrecedes($1.key) }
-                .map(\.place)
+            let keyed: [(place: Int, key: [UInt8])] = places.map { ($0, FinderOrder.key(names[$0])) }
+            return keyed.sorted { lhs, rhs in
+                guard lhs.key != rhs.key else { return lhs.place < rhs.place }
+                return lhs.key.lexicographicallyPrecedes(rhs.key)
+            }.map(\.place)
         }
         var dated = times.indices.filter { times[$0] != .min }
         dated.sort { (times[$0], $0) < (times[$1], $1) }

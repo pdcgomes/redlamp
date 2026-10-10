@@ -178,8 +178,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     }
 
     /// Goes back to the filmstrip's place, in either module, once laid out at its width: the photo in its
-    /// middle as it was last scrolled, else the active photo. A strip made again, as the filmstrip is when
-    /// it's shown again after F6, Lights Out or presenting, would start at the first photo.
+    /// middle as it was last scrolled, else the active photo.
     private func restorePlace() {
         needsPlace = false
         guard let place = model.filmstripPlace ?? model.selection, let item = item(of: place) else { return }

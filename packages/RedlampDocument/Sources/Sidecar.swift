@@ -317,7 +317,7 @@ public struct SidecarStore: Sendable {
     /// again), `SidecarStoreError.damaged` when the edit isn't JSON, or `.unreadable` when it
     /// doesn't decode. Use it wherever what's read is saved back.
     public func loadThrowing(for image: URL) throws -> Sidecar? {
-        let sidecar = url(for: image)
+        let sidecar = locator.readURL(for: image)
         guard let loaded = try Self.reading(sidecar, { try Self.decodeThrowing(sidecar: $0) }) else { return nil }
         return resolveConflicts(loaded, for: image) ?? loaded
     }

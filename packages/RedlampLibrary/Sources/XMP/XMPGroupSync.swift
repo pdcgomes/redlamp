@@ -431,6 +431,7 @@ extension XMPGroup {
         case let error as SidecarStoreError:
             switch error {
             case .writtenByNewerVersion: "a newer Redlamp wrote it"
+            case .damaged: "its edit is damaged"
             case .unreadable: "its edit can't be read"
             case .lossy: "saving it would lose what's in it"
             }

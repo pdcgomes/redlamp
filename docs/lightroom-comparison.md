@@ -208,7 +208,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Reordering Develop panels | Yes (Classic) | Undecided | | | | |
 | Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
 | A value on every control, and values that scrub when dragged | Yes | Done | | | UX-28, UX-29 | Including the grading wheels, the curve's points, Base Look Amount and the Masks panel's sizes and ranges, each typed or scrubbed |
-| Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 104 actions on 100 key bindings |
+| Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 186 actions on 135 key bindings |
 | Your own keyboard shortcuts | No | Planned | | P4 | LIB-36 | Any action on the key you choose, with keymaps for people coming from Lightroom Classic, Photo Mechanic and Bridge |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |

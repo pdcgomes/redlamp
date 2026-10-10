@@ -85,16 +85,16 @@ extension SidecarStore {
     }
 
     /// The bytes of `file`, each call a signal interrupts (`EINTR`) made again: a sidecar is never taken for
-    /// unreadable because a read was interrupted.
+    /// unreadable because a read was interrupted. Throws the error `Data(contentsOf:)` would.
     static func contents(of file: URL) throws -> Data {
         let descriptor = try file.withUnsafeFileSystemRepresentation { path -> Int32 in
-            guard let path else { throw POSIXError(.ENOENT) }
+            guard let path else { throw readError(ENOENT, file) }
             while true {
                 let descriptor = open(path, O_RDONLY | O_CLOEXEC)
                 if descriptor >= 0 {
                     return descriptor
                 }
-                guard errno == EINTR else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+                guard errno == EINTR else { throw readError(errno, file) }
             }
         }
         defer { close(descriptor) }
@@ -109,9 +109,24 @@ extension SidecarStore {
             } else if count == 0 {
                 return data
             } else if errno != EINTR {
-                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+                throw readError(errno, file)
             }
         }
+    }
+
+    /// Foundation's error for a read of `file` that failed with `code`, the POSIX error under it.
+    private static func readError(_ code: Int32, _ file: URL) -> CocoaError {
+        let reason: CocoaError.Code = switch code {
+        case ENOENT, ENOTDIR: .fileReadNoSuchFile
+        case EACCES, EPERM: .fileReadNoPermission
+        case ENAMETOOLONG: .fileReadInvalidFileName
+        case EFBIG: .fileReadTooLarge
+        default: .fileReadUnknown
+        }
+        return CocoaError(reason, userInfo: [
+            NSFilePathErrorKey: file.path,
+            NSUnderlyingErrorKey: POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO),
+        ])
     }
 
     /// Why the sidecar at `sidecar` must be left as it is; call it under coordination.

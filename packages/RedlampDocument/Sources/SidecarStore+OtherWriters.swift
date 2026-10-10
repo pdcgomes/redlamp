@@ -36,9 +36,14 @@ public struct SidecarRead: Sendable {
 
 public extension SidecarStore {
     /// The image's sidecar to edit. One read, so the base can't come from another file than
-    /// the edit: a save over an edit that wasn't read would write over it.
+    /// the edit: a save over an edit that wasn't read would write over it. Read from elsewhere
+    /// than its saves write it (`SidecarLocator.readURL(for:)`), its base is what's where they
+    /// write, read first, as `loadWithBase(for:)` reads it.
     func readForEditing(for image: URL) -> SidecarRead {
-        let sidecar = url(for: image)
+        let sidecar = locator.readURL(for: image)
+        let destination = url(for: image)
+        let isElsewhere = sidecar.path != destination.path
+        let destinationDigest = isElsewhere ? (try? Self.reading(destination) { try Self.digest(at: $0) }) ?? nil : nil
         let read: (data: Data?, protection: SidecarProtection?, decoded: Sidecar?)
         do {
             read = try Self.reading(sidecar) { url in
@@ -54,7 +59,7 @@ public extension SidecarStore {
             return SidecarRead(sidecar: nil, base: none, protection: .unreadable, failed: true)
         }
         let loaded = read.decoded.map { resolveConflicts($0, for: image) ?? $0 }
-        let digest = read.data.map { Data(SHA256.hash(data: $0)) }
+        let digest = isElsewhere ? destinationDigest : read.data.map { Data(SHA256.hash(data: $0)) }
         return SidecarRead(
             sidecar: loaded, base: SidecarBase(digest: digest, sidecar: loaded), protection: read.protection,
             failed: false,

@@ -842,7 +842,7 @@ public final class EditorModel {
     /// Opens `url`. Unless `keepingSelection`, it becomes the only photo selected. In the Library module it
     /// becomes the active photo without opening: Develop opens it when it's shown (`openActivePhoto`).
     public func select(_ url: URL, keepingSelection: Bool = false) {
-        if url == selection, opening != nil, engine.openIfReady(url) != nil {
+        if url == selection, opening != nil, info?.url == url, engine.openIfReady(url) != nil {
             // Back before the next photo was read: the open one stays as it was, in a new visit,
             // since what was started on it may have read the other photo meanwhile.
             let adoption = adoptionWhileOpening
@@ -918,6 +918,9 @@ public final class EditorModel {
             return try? await scheduler.run(.onScreen) { OpenedSidecar(url, in: sidecars) }
         }
         if let opened = engine.openIfReady(url) {
+            if !hasFrame {
+                showCachedPreview(of: url)
+            }
             // The editor changes over in one turn once the sidecar is read, never showing no
             // photo, unless the read takes longer than `openingPatience`.
             opening = url

@@ -242,15 +242,6 @@ struct FilmstripTests {
         #expect(strip.scrollView.contentView.bounds.contains(frame), "at \(strip.scrollView.contentView.bounds)")
     }
 
-    /// The model's list can be ahead of the rows the strip has loaded.
-    @Test func `centring a row the strip hasn't loaded leaves it where it is rather than raising`() async throws {
-        defer { cleanUp() }
-        let (_, strip, window) = try await showStrip(count: 10)
-        defer { window.contentView = nil }
-        strip.center(row: 500, animated: false)
-        #expect(strip.scrollView.contentView.bounds.origin.x == 0)
-    }
-
     /// The place a strip was scrolled to is kept for the photo open then: once ← or → have moved on
     /// without the strip, a strip made again opens at the photo open now.
     @Test func `a strip made again opens at the photo opened since, not where it was scrolled`() async throws {

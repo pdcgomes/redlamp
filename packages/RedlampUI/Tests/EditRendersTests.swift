@@ -93,8 +93,8 @@ final class RenderEngine: EditingEngine, @unchecked Sendable {
         try await base.previewObjectMask(request)
     }
 
-    func refineMaskEdges(_ bitmap: MaskBitmap) async throws -> MaskBitmap {
-        try await base.refineMaskEdges(bitmap)
+    func refineMaskEdges(_ mask: AIMask) async throws -> MaskBitmap {
+        try await base.refineMaskEdges(mask)
     }
 
     func refineMaskEdges(_ bitmap: MaskBitmap, along strokes: [BrushStroke]) async throws -> MaskBitmap {

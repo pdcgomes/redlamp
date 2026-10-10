@@ -263,9 +263,10 @@ extension ColumnStore {
                 name: name, count: count, filter: .filter(LibraryQuery.Filter(field, .equal, [.text(name)])),
             ))
         }
-        let sorted = values.map { (key: FinderOrder.key($0.name ?? ""), value: $0) }.sorted { lhs, rhs in
-            lhs.key == rhs.key
-                ? (lhs.value.name ?? "") < (rhs.value.name ?? "") : lhs.key.lexicographicallyPrecedes(rhs.key)
+        let keyed: [(key: [UInt8], value: FacetValue)] = values.map { (FinderOrder.key($0.name ?? ""), $0) }
+        let sorted = keyed.sorted { lhs, rhs in
+            guard lhs.key != rhs.key else { return (lhs.value.name ?? "") < (rhs.value.name ?? "") }
+            return lhs.key.lexicographicallyPrecedes(rhs.key)
         }.map(\.value)
         return sorted + (unnamed > 0 ? [FacetValue(name: nil, count: unnamed, filter: nil)] : [])
     }

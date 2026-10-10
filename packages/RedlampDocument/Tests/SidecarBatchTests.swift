@@ -159,7 +159,7 @@ struct SidecarBatchTests {
     // MARK: - Protection
 
     /// Edits this build can't save over: a newer one's, one it can't decode, one it would save back
-    /// changed, and a truncated one.
+    /// changed, and a truncated one, which is damaged.
     static let protected = [
         (#"{"format":"app.redlamp.edit","recipe":{"version":99,"processVersion":1}}"#, "newer"),
         (
@@ -170,7 +170,7 @@ struct SidecarBatchTests {
             #"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1,"values":{"basic.exposure":9}}}"#,
             "lossy",
         ),
-        (#"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1,"#, "unreadable"),
+        (#"{"format":"app.redlamp.edit","recipe":{"version":3,"processVersion":1,"#, "damaged"),
     ]
 
     @Test func `sidecars this build can't read or write back without loss are left alone, and the rest are saved`(
@@ -208,6 +208,7 @@ struct SidecarBatchTests {
             let expected: SidecarStoreError = switch kind {
             case "newer": .writtenByNewerVersion(store.url(for: images[number]))
             case "lossy": .lossy(store.url(for: images[number]))
+            case "damaged": .damaged(store.url(for: images[number]))
             default: .unreadable(store.url(for: images[number]))
             }
             #expect(Self.failed(results[number]) as? SidecarStoreError == expected, "\(kind)")

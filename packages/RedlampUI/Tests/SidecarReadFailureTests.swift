@@ -62,7 +62,7 @@ struct SidecarReadFailureTests {
     @Test func `a paste onto a photo whose sidecar can't be read leaves it alone`() async throws {
         let (image, store, presenter, cleanup) = try edited()
         defer { cleanup() }
-        let sync = SettingsSync(store: store, makeEngine: { nil })
+        let sync = SettingsSync(sidecars: SidecarPlacement(locator: store.locator), makeEngine: { nil })
         var source = EditRecipe()
         source[.contrast] = 40
 
@@ -75,7 +75,7 @@ struct SidecarReadFailureTests {
     @Test func `Auto Sync leaves a photo whose sidecar can't be read alone`() async throws {
         let (image, store, presenter, cleanup) = try edited()
         defer { cleanup() }
-        let sync = SettingsSync(store: store, makeEngine: { nil })
+        let sync = SettingsSync(sidecars: SidecarPlacement(locator: store.locator), makeEngine: { nil })
         var source = EditRecipe()
         source[.contrast] = 40
         let step = SettingsSync.RunStep(
@@ -98,7 +98,7 @@ struct SidecarReadFailureTests {
         var recipe = EditRecipe()
         recipe[.exposure] = 1
         try store.save(Sidecar(recipe: recipe), for: image)
-        let sync = SettingsSync(store: store, makeEngine: { nil })
+        let sync = SettingsSync(sidecars: SidecarPlacement(locator: store.locator), makeEngine: { nil })
         var source = EditRecipe()
         source[.contrast] = 40
         sync.run(.paste(source, .everything), on: [image], title: "Paste Settings") { _, _ in }

@@ -150,11 +150,11 @@ extension SidecarStore {
         _ place: Place, read: URL, write: URL, edits: EditWriter,
         _ make: @Sendable (Int, Sidecar?) -> SidecarChange,
     ) -> SidecarBatchResult? {
-        let edit = Result { try Self.editData(inSidecar: write) }
+        let edit = Result { try Self.batchEditData(inSidecar: write) }
         let sidecar: Sidecar?
         do {
             sidecar = try read.path == write.path
-                ? Self.found(edit.get(), at: write) : Self.found(Self.editData(inSidecar: read), at: read)
+                ? Self.found(edit.get(), at: write) : Self.found(Self.batchEditData(inSidecar: read), at: read)
         } catch {
             return Self.unreadable(place, error)
         }
@@ -221,7 +221,8 @@ extension SidecarStore {
     /// `load(for:)`, but throwing where it finds none because the sidecar can't be read.
     func loadForChange(for image: URL) throws -> Sidecar? {
         let sidecar = locator.readURL(for: image)
-        guard let loaded = try Self.reading(sidecar, { try Self.found(Self.editData(inSidecar: $0), at: $0) }) else {
+        guard let loaded = try Self.reading(sidecar, { try Self.found(Self.batchEditData(inSidecar: $0), at: $0) })
+        else {
             return nil
         }
         return resolveConflicts(loaded, for: image) ?? loaded
@@ -236,6 +237,16 @@ extension SidecarStore {
         }
         _ = try existing(data, at: sidecar)
         throw SidecarStoreError.unreadable(sidecar)
+    }
+
+    /// The edit's bytes, as `editData(inSidecar:)` reads them, but a read that fails fails as `.unreadable`:
+    /// a batch reports it rather than trying it again.
+    private static func batchEditData(inSidecar sidecar: URL) throws -> Data? {
+        do {
+            return try editData(inSidecar: sidecar)
+        } catch {
+            throw SidecarStoreError.unreadable(sidecar)
+        }
     }
 
     /// The result of a place whose sidecar couldn't be read: failed, with nothing asked of it.

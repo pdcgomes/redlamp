@@ -121,8 +121,12 @@ extension EditorModel {
         if pointColorEyedropperActive {
             pointColorEyedropperActive = false
         }
-        calibrationTargetActive = false
-        calibrationTarget = nil
+        if calibrationTargetActive {
+            calibrationTargetActive = false
+        }
+        if calibrationTarget != nil {
+            calibrationTarget = nil
+        }
     }
 
     /// A group header's reset, on the selected swatch.
