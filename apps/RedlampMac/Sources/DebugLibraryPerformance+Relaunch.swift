@@ -110,8 +110,8 @@
                     if run.shown == nil, library.count > 0 {
                         run.shown = now
                     }
-                    if run.fromLibrary == nil, library.isShownFromLibrary, let item = library.items.row(0),
-                       library.storeThumbnail(for: item) != nil {
+                    if run.fromLibrary == nil, library.isShownFromLibrary, library.count > 0,
+                       let item = library.items.row(0), library.storeThumbnail(for: item) != nil {
                         run.fromLibrary = now
                     }
                     let shown = LibraryGridViews.edits(in: grid).filter { stored.contains($0.key) }
