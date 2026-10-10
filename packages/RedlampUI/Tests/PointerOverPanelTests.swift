@@ -53,8 +53,10 @@ struct PointerOverPanelTests {
             try #require(model.hasFrame)
             model.activeTool = .masking
             let content = try #require(Self.splitItems(of: window).first { $0.behavior == .default })
+            // Develop's own view, in the modules' container, which isn't flipped as the canvas is.
+            let modules = try #require(content.viewController as? ModuleContentController)
             let editor = Editor(
-                model: model, controller: controller, window: window, canvas: content.viewController.view,
+                model: model, controller: controller, window: window, canvas: modules.developView,
                 pointer: TrackingPointer(window: window), cleanup: cleanup,
             )
             try await settle(editor)
