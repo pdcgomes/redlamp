@@ -17,6 +17,7 @@
             + SyncScenarios.all + ExportScenarios.all
             + RecipeScenarios.all + StackScenarios.all + RawScenarios.all + FeedbackScenarios.all
             + ImportScenarios.all
+            + LightroomScenarios.all
             + LibraryPanelScenarios.all
             + HealthScenarios.all
             + MissingPhotosScenarios.all
