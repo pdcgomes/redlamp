@@ -34,6 +34,9 @@ jobs:
       - name: Engine purity gate
         run: scripts/check-engine-purity.sh
 
+      - name: Focus ring gate
+        run: scripts/check-focus-rings.py
+
       - name: Model licence gate
         run: scripts/check-model-licenses.py
 

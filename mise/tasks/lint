@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-#MISE description="Run the engine purity gate, the model licence gate, the roadmap and camera list checks, rl check, SwiftFormat (lint mode) and SwiftLint"
+#MISE description="Run the engine purity gate, the focus ring gate, the model licence gate, the roadmap and camera list checks, rl check, SwiftFormat (lint mode) and SwiftLint"
 #MISE alias="l"
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
 scripts/check-engine-purity.sh
+scripts/check-focus-rings.py
 scripts/check-model-licenses.py
 scripts/roadmap-sync.py --check
 scripts/camera-list.py --check

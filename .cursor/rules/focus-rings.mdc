@@ -1,0 +1,31 @@
+---
+description: Redlamp draws no focus rings. FocusRings removes AppKit's in every window; each SwiftUI root view ends in focusEffectDisabled() where it's hosted; scripts/check-focus-rings.py enforces both.
+globs: packages/RedlampUI/**,packages/RedlampDesign/**,packages/RedlampCanvas/**,packages/RedlampAutomation/**,apps/RedlampMac/**,scripts/check-focus-rings.py
+alwaysApply: false
+---
+
+# No focus rings
+
+Redlamp draws no focus rings, in any window, sheet, popover or alert: no blue outline around a focused text field, search field, button, checkbox, slider, stepper, pop-up, segmented control, list or text view. A focused text field still shows its insertion point.
+
+## How
+
+- **AppKit's rings:** `FocusRings` (`packages/RedlampUI/Sources/DesignSystem/FocusRings.swift`), installed at launch (`FocusRings.removeEverywhere()` in `AppDelegate`), follows the key window's first responder and keeps its ring off while it has focus. It covers every window, those SwiftUI and AppKit make for scenes, sheets, popovers and alerts included, so a new window needs nothing of its own: a plain `NSWindow` is ringless.
+- **SwiftUI's own focus effects** are off where each SwiftUI hierarchy is hosted: the root view of every `NSHostingView` and `NSHostingController`, and the content of every scene (`Window`, `WindowGroup`, `Settings`), ends in `.focusEffectDisabled()`. Sheets, popovers and alerts presented from it inherit it.
+
+```swift
+let hosting = NSHostingView(rootView: MaskPresets(model: model).focusEffectDisabled())
+```
+
+`focusEffectDisabled()` alone isn't enough, and neither is `FocusRings` alone: the first removes SwiftUI's focus effect on buttons but none of AppKit's rings (a focused SwiftUI text field, pop-up or segmented control still draws one), and the second can't reach the effects SwiftUI draws itself.
+
+## Don't
+
+- Turn a ring back on: no `focusRingType = .default` or `.exterior`, no `.focusEffectDisabled(false)`.
+- Add another way to remove rings (a window subclass, a modifier, code in one view): `FocusRings` covers every window, and two mechanisms drift apart.
+
+## Checked
+
+`scripts/check-focus-rings.py` fails on a hosting view or scene whose root doesn't end in `.focusEffectDisabled()`, on code that turns a ring back on, and on an app that no longer installs `FocusRings`. It runs in CI's quick checks, the push gate and `mise run lint`. A hosting view that only measures a view and is never shown goes in its `MEASURING` list, with the reason. `FocusRingsTests` (RedlampUI) checks AppKit's and SwiftUI's controls, a SwiftUI text field as it's typed in, and a window that becomes key.
+
+To look for rings on a new screen: turn on keyboard navigation (System Settings › Keyboard › Keyboard navigation) and press Tab through it, with Redlamp the active app.

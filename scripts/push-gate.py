@@ -213,6 +213,7 @@ def steps(level: str) -> list[tuple[str, list[str], bool]]:
     xcodebuild = [*common, "-scheme", "Redlamp-Workspace"]
     out = [
         ("Engine purity gate", ["scripts/check-engine-purity.sh"], False),
+        ("Focus ring gate", ["scripts/check-focus-rings.py"], False),
         ("Model licence gate", ["scripts/check-model-licenses.py"], False),
         ("Roadmap and Lightroom comparison in step with the tracker", ["scripts/roadmap-sync.py", "--check"], False),
         ("Camera list in step with the decode tests and LibRaw", ["scripts/camera-list.py", "--check"], False),
