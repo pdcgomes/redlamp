@@ -90,10 +90,17 @@ extension LibraryGridView {
         defer { showKeywordTarget(nil) }
         guard let keyword = LibraryDrags.keyword(in: sender), let target = keywordTarget(at: sender.draggingLocation)
         else { return false }
+        drop(keyword, on: target)
+        return true
+    }
+
+    /// Puts `keyword` on the photos of `target`, a keyword dropped there, as one change of the panels' with Undo.
+    func drop(_ keyword: KeywordPath, on target: KeywordTarget) {
         let panels = model.libraryPanels
         switch target {
         case .selection where model.library.items.readsOnRequest:
-            // A large source's photos have the index's IDs: their rows aren't read for it.
+            // A large source's photos have the index's IDs, every one of them selected taken as the list has them:
+            // their rows aren't read for it.
             panels.change([keyword], ids: model.selectedIDs)
         case .selection:
             let photos = model.selectedPhotos
@@ -102,7 +109,6 @@ extension LibraryGridView {
             let photos = model.photos(standingFor: url)
             Task { await panels.change([keyword], on: photos) }
         }
-        return true
     }
 
     /// The photo under `location` (window points), or the selection when it's among several selected; nil between

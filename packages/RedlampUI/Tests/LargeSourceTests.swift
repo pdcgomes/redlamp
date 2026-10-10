@@ -195,7 +195,7 @@ struct LargeSourceTests {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }
         let diffs = DiffLog()
-        let (model, _, window) = try await open(sandbox, count: 40, diffs: diffs)
+        let (model, grid, window) = try await open(sandbox, count: 40, diffs: diffs)
         defer { window.contentView = nil }
         let (library, panels) = (model.library, model.libraryPanels)
         let engine = try #require(sandbox.service?.engine)
@@ -211,12 +211,27 @@ struct LargeSourceTests {
         await panels.written()
         try await SourcesSandbox.eventually { try await tagged("Trips/2007") == 40 }
         #expect(try await tagged("Trips/2007") == 40, "on every photo selected")
-        // Dropped on the selection.
-        #expect(try panels.change([#require(KeywordPath("Places/Lisbon"))], ids: model.selectedIDs))
+        // Dropped on the selection, every photo's ID taken as the list has them, without a pass over them.
+        let list = library.photoList
+        #expect(model.selectedIDs == Array(list.ids))
+        #expect(
+            model.selectedIDs.withUnsafeBufferPointer(\.baseAddress) == list.ids.withUnsafeBufferPointer(\.baseAddress),
+            "the list's own IDs",
+        )
+        let steps = panels.undoSteps.count
+        try grid.drop(#require(KeywordPath("Places/Lisbon")), on: .selection)
+        #expect(panels.undoSteps.count == steps + 1, "made at once")
         await panels.written()
         try await SourcesSandbox.eventually { try await tagged("Places/Lisbon") == 40 }
         #expect(try await tagged("Places/Lisbon") == 40, "on every photo selected")
         #expect(library.items.rowsRead.count == read, "no row was read for them")
+
+        // Some of them: their IDs in the list's order.
+        var some = PhotoSelection()
+        some.select(list[30], in: list)
+        some.toggle(list[3], in: list)
+        model.photoSelection = some
+        #expect(model.selectedIDs == [list[3], list[30]])
     }
 
     @Test func `stacking a large source's whole selection stacks every photo, its rows unread`() async throws {

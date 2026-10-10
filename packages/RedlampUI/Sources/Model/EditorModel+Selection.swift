@@ -18,12 +18,12 @@ public extension EditorModel {
         return library.items.urls(at: selectedPlaces(selected))
     }
 
-    /// The IDs of the photos selected, in the filmstrip's order; the active photo's alone when nothing else is.
+    /// The IDs of the photos selected, in the filmstrip's order; the active photo's alone when nothing else is. Every
+    /// photo of the list selected is its IDs as they are, without a pass over them (`PhotoSelection.ids(in:)`).
     var selectedIDs: [Int64] {
         let selected = photoSelection
         guard !selected.isEmpty else { return selection.flatMap(library.photoID(of:)).map { [$0] } ?? [] }
-        let ids = library.photoIDs
-        return selectedPlaces(selected).map { ids[$0] }
+        return Array(selected.ids(in: library.photoList))
     }
 
     /// The photos selected, for an action on them all to work through (`SelectedPhotos`): their URLs, or a large
