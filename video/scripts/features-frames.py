@@ -47,7 +47,7 @@ def draw(board, f, hook):
     it) and the kit's warnings."""
     c = w.canvas()
     if f < w.OPENER_FRAMES:
-        w.opener(c, f, board.EPISODE["hooks"][hook], board.FEATURE)
+        w.opener(c, f, board.EPISODE, board.EPISODE["hooks"][hook], board.FEATURE)
         overlays = []
     else:
         overlays = board.frame(c, (f - w.OPENER_FRAMES) / w.PER_BEAT, hook) or []

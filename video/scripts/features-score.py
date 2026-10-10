@@ -18,11 +18,13 @@ draw with it).
 """
 
 import argparse
+import contextlib
 import importlib.util
+import io
 import json
-import subprocess
 import sys
-import wave
+from copy import deepcopy
+from functools import cache
 from pathlib import Path
 
 import numpy as np
@@ -67,30 +69,56 @@ SOUNDS = {
 }
 
 
-def read(path):
-    with wave.open(str(path)) as f:
-        return np.frombuffer(f.readframes(f.getnframes()), "<i2").reshape(-1, f.getnchannels()) / 32768
+FILM_SCORE = w.VIDEO / "scripts/score.py"
+
+
+@cache
+def film_opening():
+    """
+    The opener's sound at the film's level, and the short cut's whole score: Introducing Redlamp's
+    opening as scripts/score.py writes it in the short cut, sample for sample, for the opener's first
+    `scene` bars, then its last chord held to the opener's end, as the looks explainer and the app's
+    welcome hold it, with an air swell up into the episode's first hit. score.py is run as a full run of
+    it goes, the film cut first and then the short cut, without its own loop over the cuts and with its
+    write() caught, so nothing of the film's is written. The held chord is the same scene drawn again
+    from where the short drew it, in its room and at its level, and takes over in the 50 ms before the
+    scene's last bar line.
+    """
+    source = FILM_SCORE.read_text()
+    film = {"__name__": "introducing_score", "__file__": str(FILM_SCORE)}
+    exec(compile(source.split("\ncuts = json.loads(", 1)[0], str(FILM_SCORE), "exec"), film)
+    cuts = json.loads((w.VIDEO / "src/introducing/cuts.json").read_text())
+    scene, bars = cuts["short"][0]
+    assert (scene, bars) == ("safelight", w.OPENER["scene"]), f"the short opens on {bars} bars of {scene}, not the opener's"
+    held = (w.OPENER["bars"] - bars) * w.SHEET["beatsPerBar"]
+    film["SCENES"]["features-hold"] = {8: ([("Dadd9", 8)], [0, 0]), "piano": None, "cues": [("swell", 0), ("swell", held)]}
+    written = {}
+    film["write"] = lambda path, x: written.__setitem__(Path(path).stem, x)
+    with contextlib.redirect_stdout(io.StringIO()):
+        film["fresh"]()
+        room = film["score"]("film", cuts["film"])
+        drawn = deepcopy(film["rng"]), dict(film["_cache"])
+        room = film["score"]("short", cuts["short"])
+        film["rng"], film["_cache"] = drawn
+        film["score"]("features-opener", [["safelight", bars], ["features-hold", 2]], room)
+    short, out = written["score-short"], written["score-features-opener"].copy()
+    bar, cross = int(round(bars * w.SHEET["beatsPerBar"] * 60 / w.OPENER["bpm"] * s.SR)), int(0.05 * s.SR)
+    out[: bar - cross] = short[: bar - cross]
+    blend = np.linspace(0, 1, cross)[:, None]
+    out[bar - cross : bar] = short[bar - cross : bar] * (1 - blend) + out[bar - cross : bar] * blend
+    return out[: int(round(w.OPENER_FRAMES / w.FPS * s.SR))], short
 
 
 def opener(episode):
     """
-    The opener's sound: the Introducing short's score under its opening scene (scripts/score.py short),
-    which the pixel opener is timed to frame for frame, as far below the episode's score as it sits
-    below the rest of the short, and faded out over its last three frames, where the episode's first
-    hit cuts in. Its length is the cue sheet's opener, which has to be the short's opening scene.
+    The opener's sound, as far below the episode's score as the short's opening sits below the rest of
+    the short, and faded out over its last three frames, where the episode's first hit cuts in.
     """
-    short = w.VIDEO / "public/film/score-short.wav"
-    if not short.exists():
-        subprocess.run([sys.executable, "scripts/score.py", "short"], cwd=w.VIDEO, check=True)
-    cuts = json.loads((w.VIDEO / "src/introducing/cuts.json").read_text())
-    scene, bars = cuts["short"][0]
-    assert (scene, bars) == ("safelight", w.OPENER["bars"]), f"the short opens on {bars} bars of {scene}, not the opener's"
-    seconds = w.OPENER_FRAMES / w.FPS
-    x = read(short)
-    n = int(round(seconds * s.SR))
-    head, after = x[:n], x[n:n + len(episode)]
+    sound, short = film_opening()
+    n = int(round(w.OPENER["scene"] * w.SHEET["beatsPerBar"] * 60 / w.OPENER["bpm"] * s.SR))
+    head, after = short[:n], short[n:n + len(episode)]
     gap = s.loudness(after) - s.loudness(head)
-    out = head * 10 ** ((s.loudness(episode) - gap - s.loudness(head)) / 20)
+    out = sound * 10 ** ((s.loudness(episode) - gap - s.loudness(head)) / 20)
     ramp = int(round(3 / w.FPS * s.SR))
     out[-ramp:] *= np.linspace(1, 0, ramp)[:, None]
     return out

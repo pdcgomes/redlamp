@@ -50,8 +50,9 @@ BPM, FPS = SHEET["bpm"], SHEET["fps"]
 BAR = SHEET["beatsPerBar"] * 60 / BPM
 PER_BEAT = 60 / BPM * FPS
 FRAMES = round(SHEET["bars"] * SHEET["beatsPerBar"] * PER_BEAT)
-# The opener before every episode is timed on Introducing Redlamp's 72 BPM grid, frame for frame with
-# the film's opening scene, so the film's own sound lands on it.
+# The opener before every episode is timed on Introducing Redlamp's 72 BPM grid: its first `scene` bars
+# frame for frame with the short cut's opening scene, so the film's own sound lands on them, then a bar
+# held on the scene's last chord while the logo, its lines and the episode's subtitle are read.
 OPENER = SHEET["opener"]
 OPENER_PER_BEAT = 60 / OPENER["bpm"] * FPS
 OPENER_FRAMES = round(OPENER["bars"] * SHEET["beatsPerBar"] * OPENER_PER_BEAT)
@@ -783,9 +784,10 @@ def appear(c, p, draw):
 # Every video opens with Redlamp's opener in pixel art: the looks explainer's intro, which redraws
 # Introducing Redlamp's Safelight scene frame for frame, laid out for the vertical frame. The lamp
 # warms in the dark under the hook, which stands in for the film's first line and goes as the lamp
-# settles into the logo; the brand's two lines come in under it, and the logo rises to become the
-# episode's header. Full-width lines can't sit under the lamp here, where the apps' side buttons are,
-# so the hook stands where the episode's caption does, and is back there when the episode starts.
+# settles into the logo; the brand's two lines come in under it, then where the hook was, the
+# episode's subtitle: its number in the series and its feature. All of it holds to be read, then the
+# logo rises to become the episode's header. Full-width lines can't sit under the lamp here, where the
+# apps' side buttons are, so the hook and the subtitle stand where the episode's caption does.
 
 SHEEN = "#f4c2bb"  # the lens's highlight: soft and off-centre, never white in the middle
 BRAND_LINES = (("A RAW PHOTO EDITOR", "FOR THE MAC."), ("FREE AND OPEN SOURCE.",))
@@ -833,12 +835,31 @@ def header_x(c, feature):
     return (c.w - (9 + 4 + c.measure(f"REDLAMP · {feature}", "large"))) // 2
 
 
-def opener(c, f, hook, feature):
-    """Frame f of the opener, with the hook's lines and the episode's feature for its header. As the
-    film's scene goes: the lamp warms from frame 6 over 120 frames under the hook, which goes from its
-    cue, and settles into the logo's mark from the settle cue; the flat logo lands on the frame after
-    the score's bloom and REDLAMP comes in beside it; then the brand's lines, and from the rise cue the
-    logo rises into the header and gives way to it, the feature's name and all."""
+def wrapped(text, chars=LINE_CHARS):
+    """`text` in lines of at most `chars` characters, broken between words."""
+    lines = []
+    for word in text.split():
+        if lines and len(f"{lines[-1]} {word}") <= chars:
+            lines[-1] = f"{lines[-1]} {word}"
+        else:
+            lines.append(word)
+    return lines
+
+
+def subtitle(c, episode, feature):
+    """The episode's subtitle, where the caption stands: its number in the series over its feature."""
+    number, count = int(episode["id"][1:]), len(POSTS["episodes"])
+    c.text(c.w // 2, HEADER.y + 3, f"FEATURE {number} OF {count}", "muted", font="large", align="center")
+    caption(c, wrapped(feature))
+
+
+def opener(c, f, episode, hook, feature):
+    """Frame f of the opener for `episode`, with its hook's lines and its feature, which the subtitle
+    names and the header carries. As the film's scene goes: the lamp warms from frame 6 over 120 frames
+    under the hook, which goes from its cue, and settles into the logo's mark from the settle cue; the
+    flat logo lands on the frame after the score's bloom and REDLAMP comes in beside it; then the
+    brand's lines, and the subtitle from its cue. They hold, and from the rise cue the subtitle goes
+    and the logo rises into the header and gives way to it, the feature's name and all."""
     cue = {name: beat * OPENER_PER_BEAT for name, beat in OPENER["cues"].items()}
     lock, up = cue["settle"], cue["rise"]
     warm = ramp(f, 6, 120)
@@ -864,6 +885,7 @@ def opener(c, f, hook, feature):
                 c.text(c.w // 2, top + 11 * i, line, "text", font="large", align="center")
 
         appear(c, ramp(f, cue[cue_name], 20) * (1 - rise), brand)
+    appear(c, ramp(f, cue["feature"], 20) * (1 - ramp(f, up, 8)), lambda c: subtitle(c, episode, feature))
     if f < up:
         appear(c, flat, lambda c: c.sprite(lx, LOGO_Y, *LAMP_MARK, scale=2))
         appear(c, words, lambda c: c.text(lx + 24, LOGO_Y + 1, "REDLAMP", "white", font="large", scale=2))

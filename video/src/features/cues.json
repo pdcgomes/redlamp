@@ -17,13 +17,15 @@
   ],
   "opener": {
     "bpm": 72,
-    "bars": 2,
+    "bars": 3,
+    "scene": 2,
     "cues": {
       "hookOut": 4.48,
       "settle": 5,
       "subline": 6.04,
       "free": 6.52,
-      "rise": 7
+      "feature": 7,
+      "rise": 11
     }
   },
   "cues": {
