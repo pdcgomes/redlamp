@@ -109,6 +109,33 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The lines of the Copy Settings checklist (`SettingsGroup`) whose settings the panel shows,
+    /// in the panel's order: the kinds of setting its Edited chip counts. Each panel's parameters
+    /// belong to one of its lines, and no line belongs to two panels. Calibration's Process
+    /// Version isn't counted: an edit keeps its version, so an older one isn't an edit made here.
+    static let settingsItemIDs: [PanelID: [String]] = [
+        .basic: [
+            "look.treatment", "look.baseLook", "whiteBalance", "basic.exposure", "basic.contrast", "basic.highlights",
+            "basic.shadows", "basic.whites", "basic.blacks", "presence.texture", "presence.clarity", "presence.dehaze",
+            "presence.vibrance", "presence.saturation",
+        ],
+        .toneCurve: ["toneCurve.parametric", "toneCurve.point"],
+        .colorMixer: ["colorMixer.hue", "colorMixer.saturation", "colorMixer.luminance", "colorMixer.pointColor"],
+        .colorGrading: ["colorGrading"],
+        .detail: ["detail.sharpening", "detail.noise"],
+        .lens: ["lens.profile", "lens.chromaticAberration", "lens.defringe", "lens.manual"],
+        .transform: ["transform"],
+        .effects: [
+            "effects.vignette", "effects.grain", "effects.glow", "effects.leak", "effects.dust", "effects.frame",
+            "effects.camera",
+        ],
+        .calibration: ["calibration"],
+    ]
+
+    public var settingsItems: [SettingsItem] {
+        (Self.settingsItemIDs[self] ?? []).compactMap { id in SettingsGroup.allItems.first { $0.id == id } }
+    }
+
     /// The panel's switch in the edit (UX-30); Basic has none.
     public var switchable: SwitchablePanel? {
         SwitchablePanel(rawValue: rawValue)

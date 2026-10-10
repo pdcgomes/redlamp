@@ -29,6 +29,7 @@ extension PanelSectionView {
                 reset: { model.resetPanel(panel) },
                 isOn: isOn,
                 setOn: setOn,
+                editedItems: { model.editedItems(panel).map(\.name) },
             ),
         )
         identify(as: "panel.\(panel.rawValue)")

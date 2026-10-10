@@ -67,7 +67,10 @@ struct PanelSwitchUITests {
         #expect(model.isEdited(.detail), "the Edited chip still shows")
         try await settle()
         let header = try #require(panel.subviews.first { $0.accessibilityIdentifier() == "panel.detail.header" })
-        #expect(header.accessibilityHelp() == "Detail has edits", "VoiceOver hears what the Edited chip shows")
+        #expect(
+            header.accessibilityHelp() == "Detail has 1 edited setting: Sharpening",
+            "VoiceOver hears what the chip shows",
+        )
         #expect(toggle.toolTip == "Turn Detail on")
         #expect(toggle.accessibilityValue() as? Int == 0)
 

@@ -136,16 +136,20 @@ private struct EditedChip: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
-        if model.isEdited(panel) {
-            Text("Edited")
+        let items = model.editedItems(panel).map(\.name)
+        if !items.isEmpty {
+            Text("Edited\u{2009}·\u{2009}\(items.count)")
                 .font(Typography.badge.font)
                 .foregroundStyle(Theme.editedChipText)
                 .padding(.horizontal, Theme.editedChipPadding)
                 .frame(height: TextLine.lineHeight(Typography.badge) + 3)
                 .background(Capsule().fill(Theme.editedChipFill))
                 .opacity(on ? 1 : Theme.switchedOffOpacity)
-                .help("This panel has edits")
-                .accessibilityLabel("\(panel.title) has edits")
+                .help(items.joined(separator: ", "))
+                .accessibilityLabel(
+                    "\(panel.title) has \(items.count == 1 ? "1 edited setting" : "\(items.count) edited settings"): "
+                        + items.joined(separator: ", "),
+                )
         }
     }
 }

@@ -17,6 +17,9 @@ public final class PanelSectionView: NSView, HeightProviding {
         /// Whether the panel is on, for a panel with an eye.
         public var isOn: (@MainActor () -> Bool)?
         public var setOn: (@MainActor (Bool) -> Void)?
+        /// The names of the kinds of setting the panel has changed, which its Edited chip counts
+        /// and lists on hover; nil shows the chip without a count.
+        public var editedItems: (@MainActor () -> [String])?
 
         public init(
             isExpanded: @escaping @MainActor () -> Bool,
@@ -25,6 +28,7 @@ public final class PanelSectionView: NSView, HeightProviding {
             reset: @escaping @MainActor () -> Void,
             isOn: (@MainActor () -> Bool)? = nil,
             setOn: (@MainActor (Bool) -> Void)? = nil,
+            editedItems: (@MainActor () -> [String])? = nil,
         ) {
             self.isExpanded = isExpanded
             self.isEdited = isEdited
@@ -32,6 +36,7 @@ public final class PanelSectionView: NSView, HeightProviding {
             self.reset = reset
             self.isOn = isOn
             self.setOn = setOn
+            self.editedItems = editedItems
         }
     }
 
@@ -123,14 +128,6 @@ public final class PanelSectionView: NSView, HeightProviding {
         fatalError("init(coder:) is not supported")
     }
 
-    #if DEBUG || REDLAMP_PROFILING
-        /// Draws the headers' Edited chips in capitals, for comparing in snapshots (`--script chip=upper`).
-        public static var uppercaseEditedChip: Bool {
-            get { PanelHeaderView.uppercaseEditedChip }
-            set { PanelHeaderView.uppercaseEditedChip = newValue }
-        }
-    #endif
-
     /// Names the section, its header and its eye for VoiceOver and the regression suite, such as
     /// `panel.detail`, `panel.detail.header` and `panel.detail.switch`.
     public func identify(as identifier: String) {
@@ -202,6 +199,7 @@ public final class PanelSectionView: NSView, HeightProviding {
             Tracker { [weak self] in
                 guard let self else { return }
                 header.isEdited = actions.isEdited()
+                header.editedItems = actions.editedItems?() ?? []
             },
         ]
         if let isOn = actions.isOn {
@@ -271,7 +269,7 @@ public final class PanelSectionView: NSView, HeightProviding {
 
 /// The panel title bar: chevron, glyph, title and badge, then at the trailing edge the eye (or
 /// its slot), and left of it the Edited chip or an accessory.
-final class PanelHeaderView: NSView {
+final class PanelHeaderView: NSView, NSViewToolTipOwner {
     let title: String
     let symbol: String?
     let badge: String?
@@ -301,10 +299,62 @@ final class PanelHeaderView: NSView {
     var isEdited = false {
         didSet {
             if isEdited != oldValue {
-                needsDisplay = true
-                setAccessibilityHelp(isEdited ? "\(title) has edits" : nil)
+                editedDidChange()
             }
         }
+    }
+
+    /// The names the Edited chip counts and lists, in the panel's order.
+    var editedItems: [String] = [] {
+        didSet {
+            if editedItems != oldValue {
+                editedDidChange()
+            }
+        }
+    }
+
+    private func editedDidChange() {
+        needsDisplay = true
+        updateChipToolTip()
+        setAccessibilityHelp(Self.editedHelp(title, isEdited: isEdited, items: editedItems))
+    }
+
+    /// What VoiceOver hears: "Detail has 2 edited settings: Sharpening, Noise Reduction".
+    static func editedHelp(_ title: String, isEdited: Bool, items: [String]) -> String? {
+        guard isEdited else { return nil }
+        guard !items.isEmpty else { return "\(title) has edits" }
+        let count = items.count == 1 ? "1 edited setting" : "\(items.count) edited settings"
+        return "\(title) has \(count): \(items.joined(separator: ", "))"
+    }
+
+    /// The chip's text: "Edited · 2", with thin spaces around the dot.
+    var editedChipTitle: String {
+        editedItems.isEmpty ? "Edited" : "Edited\u{2009}·\u{2009}\(editedItems.count)"
+    }
+
+    /// The chip's place: its right edge where the dot's was, so the chips of a column line up
+    /// whatever their counts.
+    private var chipRect: CGRect? {
+        guard isEdited, accessory == nil else { return nil }
+        let font = Typography.badge
+        let height = TextLine.lineHeight(font) + 3
+        let width = TextLine.width(editedChipTitle, font: font) + 2 * Metrics.editedChipPadding
+        return PixelGrid.centered(
+            CGSize(width: width, height: height),
+            at: CGPoint(x: trailingEdge - (eyeSlot ? 2 : 0) - width / 2, y: bounds.midY), scale: backingScale,
+        )
+    }
+
+    private func updateChipToolTip() {
+        removeAllToolTips()
+        if let chipRect, !editedItems.isEmpty {
+            addToolTip(chipRect, owner: self, userData: nil)
+        }
+    }
+
+    func view(_: NSView, stringForToolTip _: NSView.ToolTipTag, point _: NSPoint, userData _: UnsafeMutableRawPointer?)
+        -> String {
+        editedItems.joined(separator: ", ")
     }
 
     var isOn = true {
@@ -374,6 +424,7 @@ final class PanelHeaderView: NSView {
     override func layout() {
         super.layout()
         eye?.frame = eyeFrame
+        updateChipToolTip()
         guard let accessory else { return }
         let size = accessory.intrinsicContentSize
         accessory.frame = PixelGrid.centered(
@@ -432,41 +483,18 @@ final class PanelHeaderView: NSView {
             )
         }
 
-        if isEdited, accessory == nil {
-            let font = Self.editedChipFont
-            let text = Self.editedChipTitle
-            let height = TextLine.lineHeight(font) + 3
-            let width = TextLine.width(text, font: font) + 2 * Metrics.editedChipPadding
-            let chip = PixelGrid.centered(
-                CGSize(width: width, height: height),
-                at: CGPoint(x: trailingEdge - (eyeSlot ? 2 : 0) - width / 2, y: midY), scale: scale,
-            )
+        if let chip = chipRect {
+            let height = chip.height
             // A switched-off panel's chip dims with its title.
             let alpha: CGFloat = isOn ? 1 : Metrics.switchedOffOpacity
             Palette.editedChipFill.withAlphaComponent(Palette.editedChipFill.alphaComponent * alpha).setFill()
             NSBezierPath(roundedRect: chip, xRadius: height / 2, yRadius: height / 2).fill()
             TextLine.draw(
-                text, font: font, color: Palette.editedChipText.withAlphaComponent(alpha),
+                editedChipTitle, font: Typography.badge, color: Palette.editedChipText.withAlphaComponent(alpha),
                 in: chip.insetBy(dx: Metrics.editedChipPadding, dy: 0), alignment: .center, scale: scale,
             )
         }
     }
-
-    /// The chip on a header whose panel has edits.
-    static var editedChipTitle: String {
-        uppercaseEditedChip ? "EDITED" : "Edited"
-    }
-
-    static var editedChipFont: FontSpec {
-        uppercaseEditedChip ? FontSpec(size: 8.5, weight: .semibold, tracking: 0.5) : Typography.badge
-    }
-
-    #if DEBUG || REDLAMP_PROFILING
-        /// The chip in capitals, for comparing in snapshots (`PanelSectionView.uppercaseEditedChip`).
-        static var uppercaseEditedChip = false
-    #else
-        static let uppercaseEditedChip = false
-    #endif
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

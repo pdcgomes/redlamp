@@ -155,6 +155,9 @@ public final class EditorModel {
             if newValue.panelsOff != old.panelsOff {
                 withMutation(keyPath: \.panelsOff) {}
             }
+            if newValue.pointColor.isEmpty != old.pointColor.isEmpty {
+                withMutation(keyPath: \.hasPointColor) {}
+            }
             if newValue.masks != old.masks {
                 withMutation(keyPath: \.masks) {}
                 if newValue.masks.map(MaskOutline.init) != old.masks.map(MaskOutline.init) {
@@ -212,6 +215,12 @@ public final class EditorModel {
     public var masks: [MaskLayer] {
         access(keyPath: \.masks)
         return storedRecipe.masks
+    }
+
+    /// Whether the edit has Point Color swatches of its own (a mask's aren't counted).
+    public var hasPointColor: Bool {
+        access(keyPath: \.hasPointColor)
+        return !storedRecipe.pointColor.isEmpty
     }
 
     /// The panels switched off from their headers (UX-30).
@@ -1694,13 +1703,29 @@ public final class EditorModel {
 
     // MARK: - Panels
 
-    /// Whether a panel has edits, for the dot on its header. The Tone Curve's point curve is one,
-    /// though it isn't a parameter.
+    /// Whether a panel has edits, for the Edited chip on its header.
     public func isEdited(_ panel: PanelID) -> Bool {
-        if panel == .toneCurve, pointCurve != EditRecipe.linearPointCurve {
-            return true
+        panel.settingsItems.contains(where: isEdited)
+    }
+
+    /// The kinds of setting a panel has changed, as Copy Settings lists them (`PanelID.settingsItems`):
+    /// what its Edited chip counts.
+    public func editedItems(_ panel: PanelID) -> [SettingsItem] {
+        panel.settingsItems.filter(isEdited)
+    }
+
+    /// Whether any of a checklist line's settings differs from its default.
+    func isEdited(_ item: SettingsItem) -> Bool {
+        item.parameters.contains(where: isEdited) || item.fields.contains { field in
+            switch field {
+            case .treatment: treatment != .color
+            case .baseLook: baseLook != BuiltInBaseLook.color.reference
+            case .whiteBalanceMode: whiteBalanceMode != .asShot
+            case .pointCurve: pointCurve != EditRecipe.linearPointCurve
+            case .pointColor: hasPointColor
+            case .crop, .orientation, .processVersion, .spots: false
+            }
         }
-        return panel.parameters.contains(where: isEdited)
     }
 
     /// Resets a panel from its header, in one step: the Tone Curve's point curve with its sliders,
