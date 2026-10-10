@@ -170,6 +170,9 @@ struct ThemeColors {
 extension EnvironmentValues {
     /// Tokens a subtree draws in instead of the app's theme; `nil` follows it.
     @Entry var themeTokens: PaletteTokens?
+    /// The value column a Develop panel gives its fields (`ValueFieldView.columnTextWidth`), so
+    /// their wells line up; `nil` keeps the standard column.
+    @Entry var valueColumnWidth: CGFloat?
 }
 
 extension ColorBand {

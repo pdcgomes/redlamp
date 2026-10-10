@@ -128,6 +128,12 @@ struct BaseLookMenu: View {
 struct BaseLookAmountRow: View {
     @Environment(EditorModel.self) private var model
     private static let amountSpec = FieldSpec(range: BaseLookReference.amountRange)
+    @Environment(\.valueColumnWidth) private var column
+
+    /// In Basic's value column, beside its slider rows.
+    private var amountFieldWidth: CGFloat {
+        max(column ?? 0, ValueFieldView.columnTextWidth(for: [Self.amountSpec])) + 2 * ValueFieldView.wellPadding
+    }
 
     var body: some View {
         let amount = model.baseLook.amount
@@ -151,7 +157,7 @@ struct BaseLookAmountRow: View {
                 onChange: { model.setBaseLookAmount($0) },
                 onEnd: { model.endEdit(.baseLook, "Base Look Amount", value: EditorModel.baseLookAmountText) },
             )
-            .frame(width: ValueFieldControl.width(for: "200"), height: Metrics.rowHeight)
+            .frame(width: amountFieldWidth, height: Metrics.rowHeight)
             .padding(.trailing, -ValueFieldView.wellPadding)
         }
         .onTapGesture(count: 2) { model.setBaseLookAmount(100) }

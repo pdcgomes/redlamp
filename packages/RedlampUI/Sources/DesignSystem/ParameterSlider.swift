@@ -16,6 +16,7 @@ import SwiftUI
     var enabled = true
 
     @Environment(EditorModel.self) private var model
+    @Environment(\.valueColumnWidth) private var column
     @State private var isHovering = false
 
     public init(parameter: ParameterID, label: String? = nil, enabled: Bool = true) {
@@ -62,7 +63,9 @@ import SwiftUI
             )
 
             ValueField(spec: spec, value: model.sliderValue(parameter)) { model.setSliderValue(parameter, $0) }
-                .frame(width: Theme.valueWidth)
+                .frame(width: column ?? Theme.valueWidth)
+                // In a panel's column, the track ends clear of the well.
+                .padding(.leading, column == nil ? 0 : ValueFieldView.wellPadding)
         }
         .frame(height: Theme.rowHeight)
         .background(alignment: .leading) {
@@ -183,11 +186,14 @@ struct ValueField: View {
     @State private var hovering = false
     @FocusState private var focused: Bool
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.valueColumnWidth) private var column
 
     var body: some View {
         let padding = ValueFieldView.wellPadding
-        let widest = [spec.range.lowerBound, spec.range.upperBound, value]
-            .map { TextLine.width(spec.formatted($0), font: Typography.value) }.max() ?? 0
+        let own = [spec.range.lowerBound, spec.range.upperBound].map {
+            TextLine.width(spec.formatted($0), font: Typography.value)
+        }.max() ?? 0
+        let widest = max(column ?? own, TextLine.width(spec.formatted(value), font: Typography.value))
         field
             .background(alignment: .trailing) {
                 if isEnabled {

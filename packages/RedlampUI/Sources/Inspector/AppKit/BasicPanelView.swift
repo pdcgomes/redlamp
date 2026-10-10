@@ -21,7 +21,12 @@ import SwiftUI
         return PanelSectionView(panel: .basic, model: model, rows: [
             controls("Treatment", TreatmentPicker()),
             controls("Base Look", BaseLookMenu()),
-            HostedControl(model: model, BaseLookAmountRow()),
+            HostedControl(
+                model: model,
+                BaseLookAmountRow().environment(
+                    \.valueColumnWidth, ValueFieldView.columnTextWidth(for: PanelID.basic.parameters.map(\.spec)),
+                ),
+            ),
             HostedControl(model: model, ReproductionStatusRow(), shown: { model.baseLook.isReproduction }),
             controls("White Balance", WhiteBalanceControls()),
             slider(.temperature, enabled: whiteBalanceSupported),

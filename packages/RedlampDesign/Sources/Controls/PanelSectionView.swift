@@ -109,6 +109,7 @@ public final class PanelSectionView: NSView, HeightProviding {
         } else {
             addSubview(divider)
         }
+        alignValueColumn()
         header.onClick = { [weak self] solo in self?.actions.toggle(solo) }
         header.onDoubleClick = {
             // The first click already toggled the panel; put it back, then reset.
@@ -137,7 +138,20 @@ public final class PanelSectionView: NSView, HeightProviding {
     /// Replaces the panel's rows (a panel whose content depends on a mode).
     public func setRows(_ rows: [NSView]) {
         body.setArrangedViews(rows)
+        alignValueColumn()
         invalidateColumnLayout()
+    }
+
+    /// A card's slider rows, its sub-groups' included, share one value column as wide as the
+    /// widest number among them, so their wells line up and their tracks end at one x.
+    private func alignValueColumn() {
+        guard style == .card else { return }
+        func rows(in view: NSView) -> [SliderRowView] {
+            view.subviews.flatMap { ($0 as? SliderRowView).map { [$0] } ?? rows(in: $0) }
+        }
+        let sliders = rows(in: body)
+        let column = sliders.map(\.widestValueWidth).max()
+        sliders.forEach { $0.valueColumnWidth = column }
     }
 
     /// Builds the header's right-click menu when it opens.

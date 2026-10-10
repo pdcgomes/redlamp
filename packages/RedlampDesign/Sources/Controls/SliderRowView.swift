@@ -87,21 +87,38 @@ public final class SliderRowView: NSView {
         NSSize(width: NSView.noIntrinsicMetric, height: Metrics.rowHeight)
     }
 
+    /// The width this row's number needs at its widest.
+    public var widestValueWidth: CGFloat {
+        valueView.widestText
+    }
+
+    /// The value column's width its panel gives every row (`PanelSectionView`), so their wells
+    /// are one width and their tracks end at one x, clear of the well; nil keeps the panels'
+    /// standard value column.
+    public var valueColumnWidth: CGFloat? {
+        didSet {
+            if valueColumnWidth != oldValue {
+                valueView.columnTextWidth = valueColumnWidth
+                needsLayout = true
+            }
+        }
+    }
+
     // MARK: - Layout
 
     override public func layout() {
         super.layout()
         let height = bounds.height
         labelView.frame = CGRect(x: 0, y: 0, width: Metrics.labelWidth, height: height)
-        let valueX = bounds.width - Metrics.valueWidth
-        valueView.frame = CGRect(
-            x: valueX, y: 0, width: Metrics.valueWidth + ValueFieldView.wellPadding, height: height,
-        )
+        let column = valueColumnWidth ?? Metrics.valueWidth
+        let valueX = bounds.width - column
+        valueView.frame = CGRect(x: valueX, y: 0, width: column + ValueFieldView.wellPadding, height: height)
         let trackX = Metrics.labelWidth + Metrics.rowSpacing
+        let trackEnd = valueX - Metrics.rowSpacing - (valueColumnWidth == nil ? 0 : ValueFieldView.wellPadding)
         trackView.frame = CGRect(
             x: trackX,
             y: (height - Metrics.trackHeight) / 2,
-            width: max(valueX - Metrics.rowSpacing - trackX, 0),
+            width: max(trackEnd - trackX, 0),
             height: Metrics.trackHeight,
         )
         focusMarker.frame = CGRect(x: -8, y: (height - 12) / 2, width: 2, height: 12)

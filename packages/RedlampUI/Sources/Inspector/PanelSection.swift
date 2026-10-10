@@ -1,4 +1,6 @@
 import AppKit
+import RedlampDesign
+import RedlampEngineAPI
 import SwiftUI
 
 /// A collapsible Develop panel, drawn as a card. Option-click the header for Solo Mode (only one
@@ -81,9 +83,18 @@ struct PanelSection<Content: View>: View {
                 .transition(.opacity)
             }
         }
+        .environment(\.valueColumnWidth, Self.valueColumnWidth(panel))
         .background(Theme.card, in: shape)
         .overlay(shape.strokeBorder(Theme.divider, lineWidth: 1))
         .clipShape(shape)
+    }
+}
+
+extension PanelSection {
+    /// The panel's value column, as `PanelSectionView` works it out from its slider rows.
+    static func valueColumnWidth(_ panel: PanelID) -> CGFloat {
+        let parameters = panel.parameters + (panel == .colorMixer ? ParameterID.pointColorParameters : [])
+        return ValueFieldView.columnTextWidth(for: parameters.map(\.spec))
     }
 }
 

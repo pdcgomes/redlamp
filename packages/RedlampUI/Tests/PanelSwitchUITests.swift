@@ -95,6 +95,41 @@ struct PanelSwitchUITests {
         #expect(plain.height(forWidth: 300) == Metrics.panelHeaderHeight + 1, "the left column's keep their divider")
     }
 
+    /// Every slider row of a Develop panel, its sub-groups' included, shares one value column as
+    /// wide as its widest number, so the wells are one width and the tracks end at one x.
+    @Test func `a panel's value fields are one width, and its tracks end at one x`() async throws {
+        let (model, _, _, cleanup) = try await openEditor()
+        defer { cleanup() }
+        func sliders(in view: NSView) -> [SliderRowView] {
+            view.subviews.flatMap { ($0 as? SliderRowView).map { [$0] } ?? sliders(in: $0) }
+        }
+        for panel in [BasicPanelView.make(model: model), ReferencePanelViews.detail(model: model)] {
+            let window = NSWindow(
+                contentRect: CGRect(x: 0, y: 0, width: 300, height: 1200), styleMask: [.borderless],
+                backing: .buffered, defer: true,
+            )
+            window.contentView = panel
+            model.expandedPanels = Set(PanelID.allCases)
+            try await settle()
+            panel.layoutSubtreeIfNeeded()
+            let rows = sliders(in: panel)
+            #expect(rows.count > 5)
+            let column = try #require(rows.first?.valueColumnWidth)
+            #expect(rows.allSatisfy { $0.valueColumnWidth == column })
+            #expect(column == rows.map(\.widestValueWidth).max())
+            let ends = Set(rows.map { row in
+                row.subviews.first { $0.accessibilityIdentifier().hasSuffix(".track") }
+                    .map { $0.convert($0.bounds, to: nil).maxX } ?? -1
+            })
+            #expect(ends.count == 1, "tracks end at \(ends)")
+            let wells = Set(rows.compactMap { row in
+                (row.subviews.first { $0 is ValueFieldView } as? ValueFieldView)?.wellRect.width
+            })
+            #expect(wells.count == 1, "wells \(wells)")
+            window.contentView = nil
+        }
+    }
+
     @Test func `changing a setting of a panel that's off turns it on in that change's step`() async throws {
         let (model, _, _, cleanup) = try await openEditor()
         defer { cleanup() }

@@ -23,7 +23,22 @@ public final class ValueFieldView: LayerDrawnView, NSTextFieldDelegate {
 
     /// The width of the widest number the field shows, its range's ends, so the well holds its
     /// width as the value changes.
-    private var widestText: CGFloat
+    public private(set) var widestText: CGFloat
+
+    /// The width the panel gives every number in its value column, so their wells line up
+    /// (`PanelSectionView`); nil sizes the well to this field's own widest number.
+    public var columnTextWidth: CGFloat? {
+        didSet {
+            if columnTextWidth != oldValue {
+                setNeedsContentDisplay()
+            }
+        }
+    }
+
+    /// The widest number any of `specs` shows: a value column's width for their fields.
+    public static func columnTextWidth(for specs: [any ValueFieldSpec]) -> CGFloat {
+        specs.map(widest).max() ?? 0
+    }
 
     public var value: Double {
         didSet {
@@ -112,7 +127,7 @@ public final class ValueFieldView: LayerDrawnView, NSTextFieldDelegate {
     /// The well, ending `wellPadding` beyond the number's right edge.
     public var wellRect: CGRect {
         let padding = Self.wellPadding
-        let text = max(widestText, TextLine.width(spec.formatted(value), font: Typography.value))
+        let text = max(columnTextWidth ?? widestText, TextLine.width(spec.formatted(value), font: Typography.value))
         let width = min(text + 2 * padding, bounds.width)
         let height = min(TextLine.lineHeight(Typography.value) + 4, bounds.height)
         return PixelGrid.centered(
