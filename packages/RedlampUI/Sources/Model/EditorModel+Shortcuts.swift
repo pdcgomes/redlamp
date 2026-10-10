@@ -173,7 +173,7 @@ public extension EditorModel {
         case .increaseRating where sizedBrush != nil: nudgeSizedBrush(direction: 1, feather: shifted)
         // In the Crop tool, X swaps the crop's orientation rather than rejecting the photo.
         case .flagReject where module == .develop && activeTool == .crop: swapCropOrientation()
-        // File & Edit (open and export are handled by the app, which owns the panels)
+        // File & Edit
         case .showShortcuts: showShortcuts.toggle()
         case .commandPalette: toggleCommandPalette()
         case .findAdjustment:
@@ -195,7 +195,8 @@ public extension EditorModel {
         case .importPhotos: ImportActions.open(model: self)
         case .importFromLightroom: return LightroomActions.open(model: self)
         case .moveEditsAndMetadata: return moveEditsAndMetadata()
-        case .openFolder, .export, .exportWithPrevious, .filmLooks: return false
+        // The app's, which a key reaches through the action's menu item when the item doesn't carry the key.
+        case .openFolder, .export, .exportWithPrevious, .filmLooks: return MenuBarKeys.chooseItem(of: action)
         case .testCamera:
             guard let onTestCamera else { return false }
             onTestCamera()

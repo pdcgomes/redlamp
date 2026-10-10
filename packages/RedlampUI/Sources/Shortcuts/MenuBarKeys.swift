@@ -8,21 +8,66 @@ import AppKit
     /// Fills in the top-level menu holding the item `event`'s key reaches, as opening the menu does. True when the
     /// key is taken in its item's place: the item is still disabled though its action can run, as after a change
     /// in the key's own turn, before SwiftUI's update; the item is chosen once SwiftUI has filled it in enabled.
+    /// A key no item carries that the key monitor doesn't read (⌘ or ⌃ with a key, or F1, F3, F4 and F9 on) runs
+    /// the action the keymap gives it (LIB-36), and is taken when it does.
     public static func prepare(for event: NSEvent, model: EditorModel) -> Bool {
-        guard event.type == .keyDown, event.modifierFlags.contains(.command), let mainMenu = NSApp.mainMenu else {
-            return false
-        }
+        guard event.type == .keyDown, !KeyRecorderView.isRecording, let mainMenu = NSApp.mainMenu else { return false }
+        let combo = KeyCombo(event: event)
+        guard event.modifierFlags.contains(.command) || combo.map({ !$0.isMonitored }) == true else { return false }
         #if DEBUG || REDLAMP_PROFILING
             let started = CFAbsoluteTimeGetCurrent()
             defer { MenuBarProbe.shared.readiedKey(since: started) }
         #endif
-        guard let (menu, item) = item(for: event, in: mainMenu) else { return false }
+        guard let (menu, item) = item(for: event, in: mainMenu) else {
+            return combo.map { perform($0, model: model) } ?? false
+        }
         fill(menu)
         guard !item.isEnabled, isSwiftUIs(item), let action = action(of: item), model.canPerform(action) else {
             return false
         }
         choose(event, attempts: 5)
         return true
+    }
+
+    /// Runs the action the keymap gives a key no menu item carries, where the editor's keys go: not while text is
+    /// edited, the palette is open, a dialog or sheet holds the editor, or another window has the keys.
+    private static func perform(_ combo: KeyCombo, model: EditorModel) -> Bool {
+        guard !combo.isTextNavigation, !combo.isMonitored else { return false }
+        let window = NSApp.keyWindow
+        guard window == nil || window?.windowController is EditorWindowController,
+              !(window?.firstResponder is NSTextView), window?.attachedSheet == nil, model.commandPalette == nil,
+              !model.isModalDialogOpen,
+              let (action, shifted) = ShortcutAction.resolve(combo, in: model.module)
+        else { return false }
+        return model.perform(action, shifted: shifted)
+    }
+
+    /// Chooses `action`'s menu item, as a click on it does: how a key that isn't the item's own reaches what only
+    /// the app can do (Open Folder, Export). False without an enabled item.
+    @discardableResult
+    static func chooseItem(of action: ShortcutAction) -> Bool {
+        let title = action.plannedPhase.map { "\(action.title) (\($0))" } ?? action.title
+        func find(in menu: NSMenu) -> (NSMenu, Int)? {
+            for (index, item) in menu.items.enumerated() {
+                if let submenu = item.submenu {
+                    if let found = find(in: submenu) {
+                        return found
+                    }
+                } else if item.title == title || item.title.hasPrefix("\(title)    ") {
+                    return (menu, index)
+                }
+            }
+            return nil
+        }
+        guard let mainMenu = NSApp?.mainMenu else { return false }
+        for top in mainMenu.items {
+            guard let menu = top.submenu, let (parent, index) = find(in: menu) else { continue }
+            fill(menu)
+            guard parent.items.indices.contains(index), parent.items[index].isEnabled else { return false }
+            parent.performActionForItem(at: index)
+            return true
+        }
+        return false
     }
 
     /// The first item in the menu bar's order whose key equivalent is `event`'s, since AppKit gives a key to the first

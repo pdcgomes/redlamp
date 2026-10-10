@@ -41,6 +41,9 @@ public struct SettingsView: View {
             Tab("Import", systemImage: "sdcard") {
                 ImportSettingsView(preferences: .shared)
             }
+            Tab("Shortcuts", systemImage: "keyboard") {
+                ShortcutsSettings()
+            }
             if let engine {
                 Tab("Models", systemImage: "cpu") {
                     ModelsSettings(engine: engine)

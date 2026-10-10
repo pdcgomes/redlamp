@@ -12,12 +12,15 @@ public struct KeyCombo: Hashable, Sendable {
     public var shift: Bool
     public var option: Bool
     public var command: Bool
+    /// Only a preset's or a person's keys have it (Photo Mechanic rates with ⌃1 to ⌃5).
+    public var control: Bool
 
-    public init(_ key: Key, shift: Bool = false, option: Bool = false, command: Bool = false) {
+    public init(_ key: Key, shift: Bool = false, option: Bool = false, command: Bool = false, control: Bool = false) {
         self.key = key
         self.shift = shift
         self.option = option
         self.command = command
+        self.control = control
     }
 
     public static func char(
@@ -25,8 +28,9 @@ public struct KeyCombo: Hashable, Sendable {
         shift: Bool = false,
         option: Bool = false,
         command: Bool = false,
+        control: Bool = false,
     ) -> KeyCombo {
-        KeyCombo(.character(character), shift: shift, option: option, command: command)
+        KeyCombo(.character(character), shift: shift, option: option, command: command, control: control)
     }
 
     /// `⇧⌘C`, `Tab`, `F6`, `←`.
@@ -37,6 +41,9 @@ public struct KeyCombo: Hashable, Sendable {
     /// One entry per key, modifiers first: `["⇧", "⌘", "C"]`, as keycaps draw them.
     public var keys: [String] {
         var keys: [String] = []
+        if control {
+            keys.append("⌃")
+        }
         if option {
             keys.append("⌥")
         }
@@ -70,6 +77,9 @@ public struct KeyCombo: Hashable, Sendable {
         }
         if option {
             modifiers.insert(.option)
+        }
+        if control {
+            modifiers.insert(.control)
         }
         switch key {
         case let .character(character): return KeyboardShortcut(KeyEquivalent(character), modifiers: modifiers)
@@ -416,8 +426,13 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// The keys, first one shown as primary. Lightroom Classic's defaults.
+    /// The keys as customised (`ShortcutKeymap`), the first shown as the action's key.
     public var combos: [KeyCombo] {
+        ShortcutKeymap.current.combos(for: self)
+    }
+
+    /// The keys Redlamp comes with, the first shown as primary: Lightroom Classic's.
+    public var defaultCombos: [KeyCombo] {
         switch self {
         case .libraryModule: [.char("1", option: true, command: true)]
         case .developModule: [.char("2", option: true, command: true)]
@@ -619,16 +634,19 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         plannedPhase == nil
     }
 
-    /// Combos with ⌘ are handled by the menu bar; the rest by the Develop key monitor.
+    /// Whether every key the action has is ⌘'s, which the menu bar handles; the key monitor handles the rest.
     public var isMenuShortcut: Bool {
-        combos.first?.command ?? false
+        let combos = combos
+        return !combos.isEmpty && combos.allSatisfy(\.command)
     }
 
     /// The Keyboard Shortcuts sheet's groups: every action with a key.
-    @_spi(Harness) public static let byCategory: [(ShortcutCategory, [ShortcutAction])] = ShortcutCategory.allCases
-        .map { category in
-            (category, allCases.filter { $0.category == category && !$0.combos.isEmpty })
+    @_spi(Harness) public static var byCategory: [(ShortcutCategory, [ShortcutAction])] {
+        let keymap = ShortcutKeymap.current
+        return ShortcutCategory.allCases.map { category in
+            (category, allCases.filter { $0.category == category && !keymap.combos(for: $0).isEmpty })
         }
+    }
 
     /// Resolves a key press in Develop. Exact matches win; actions that accept Shift also match
     /// with Shift held (and receive `shifted == true`).
@@ -638,16 +656,6 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     /// Resolves a key press in `module`, where J, = and - mean what they mean there.
     public static func resolve(_ combo: KeyCombo, in module: AppModule) -> (action: ShortcutAction, shifted: Bool)? {
-        let actions = allCases.filter { module == .library ? !$0.isDevelopOnly : !$0.isLibraryOnly }
-        if let exact = actions.first(where: { $0.combos.contains(combo) }) {
-            return (exact, combo.shift && exact.acceptsShift)
-        }
-        guard combo.shift else { return nil }
-        var unshifted = combo
-        unshifted.shift = false
-        if let action = actions.first(where: { $0.acceptsShift && $0.combos.contains(unshifted) }) {
-            return (action, true)
-        }
-        return nil
+        ShortcutKeymap.current.resolve(combo, in: module)
     }
 }

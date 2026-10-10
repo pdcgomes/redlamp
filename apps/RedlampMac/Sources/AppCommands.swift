@@ -1,9 +1,10 @@
 @_spi(Harness) import RedlampUI
 import SwiftUI
 
-/// The menu bar, built from `ShortcutAction` so menus, keys and the ⌘/ sheet always agree.
-/// Items are enabled when `canPerform` says so, as the command palette dims its rows. What they show is read from
-/// `menu` alone, never from the model: SwiftUI makes the whole main menu again whenever anything read here changes.
+/// The menu bar, built from `ShortcutAction` so menus, keys and the ⌘/ sheet always agree, with the keys as
+/// Settings › Shortcuts has them (LIB-36). Items are enabled when `canPerform` says so, as the command palette dims
+/// its rows. What they show is read from `menu` and the keymap alone, never from the model: SwiftUI makes the whole
+/// main menu again whenever anything read here changes.
 struct AppCommands: Commands {
     let model: EditorModel
     let menu: MenuBarState
@@ -44,7 +45,6 @@ struct AppCommands: Commands {
     }
 
     @CommandsBuilder private var appAndFileMenus: some Commands {
-        let shown = menu.shown
         CommandGroup(after: .appInfo) {
             if let updates {
                 Button("Check for Updates…") { updates.check() }
@@ -59,9 +59,7 @@ struct AppCommands: Commands {
             item(.importKeywords)
             item(.exportKeywords)
             Divider()
-            // ⌘N is New Collection's in Library and New Snapshot's in Develop: AppKit gives a key to the first item
-            // that has it, enabled or not.
-            item(.newCollection, keyed: shown.module == .library)
+            item(.newCollection)
             item(.newSmartCollection)
             item(.newCollectionSet)
             Divider()
@@ -84,7 +82,7 @@ struct AppCommands: Commands {
     }
 
     @ViewBuilder private var libraryItems: some View {
-        mouseItem(.renamePhotos)
+        item(.renamePhotos)
         toggle(.keywordPainter)
         Divider()
         // For the folder added to Folders that holds the folder open (LIB-11).
@@ -104,18 +102,18 @@ struct AppCommands: Commands {
         item(.listAgain)
         item(.locateMissingPhoto)
         item(.removeMissingPhotos)
-        mouseItem(.renamePhotos)
+        // The Library menu's item, ahead of this one, carries the key.
+        item(.renamePhotos, keyed: false)
         item(.moveToFolder)
         item(.copyToFolder)
         Divider()
         item(.addToCollection)
         item(.addToTargetCollection)
-        mouseItem(.removeFromCollection)
+        item(.removeFromCollection)
     }
 
     /// The edit's settings, auto settings, rotation, snapshots and copies.
     @ViewBuilder private var photoSettingsItems: some View {
-        let shown = menu.shown
         item(.copySettings)
         item(.copySettingsAgain)
         item(.pasteSettings)
@@ -123,12 +121,7 @@ struct AppCommands: Commands {
         item(.syncSettings)
         item(.syncSettingsAgain)
         item(.undoSync)
-        Toggle(ShortcutAction.toggleAutoSync.title, isOn: Binding(
-            get: { menu.isChecked(.toggleAutoSync) },
-            set: { _ in model.perform(.toggleAutoSync) },
-        ))
-        .keyboardShortcut(ShortcutAction.toggleAutoSync.combos.first?.keyboardShortcut)
-        .disabled(!menu.isEnabled(.toggleAutoSync))
+        toggle(.toggleAutoSync)
         Divider()
         item(.autoTone)
         item(.autoWhiteBalance)
@@ -138,7 +131,7 @@ struct AppCommands: Commands {
         item(.rotateLeft)
         item(.rotateRight)
         Divider()
-        item(.newSnapshot, keyed: shown.module != .library)
+        item(.newSnapshot)
         item(.newPreset)
         item(.virtualCopy)
     }
@@ -155,11 +148,11 @@ struct AppCommands: Commands {
             item(.removeFromStack)
             item(.splitStack)
             Divider()
-            mouseItem(.moveToStackTop)
-            mouseItem(.moveUpInStack)
-            mouseItem(.moveDownInStack)
+            item(.moveToStackTop)
+            item(.moveUpInStack)
+            item(.moveDownInStack)
             Divider()
-            mouseItem(.toggleStack)
+            item(.toggleStack)
             item(.openAllStacks)
             item(.closeAllStacks)
         }
@@ -167,8 +160,8 @@ struct AppCommands: Commands {
         Divider()
         item(.previousPhoto)
         item(.nextPhoto)
-        mouseItem(.previousGroup)
-        mouseItem(.nextGroup)
+        item(.previousGroup)
+        item(.nextGroup)
         item(.selectAllPhotos)
         item(.deselectOtherPhotos)
     }
@@ -178,16 +171,16 @@ struct AppCommands: Commands {
     @ViewBuilder private var photoMarkingItems: some View {
         let shown = menu.shown
         Menu("Set Rating") {
-            ForEach([ShortcutAction.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]) { mouseItem($0) }
+            ForEach([ShortcutAction.rating0, .rating1, .rating2, .rating3, .rating4, .rating5]) { item($0) }
             Divider()
-            mouseItem(.decreaseRating)
-            mouseItem(.increaseRating)
+            item(.decreaseRating)
+            item(.increaseRating)
         }
         Menu("Set Flag") {
-            ForEach([ShortcutAction.flagPick, .flagReject, .unflag]) { mouseItem($0) }
+            ForEach([ShortcutAction.flagPick, .flagReject, .unflag]) { item($0) }
         }
         Menu("Set Color Label") {
-            ForEach([ShortcutAction.labelRed, .labelYellow, .labelGreen, .labelBlue]) { mouseItem($0) }
+            ForEach([ShortcutAction.labelRed, .labelYellow, .labelGreen, .labelBlue]) { item($0) }
             item(.labelPurple)
             if !shown.customLabels.isEmpty {
                 Divider()
@@ -199,14 +192,10 @@ struct AppCommands: Commands {
             Divider()
             item(.clearLabel)
         }
-        mouseItem(.toggleMark)
+        item(.toggleMark)
         keywordSetMenu
         item(.editCaptureTime)
-        Toggle(ShortcutAction.autoAdvance.title, isOn: Binding(
-            get: { menu.isChecked(.autoAdvance) },
-            set: { _ in model.perform(.autoAdvance) },
-        ))
-        .disabled(!menu.isEnabled(.autoAdvance))
+        toggle(.autoAdvance)
     }
 
     /// Library's keyword set (LIB-21): its nine keywords on the selection, toggled, and the set chosen.
@@ -224,11 +213,7 @@ struct AppCommands: Commands {
             .disabled(shown.module != .library || shown.isModalDialogOpen)
             Divider()
             ForEach(ShortcutAction.allCases.filter { $0.keywordSetNumber != nil }) { action in
-                let keyword = action.keywordSetNumber.flatMap { shown.keywords[$0 - 1] }
-                Button("\(keyword ?? action.title)    \(action.combos.first?.display ?? "")") {
-                    model.perform(action)
-                }
-                .disabled(!menu.isEnabled(action))
+                item(action, titled: action.keywordSetNumber.flatMap { shown.keywords[$0 - 1] })
             }
         }
     }
@@ -252,7 +237,7 @@ struct AppCommands: Commands {
         item(.developModule)
         item(.previousModule)
         Divider()
-        ForEach([ShortcutAction.gridView, .loupeView, .compareView, .surveyView]) { mouseItem($0) }
+        ForEach([ShortcutAction.gridView, .loupeView, .compareView, .surveyView]) { item($0) }
         Divider()
         Menu("Grid View Style") {
             Picker("Grid View Style", selection: Binding(
@@ -265,7 +250,7 @@ struct AppCommands: Commands {
             .labelsHidden()
             .disabled(shown.module != .library || shown.isModalDialogOpen)
             Divider()
-            mouseItem(.cycleGridStyle)
+            item(.cycleGridStyle)
         }
         Menu("Group By") {
             ForEach(ShortcutAction.allCases.filter { $0.groupKey != nil }) { toggle($0) }
@@ -278,14 +263,14 @@ struct AppCommands: Commands {
             item(.openAllGroups)
             item(.closeAllGroups)
         }
-        mouseItem(.largerThumbnails)
-        mouseItem(.smallerThumbnails)
+        item(.largerThumbnails)
+        item(.smallerThumbnails)
     }
 
     /// The filter bar, its presets and the sort.
     @ViewBuilder private var viewFilterItems: some View {
         let shown = menu.shown
-        mouseItem(.toggleFilterBar)
+        item(.toggleFilterBar)
         toggle(.toggleFilters)
         toggle(.lockFilters)
         Menu("Filter Presets") {
@@ -309,7 +294,7 @@ struct AppCommands: Commands {
     @ViewBuilder private var viewPhotoItems: some View {
         let shown = menu.shown
         Menu("Before / After") {
-            mouseItem(.beforeAfter)
+            item(.beforeAfter)
             Divider()
             Picker("Layout", selection: Binding(
                 get: { menu.shown.compareLayout },
@@ -320,8 +305,8 @@ struct AppCommands: Commands {
             .pickerStyle(.inline)
             .disabled(!shown.hasSelection || shown.isModalDialogOpen)
             Divider()
-            mouseItem(.nextCompareLayout)
-            mouseItem(.previousCompareLayout)
+            item(.nextCompareLayout)
+            item(.previousCompareLayout)
         }
         item(.zoomIn)
         item(.zoomOut)
@@ -332,10 +317,10 @@ struct AppCommands: Commands {
         // The Library panel's entries (LIB-23).
         ForEach([ShortcutAction.showAllPhotographs, .showPreviousImport, .showMarked, .showRejected]) { item($0) }
         Menu("Develop Panels") {
-            ForEach(ShortcutAction.allCases.filter { $0.category == .panels && $0.isMenuShortcut }) { item($0) }
+            ForEach(Self.developPanels) { item($0) }
         }
         Menu("Filmstrip") {
-            mouseItem(.toggleFilmstrip)
+            item(.toggleFilmstrip)
             Toggle("Hide Automatically", isOn: Binding(
                 get: { menu.shown.filmstripHidesAutomatically },
                 set: { model.filmstripHidesAutomatically = $0 },
@@ -365,16 +350,25 @@ struct AppCommands: Commands {
         }
     }
 
-    /// A menu item with the action's ⌘ shortcut, unless it isn't `keyed`.
-    private func item(_ action: ShortcutAction, keyed: Bool = true, perform: (() -> Void)? = nil) -> some View {
-        Button(action.plannedPhase.map { "\(action.title) (\($0))" } ?? action.title) {
+    static let developPanels: [ShortcutAction] = [
+        .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail, .panelLens, .panelTransform,
+        .panelEffects, .panelCalibration,
+    ]
+
+    /// A menu item for `action`, titled `title` if given. Its first key, if it has ⌘, is the item's key
+    /// equivalent unless it isn't `keyed`; a key without ⌘ is shown in the title, because a modifier-free key
+    /// equivalent would also fire while typing in a text field.
+    private func item(
+        _ action: ShortcutAction, titled title: String? = nil, keyed: Bool = true, perform: (() -> Void)? = nil,
+    ) -> some View {
+        Button(self.title(of: action, titled: title)) {
             if let perform {
                 perform()
             } else {
                 model.perform(action)
             }
         }
-        .keyboardShortcut(keyed ? action.combos.first?.keyboardShortcut : nil)
+        .keyboardShortcut(keyed ? keyEquivalent(of: action) : nil)
         .disabled(!action.isAvailable || !menu.isEnabled(action))
     }
 
@@ -386,18 +380,26 @@ struct AppCommands: Commands {
             .disabled(!menu.isEnabled(action))
     }
 
-    /// A menu item for a single-key shortcut: the key is shown in the title, because a
-    /// modifier-free key equivalent would also fire while typing in a text field.
-    private func mouseItem(_ action: ShortcutAction) -> some View {
-        Button("\(action.title)    \(action.combos.first?.display ?? "")") { model.perform(action) }
+    /// A menu item with a checkmark while its action is on, and its key as `item`'s.
+    private func toggle(_ action: ShortcutAction) -> some View {
+        let isOn = menu.isChecked(action)
+        return Toggle(title(of: action), isOn: Binding(get: { isOn }, set: { _ in model.perform(action) }))
+            .keyboardShortcut(keyEquivalent(of: action))
             .disabled(!menu.isEnabled(action))
     }
 
-    /// A menu item with a checkmark while its action is on, and the action's ⌘ shortcut.
-    private func toggle(_ action: ShortcutAction) -> some View {
-        let isOn = menu.isChecked(action)
-        return Toggle(action.title, isOn: Binding(get: { isOn }, set: { _ in model.perform(action) }))
-            .keyboardShortcut(action.combos.first?.keyboardShortcut)
-            .disabled(!menu.isEnabled(action))
+    /// The item's key equivalent: the action's first key, if it has ⌘ and isn't another action's in the module
+    /// shown, as ⌘N is New Collection's in Library and New Snapshot's in Develop. AppKit gives a key to the first
+    /// item that has it, enabled or not.
+    private func keyEquivalent(of action: ShortcutAction) -> KeyboardShortcut? {
+        let keymap = ShortcutKeymap.current
+        guard keymap.menuCarriesKey(of: action, in: menu.shown.module) else { return nil }
+        return keymap.combos(for: action).first?.keyboardShortcut
+    }
+
+    private func title(of action: ShortcutAction, titled title: String? = nil) -> String {
+        let title = title ?? action.plannedPhase.map { "\(action.title) (\($0))" } ?? action.title
+        guard let key = action.combos.first, !key.command else { return title }
+        return "\(title)    \(key.display)"
     }
 }

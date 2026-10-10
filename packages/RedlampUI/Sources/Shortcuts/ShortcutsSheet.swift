@@ -21,7 +21,7 @@ struct ShortcutsSheet: View {
                     Text("Keyboard Shortcuts")
                         .font(.system(size: 17, weight: .semibold))
                     Spacer()
-                    Text("Dimmed shortcuts belong to tools that arrive in later phases.")
+                    Text("Change any key in Settings › Shortcuts. Dimmed shortcuts arrive in later phases.")
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.secondaryLabel)
                     Button {

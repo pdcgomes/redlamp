@@ -67,14 +67,17 @@ import Foundation
 /// The tips the top level shows, a different one each time the palette opens: tricks no
 /// single row shows.
 @_spi(Harness) public enum PaletteTips {
-    public static let all: [[PaletteTipPart]] = [
-        [.text("Type a value after a name:"), .keys(["exposure 0.7"])],
-        [.keys(["⌘", "F"]), .text("searches sliders only")],
-        [.text("In a slider, type a name to jump to another")],
-        [.text("Arrow through looks and recipes to preview them")],
-        [.text("The keys beside a command work without the palette")],
-        [.text("Hold"), .keys(["⇧"]), .text("or"), .keys(["⌥"]), .text("for bigger or finer steps")],
-    ]
+    public static var all: [[PaletteTipPart]] {
+        [
+            [.text("Type a value after a name:"), .keys(["exposure 0.7"])],
+            [.keys(ShortcutAction.findAdjustment.combos.first?.keys ?? ["⌘", "F"]), .text("searches sliders only")],
+            [.text("In a slider, type a name to jump to another")],
+            [.text("Arrow through looks and recipes to preview them")],
+            [.text("The keys beside a command work without the palette")],
+            [.text("Hold"), .keys(["⇧"]), .text("or"), .keys(["⌥"]), .text("for bigger or finer steps")],
+            [.keys(["⌘", "↵"]), .text("shows what else a row can do")],
+        ]
+    }
 
     static let defaultsKey = "commandPaletteNextTip"
 
@@ -91,13 +94,19 @@ import Foundation
     }
 }
 
-/// The palette's own keys, for the ⌘/ sheet.
+/// The palette's own keys, for the ⌘/ sheet, with ⌘K's and ⌘F's as customised.
 @_spi(Harness) public enum PaletteKeyReference {
-    public static let keys: [PaletteHint] = [
-        PaletteHint("Open the command palette", ["⌘", "K"]),
-        PaletteHint("Search sliders only", ["⌘", "F"]),
+    public static var keys: [PaletteHint] {
+        [
+            PaletteHint("Open the command palette", ShortcutAction.commandPalette.combos.first?.keys ?? []),
+            PaletteHint("Search sliders only", ShortcutAction.findAdjustment.combos.first?.keys ?? []),
+        ].filter { !$0.keys.isEmpty } + fixed
+    }
+
+    private static let fixed: [PaletteHint] = [
         PaletteHint("Move the highlight, or preview a choice", ["↑", "↓"]),
         PaletteHint("Adjust, run, open or apply", ["↵"]),
+        PaletteHint("What else the row can do", ["⌘", "↵"]),
         PaletteHint("Back, or close", ["Esc"]),
         PaletteHint("Slider: step", ["←", "→"]),
         PaletteHint("Slider: ×10 or finer steps", ["⇧", "⌥"]),
