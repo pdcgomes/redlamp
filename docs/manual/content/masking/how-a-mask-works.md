@@ -36,7 +36,7 @@ The list
 : Your masks, newest first, each with a picture of what it covers; see [](#masking.manage).
 
 The selected mask
-: Its name with Invert and Reset, its Amount, its components, the selected component's own settings, then its adjustments.
+: Its name with Invert and Reset, its Amount, its components, the selected component's own settings, then its Effect menu and its adjustments.
 
 ## Make a mask
 

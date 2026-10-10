@@ -88,9 +88,9 @@ Also changed outside the panel but inside Part 3's subject:
 - `docs/lightroom-comparison.md:130` now marks **Point Color inside masks** as Done (TON-29); the old
   sheet listed it as the one masking row not done.
 
-**Built since:** the **Landscape picker** (UX-26, §2.11) and **mask presets applied to every
-selected photo** (UX-25, §8). **Not built yet,** so the manual must not describe it: **effect
-presets** for a mask's adjustments, UX-27.
+**Built since:** the **Landscape picker** (UX-26, §2.11), **mask presets applied to every
+selected photo** (UX-25, §8), and **effects** for a mask's adjustments, Lightroom's Effect menu
+(UX-27, §6, "Effects").
 
 **One gap to be aware of:** at this commit the editor still builds the **old** panel —
 `packages/RedlampUI/Sources/Inspector/AppKit/InspectorPanelsView.swift:32-33` returns
@@ -606,10 +606,12 @@ button, and the message **"A preset with the same name is replaced."**
 5. **Add, Subtract and Intersect** as three buttons (`:862-869`, `MasksPanelNext.swift:361-393`).
 6. **The selected component's own settings** (`:871-901`; see below).
 7. A 6-pt gap, **Detail**, a 4-pt gap (`:909-912`).
-8. The local sliders, with extra gaps after Tint, Blacks, Dehaze and Defringe (`:913-919`; §6).
-9. The **Color** swatch (`:920`).
-10. **Curve** (`:921`).
-11. **Point Color** (`:923`; §6).
+8. The **Effect** row (`MaskEffectMenu`, `MaskingPanel.swift:599` and `:866-931`; AppKit
+   `MasksPanelView.swift:161`; §6, "Effects").
+9. The local sliders, with extra gaps after Tint, Blacks, Dehaze and Defringe (`:913-919`; §6).
+10. The **Color** swatch (`:920`).
+11. **Curve** (`:921`).
+12. **Point Color** (`:923`; §6).
 
 **A component row** (`ComponentRow`, `actionsOnScreen: true`,
 `packages/RedlampUI/Sources/Inspector/MaskingPanel.swift:1267-1417`). 26 pt tall, 8 pt of horizontal
@@ -1441,11 +1443,12 @@ Panel order, top to bottom, in the new panel (`MaskingPanel.swift:849-927`, and 
 3. the components, the Add/Subtract/Intersect buttons, and the selected component's settings
 4. **Detail**
 5. a gap
-6. the sliders of `ParameterID.localParameters` minus the two swatch parameters, with extra gaps after
+6. the **Effect** row (UX-27; "Effects" below)
+7. the sliders of `ParameterID.localParameters` minus the two swatch parameters, with extra gaps after
    Tint, Blacks, Dehaze and Defringe (`MaskingPanel.gapAfter`, `MaskingPanel.swift:932`)
-7. the **Color** swatch
-8. **Curve**
-9. **Point Color**
+8. the **Color** swatch
+9. **Curve**
+10. **Point Color**
 
 `ParameterID.localParameters` order is declared at
 `packages/RedlampEngineAPI/Sources/ParameterID.swift:193-199` ("The local adjustments, in Lightroom's
@@ -1558,6 +1561,64 @@ Notes:
 - It clears every adjustment, the curves, the Point Color swatches, and returns Amount to 100 and
   Detail to 0; the components are untouched — `Masks.swift:902-909`. History step
   `"Reset <Mask name>"` (`EditorModel+Masking.swift:300`).
+
+### Effects (UX-27, Lightroom's Effect menu)
+
+Code: `packages/RedlampEngineAPI/Sources/MaskEffects.swift` (the type, the built-in list, applying
+and matching), `packages/RedlampUI/Sources/Model/EditorModel+MaskEffects.swift` (the user's store,
+choosing, saving, deleting, the menu's title), `MaskEffectMenu` in
+`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift:866-931`.
+
+- **Where:** a `ControlRow` labelled **Effect** between Detail and Temp, in both panels
+  (`MaskingPanel.swift:599`, `MasksPanelView.swift:161`). The control is a small button-style menu
+  whose label is the menu's title; tooltip **"Set the mask's sliders and Curves from an effect, or
+  keep them as one"**; identifier `masks.mask.effect` (`MaskingPanel.swift:880-906`).
+- **What an effect is:** the mask's sliders (`localParameters`, the Color swatch's hue and saturation
+  among them) and its Curves. Not the components, Amount, Detail, Invert or Point Color
+  (`MaskEffects.swift:3-6`).
+- **Choosing one** (`MaskLayer.apply`, `MaskEffects.swift:67-80`): every slider the effect doesn't
+  set goes back to 0, the Curves become the effect's (straight if it has none), and adjustments a
+  newer Redlamp wrote are cleared; components, Amount, Detail, Invert and Point Color are kept. One
+  history step, **"Apply \<Effect> to \<Mask name>"** (`EditorModel+MaskEffects.swift:53-58`).
+  Choosing the effect the mask already has adds no step (`commit` ignores an unchanged recipe,
+  `EditorModel.swift:1883-1887`).
+- **The menu's title** (`effectTitle`, `EditorModel+MaskEffects.swift:43-50`): the name of the first
+  effect, Redlamp's then the user's, whose sliders and Curves the mask has exactly; **Custom** when
+  any slider is off 0 or a curve is bent but no effect matches; **None** when nothing is set. The
+  matching item carries a checkmark (`MaskingPanel.swift:918-930`).
+- **The menu, top to bottom** (`MaskingPanel.swift:881-899`): Redlamp's nine effects; a divider and
+  the user's own, when there are any; a divider; **Save Current Settings as Effect…**, dimmed while
+  nothing is set (`:888-892`); **Delete Effect**, a submenu of the user's effects, when there are any
+  (`:893-899`).
+- **Redlamp's effects** (`MaskEffect.builtIn`, `MaskEffects.swift:43-63`), values of its own:
+
+  | Effect | Sets |
+  | --- | --- |
+  | Dodge | Exposure +0.35 |
+  | Burn | Exposure −0.35 |
+  | Warm | Temp +15 |
+  | Cool | Temp −15 |
+  | Add Detail | Texture +20, Clarity +10 |
+  | Reduce Haze | Dehaze +20 |
+  | Smooth Skin | Texture −35, Clarity −10 |
+  | Whiten Teeth | Exposure +0.25, Saturation −45 |
+  | Pop Eyes | Exposure +0.30, Clarity +20, Saturation +15 |
+
+  Smooth Skin, Whiten Teeth and Pop Eyes have the adjustments of the mask presets of the same names
+  (`MaskPresets.swift:126-157`), so a mask one of those presets made shows the effect
+  (`packages/RedlampEngineAPI/Tests/MaskEffectTests.swift`, last test).
+- **Saving** (`saveMaskEffect`, `EditorModel+MaskEffects.swift:60-70`): an alert titled **Save
+  Effect** with a **Name** field filled with the mask's name, the message **"An effect with the same
+  name is replaced."**, and **Save** (Return) and **Cancel** (`MaskingPanel.swift:908-915`). The name
+  is trimmed; a blank one is the mask's. One of the user's effects with the same name is replaced (it
+  moves to the end of the list); one of Redlamp's of the same name isn't.
+- **Deleting:** **Delete Effect › \<name>** removes it (`deleteMaskEffect`, `:72-74`). Redlamp's
+  effects can't be deleted.
+- **Where they're kept:** in user defaults under `app.redlamp.maskEffects`, as JSON, written as they
+  change (`MaskEffectStore`, `EditorModel+MaskEffects.swift:4-22`), as mask presets are in
+  `app.redlamp.maskPresets`. They don't travel with photos.
+- **Not part of an effect:** Point Color, so choosing an effect leaves a mask's swatches as they are,
+  and the title can read an effect's name on a mask with Point Color swatches.
 
 ---
 
@@ -1800,10 +1861,8 @@ shows.
 
 ### Listed as not yet available
 
-- **The Landscape picker** (UX-26) and **mask presets applied to every selected photo** (UX-25) are
-  "Not started" — `docs/research/research-tracker.md:331-332`.
-- **Effect presets for a mask's adjustments** (UX-27, Lightroom's Effect menu) are "Not started" —
-  `:333`.
+- Nothing of the Masks panel's design is left: the Landscape picker (UX-26), mask presets on every
+  selected photo (UX-25) and effects (UX-27) are Done — `docs/research/research-tracker.md:334-336`.
 - Every row of the Masking table in `docs/lightroom-comparison.md:107-132` is now marked **Done**,
   Point Color included.
 - No mask **kind** is pending: `MaskKind.plannedPhase` returns `nil` for every case —
@@ -1904,7 +1963,7 @@ Both files are registered in `packages/RedlampAutomation/Sources/Catalogue.swift
 
 ### The new panel: `packages/RedlampAutomation/Sources/Scenarios/MasksPanelScenarios.swift`
 
-Three scenarios, worked "by its own controls, as a person works it: clicks on its buttons, tiles, rows
+Six scenarios, worked "by its own controls, as a person works it: clicks on its buttons, tiles, rows
 and checkboxes, choices in its menus, and drags on its value fields" (`:7-10`). Hovers are **not**
 among them — SwiftUI reads them from the real pointer, so the previews they start are covered by
 `PointerPreviewTests` and `packages/RedlampUI/Tests/MasksPanelViewTests.swift` instead (`:9-10`).
@@ -1914,11 +1973,13 @@ among them — SwiftUI reads them from the real pointer, so the previews they st
 | `masking.panel` | the inline picker (`masks.picker.radial`); New Mask's popover; a mask row's menu (Duplicate, Duplicate and Invert, Invert, Reset Adjustments, Delete \<name>, Rename…); `masks.mask.invert` and `masks.mask.reset`; a row chosen by click; the eye, and Option-click on the eye both ways; Subtract, Add (with **Existing Mask**) and Intersect through the picker; a component row, its operation menu (Set to Intersect, Set to Subtract), its Invert and its menu's Delete; the header's overlay switch, Pins switch and Delete All Masks | `masking.overlay`, `masking.combining`, `masking.radial`, `masking.linear`, the Existing Mask kind | `:14-130` |
 | `masking.panel-tools` | a Luminance Range from the picker, its **four stop value fields scrubbed**, Show Luminance Map, Done; the brush from Add and `masks.brush.autoMask`; the overlay options popover — Mode and Color from their menus and **Opacity scrubbed**; Subject from New Mask, then `masks.refineEdges`, `masks.refineEdgeBrush` and the **Refine Edge brush's Size scrubbed** | `masking.luminance-range`, `masking.brush`, `masking.overlay`, `masking.refine` | `:132-234` |
 | `masking.panel-people` | the People tile; Cancel; People from New Mask; a person's crop ticked and unticked; a part ticked and unticked (`masks.people.part.faceSkin`); Create | `masking.people`, the People kind | `:236-287` |
+| `masking.panel-presets` | every photo selected; Blue Sky from the header's Mask Presets menu (`masks.presets`), onto the selection; Undo Sync Settings | `masking.presets` | `:299-351` |
+| `masking.panel-landscape` | the Landscape tile; Cancel; Landscape from New Mask; two regions ticked, Separate masks, Create; Landscape from Add on a mask, a region, Create | `masking.landscape`, the Landscape kind | `:353-418` |
+| `masking.panel-effects` | the Effect menu (`masks.mask.effect`): Dodge, Pop Eyes; Save Current Settings as Effect… and its prompt's Save (Return); Burn; a second mask from New Mask given the saved effect; ⌘Z; Delete Effect › the saved one | `masking.local-adjustments` | `:420-481` |
 
-Not reached by any scenario, worth knowing when writing: the Presets menu from the new header (the old
-`masking.presets` scenario applies presets through the model), the Landscape tile's class menu, the
-Depth Range stops, **Separate masks**, **All** in the People picker, and the download notice's
-**Download** / **Not Now** buttons **(inferred from the three claim lists and the identifiers each
+Not reached by any scenario, worth knowing when writing: the Mask Presets menu's Delete Preset, the
+Depth Range stops, **All** in the People picker, and the download notice's
+**Download** / **Not Now** buttons **(inferred from the six claim lists and the identifiers each
 scenario taps)**.
 
 ### The kinds themselves: `packages/RedlampAutomation/Sources/Scenarios/MaskingScenarios.swift`

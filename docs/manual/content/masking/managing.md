@@ -102,6 +102,8 @@ Mask Presets, the wand at the top of the panel, lists Redlamp's presets and then
 
 Even Skin Tone leaves the skin's lightness alone, which keeps a face's shading and texture. Its Body Skin needs SAM 3; without it, the preset evens the face alone.
 
+To give a mask you already have the adjustments of Smooth Skin, Whiten Teeth or Pop Eyes without making a new mask, choose them from its Effect menu: see [](#masking.adjust.effects).
+
 ### On several photos
 
 With several photos selected in the filmstrip, the presets sit under Apply to 5 Selected Photos, with your count, and a preset goes to every one of them. The open photo gets it as a step of its history. The others get it in the background, one at a time, each with its AI masks found for that photo, while the filmstrip shows how far it has gone, as in Apply Blue Sky: 2 of 5, with Cancel beside it.
