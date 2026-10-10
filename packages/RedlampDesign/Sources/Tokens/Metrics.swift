@@ -17,8 +17,8 @@ public enum Metrics {
     /// A panel header's eye, at its trailing edge: the hit target, and the glyph's size.
     public static let panelEyeTarget: CGFloat = 22
     public static let panelEyePointSize: CGFloat = 12
-    /// The dot on a header whose panel has edits.
-    public static let editedDotSize: CGFloat = 5
+    /// The Edited chip on a header whose panel has edits: its text's inset from its ends.
+    public static let editedChipPadding: CGFloat = 5
     /// Develop panels as cards: the column's margin around them, the gap between them, their
     /// corners, and the padding inside them.
     public static let panelCardMargin: CGFloat = 8

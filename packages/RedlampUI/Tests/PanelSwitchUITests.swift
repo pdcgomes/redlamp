@@ -64,8 +64,10 @@ struct PanelSwitchUITests {
         #expect(model.history.count == steps + 1 && model.history.last?.name == "Detail Off")
         #expect(model.expandedPanels.isEmpty, "the eye doesn't expand the panel")
         #expect(model.value(.sharpenAmount) == 70, "the panel keeps its settings")
-        #expect(model.isEdited(.detail), "the edited dot still shows")
+        #expect(model.isEdited(.detail), "the Edited chip still shows")
         try await settle()
+        let header = try #require(panel.subviews.first { $0.accessibilityIdentifier() == "panel.detail.header" })
+        #expect(header.accessibilityHelp() == "Detail has edits", "VoiceOver hears what the Edited chip shows")
         #expect(toggle.toolTip == "Turn Detail on")
         #expect(toggle.accessibilityValue() as? Int == 0)
 

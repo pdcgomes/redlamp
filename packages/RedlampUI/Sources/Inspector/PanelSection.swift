@@ -45,7 +45,7 @@ struct PanelSection<Content: View>: View {
                 }
                 Spacer()
                 HStack(spacing: 2) {
-                    EditedDot(panel: panel)
+                    EditedChip(panel: panel, on: on)
                     PanelEye(panel: panel)
                 }
                 // The eye's glyph, not its hit target, ends at the padding.
@@ -98,7 +98,7 @@ extension PanelSection {
     }
 }
 
-/// The header's eye, or the room for one in Basic, so the edited dots line up.
+/// The header's eye, or the room for one in Basic, so the Edited chips line up.
 private struct PanelEye: View {
     let panel: PanelID
     @Environment(EditorModel.self) private var model
@@ -129,17 +129,23 @@ private struct PanelEye: View {
 }
 
 /// Its own view so that a slider drag, which changes whether the panel is edited, re-evaluates
-/// just the dot rather than the whole panel.
-private struct EditedDot: View {
+/// just the chip rather than the whole panel.
+private struct EditedChip: View {
     let panel: PanelID
+    let on: Bool
     @Environment(EditorModel.self) private var model
 
     var body: some View {
         if model.isEdited(panel) {
-            Circle()
-                .fill(Theme.panelEditedDot)
-                .frame(width: Theme.editedDotSize, height: Theme.editedDotSize)
+            Text("Edited")
+                .font(Typography.badge.font)
+                .foregroundStyle(Theme.editedChipText)
+                .padding(.horizontal, Theme.editedChipPadding)
+                .frame(height: TextLine.lineHeight(Typography.badge) + 3)
+                .background(Capsule().fill(Theme.editedChipFill))
+                .opacity(on ? 1 : Theme.switchedOffOpacity)
                 .help("This panel has edits")
+                .accessibilityLabel("\(panel.title) has edits")
         }
     }
 }

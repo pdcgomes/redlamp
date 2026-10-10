@@ -5,7 +5,7 @@ import RedlampEngineAPI
 extension EditorModel: ParameterEditing {}
 
 extension PanelSectionView {
-    /// A Develop panel bound to the editor, as a card: expanded state, the edited dot, the eye
+    /// A Develop panel bound to the editor, as a card: expanded state, the Edited chip, the eye
     /// that turns it off and on, reset, Solo Mode and the header's context menu.
     convenience init(panel: PanelID, model: EditorModel, badge: String? = nil, rows: [NSView]) {
         let switchable = panel.switchable != nil

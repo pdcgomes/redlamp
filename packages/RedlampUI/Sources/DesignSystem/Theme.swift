@@ -58,8 +58,12 @@ enum Theme {
         Palette.trackFill.color
     }
 
-    static var panelEditedDot: Color {
-        Color(nsColor: Palette.panelEditedDot)
+    static var editedChipText: Color {
+        Color(nsColor: Palette.editedChipText)
+    }
+
+    static var editedChipFill: Color {
+        Color(nsColor: Palette.editedChipFill)
     }
 
     static var card: Color {
@@ -92,7 +96,7 @@ enum Theme {
     static let panelSymbolSlot = Metrics.panelSymbolSlot
     static let panelEyeTarget = Metrics.panelEyeTarget
     static let panelEyePointSize = Metrics.panelEyePointSize
-    static let editedDotSize = Metrics.editedDotSize
+    static let editedChipPadding = Metrics.editedChipPadding
     static let panelCardMargin = Metrics.panelCardMargin
     static let panelCardGap = Metrics.panelCardGap
     static let panelCardRadius = Metrics.panelCardRadius

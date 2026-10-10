@@ -1,6 +1,7 @@
 #if DEBUG || REDLAMP_PROFILING
     import AppKit
     import RedlampCanvas
+    import RedlampDesign
     import RedlampEngineAPI
     @_spi(Harness) import RedlampUI
 
@@ -34,7 +35,8 @@
     ///   up with a photo selected, `inspector=end` scrolls the inspector to its end, `extend=<n>`
     ///   selects from the open photo to the nth, as ⇧-click does, `type=<identifier>` clicks a value
     ///   field to type in it, such as `type=slider.basic.exposure.value`, `off=<panel>[+<panel>]`
-    ///   switches Develop panels off, and `filmstrip-menu=<n>` opens
+    ///   switches Develop panels off, `chip=upper` draws the headers' Edited chips in capitals, and
+    ///   `filmstrip-menu=<n>` opens
     ///   the context menu of the nth photo on screen; the menu holds the app, so it comes last.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
     ///   deployment's `/api/whats-new`, or a `file://` feed whose image URLs are absolute.
@@ -122,6 +124,8 @@
                 await scrollInspectorToEnd()
             case "type":
                 await beginTyping(in: value)
+            case "chip" where value == "upper":
+                PanelSectionView.uppercaseEditedChip = true
             case "select" where Int(value) == nil:
                 await select(named: value, model: model)
             case "mask":

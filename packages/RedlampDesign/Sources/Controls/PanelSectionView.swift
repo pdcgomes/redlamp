@@ -1,7 +1,7 @@
 import AppKit
 
 /// A collapsible panel: a header (chevron, glyph, title, optional badge, then at the trailing
-/// edge a dot when the panel has edits and, for a Develop panel that can be turned off, an eye),
+/// edge an Edited chip when the panel has edits and, for a Develop panel that can be turned off, an eye),
 /// its rows, and a divider, or in the card style a card of its own.
 ///
 /// Click the header to expand or collapse (Option-click for Solo Mode), double-click to
@@ -67,7 +67,7 @@ public final class PanelSectionView: NSView, HeightProviding {
     /// `accessory` (a button) sits at the header's trailing edge. Rows that pad themselves (a
     /// list whose highlight reaches past its text) can be given other `insets`; in a card, the
     /// rows' sides come in as its padding does. With `eyeSlot`, a header without an eye keeps
-    /// its room, so the edited dots of a column line up.
+    /// its room, so the Edited chips of a column line up.
     public init(
         title: String,
         symbol: String? = nil,
@@ -122,6 +122,14 @@ public final class PanelSectionView: NSView, HeightProviding {
     required init?(coder _: NSCoder) {
         fatalError("init(coder:) is not supported")
     }
+
+    #if DEBUG || REDLAMP_PROFILING
+        /// Draws the headers' Edited chips in capitals, for comparing in snapshots (`--script chip=upper`).
+        public static var uppercaseEditedChip: Bool {
+            get { PanelHeaderView.uppercaseEditedChip }
+            set { PanelHeaderView.uppercaseEditedChip = newValue }
+        }
+    #endif
 
     /// Names the section, its header and its eye for VoiceOver and the regression suite, such as
     /// `panel.detail`, `panel.detail.header` and `panel.detail.switch`.
@@ -262,7 +270,7 @@ public final class PanelSectionView: NSView, HeightProviding {
 }
 
 /// The panel title bar: chevron, glyph, title and badge, then at the trailing edge the eye (or
-/// its slot), and left of it the edited dot or an accessory.
+/// its slot), and left of it the Edited chip or an accessory.
 final class PanelHeaderView: NSView {
     let title: String
     let symbol: String?
@@ -294,6 +302,7 @@ final class PanelHeaderView: NSView {
         didSet {
             if isEdited != oldValue {
                 needsDisplay = true
+                setAccessibilityHelp(isEdited ? "\(title) has edits" : nil)
             }
         }
     }
@@ -357,7 +366,7 @@ final class PanelHeaderView: NSView {
         return PixelGrid.centered(CGSize(width: side, height: side), at: center, scale: backingScale)
     }
 
-    /// Where the edited dot and an accessory end: left of the eye's slot, or at the padding.
+    /// Where the Edited chip and an accessory end: left of the eye's slot, or at the padding.
     private var trailingEdge: CGFloat {
         eyeSlot ? eyeFrame.minX : bounds.width - padding
     }
@@ -424,13 +433,40 @@ final class PanelHeaderView: NSView {
         }
 
         if isEdited, accessory == nil {
-            let size = Metrics.editedDotSize
-            let gap: CGFloat = eyeSlot ? 2 : 0
-            Palette.panelEditedDot.setFill()
-            NSBezierPath(ovalIn: CGRect(x: trailingEdge - gap - size, y: midY - size / 2, width: size, height: size))
-                .fill()
+            let font = Self.editedChipFont
+            let text = Self.editedChipTitle
+            let height = TextLine.lineHeight(font) + 3
+            let width = TextLine.width(text, font: font) + 2 * Metrics.editedChipPadding
+            let chip = PixelGrid.centered(
+                CGSize(width: width, height: height),
+                at: CGPoint(x: trailingEdge - (eyeSlot ? 2 : 0) - width / 2, y: midY), scale: scale,
+            )
+            // A switched-off panel's chip dims with its title.
+            let alpha: CGFloat = isOn ? 1 : Metrics.switchedOffOpacity
+            Palette.editedChipFill.withAlphaComponent(Palette.editedChipFill.alphaComponent * alpha).setFill()
+            NSBezierPath(roundedRect: chip, xRadius: height / 2, yRadius: height / 2).fill()
+            TextLine.draw(
+                text, font: font, color: Palette.editedChipText.withAlphaComponent(alpha),
+                in: chip.insetBy(dx: Metrics.editedChipPadding, dy: 0), alignment: .center, scale: scale,
+            )
         }
     }
+
+    /// The chip on a header whose panel has edits.
+    static var editedChipTitle: String {
+        uppercaseEditedChip ? "EDITED" : "Edited"
+    }
+
+    static var editedChipFont: FontSpec {
+        uppercaseEditedChip ? FontSpec(size: 8.5, weight: .semibold, tracking: 0.5) : Typography.badge
+    }
+
+    #if DEBUG || REDLAMP_PROFILING
+        /// The chip in capitals, for comparing in snapshots (`PanelSectionView.uppercaseEditedChip`).
+        static var uppercaseEditedChip = false
+    #else
+        static let uppercaseEditedChip = false
+    #endif
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

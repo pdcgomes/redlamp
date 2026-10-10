@@ -88,9 +88,14 @@ public enum Palette {
         current.editedDot
     }
 
-    /// The dot on a Develop panel's header whose panel has edits: a tint of the theme's accent.
-    public static var panelEditedDot: NSColor {
-        accent.withAlphaComponent(0.8)
+    /// The Edited chip on a Develop panel's header: the theme's accent on a faint fill of it, a
+    /// status rather than a button, unlike the grey badge.
+    public static var editedChipText: NSColor {
+        accent
+    }
+
+    public static var editedChipFill: NSColor {
+        accent.withAlphaComponent(current.isDark ? 0.2 : 0.14)
     }
 
     /// A Develop panel's card, a step above the panel background (`PanelSectionView.Style.card`).
