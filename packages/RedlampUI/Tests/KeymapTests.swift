@@ -200,3 +200,35 @@ struct KeymapTests {
         #expect(try press(96, "\u{F708}")?.isMonitored == true, "F5 is")
     }
 }
+
+/// Keys that never move when panels change (LIB-36): each panel's key opens that panel whichever are shown, open or
+/// soloed, as it would with any preset's keys, Lightroom Classic 15.0's culling panels having renumbered its own.
+@MainActor
+struct PanelKeyTests: PaletteTesting {
+    private static let panels: [(ShortcutAction, PanelID)] = [
+        (.panelBasic, .basic), (.panelToneCurve, .toneCurve), (.panelColorMixer, .colorMixer),
+        (.panelColorGrading, .colorGrading), (.panelDetail, .detail), (.panelLens, .lens),
+        (.panelTransform, .transform), (.panelEffects, .effects), (.panelCalibration, .calibration),
+    ]
+
+    @Test(arguments: KeymapPreset.allCases)
+    func `each panel's key opens that panel whichever panels are shown or open`(preset: KeymapPreset) async throws {
+        let (model, _, cleanup) = try await openEditor()
+        defer { cleanup() }
+        try ShortcutKeymap.$override.withValue(Keymap(preset: preset)) {
+            for arrangement in 0 ..< 3 {
+                for (action, panel) in Self.panels {
+                    let key = try #require(action.combos.first, "\(preset.title) gives \(action) no key")
+                    let resolved = ShortcutAction.resolve(key, in: .develop)
+                    #expect(resolved?.action == action, "\(key.display) in \(preset.title)")
+                    model.rightPanelVisible = arrangement != 1
+                    model.soloMode = arrangement == 2
+                    model.expandedPanels = Set(PanelID.allCases.filter { $0 != panel && arrangement != 0 })
+                    model.perform(resolved?.action ?? action)
+                    #expect(model.expandedPanels.contains(panel), "\(key.display) opens \(panel)")
+                    #expect(model.rightPanelVisible)
+                }
+            }
+        }
+    }
+}
