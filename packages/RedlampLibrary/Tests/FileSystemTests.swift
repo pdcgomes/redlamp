@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import RedlampLibrary
 
@@ -63,6 +64,57 @@ struct FileSystemTests {
         #expect(throws: POSIXError.self) { try files.read(folder.url.appending(path: "missing.JPG"), range: 0 ..< 10) }
     }
 
+    @Test func `a read whose open a signal interrupts opens the file again, rather than failing`() async throws {
+        let folder = try TemporaryFolder()
+        let fifo = folder.url.appending(path: "pipe")
+        try #require(mkfifo(fifo.path, 0o600) == 0)
+        // A handler without SA_RESTART, so a signal interrupts the open() a FIFO blocks in until it has a writer.
+        var action = sigaction()
+        action.__sigaction_u.__sa_handler = { _ in }
+        sigemptyset(&action.sa_mask)
+        var previous = sigaction()
+        sigaction(SIGUSR2, &action, &previous)
+        defer { sigaction(SIGUSR2, &previous, nil) }
+
+        let reading = Reading()
+        Thread { [files] in
+            // The thread starts with its creator's signal mask, which may block the signal.
+            var mask = sigset_t()
+            sigemptyset(&mask)
+            sigaddset(&mask, SIGUSR2)
+            pthread_sigmask(SIG_UNBLOCK, &mask, nil)
+            reading.state.withLock { $0.thread = pthread_self() }
+            var error: POSIXErrorCode?
+            do {
+                _ = try files.read(fifo, range: 0 ..< 1)
+            } catch let failure as POSIXError {
+                error = failure.code
+            } catch {}
+            reading.state.withLock {
+                $0.error = error
+                $0.ended = true
+            }
+        }.start()
+        var signals = 0
+        var writer: Int32 = -1
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !reading.state.withLock({ $0.ended }), ContinuousClock.now < deadline {
+            if let thread = reading.state.withLock({ $0.thread }), signals < 20 {
+                pthread_kill(thread, SIGUSR2)
+                signals += 1
+            } else if signals == 20, writer < 0 {
+                writer = open(fifo.path, O_RDWR | O_NONBLOCK)
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        if writer >= 0 {
+            close(writer)
+        }
+        // A FIFO refuses pread, so that error means the open went on past the signals.
+        #expect(signals == 20)
+        #expect(reading.state.withLock { $0.ended && $0.error == .ESPIPE })
+    }
+
     @Test func `a volume reports its UUID, name and whether it's local`() throws {
         let folder = try TemporaryFolder()
         let volume = try files.volume(of: folder.url)
@@ -70,4 +122,15 @@ struct FileSystemTests {
         #expect(volume.name?.isEmpty == false)
         #expect(volume.isLocal)
     }
+}
+
+/// The reading thread, to signal, and the error its read ended with.
+private final class Reading: @unchecked Sendable {
+    struct State {
+        var thread: pthread_t?
+        var ended = false
+        var error: POSIXErrorCode?
+    }
+
+    let state = Mutex(State())
 }

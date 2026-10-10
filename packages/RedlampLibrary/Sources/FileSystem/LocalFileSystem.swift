@@ -32,7 +32,14 @@ public struct LocalFileSystem: LibraryFileSystem {
 
     public func read(_ url: URL, range: Range<Int>) throws -> Data {
         guard range.lowerBound >= 0 else { throw POSIXError(.EINVAL) }
-        let fd = url.withUnsafeFileSystemRepresentation { path in path.map { open($0, O_RDONLY | O_CLOEXEC) } ?? -1 }
+        let fd = url.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { return -1 }
+            var fd: Int32
+            repeat {
+                fd = open(path, O_RDONLY | O_CLOEXEC)
+            } while fd < 0 && errno == EINTR
+            return fd
+        }
         guard fd >= 0 else { throw POSIXError.current }
         defer { close(fd) }
         var data = Data(count: range.count)
