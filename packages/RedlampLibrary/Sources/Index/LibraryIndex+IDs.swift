@@ -4,9 +4,9 @@ import Foundation
 /// never gets the ID of one the index had before, as SQLite would give it once the row with the largest ID is gone,
 /// nor of one an index it replaced had (`IndexIDMarks`). Photo IDs outlive their rows in culling's, the panels' and
 /// rename's Undo, the metadata, keyword and file journals, the photos waiting for an XMP sync, lists, their diffs and
-/// selections, the column store and its snapshot, and the health rows, hashes and XMP merge records kept for a
-/// photo; folder IDs in the file journal's moves and Put Back; root IDs in the settings kept for a root and the
-/// sidecar move's journal; collection IDs in the file journal's places of a photo put back, and collection and
+/// selections, the column store and its snapshot, and the health rows, hashes, rendered edits and XMP merge records
+/// kept for a photo; folder IDs in the file journal's moves and Put Back; root IDs in the settings kept for a root and
+/// the sidecar move's journal; collection IDs in the file journal's places of a photo put back, and collection and
 /// keyword IDs in the query engine's names, plans and postings until they're read again after a change; camera and
 /// lens IDs in the rows the file journal keeps. Each table's last ID given is kept in the settings, in the
 /// transaction that gives it.

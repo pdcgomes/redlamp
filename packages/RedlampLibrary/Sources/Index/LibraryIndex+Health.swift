@@ -115,9 +115,9 @@ public extension IndexQueries {
 
 extension LibraryIndex.Writer {
     /// Removes what's kept for photos `ids` beside their rows, which outlives them while a batch can bring them back:
-    /// their health rows, hashes and XMP merge records.
+    /// their health rows, hashes, rendered edits and XMP merge records.
     func removeRecords(ofPhotos ids: [Int64]) throws {
-        let deletes = try ["photo_health", "photo_hashes"]
+        let deletes = try ["photo_health", "photo_hashes", "photo_edits"]
             .map { try database.cached("DELETE FROM \($0) WHERE photo = ?") }
         for id in ids {
             for delete in deletes {
@@ -128,11 +128,11 @@ extension LibraryIndex.Writer {
         }
     }
 
-    /// Removes the health rows and hashes of photos the index no longer has, but for `keeping`'s;
+    /// Removes the health rows, hashes and rendered edits of photos the index no longer has, but for `keeping`'s;
     /// returns how many photos they were.
     @discardableResult
     func removeOrphanedHealth(keeping: Set<Int64>) throws -> Int {
-        let tables = ["photo_health", "photo_hashes"]
+        let tables = ["photo_health", "photo_hashes", "photo_edits"]
         var orphans = Set<Int64>()
         for table in tables {
             try database.cached("SELECT photo FROM \(table) WHERE photo NOT IN (SELECT id FROM photos)")

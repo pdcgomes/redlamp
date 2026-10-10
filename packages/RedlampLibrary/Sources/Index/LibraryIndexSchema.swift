@@ -7,7 +7,7 @@ extension LibraryIndex {
     /// The schema's steps in order: the first makes version 1 from an empty database.
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
-        migrateToVersion6, migrateToVersion7, migrateToVersion8, migrateToVersion9,
+        migrateToVersion6, migrateToVersion7, migrateToVersion8, migrateToVersion9, migrateToVersion10,
     ]
 
     /// The version of the schema this build makes and opens.
@@ -53,6 +53,10 @@ extension LibraryIndex {
         let column = try database.prepare("SELECT 1 FROM pragma_table_info('photos') WHERE name = 'stack_position'")
         guard try column.first({ _ in true }) == nil else { return }
         try database.execute(schemaVersion9)
+    }
+
+    static func migrateToVersion10(_ database: SQLiteDatabase) throws {
+        try database.execute(schemaVersion10)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -235,5 +239,15 @@ extension LibraryIndex {
     /// row.
     static let schemaVersion9 = """
     ALTER TABLE photos ADD COLUMN stack_position INTEGER;         -- from 0 at the top
+    """
+
+    /// The edits whose renders the store holds (LIB-17), so a relaunch shows a photo's render before its sidecar is
+    /// read again: for each photo rendered, its edit's digest, the way of rendering edits that digest is for, and the
+    /// modification date its sidecar had when the edit was read. A row stands for its photo while the photo's row has
+    /// that date still (`PhotoEdit`). Rows outlive their photos, as hashes do, so a photo Undo or Put Back brings back
+    /// under its ID finds its render again.
+    static let schemaVersion10 = """
+    CREATE TABLE IF NOT EXISTS photo_edits (photo INTEGER PRIMARY KEY, sidecar_modified REAL NOT NULL,
+      digest BLOB NOT NULL, renderer INTEGER NOT NULL);         -- photo is photos.id
     """
 }
