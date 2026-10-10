@@ -59,7 +59,7 @@ def notes_height(panel):
 
 
 def sheet(key, board, drawn):
-    ep = w.episode(key)
+    ep = board.EPISODE
     under = max(notes_height(p) for p in board.PANELS) + 4
     footer = [f"CLAIM: {ep['feature']}", f"SOURCE: {ep['source']}"]
     if getattr(board, "PHOTO", None):
@@ -70,7 +70,8 @@ def sheet(key, board, drawn):
     height = HEAD + 6 + 2 * (w.H + 4 + under) + GAP + foot_h
     c = w.canvas(width, height, SHEET)
     c.footer(footer)
-    title = f"REDLAMP FEATURE VIDEOS · {key.upper()} {ep['title'].upper()} · STORYBOARD"
+    variant = f" · {board.VARIANT}" if getattr(board, "VARIANT", None) else ""
+    title = f"REDLAMP FEATURE VIDEOS · {ep['id'].upper()} {ep['title'].upper()}{variant} · STORYBOARD"
     right = f"{w.BPM} BPM · 8 BARS · {8 * w.BAR:.1f} S · {w.W * w.SCALE} × {w.H * w.SCALE}"
     c.header(title, right=right, font="large", h=HEAD, mark=w.LAMP_MARK)
     overlays = []
@@ -99,7 +100,7 @@ def episode(key, *, zones=False):
     for note in w.check(c, video=False):
         print(f"{key} sheet: warning: {note}")
     paths = [w.save(w.render(c, SHEET, overlays), OUT / f"{key}.png")]
-    post = next(p for p in w.POSTS["posts"] if p["episode"] == key and p["hook"] == "a")
+    post = next(p for p in w.POSTS["posts"] if p["episode"] == board.EPISODE["id"] and p["hook"] == "a")
     cover = w.canvas()
     w.opener(cover, round(post["coverMs"] / 1000 * w.FPS), board.EPISODE, board.EPISODE["hooks"]["a"], board.FEATURE)
     paths.append(w.save(cover.img, OUT / f"{key}-hook.png"))
@@ -120,7 +121,7 @@ def main():
     group.add_argument("--all", action="store_true", help="every episode with a board")
     parser.add_argument("--zones", action="store_true", help="outline the covered zones on each panel")
     args = parser.parse_args()
-    keys = sorted(p.stem for p in BOARDS.glob("e*.py")) if args.all else [args.episode.lower()]
+    keys = sorted(p.stem for p in BOARDS.glob("e*.py") if "-" not in p.stem) if args.all else [args.episode.lower()]
     for key in keys:
         episode(key, zones=args.zones)
 

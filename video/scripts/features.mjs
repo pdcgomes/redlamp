@@ -7,6 +7,7 @@
 //   npm run features -- --episode=e01 --hook=b   one hook
 //   npm run features -- --episode=e01 --draft    half size, for a quick look on a phone (…-draft.mp4)
 //   npm run features -- --episode=e01 --draft --score=score-pulse   another arrangement (…-pulse-draft.mp4)
+//   npm run features -- --episode=e01-ui --draft   a variation of an episode, its board boards/e01-ui.py (e01-a-ui-draft.mp4)
 //   npm run features -- --episode=e01 --fresh    draw the frames and write the score again first
 
 import { execFileSync } from "node:child_process";
@@ -29,11 +30,13 @@ const fresh = args.includes("--fresh");
 const score = option("score") ?? "score";
 const schedule = JSON.parse(readFileSync(path.join(root, "../docs/social/posts.json"), "utf8"));
 const known = schedule.episodes.map((e) => e.id);
-if (!episode || !known.includes(episode)) {
-  console.error(`usage: npm run features -- --episode=<${known.join("|")}> [--hook=<id>] [--draft] [--fresh]`);
+// A variation of an episode is the episode's id and a name (e01-ui), with a board of its own.
+const [base, ...variation] = (episode ?? "").split("-");
+if (!episode || !known.includes(base) || (variation.length && !existsSync(path.join(root, `scripts/features/boards/${episode}.py`)))) {
+  console.error(`usage: npm run features -- --episode=<${known.join("|")}>[-<variation>] [--hook=<id>] [--draft] [--fresh]`);
   process.exit(1);
 }
-const posts = schedule.posts.filter((p) => p.episode === episode);
+const posts = schedule.posts.filter((p) => p.episode === base);
 const hook = option("hook");
 const chosen = hook ? posts.filter((p) => p.hook === hook) : posts;
 if (chosen.length === 0) {
@@ -66,7 +69,7 @@ const remotion = (...a) => execFileSync("npx", ["remotion", ...a], { cwd: root, 
 mkdirSync(out, { recursive: true });
 for (const post of chosen) {
   const props = JSON.stringify({ episode, hook: post.hook, score, opener: true, guides: false });
-  const variant = score === "score" ? "" : `-${score.replace(/^score-/, "")}`;
+  const variant = [...variation, ...(score === "score" ? [] : [score.replace(/^score-/, "")])].map((v) => `-${v}`).join("");
   const name = post.file.replace(/\.mp4$/, `${variant}${draft ? "-draft" : ""}`);
   const scale = draft ? ["--scale=0.5"] : [];
   // CRF 16, limited-range BT.709 4:2:0, as the studio's other promos.

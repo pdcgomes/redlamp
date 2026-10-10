@@ -411,6 +411,10 @@ The first cut, for the owner's review in Studio, with hook A or B and the stand-
 - **With the opener:** 29.2 s, its first 300 frames the pixel opener with its hold and title (464 pictures for both hooks' 876 frames, with no warning from the kit or the safe zones). On screen, "free" is in the hook, the title and DOWNLOAD FREE, where it was in six places before. The opener's sound crosses into the held chord at the bar line with no step in the waveform. The episode's score starts exactly 300 frames (10 s) in, by cross-correlating each draft's audio with it. The whole measures −14.1 LUFS in both drafts by ffmpeg, with true peaks of −1.3 dBFS (drive) and −1.4 dBFS (pulse).
 - **Not checked:** how it plays at full speed and size, and how the ticks and the key sit in the mix on a phone. Those are for the owner's viewing in Studio.
 
+### E01's UI variation, 10 October 2026
+
+The owner found the pixelartvisuals pieces (the DAW, the fruit music player, the system monitor) more colourful and interesting than the editor with the real photo, and asked to explore a variation built from them. `video/scripts/features/boards/e01-ui.py` keeps E01's beats, words and sounds, and draws the editor as one of those dashboards: the panels in the kit's navy with an accent each, a pixel-art dusk in place of the photo, developed by E01's four sliders at E01's values, the sliders as coloured meters over a live RGB histogram and an LED level, and a card for what each bar says (a plan at $0 a month, a network panel with nothing uploaded, the licence over a heatmap of commits). The result is the dusk before and after, filling the stage, under BEFORE AND AFTER. It plays in Studio as FeatureVideo with `"episode": "e01-ui"`, and its draft is `~/src/redlamp-social/renders/e01-a-ui-draft.mp4`. Its frames raise no warning (773 pictures for 876 frames), and its draft measures −14.1 LUFS with a true peak of −1.3 dBFS.
+
 ## For the owner to decide
 
 - The hook each video leads with. A is the default, and B is tested as a trial reel.
