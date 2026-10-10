@@ -225,7 +225,7 @@ extension LibraryService {
                     await self?.damaged()
                 }
             }
-            notify()
+            notify(now: true)
         }
     }
 
@@ -492,14 +492,17 @@ extension LibraryService {
         switch progress {
         case let .current(roots):
             currentRoots.formUnion(roots.filter(self.roots.contains))
+            notify(now: true)
         case let .offline(roots):
             currentRoots.subtract(roots)
+            notify(now: true)
         case let .indexed(path):
             indexedFolders.insert(path)
+            notify()
         case let .placed(locator):
             placed(locator)
+            notify()
         }
-        notify()
     }
 }
 
@@ -512,8 +515,18 @@ extension LibraryService {
         return LibraryObservation { [weak self] in self?.observers.removeValue(forKey: id) }
     }
 
-    /// Tells the observers, at most every quarter of a second: indexing reports a folder at a time.
-    private func notify() {
+    /// Tells the observers, at most every quarter of a second: indexing reports a folder at a time. With `now`, on
+    /// the next turn as well, for what comes seldom and lets a folder listed from the disk be shown from the library:
+    /// the library open, and roots caught up or gone, so a launch's folder doesn't wait the quarter.
+    private func notify(now: Bool = false) {
+        if now {
+            Task { [weak self] in
+                guard let self else { return }
+                for observer in observers.values {
+                    observer()
+                }
+            }
+        }
         guard !notifying else { return }
         notifying = true
         Task { [weak self] in
