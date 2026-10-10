@@ -29,6 +29,11 @@ struct PeoplePickerView: View {
                     .font(Theme.labelFont)
                     .automationIdentifier("masks.people.separate")
                 }
+                if picker.mode.operation == .intersect, picker.parts.count > 1 {
+                    Text("Intersect takes one part at a time.")
+                        .font(Theme.labelFont)
+                        .foregroundStyle(Theme.secondaryLabel)
+                }
             }
             HStack {
                 Button("Cancel") { model.closePeoplePicker() }
@@ -39,7 +44,7 @@ struct PeoplePickerView: View {
                     Task { await model.createPeopleMasks() }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(picker.chosen.isEmpty || picker.parts.isEmpty || model.aiMaskProgress != nil)
+                .disabled(!picker.canCreate || model.aiMaskProgress != nil)
                 .automationIdentifier("masks.people.create")
             }
             .controlSize(.small)

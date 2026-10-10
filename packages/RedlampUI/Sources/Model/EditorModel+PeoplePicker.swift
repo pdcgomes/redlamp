@@ -14,6 +14,11 @@ struct PeoplePicker: Equatable {
     /// The parts whose model isn't downloaded yet.
     var needsModel: [PersonPart: ModelInfo] = [:]
 
+    /// A mask's components combine in order, so intersecting takes one part at a time.
+    var canCreate: Bool {
+        !chosen.isEmpty && !parts.isEmpty && (mode.operation != .intersect || parts.count == 1)
+    }
+
     /// "Person 2", by where they are in the photo's list.
     func name(of person: PersonFound) -> String {
         guard person.instance != nil, let index = people?.firstIndex(of: person) else { return "Everyone" }
@@ -132,10 +137,10 @@ extension EditorModel {
     }
 
     /// Makes the picker's masks: one for everyone ticked, or one each; or, for a component, the
-    /// parts added to (subtracted from, intersected with) the target. Asks first for any model
-    /// a part needs, and carries on once it's downloaded.
+    /// parts added to (each subtracted from, or the one intersected with) the target. Asks first
+    /// for any model a part needs, and carries on once it's downloaded.
     func createPeopleMasks() async {
-        guard let picker = peoplePicker, let found = picker.people, let visit = currentVisit,
+        guard let picker = peoplePicker, picker.canCreate, let found = picker.people, let visit = currentVisit,
               aiMaskProgress == nil
         else { return }
         let people = found.filter { picker.chosen.contains($0.id) }
@@ -193,7 +198,9 @@ extension EditorModel {
         var next = recipe
         if let target, let index = next.masks.firstIndex(where: { $0.id == target }) {
             var components = people.flatMap { byPerson[$0.id] ?? [] }
-            components[0].operation = operation
+            for position in components.indices {
+                components[position].operation = operation
+            }
             next.masks[index].components += components
             selectedMaskID = target
             selectedComponentID = components.last?.id

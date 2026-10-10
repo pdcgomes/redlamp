@@ -148,6 +148,62 @@ struct PeoplePickerTests {
         #expect(model.history.last?.name == "Subtract People")
     }
 
+    /// A mask's components combine in order: each part ticked has to subtract, or the parts
+    /// after the first are added back.
+    @Test func `the picker subtracts every part ticked from a mask`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (model, _) = try await threePeople()
+        let target = try drawRadial(in: model)
+        try await open(model, .component(.subtract, target: target))
+        try model.togglePerson(#require(model.peoplePicker?.people?[0]))
+        model.togglePersonPart(.entirePerson)
+        model.togglePersonPart(.faceSkin)
+        model.togglePersonPart(.hair)
+        await model.createPeopleMasks()
+        let added = try #require(model.recipe.masks.first?.components.dropFirst())
+        #expect(added.count == 2)
+        #expect(added.allSatisfy { $0.operation == .subtract })
+    }
+
+    /// Intersecting with several parts would need them as one component.
+    @Test func `the picker intersects a mask with one part at a time`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (model, _) = try await threePeople()
+        let target = try drawRadial(in: model)
+        try await open(model, .component(.intersect, target: target))
+        try model.togglePerson(#require(model.peoplePicker?.people?[0]))
+        model.togglePersonPart(.faceSkin)
+        #expect(model.peoplePicker?.canCreate == false, "Entire Person and Face Skin")
+        await model.createPeopleMasks()
+        #expect(model.recipe.masks.first?.components.count == 1)
+        model.togglePersonPart(.entirePerson)
+        #expect(model.peoplePicker?.canCreate == true)
+        await model.createPeopleMasks()
+        #expect(model.recipe.masks.first?.components.count == 2)
+        #expect(model.recipe.masks.first?.components.last?.operation == .intersect)
+    }
+
+    @Test func `opening another photo closes the picker`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (model, _) = try await threePeople()
+        try await open(model)
+        let other = folder.appending(path: "IMG_0003.ARW")
+        model.select(other)
+        for _ in 0 ..< 400 where model.info?.url != other {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(model.info?.url == other)
+        #expect(model.peoplePicker == nil)
+        #expect(model.peopleCrops.isEmpty)
+    }
+
+    private func drawRadial(in model: EditorModel) throws -> UUID {
+        model.startDrawing(.radial)
+        model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.2, radiusY: 0.2)))
+        model.finishDrawing()
+        return try #require(model.recipe.masks.first?.id)
+    }
+
     /// The engine's list of People parts can arrive after the picker opens (RESP-15).
     @Test func `ticking a part whose model isn't here asks for it, and Not Now unticks it`() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
