@@ -6,6 +6,8 @@ What Nikon's High Efficiency raw files are, how Redlamp handles them, and the ro
 
 **Assessment:** take Nikon HE support from LibRaw's next public snapshot, which its maintainers say carries an HE and HE* decoder "this fall", together with CAM-13's update. Until then Redlamp refuses HE files and says they aren't supported yet, with Send Feedback… beside the message (a80c683, 31ce266). No stopgap decoder is worth carrying for the few weeks or months the snapshot is likely to take, and every open decoder raises the same patent question a licensed one would answer.
 
+**Update (10 October 2026):** a user's Z5 II HE files didn't open, and LibRaw#826 was tested on 41 CC0 samples (below). With RdWing's fixes it decodes five of the six bodies correctly, and fails on the Z50 II and on damaged files. The owner chose to carry it, fixed in place and held to a bench, in Redlamp's LibRaw fork (CAM-30) until LibRaw's own decoder ships; a release ships it after the patent question (DEC-54).
+
 - HE and HE* are intoPIX's TicoRAW: each raw image is a JPEG XS codestream with Nikon's extensions. HE stores about 3 bits per photosite and HE* about 5, against 14 for the uncompressed data.
 - LibRaw 0.22.2 looks for HE data only in the Z 9, Z 8, Z f and Z 6III, and refuses it there. The Z5 II's and Z50 II's HE files went to its ordinary Nikon decoder and opened as noise; since a80c683 they are refused too.
 - macOS's own raw engine decodes HE and HE* on every body tried, but gives a demosaiced, processed image, not the sensor data Redlamp develops.
@@ -30,7 +32,9 @@ What Nikon's High Efficiency raw files are, how Redlamp handles them, and the ro
 | Nikon Z5 II, 5.89 MB | HE, DX crop | 4000 × 2672 | 4,007,936 bytes | 3.0 |
 | Nikon Z50 II, 8.05 MB | HE, 1:1 | 3728 × 3728 | 5,211,648 bytes | 3.0 |
 
-raw.pixls.us labels all of these "8bit compressed", as it labels the same bodies' lossless files, so its mode names can't tell HE apart; the markers and `NEFCompression` can.
+raw.pixls.us labels all of these "8bit compressed", as it labels the same bodies' lossless files, so its mode names can't tell HE apart; the markers and `NEFCompression` can. On these bodies `NEFCompression` is the 16-bit value at byte 10 of maker-note tag 0x51, not tag 0x93.
+
+The table lists the first file checked per body. raw.pixls.us has 41 CC0 files from the six bodies (checked on 9 October): 14 HE, 14 HE* and 13 lossless, every body in every mode, and each body's files are the same scene shot in each mode. The Z5 II, Z50 II and Z 6III have them at 3:2 (FX and DX where the body has both), 1:1 and 16:9; the Z 9, Z 8 and Z f at 3:2 only.
 
 ## How Redlamp handled them, and handles them now
 
@@ -101,7 +105,7 @@ Shooting Lossless compressed works on every body, though the Z5 II's and Z50 II'
 
 ## Checking the decoder when it lands
 
-- **Samples:** the seven files above (raw.pixls.us files 5148, 6616, 6887, 6886, 7810, 7737 and 7767) join the camera coverage set (`tests/decode/samples.json`) with decode and colour goldens. raw.pixls.us has HE* only from the Z f; more HE* samples are needed.
+- **Samples:** one HE and one HE* file per body join the camera coverage set (`tests/decode/samples.json`) with decode and colour goldens; the fork's bench uses all 41.
 - **Exact references:** Adobe DNG Converter's uncompressed mosaics of the same files, compared photosite by photosite, as RdWing did. The owner would need to install DNG Converter, and the references stay outside the repository like the fixtures.
 - **Lossy data in Redlamp's raw stages:** the white level comes from a spike of photosites at the clip point (`WhiteLevel.measured`), which a wavelet codec may spread out; hot-pixel repair works at 8 sigmas; `DecodedImage.noise` prefers a measured noise below 40% of the camera's profile, which quantisation may trigger; the bench's optical black check needs margins the HE frame may not carry. Run the camera bench on the samples and record what each check finds.
 
@@ -111,9 +115,28 @@ Shooting Lossless compressed works on every body, though the Z5 II's and Z50 II'
 2. Ask counsel about patents. intoPIX asserts patents on TicoRAW and JPEG XS; LibRaw's decoder, like every open one, is unlicensed.
 3. Optionally install Adobe DNG Converter, for the exact references.
 4. ~~Decide how to triage the Send Feedback requests for HE support~~: decided on 5 October 2026, they stay open, labelled `follows:CAM-12`, and are answered and closed when CAM-12 is done (`.cursor/rules/tracker-issues.mdc`).
+5. ~~Accept the route~~: decided on 10 October 2026, a different one: LibRaw#826's decoder, fixed, in Redlamp's LibRaw fork (CAM-30), until LibRaw's own ships. The patent question is DEC-54.
+
+## Testing LibRaw#826 (9 October 2026)
+
+The pull request at `499bfd4` was built as it stands and with RdWing's four fixes (each switchable), with AddressSanitizer and UndefinedBehaviorSanitizer builds of both, and run on all 41 CC0 samples. dnglab#835 (`nbuchwitz/dnglab`, branch `nikon-he-jpegxs`) was built as a separate tool to compare against. Each HE and HE* decode was compared with the same body's lossless file of the same scene, decoded by LibRaw's lossless Nikon decoder.
+
+**Evidence:**
+
+- **RdWing's figures reproduce.** As the pull request stands, its last two rows differ from the fixed build by 9 to 443 raw steps and about 13% of the other photosites by one step; fix 1 removes the first, fix 3 the second. No camera file uses raw-GCLI packets, so fix 4 changes nothing on them. The decoder also decodes HE*, although the pull request's description, from May, says it refuses it.
+- **Sanitizers.** As it stands, every HE and HE* file reads past the transfer table (fix 2). With the fixes, 24 of the 28 decode with no report; the other four crash (below). The remaining reports are left shifts of negative values in the wavelet code.
+- **Five bodies decode correctly.** The 22 HE and HE* files from the Z 9, Z 8, Z f, Z 6III and Z5 II decode, and against their lossless shots red's and blue's balance agree within 1.5% on the Z 9, Z f and Z5 II and within 3.3% on the Z 8 and Z 6III, whose pairs line up less well. Crops at 100% look like the lossless shots.
+- **The Z50 II fails.** Its 3:2 and 16:9 files (5600 photosites wide) crash with a null-pointer read in `ver_lift_lb_step`, the vertical inverse wavelet's state machine, which handles a missing input row only in its steady state while the tile's tail passes none to every line block. Its 1:1 files decode with garbled patches that neither its lossless shot nor dnglab shows. Its JPEG XS headers match the Z5 II's except for the image size.
+- **Fuzzing.** 20 of 32 runs of up to 50 mutated files crashed it, every one the same null-pointer read; none was an out-of-bounds write. In Redlamp a crash ends the sandboxed decode service, not the app.
+- **Shared state.** `nikon_he_subband_config.cpp` rewrites one `static` layout from the image width on every decode, which two HE files of different sizes decoding at once would share.
+- **dnglab isn't a reference.** Its red is 4.5% to 8.9% too strong against the lossless shots on every body, and it disagrees with LibRaw#826 at over 99.5% of photosites.
+- **Speed.** About twice as long as a lossless file of the same size: 0.9 s against 0.5 s for the Z 9's 45.7 MP, on a heavily loaded Mac.
+
+**Assessment:** close enough to fix rather than replace. The crash and the shared layout are visible in the code, and the 22 good files give a bit-exact check that each fix changes nothing else. Not shippable as it stands.
 
 ## Not verified
 
 - Whether Apple licenses TicoRAW, and whether DNG Converter's output opens in Redlamp.
-- HE* on any body but the Z f, and the Nikon ZR's files.
+- Any decode against Adobe DNG Converter's output: RdWing's report is the only exact comparison so far.
+- The Nikon ZR's files, and the Z 8's and Z 9's other crops and smaller raw sizes: raw.pixls.us has none.
 - When LibRaw's snapshot ships, and which bodies its detection covers.
