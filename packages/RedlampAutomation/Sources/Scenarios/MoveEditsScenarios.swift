@@ -135,6 +135,8 @@
             }
 
             var phases: [(String, (summary: MainThreadMonitor.Summary?, seconds: Double))] = []
+            // Too few turns for a p99: the slowest is the sheet's.
+            var openings: [(String, (summary: MainThreadMonitor.Summary?, seconds: Double))] = []
             var shown: [Double] = []
             var surveyed: [Double] = []
             var read: [Double] = []
@@ -152,14 +154,21 @@
                 }
                 _ = MoveEditsTrace.take()
                 let timelineFile = app.runDirectory.appending(path: "move-edits-timeline-\(name)-\(getpid()).txt")
+                var opened = Date()
                 do {
-                    try app.rightClick(
-                        .identifier(row), choosing: ShortcutAction.moveEditsAndMetadata.title, marking: timeline,
-                    )
-                    try app.waitForSheet("Move Edits and Metadata", timeout: 10)
-                    try app.wait("the sheet's numbers") { model in
-                        model.moveEditsSheet.map { $0.shownAfter != nil && $0.surveyedAfter != nil } == true
+                    // Until AppKit has animated the sheet in, in a run loop of its own that the turn opening it holds.
+                    let opening = try app.watchingMainThread("sheet-\(name)") {
+                        try app.rightClick(
+                            .identifier(row), choosing: ShortcutAction.moveEditsAndMetadata.title, marking: timeline,
+                        )
+                        try app.waitForSheet("Move Edits and Metadata", timeout: 10)
+                        try app.wait("the sheet's numbers") { model in
+                            model.moveEditsSheet.map { $0.shownAfter != nil && $0.surveyedAfter != nil } == true
+                        }
+                        opened = Date()
+                        app.pause(0.5)
                     }
+                    openings.append((name, opening))
                 } catch {
                     try? timeline.map { try Self.write($0, to: timelineFile) }
                     throw error
@@ -171,7 +180,6 @@
                         inside: marker,
                     )
                 }
-                let opened = Date()
                 let sheet = try app.main { $0.moveEditsSheet }
                 shown.append(Self.milliseconds(sheet?.shownAfter))
                 surveyed.append(Self.milliseconds(sheet?.surveyedAfter))
@@ -210,6 +218,11 @@
                     app.record("e2e-move-edits-\(name)-max", summary.max)
                 }
             }
+            for (name, opening) in openings {
+                if let summary = opening.summary {
+                    app.record("e2e-move-edits-sheet-\(name)-max", summary.max)
+                }
+            }
             app.record("e2e-move-edits-sheet-shown-ms", shown.max() ?? -1)
             app.record("e2e-move-edits-sheet-survey-ms", surveyed.max() ?? -1)
             app.record("e2e-move-edits-sheet-read-ms", read.max() ?? -1)
@@ -219,6 +232,11 @@
                     format: "%@: %.2f s, main thread p50 %.2f ms, p99 %.2f ms, max %.1f ms, over a frame %d", name,
                     phase.seconds, phase.summary?.p50 ?? -1, phase.summary?.p99 ?? -1, phase.summary?.max ?? -1,
                     phase.summary?.overFrame ?? -1,
+                )
+            } + openings.map { name, opening in
+                String(
+                    format: "the sheet opening %@: main thread max %.1f ms, over a frame %d", name,
+                    opening.summary?.max ?? -1, opening.summary?.overFrame ?? -1,
                 )
             } + [
                 String(

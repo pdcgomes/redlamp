@@ -363,8 +363,13 @@
             app.record("e2e-rename-indexed-10000-seconds", Date().timeIntervalSince(started))
             try app.choose(.selectAllPhotos)
             try app.wait("every photo selected") { $0.selectedPhotos.count == RenamePerformanceScratch.previewed }
-            try app.pressF2()
-            try app.waitForSheet("Rename Photos")
+            // From F2 to the sheet on screen, until AppKit has animated it in, in a run loop of its own that the turn
+            // opening it holds.
+            let opening = try app.watchingMainThread("sheet") {
+                try app.pressF2()
+                try app.waitForSheet("Rename Photos")
+                app.pause(0.5)
+            }
             try app.wait("10,000 photos read and named", timeout: 300) { $0.renameSheetFollows }
             try app.selectSheetField()
             let template = "Wedding-{date:yyyyMMdd}-{sequence:5}"
@@ -381,8 +386,11 @@
                     app.pause(0.05)
                 }
             }
-            try app.pressInSheet(KeyCombo(.escape))
-            try app.waitForNoSheet("Rename Photos")
+            let cancelling = try app.watchingMainThread("sheet-cancel") {
+                try app.pressInSheet(KeyCombo(.escape))
+                try app.waitForNoSheet("Rename Photos")
+                app.pause(0.5)
+            }
 
             started = Date()
             try scratch.show(scratch.thousand, count: RenamePerformanceScratch.renamed, app)
@@ -398,6 +406,8 @@
             try app.wait("the names to follow the template", timeout: 30) { model in
                 model.renameSheetTemplate == "Trip-{sequence:4:folder}" && model.renameSheetFollows
             }
+            // Through the batches and their Undo, the folder never shows more photos than it has, nor one twice.
+            let shownAtMost = try app.main { model in MostShown(model.library) }
             // From Rename to the batch made, its progress on screen, and the sheet closed: AppKit animates it away in a
             // run loop of its own, which the turn that closes it holds.
             let made = try app.main { $0.fileUndoCount }
@@ -447,6 +457,10 @@
                 try app.run("the move's Undo", timeout: 900) { await $0.filesMade() }
             }
             try app.expect(scratch.photos(in: scratch.moved).isEmpty, "Not every photo moved back")
+            let (most, twice) = try app.main { _ in
+                shownAtMost.stop()
+                return (shownAtMost.most, shownAtMost.twice)
+            }
 
             latencies.sort()
             let keyP95 = latencies.isEmpty ? -1 : latencies[min(latencies.count - 1, latencies.count * 95 / 100)]
@@ -461,19 +475,44 @@
                 app.record("e2e-rename-\(name)-seconds", phase.seconds)
             }
             app.record("e2e-rename-typing-key-p95", keyP95)
+            // Too few turns for a p99: the slowest is the sheet's.
+            let sheets = [
+                ("the sheet opening on 10,000 photos", "sheet", opening),
+                ("cancelled", "sheet-cancel", cancelling),
+            ]
+            for (_, name, phase) in sheets {
+                if let summary = phase.summary {
+                    app.record("e2e-rename-\(name)-max", summary.max)
+                }
+            }
             var lines = [String(
                 format: "names following a key (10,000 photos, %d keys): p95 %.0f ms",
                 latencies.count,
                 keyP95,
             )]
+            lines += sheets.map { what, _, phase in
+                String(
+                    format: "%@: main thread max %.1f ms, over a frame %d", what, phase.summary?.max ?? -1,
+                    phase.summary?.overFrame ?? -1,
+                )
+            }
             for (name, phase) in phases {
                 lines.append(String(
                     format: "%@: %.1f s, main thread p99 %.2f ms, max %.1f ms, over a frame %d", name, phase.seconds,
                     phase.summary?.p99 ?? -1, phase.summary?.max ?? -1, phase.summary?.overFrame ?? -1,
                 ))
             }
+            app.record("e2e-rename-most-shown", Double(most))
+            lines.append(
+                "the folder of \(RenamePerformanceScratch.renamed) photos, through the batches: at most \(most) shown, "
+                    + (twice ? "a photo shown twice" : "none twice"),
+            )
             try? (lines.joined(separator: "\n") + "\n").write(
                 to: app.runDirectory.appending(path: "rename-performance.txt"), atomically: true, encoding: .utf8,
+            )
+            try app.expect(
+                most <= RenamePerformanceScratch.renamed && !twice,
+                "the folder showed \(most) photos at most\(twice ? ", a photo twice" : "")",
             )
         }
     }
@@ -566,6 +605,26 @@
     /// Copies for the performance tier, in a folder of their own where `REDLAMP_PERF_SCRATCH` says (the run's folder
     /// by default): 10,000 of a JPEG in Big, and 1,000 raws in Thousand, with Moved, an empty folder, in it. Each copy
     /// is a clone of one copied once to that volume, ending in bytes of its own so each has its own content key.
+    /// The most photos the open folder showed after any change, and whether it ever showed a photo twice.
+    @MainActor
+    final class MostShown {
+        private(set) var most = 0
+        private(set) var twice = false
+        private var observation: LibraryObservation?
+
+        init(_ library: FolderLibrary) {
+            observation = library.observe { [weak self, weak library] _ in
+                guard let self, let library else { return }
+                most = max(most, library.count)
+                twice = twice || Set(library.photoIDs).count < library.photoIDs.count
+            }
+        }
+
+        func stop() {
+            observation = nil
+        }
+    }
+
     struct RenamePerformanceScratch: Sendable {
         static let previewed = 10000
         static let renamed = 1000
