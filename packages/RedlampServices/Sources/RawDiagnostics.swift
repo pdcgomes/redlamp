@@ -17,13 +17,12 @@ public extension ImageDecoder {
 
     /// "LibRaw 0.22.2-Release", or for a commit between releases, which still reports the last
     /// release's number, "LibRaw 0.22.0-Release (7bfffe2)", and for a commit of Redlamp's fork
-    /// (CAM-30), "LibRaw 0.22.0-Release (redlamp-libraw fedabb2)".
+    /// (CAM-30), "LibRaw 0.22.0-Release (fork 4abfcd2)": a camera bench report allows 40 characters.
     static var rawDecoderVersion: String {
         let reported = "LibRaw \(String(cString: libraw_version()))"
         let pin = String(cString: rl_libraw_pin())
         guard pin.count == 40, pin.allSatisfy(\.isHexDigit) else { return reported }
-        let source = String(cString: rl_libraw_source())
-        let fork = source == "LibRaw/LibRaw" ? "" : "\(source.split(separator: "/").last ?? "") "
+        let fork = String(cString: rl_libraw_source()) == "LibRaw/LibRaw" ? "" : "fork "
         return "\(reported) (\(fork)\(pin.prefix(7)))"
     }
 }
