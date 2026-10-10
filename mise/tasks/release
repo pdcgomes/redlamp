@@ -68,8 +68,9 @@ if [ -z "${SKIP_DMG:-}" ]; then
     rm -f "$PROBE"
     if [[ "$PROBE_ATTRIBUTES" == *com.apple.provenance* ]]; then
         fail "the files this release writes are tagged with com.apple.provenance, so its disk image would carry them (#333).
-       mise's binary usually does it: in a plain shell, run
-         xattr -d com.apple.provenance \"\$(readlink -f \"\$(command -v mise)\")\"
+       mise's binary usually does it, and macOS keeps tracking that file even once its attribute is
+       removed, so replace it with a fresh copy without attributes, in a plain shell:
+         R=\"\$(readlink -f \"\$(command -v mise)\")\" && cp -X \"\$R\" \"\$R.new\" && mv -f \"\$R.new\" \"\$R\"
        and release again (again after each Homebrew update of mise), or set SKIP_DMG=\"<why>\" for the zip alone."
     fi
 fi
