@@ -10,6 +10,8 @@ public final class KernelLibrary: @unchecked Sendable {
     public let rgbNormalize: any MTLComputePipelineState
     public let repairHotPixels: any MTLComputePipelineState
     public let reconstructHighlights: any MTLComputePipelineState
+    public let reconstructHighlightsJoint: any MTLComputePipelineState
+    public let neutralizeHighlights: any MTLComputePipelineState
     public let applyGainMaps: any MTLComputePipelineState
     public let demosaicBayer: any MTLComputePipelineState
     public let demosaicGeneric: any MTLComputePipelineState
@@ -88,6 +90,8 @@ public final class KernelLibrary: @unchecked Sendable {
         rgbNormalize = try pipeline("rl_rgb_normalize")
         repairHotPixels = try pipeline("rl_cfa_repair_hot_pixels")
         reconstructHighlights = try pipeline("rl_cfa_reconstruct_highlights")
+        reconstructHighlightsJoint = try pipeline("rl_cfa_reconstruct_highlights_joint")
+        neutralizeHighlights = try pipeline("rl_cfa_neutralize_highlights")
         applyGainMaps = try pipeline("rl_cfa_apply_gain_maps")
         demosaicBayer = try pipeline("rl_demosaic_bayer")
         demosaicGeneric = try pipeline("rl_demosaic_generic")

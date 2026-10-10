@@ -7,7 +7,7 @@
 public enum RawRevision: Int, Sendable, Hashable, Comparable {
     /// Processes 1 to 14.
     case first = 1
-    /// Process 15 on.
+    /// Process 15 on: clipped highlights keep the colour of what's around them (CAM-31).
     case second
 
     public init(processVersion: Int) {

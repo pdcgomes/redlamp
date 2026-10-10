@@ -201,7 +201,7 @@ struct HighlightParams {
 // the prediction in cube-root space from the means of its bright neighbours (at least half their
 // clip level: darker ones belong to another surface, such as a twig against the sky), never below the
 // clip level and at most two stops above it. Where every colour clipped, the lowest neutral
-// consistent with all of them.
+// consistent with all of them. The first raw revision's (processes 1 to 14), kept as it shipped.
 kernel void rl_cfa_reconstruct_highlights(
     texture2d<float, access::read> cfa [[texture(0)]],
     texture2d<float, access::write> out [[texture(1)]],
@@ -243,6 +243,112 @@ kernel void rl_cfa_reconstruct_highlights(
     float root = m.x + dot(m.yzw, powr(means, float3(1.0f / 3.0f)));
     float predicted = root > 0.0f ? root * root * root : 0.0f;
     out.write(float4(clamp(predicted, p.clip[color], 4.0f * p.clip[color])), gid);
+}
+
+// The second raw revision's reconstruction (process 15 on, CAM-31). A neighbour is bright when it
+// reaches half the lowest clip level: against its own, red's large multiplier in daylight puts a
+// blue sky's red out of reach, and a colour held at its own clip level is the white-balanced clip
+// colour, magenta. Where one other colour clipped too, that one is predicted first from the colour
+// seen, at least at its clip level, and this one from both, so nothing steps where a second colour
+// starts to clip.
+kernel void rl_cfa_reconstruct_highlights_joint(
+    texture2d<float, access::read> cfa [[texture(0)]],
+    texture2d<float, access::write> out [[texture(1)]],
+    constant HighlightParams &p [[buffer(0)]],
+    constant uchar *pattern [[buffer(1)]],
+    constant float4 *model [[buffer(2)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= p.width || gid.y >= p.height) return;
+    uint color = pattern[(gid.y % p.patternHeight) * p.patternWidth + gid.x % p.patternWidth];
+    float value = cfa.read(gid).r;
+    if (value < p.clip[color]) {
+        out.write(float4(value), gid);
+        return;
+    }
+    float bright = 0.5f * min3(p.clip.x, p.clip.y, p.clip.z);
+    float3 sums = 0.0f;
+    float3 counts = 0.0f;
+    for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -2; dx <= 2; dx++) {
+            int qx = int(gid.x) + dx;
+            int qy = int(gid.y) + dy;
+            if (qx < 0 || qy < 0 || qx >= int(p.width) || qy >= int(p.height)) continue;
+            uint neighbourColor = pattern[(uint(qy) % p.patternHeight) * p.patternWidth + uint(qx) % p.patternWidth];
+            float neighbour = cfa.read(uint2(qx, qy)).r;
+            if (neighbour < p.clip[neighbourColor] && neighbour >= bright) {
+                sums[neighbourColor] += neighbour;
+                counts[neighbourColor] += 1.0f;
+            }
+        }
+    }
+    bool first = counts[(color + 1) % 3] > 0.0f;
+    bool second = counts[(color + 2) % 3] > 0.0f;
+    if (!first && !second) {
+        out.write(float4(p.clip.w), gid);
+        return;
+    }
+    float3 means = select(float3(0.0f), sums / max(counts, float3(1.0f)), counts > 0.0f);
+    if (first != second) {
+        uint seen = first ? (color + 1) % 3 : (color + 2) % 3;
+        uint other = first ? (color + 2) % 3 : (color + 1) % 3;
+        float4 m = model[other * 3 + (seen == (other + 1) % 3 ? 1 : 2)];
+        float root = m.x + dot(m.yzw, powr(means, float3(1.0f / 3.0f)));
+        means[other] = max(root > 0.0f ? root * root * root : 0.0f, p.clip[other]);
+    }
+    float4 m = model[color * 3];
+    float root = m.x + dot(m.yzw, powr(means, float3(1.0f / 3.0f)));
+    float predicted = root > 0.0f ? root * root * root : 0.0f;
+    out.write(float4(clamp(predicted, p.clip[color], 4.0f * p.clip[color])), gid);
+}
+
+struct HighlightFadeParams {
+    uint width;
+    uint height;
+    uint patternWidth;
+    uint patternHeight;
+    float4 clip;         // xyz clip level per colour (white-balanced)
+    uint cell;           // photosites per side of the fade's cells
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+// After the second revision's reconstruction, areas clipped in every colour fade to neutral (see
+// HighlightFade): a photosite near its clip level (from 0.8 of it, fully from 0.9) moves towards the
+// brightest colour's mean around it, the lowest neutral none of them falls below, by the fade's
+// weight there. Unclipped detail beside a blown area keeps its colour.
+kernel void rl_cfa_neutralize_highlights(
+    texture2d<float, access::read> cfa [[texture(0)]],
+    texture2d<float, access::write> out [[texture(1)]],
+    texture2d<float, access::sample> fade [[texture(2)]],
+    constant HighlightFadeParams &p [[buffer(0)]],
+    constant uchar *pattern [[buffer(1)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= p.width || gid.y >= p.height) return;
+    uint color = pattern[(gid.y % p.patternHeight) * p.patternWidth + gid.x % p.patternWidth];
+    float value = cfa.read(gid).r;
+    constexpr sampler cells(filter::linear, address::clamp_to_edge, coord::normalized);
+    float2 uv = (float2(gid) + 0.5f) / (float(p.cell) * float2(fade.get_width(), fade.get_height()));
+    float weight = fade.sample(cells, uv).r * smoothstep(0.8f, 0.9f, value / p.clip[color]);
+    if (weight <= 1e-3f) {
+        out.write(float4(value), gid);
+        return;
+    }
+    float3 sums = 0.0f;
+    float3 counts = 0.0f;
+    for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -2; dx <= 2; dx++) {
+            int qx = clamp(int(gid.x) + dx, 0, int(p.width) - 1);
+            int qy = clamp(int(gid.y) + dy, 0, int(p.height) - 1);
+            uint neighbourColor = pattern[(uint(qy) % p.patternHeight) * p.patternWidth + uint(qx) % p.patternWidth];
+            sums[neighbourColor] += cfa.read(uint2(qx, qy)).r;
+            counts[neighbourColor] += 1.0f;
+        }
+    }
+    float3 means = sums / max(counts, float3(1.0f));
+    out.write(float4(mix(value, max3(means.x, means.y, means.z), weight)), gid);
 }
 
 // Malvar–He–Cutler gradient-corrected bilinear demosaic for 2x2 Bayer patterns.

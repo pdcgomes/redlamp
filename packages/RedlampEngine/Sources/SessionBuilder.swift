@@ -239,6 +239,24 @@ struct SessionBuilder {
         return minimum > 0 ? decoded.asShotMultipliers / minimum : SIMD3(1, 1, 1)
     }
 
+    /// The fade's weights, sampled between cells by `rl_cfa_neutralize_highlights`.
+    private func fadeTexture(_ fade: HighlightFade) throws -> any MTLTexture {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .r16Float, width: fade.width, height: fade.height, mipmapped: false,
+        )
+        descriptor.usage = [.shaderRead]
+        descriptor.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
+        let halves = fade.weights.map(Float16.init)
+        halves.withUnsafeBytes { bytes in
+            texture.replace(
+                region: MTLRegionMake2D(0, 0, fade.width, fade.height), mipmapLevel: 0, withBytes: bytes.baseAddress!,
+                bytesPerRow: fade.width * MemoryLayout<Float16>.stride,
+            )
+        }
+        return texture
+    }
+
     /// The gain maps' gain per camera channel (see `NoiseGain`); 1 everywhere without them.
     private func noiseGainTexture(_ decoded: DecodedImage) throws -> any MTLTexture {
         let field = switch decoded.layout {
@@ -313,6 +331,7 @@ struct SessionBuilder {
         else {
             throw EngineError.gpuUnavailable
         }
+        let fade = try highlights?.fade.map { try (cell: $0.cell, texture: fadeTexture($0)) }
 
         try commands.withComputeEncoder { encoder in
             var params = CFAParams(
@@ -355,7 +374,8 @@ struct SessionBuilder {
             encoder.setBuffer(repairedCount, offset: 0, index: 2)
             encoder.dispatchGrid(width: width, height: height, pipeline: kernels.repairHotPixels)
 
-            // Rebuilt highlights go back into the first texture, which the demosaic then reads.
+            // Rebuilt highlights go back into the first texture, which the demosaic then reads; faded
+            // ones into the second.
             var mosaic = repaired
             if let highlights {
                 var highlightParams = HighlightParams(
@@ -364,7 +384,9 @@ struct SessionBuilder {
                     clip: highlights.clip,
                 )
                 var coefficients = highlights.coefficients
-                encoder.setComputePipelineState(kernels.reconstructHighlights)
+                let reconstruct = highlights.revision >= .second
+                    ? kernels.reconstructHighlightsJoint : kernels.reconstructHighlights
+                encoder.setComputePipelineState(reconstruct)
                 encoder.setTexture(repaired, index: 0)
                 encoder.setTexture(cfa, index: 1)
                 encoder.setBytes(&highlightParams, length: MemoryLayout<HighlightParams>.stride, index: 0)
@@ -372,8 +394,23 @@ struct SessionBuilder {
                 encoder.setBytes(
                     &coefficients, length: coefficients.count * MemoryLayout<SIMD4<Float>>.stride, index: 2,
                 )
-                encoder.dispatchGrid(width: width, height: height, pipeline: kernels.reconstructHighlights)
+                encoder.dispatchGrid(width: width, height: height, pipeline: reconstruct)
                 mosaic = cfa
+                if let fade {
+                    var fadeParams = HighlightFadeParams(
+                        width: UInt32(width), height: UInt32(height),
+                        patternWidth: UInt32(pattern.width), patternHeight: UInt32(pattern.height),
+                        clip: highlights.clip, cell: UInt32(fade.cell),
+                    )
+                    encoder.setComputePipelineState(kernels.neutralizeHighlights)
+                    encoder.setTexture(cfa, index: 0)
+                    encoder.setTexture(repaired, index: 1)
+                    encoder.setTexture(fade.texture, index: 2)
+                    encoder.setBytes(&fadeParams, length: MemoryLayout<HighlightFadeParams>.stride, index: 0)
+                    encoder.setBytes(&colors, length: colors.count, index: 1)
+                    encoder.dispatchGrid(width: width, height: height, pipeline: kernels.neutralizeHighlights)
+                    mosaic = repaired
+                }
             }
 
             // Lens shading last: clipping and hot pixels are judged against the sensor's own levels.

@@ -20,6 +20,9 @@ public struct HighlightModel: Sendable, Hashable {
     public var coefficients: [SIMD4<Float>]
     /// The raw revision it was fitted for, which also says how the kernels rebuild.
     public var revision: RawRevision
+    /// From the second revision, where areas clipped in every colour fade to neutral; nil when
+    /// none did.
+    public var fade: HighlightFade?
 
     /// Photosites at or above this fraction of the white level count as clipped.
     public static let clipFraction: Float = 0.99
@@ -29,12 +32,16 @@ public struct HighlightModel: Sendable, Hashable {
         guard case let .mosaic(pattern) = image.layout else { return nil }
         let block = pattern.width % 3 == 0 ? 3 : 2
         let grid = BlockGrid(image: image, pattern: pattern, balance: balance, block: block)
-        let clipped = grid.clippedBlocks()
+        let colours = grid.clippedColours()
+        let clipped = colours.map { $0 != 0 }
         guard clipped.contains(true) else { return nil }
         let rim = grid.dilate(clipped, radius: 2)
         let clip = SIMD3<Float>(repeating: clipFraction) * balance
-        // Bright rim pixels only: darker ones (a twig against the sky) aren't what clipped.
-        let bright = SIMD3<Double>(clip) * 0.5
+        // Bright rim pixels only: darker ones (a twig against the sky) aren't what clipped. From the
+        // second revision, bright against the lowest clip level: against each colour's own, red's
+        // large multiplier in daylight puts a blue sky's own rim out of reach.
+        let bright = revision >= .second
+            ? SIMD3<Double>(repeating: Double(clip.min()) * 0.5) : SIMD3<Double>(clip) * 0.5
         var reference: [SIMD3<Double>] = []
         for index in clipped.indices where rim[index] && !clipped[index] {
             if let means = grid.means(ofBlock: index), all(means .>= bright) {
@@ -45,6 +52,7 @@ public struct HighlightModel: Sendable, Hashable {
             clip: SIMD4(clip, clip.max()),
             coefficients: coefficients(reference),
             revision: revision,
+            fade: revision >= .second ? HighlightFade(grid: grid, colours: colours) : nil,
         )
     }
 
@@ -74,8 +82,77 @@ public struct HighlightModel: Sendable, Hashable {
     }
 }
 
+/// How far each part of the mosaic fades to neutral after the second revision's reconstruction:
+/// over cells of `blocksPerCell` blocks a side, the share of a cell's blocks clipped in every
+/// colour, blurred over `blurCells`, so an area clipped in every colour meets the colour around it
+/// smoothly.
+public struct HighlightFade: Sendable, Hashable {
+    public var width: Int
+    public var height: Int
+    /// Photosites per side of a cell.
+    public var cell: Int
+    /// Per cell, row-major, from 0 to 1.
+    public var weights: [Float]
+
+    static let blocksPerCell = 4
+    static let blurCells: Float = 2
+
+    /// Nil when no block clipped in every colour.
+    fileprivate init?(grid: BlockGrid, colours: [UInt8]) {
+        guard colours.contains(BlockGrid.allColours) else { return nil }
+        let factor = Self.blocksPerCell
+        width = (grid.columns + factor - 1) / factor
+        height = (grid.rows + factor - 1) / factor
+        cell = grid.block * factor
+        var shares = [Float](repeating: 0, count: width * height)
+        var counts = [Float](repeating: 0, count: width * height)
+        for row in 0 ..< grid.rows {
+            let cellRow = (row / factor) * width
+            for column in 0 ..< grid.columns {
+                let index = cellRow + column / factor
+                if colours[row * grid.columns + column] == BlockGrid.allColours {
+                    shares[index] += 1
+                }
+                counts[index] += 1
+            }
+        }
+        weights = Self.blurred(zip(shares, counts).map { $1 > 0 ? $0 / $1 : 0 }, width: width, height: height)
+    }
+
+    /// A separable Gaussian of `blurCells`, clamped at the edges.
+    private static func blurred(_ values: [Float], width: Int, height: Int) -> [Float] {
+        let radius = Int((3 * blurCells).rounded(.up))
+        let taps = (-radius ... radius).map { exp(-Float($0 * $0) / (2 * blurCells * blurCells)) }
+        let total = taps.reduce(0, +)
+        var horizontal = [Float](repeating: 0, count: values.count)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                var sum: Float = 0
+                for (k, tap) in taps.enumerated() {
+                    sum += tap * values[y * width + min(max(x + k - radius, 0), width - 1)]
+                }
+                horizontal[y * width + x] = sum / total
+            }
+        }
+        var result = [Float](repeating: 0, count: values.count)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                var sum: Float = 0
+                for (k, tap) in taps.enumerated() {
+                    sum += tap * horizontal[min(max(y + k - radius, 0), height - 1) * width + x]
+                }
+                result[y * width + x] = sum / total
+            }
+        }
+        return result
+    }
+}
+
 /// The mosaic in blocks small enough to hold every colour (2 x 2 Bayer, 3 x 3 X-Trans).
 private struct BlockGrid {
+    /// A block's clipped colours when every one of them clipped.
+    static let allColours: UInt8 = 0b111
+
     let image: DecodedImage
     let pattern: CFAPattern
     let balance: SIMD3<Float>
@@ -98,9 +175,9 @@ private struct BlockGrid {
         return blacks[((y % pattern.height) * pattern.width + x % pattern.width) % blacks.count]
     }
 
-    /// Whether any photosite in each block reached the clip level.
-    func clippedBlocks() -> [Bool] {
-        var clipped = [Bool](repeating: false, count: columns * rows)
+    /// Per block, a bit for each colour (1 red, 2 green, 4 blue) with a photosite at the clip level.
+    func clippedColours() -> [UInt8] {
+        var colours = [UInt8](repeating: 0, count: columns * rows)
         let white = image.whiteLevel
         let fraction = HighlightModel.clipFraction
         image.samples.withUnsafeBufferPointer { samples in
@@ -109,12 +186,12 @@ private struct BlockGrid {
                 for x in 0 ..< columns * block {
                     let black = black(x: x, y: y)
                     if Float(samples[y * image.width + x]) >= black + fraction * (white - black) {
-                        clipped[rowStart + x / block] = true
+                        colours[rowStart + x / block] |= 1 << pattern.color(x: x, y: y)
                     }
                 }
             }
         }
-        return clipped
+        return colours
     }
 
     /// Blocks within `radius` blocks of a set one.

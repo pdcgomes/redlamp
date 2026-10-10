@@ -127,6 +127,30 @@ public struct HighlightParams {
     }
 }
 
+public struct HighlightFadeParams {
+    public var width: UInt32
+    public var height: UInt32
+    public var patternWidth: UInt32
+    public var patternHeight: UInt32
+    public var clip: SIMD4<Float>
+    /// Photosites per side of the fade's cells.
+    public var cell: UInt32
+    public var pad0: UInt32 = 0
+    public var pad1: UInt32 = 0
+    public var pad2: UInt32 = 0
+
+    public init(
+        width: UInt32, height: UInt32, patternWidth: UInt32, patternHeight: UInt32, clip: SIMD4<Float>, cell: UInt32,
+    ) {
+        self.width = width
+        self.height = height
+        self.patternWidth = patternWidth
+        self.patternHeight = patternHeight
+        self.clip = clip
+        self.cell = cell
+    }
+}
+
 public struct GainMapGPU {
     public var area: SIMD4<Int32>
     public var grid: SIMD4<Int32>
