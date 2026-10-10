@@ -39,14 +39,16 @@ public final class LibraryCompare {
     }
 }
 
-/// Compare (C) and Survey (N) in the Library module (LIB-16, LIB-13), as Lightroom Classic has them.
+/// Compare (C) and Survey (N) in the Library module (LIB-16, LIB-13), as Lightroom Classic has them. Both show the
+/// grid's cells: a closed stack, or a raw and its JPEG, is one photo there, its first, and stands for all of them,
+/// as in the grid.
 ///
 /// - **Compare** shows the select and a candidate side by side. Both are selected, and the active one is the model's
 ///   `selection`, which a click on the other changes. ← and → change the candidate, in the grid's order past the
 ///   select; ↑ makes the candidate the select and the photo after it the candidate; ↓ swaps the two, the active
 ///   photo staying active. The two zoom (Z, Space, a click) and pan (a drag) together until they're unlinked;
 ///   linked again, the other takes the active one's zoom and place. A photo chosen elsewhere, in the filmstrip,
-///   takes the active one's place.
+///   takes the active one's place, and the selection is kept to the two.
 /// - **Survey** lays out the photos selected as large as they fit, the active one marked. A click makes another
 ///   active, the arrow keys move between them, and a photo's × takes it out of the selection, and so out of Survey,
 ///   which stays, until one is left.
@@ -71,16 +73,30 @@ public extension EditorModel {
         module == .library && (libraryView == .compare || libraryView == .survey)
     }
 
+    /// The photo whose cell stands for `url`'s in the grid: itself, or the first of the closed stack it's in.
+    internal func cellPhoto(of url: URL?, in order: GridOrder) -> URL? {
+        guard let url, let id = library.photoID(of: url) else { return nil }
+        guard let cell = order.cell(for: id), cell != id else { return url }
+        return library.url(ofPhoto: cell)
+    }
+
+    /// The photos cell `id` stands for: a closed stack's, a raw and its JPEG; else the photo alone.
+    private func photos(ofCell id: Int64, in order: GridOrder) -> [Int64] {
+        let photos = order.stacks?.photos(of: id) ?? []
+        return photos.isEmpty ? [id] : photos
+    }
+
     // MARK: - Compare
 
     /// C: the active photo as the select beside a candidate, the photo selected after it, else the one after it in
     /// the grid's order (before it, at the end); both selected, the select active.
     @discardableResult
     func showCompare() -> Bool {
-        guard let active = selection, let id = library.photoID(of: active) else { return false }
-        let compare = libraryCompare
         let order = gridOrder
-        let candidate = selectedPhoto(after: id) ?? order.cell(1, from: id) ?? order.cell(-1, from: id)
+        guard let active = cellPhoto(of: selection, in: order),
+              let id = library.photoID(of: active) else { return false }
+        let compare = libraryCompare
+        let candidate = selectedCell(after: id, in: order) ?? order.cell(1, from: id) ?? order.cell(-1, from: id)
         compare.select = active
         compare.candidate = candidate.flatMap(library.url(ofPhoto:))
         if compare.activeSide != .select {
@@ -91,13 +107,13 @@ public extension EditorModel {
         return true
     }
 
-    /// The photo selected after `id` in the list's order, back to the first after the last; nil unless another
-    /// photo is selected.
-    private func selectedPhoto(after id: Int64) -> Int64? {
+    /// The cell of the photo selected after cell `id`'s in the list's order, back to the first after the last; nil
+    /// unless a photo of another cell is selected.
+    private func selectedCell(after id: Int64, in order: GridOrder) -> Int64? {
         guard photoSelection.count > 1 else { return nil }
-        let ids = photoSelection.ids(in: library.photoList)
-        guard let place = ids.firstIndex(of: id) else { return ids.first }
-        return ids[(place + 1) % ids.count]
+        let cells = photoSelection.ids(in: library.photoList).map { order.cell(for: $0) ?? $0 }
+        guard let place = cells.firstIndex(of: id) else { return cells.first }
+        return (1 ..< max(cells.count, 1)).lazy.map { cells[(place + $0) % cells.count] }.first { $0 != id }
     }
 
     /// ← and →: the candidate becomes the photo before or after it in the grid's order, past the select. False at
@@ -192,14 +208,17 @@ public extension EditorModel {
         return compare.unlinked
     }
 
-    /// Selects Compare's two photos, the active side's active, and makes it the active photo; only what changes is set.
+    /// Selects the photos Compare's two cells stand for, the active side's photo active, and makes it the active
+    /// photo; only what changes is set.
     private func selectCompared() {
         let compare = libraryCompare
-        let list = library.photoList
-        let ids = [compare.select, compare.candidate].compactMap { $0.flatMap(library.photoID(of:)) }
+        let (list, order) = (library.photoList, gridOrder)
+        let cells = [compare.select, compare.candidate].compactMap { $0.flatMap(library.photoID(of:)) }
         let active = compare.photo(compare.activeSide) ?? compare.select
         var selected = PhotoSelection()
-        selected.select(ids, active: active.flatMap(library.photoID(of:)), in: list)
+        selected.select(
+            cells.flatMap { photos(ofCell: $0, in: order) }, active: active.flatMap(library.photoID(of:)), in: list,
+        )
         if selected != photoSelection {
             photoSelection = selected
         }
@@ -213,8 +232,9 @@ public extension EditorModel {
     internal func keepCompareInStep() {
         guard libraryView == .compare else { return }
         let compare = libraryCompare
+        let order = gridOrder
         let listed = { (url: URL?) -> Bool in url.flatMap(self.library.photoID(of:)) != nil }
-        if let active = selection, listed(active) {
+        if let active = cellPhoto(of: selection, in: order) {
             if active == compare.select {
                 activateCompared(.select)
             } else if active == compare.candidate {
@@ -227,13 +247,12 @@ public extension EditorModel {
             }
         }
         if !listed(compare.select) {
-            compare.select = listed(compare.candidate) ? compare.candidate : selection
+            compare.select = listed(compare.candidate) ? compare.candidate : cellPhoto(of: selection, in: order)
             compare.candidate = nil
             compare.activeSide = .select
         }
         if !listed(compare.candidate) || compare.candidate == compare.select,
            let id = compare.select.flatMap(library.photoID(of:)) {
-            let order = gridOrder
             compare.candidate = (order.cell(1, from: id) ?? order.cell(-1, from: id)).flatMap(library.url(ofPhoto:))
         }
         selectCompared()
@@ -249,17 +268,34 @@ public extension EditorModel {
         return true
     }
 
-    /// The photos Survey shows: those selected, in the filmstrip's order, the active one among them, at most
-    /// `LibraryCompare.surveyLimit` of them from the active one's place.
-    internal var surveyPhotos: [URL] {
-        var photos = selectedPhotos
-        if let active = selection, !photos.contains(active) {
-            photos.insert(active, at: 0)
+    /// The photos Survey shows: a photo for each of the grid's cells the selection has photos of, the active one's
+    /// among them, in the list's order, at most `LibraryCompare.surveyLimit` of them from the active one's place.
+    var surveyPhotos: [URL] {
+        let order = gridOrder
+        let active = selection.flatMap(library.photoID(of:)).map { order.cell(for: $0) ?? $0 }
+        var cells: [Int64] = []
+        var seen = Set<Int64>()
+        let selected = photoSelection.isEmpty ? [] : photoSelection.ids(in: library.photoList)
+        for id in selected {
+            let cell = order.cell(for: id) ?? id
+            if seen.insert(cell).inserted {
+                cells.append(cell)
+            }
+        }
+        if let active, !seen.contains(active) {
+            cells.insert(active, at: 0)
         }
         let limit = LibraryCompare.surveyLimit
-        guard photos.count > limit else { return photos }
-        let start = min(selection.flatMap(photos.firstIndex(of:)) ?? 0, photos.count - limit)
-        return Array(photos[start ..< start + limit])
+        if cells.count > limit {
+            let start = min(active.flatMap(cells.firstIndex(of:)) ?? 0, cells.count - limit)
+            cells = Array(cells[start ..< start + limit])
+        }
+        return cells.compactMap(library.url(ofPhoto:))
+    }
+
+    /// The photo Survey marks active: the active photo's cell's.
+    var surveyActivePhoto: URL? {
+        cellPhoto(of: selection, in: gridOrder)
     }
 
     /// ← and → in Survey: the photo before or after the active one among those shown becomes active. False at either
@@ -267,7 +303,7 @@ public extension EditorModel {
     @discardableResult
     func stepSurvey(by offset: Int) -> Bool {
         let photos = surveyPhotos
-        guard let active = selection, let place = photos.firstIndex(of: active),
+        guard let active = surveyActivePhoto, let place = photos.firstIndex(of: active),
               photos.indices.contains(place + offset) else { return false }
         activateSurveyed(photos[place + offset])
         return true
@@ -282,12 +318,26 @@ public extension EditorModel {
         select(url, keepingSelection: true)
     }
 
-    /// A photo's × in Survey: taken out of the selection, and so out of Survey, which stays; when it was the active
-    /// one, the photo selected after it becomes active. The last photo stays.
+    /// A photo's × in Survey: the photos its cell stands for taken out of the selection, and so out of Survey, which
+    /// stays; when the active photo was among them, the photo selected after them becomes active. The last photo
+    /// stays.
     @discardableResult
     func removeFromSurvey(_ url: URL) -> Bool {
-        guard selectedCount > 1, let id = library.photoID(of: url), photoSelection.contains(id) else { return false }
-        click(url, toggling: true)
+        let order = gridOrder
+        guard surveyPhotos.count > 1, let id = library.photoID(of: url) else { return false }
+        let removed = photos(ofCell: order.cell(for: id) ?? id, in: order)
+        let list = library.photoList
+        var selected = photoSelection
+        for photo in removed where selected.contains(photo) {
+            selected.toggle(photo, in: list)
+        }
+        guard !selected.isEmpty, selected != photoSelection else { return false }
+        photoSelection = selected
+        if let active = selection.flatMap(library.photoID(of:)), removed.contains(active),
+           let next = selected.active.flatMap(library.url(ofPhoto:)) {
+            select(next, keepingSelection: true)
+            selectionAnchor = next
+        }
         activity.record(.action, "Remove from Survey")
         return true
     }
@@ -341,7 +391,7 @@ public extension EditorModel {
                 return next != select || order.cell(offset, from: next) != nil
             }
             let photos = surveyPhotos
-            guard let place = selection.flatMap(photos.firstIndex(of:)) else { return false }
+            guard let place = surveyActivePhoto.flatMap(photos.firstIndex(of:)) else { return false }
             return photos.indices.contains(place + offset)
         case .toggleZoom:
             return comparing ? selection != nil : nil
@@ -351,11 +401,15 @@ public extension EditorModel {
         }
     }
 
-    /// A culling key in Compare or Survey: the active photo alone, as one change with Undo; `advance` then moves
-    /// Compare's candidate on, or makes Survey's next photo active.
+    /// A culling key in Compare or Survey: the photos the active photo's cell stands for, as one change with Undo;
+    /// `advance` then moves Compare's candidate on, or makes Survey's next photo active.
     private func cullCompared(_ change: CullingChange, advance: Bool) -> Bool {
-        guard let active = selection, let row = library.index(of: active) else { return false }
-        cull(change, rows: [row])
+        let order = gridOrder
+        guard let active = selection.flatMap(library.photoID(of:)) else { return false }
+        let list = library.photoList
+        let rows = photos(ofCell: order.cell(for: active) ?? active, in: order).compactMap(list.index(of:))
+        guard !rows.isEmpty else { return false }
+        cull(change, rows: rows)
         if advance {
             if libraryView == .compare {
                 stepCandidate(by: 1)

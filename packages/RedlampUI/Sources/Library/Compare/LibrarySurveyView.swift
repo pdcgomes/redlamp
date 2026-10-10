@@ -69,10 +69,9 @@ final class LibrarySurveyView: NSView {
         trackers = [
             Tracker { [weak self] in
                 guard let self else { return }
-                _ = (model.photoSelection, model.library.revision)
-                let active = model.selection
+                _ = (model.photoSelection, model.selection, model.library.revision)
                 guard model.module == .library, model.libraryView == .survey else { return }
-                show(model.surveyPhotos, active: active)
+                show(model.surveyPhotos, active: model.surveyActivePhoto)
             },
         ]
     }
@@ -221,7 +220,7 @@ final class LibrarySurveyView: NSView {
 
     /// ↑ and ↓: the photo in the row above or below nearest across to the active one.
     private func moveVertically(by offset: Int) {
-        guard let active = model.selection, let index = photos.firstIndex(of: active) else { return }
+        guard let active = model.surveyActivePhoto, let index = photos.firstIndex(of: active) else { return }
         let frames = cells.prefix(photos.count).map(\.frame)
         let rows = Array(Set(frames.map(\.minY))).sorted()
         guard let row = rows.firstIndex(of: frames[index].minY), rows.indices.contains(row + offset) else { return }
