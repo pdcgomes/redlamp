@@ -120,7 +120,16 @@
                 try app.press(.surveyView)
                 try app.wait("Survey") { $0.libraryView == .survey }
                 try app.expect(try app.exists(.identifier("library.survey")), "Survey isn't on screen")
-                try app.wait("the four cells' photos laid out") { $0.surveyPhotos.map(\.lastPathComponent) == shown }
+                do {
+                    try app
+                        .wait("the four cells' photos laid out") { $0.surveyPhotos.map(\.lastPathComponent) == shown }
+                } catch {
+                    let state = try app.main { model in
+                        "Survey shows \(model.surveyPhotos.map(\.lastPathComponent)), of the selection "
+                            + "\(model.selectedPhotos.map(\.lastPathComponent)), \(model.selection?.lastPathComponent ?? "") active"
+                    }
+                    throw ScenarioFailure("\(error): \(state); the cells are \(Array(cells.prefix(4)))")
+                }
                 try app.wait("Survey to take the keyboard") { _ in firstResponder() == "LibrarySurveyView" }
                 try app.wait("each photo on screen") { _ in
                     shown

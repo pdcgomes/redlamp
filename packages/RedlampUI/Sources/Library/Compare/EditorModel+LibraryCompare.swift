@@ -107,13 +107,28 @@ public extension EditorModel {
         return true
     }
 
-    /// The cell of the photo selected after cell `id`'s in the list's order, back to the first after the last; nil
-    /// unless a photo of another cell is selected.
+    /// The cell selected after cell `id` in the grid's order, back to the first after the last; nil unless a photo of
+    /// another cell is selected.
     private func selectedCell(after id: Int64, in order: GridOrder) -> Int64? {
         guard photoSelection.count > 1 else { return nil }
-        let cells = photoSelection.ids(in: library.photoList).map { order.cell(for: $0) ?? $0 }
+        let cells = selectedCells(in: order)
         guard let place = cells.firstIndex(of: id) else { return cells.first }
         return (1 ..< max(cells.count, 1)).lazy.map { cells[(place + $0) % cells.count] }.first { $0 != id }
+    }
+
+    /// The cells the selection has photos of, in the grid's order, and the active photo's.
+    private func selectedCells(in order: GridOrder) -> [Int64] {
+        var cells: [Int64] = []
+        var seen = Set<Int64>()
+        let active = selection.flatMap(library.photoID(of:))
+        let selected = photoSelection.isEmpty ? [] : photoSelection.ids(in: library.photoList)
+        for id in selected + (active.map { [$0] } ?? []) {
+            let cell = order.cell(for: id) ?? id
+            if seen.insert(cell).inserted {
+                cells.append(cell)
+            }
+        }
+        return cells.sorted { (order.place(of: $0) ?? .max) < (order.place(of: $1) ?? .max) }
     }
 
     /// ← and →: the candidate becomes the photo before or after it in the grid's order, past the select. False at
@@ -269,22 +284,11 @@ public extension EditorModel {
     }
 
     /// The photos Survey shows: a photo for each of the grid's cells the selection has photos of, the active one's
-    /// among them, in the list's order, at most `LibraryCompare.surveyLimit` of them from the active one's place.
+    /// among them, in the grid's order, at most `LibraryCompare.surveyLimit` of them from the active one's place.
     var surveyPhotos: [URL] {
         let order = gridOrder
         let active = selection.flatMap(library.photoID(of:)).map { order.cell(for: $0) ?? $0 }
-        var cells: [Int64] = []
-        var seen = Set<Int64>()
-        let selected = photoSelection.isEmpty ? [] : photoSelection.ids(in: library.photoList)
-        for id in selected {
-            let cell = order.cell(for: id) ?? id
-            if seen.insert(cell).inserted {
-                cells.append(cell)
-            }
-        }
-        if let active, !seen.contains(active) {
-            cells.insert(active, at: 0)
-        }
+        var cells = selectedCells(in: order)
         let limit = LibraryCompare.surveyLimit
         if cells.count > limit {
             let start = min(active.flatMap(cells.firstIndex(of:)) ?? 0, cells.count - limit)
@@ -319,24 +323,33 @@ public extension EditorModel {
     }
 
     /// A photo's × in Survey: the photos its cell stands for taken out of the selection, and so out of Survey, which
-    /// stays; when the active photo was among them, the photo selected after them becomes active. The last photo
-    /// stays.
+    /// stays; when the active photo was among them, the photo after it in Survey becomes active, else the one before
+    /// it. The last photo stays.
     @discardableResult
     func removeFromSurvey(_ url: URL) -> Bool {
         let order = gridOrder
-        guard surveyPhotos.count > 1, let id = library.photoID(of: url) else { return false }
-        let removed = photos(ofCell: order.cell(for: id) ?? id, in: order)
+        let shown = surveyPhotos
+        guard shown.count > 1, let id = library.photoID(of: url) else { return false }
+        let cell = order.cell(for: id) ?? id
+        let removed = photos(ofCell: cell, in: order)
         let list = library.photoList
         var selected = photoSelection
         for photo in removed where selected.contains(photo) {
             selected.toggle(photo, in: list)
         }
         guard !selected.isEmpty, selected != photoSelection else { return false }
-        photoSelection = selected
-        if let active = selection.flatMap(library.photoID(of:)), removed.contains(active),
-           let next = selected.active.flatMap(library.url(ofPhoto:)) {
+        let place = library.url(ofPhoto: cell).flatMap(shown.firstIndex(of:))
+        let next = place.flatMap { place in
+            shown.indices.contains(place + 1) ? shown[place + 1] : place > 0 ? shown[place - 1] : nil
+        }
+        if let active = selection.flatMap(library.photoID(of:)), removed.contains(active), let next,
+           let nextID = library.photoID(of: next) {
+            selected.activate(nextID)
+            photoSelection = selected
             select(next, keepingSelection: true)
             selectionAnchor = next
+        } else {
+            photoSelection = selected
         }
         activity.record(.action, "Remove from Survey")
         return true
