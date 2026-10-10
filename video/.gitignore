@@ -18,3 +18,6 @@ public/review/
 
 # The pixelkit promo's frames and score (scripts/pixelkit-frames.py, scripts/pixelkit-score.py).
 public/pixelkit/
+
+# The feature videos' theme, in each of its arrangements (scripts/features-theme.py).
+public/features/

@@ -1,0 +1,31 @@
+{
+  "bpm": 100,
+  "fps": 30,
+  "beatsPerBar": 4,
+  "bars": 8,
+  "chords": [
+    ["Bbmaj9", 0, 4],
+    ["Am7", 4, 4],
+    ["Dm9", 8, 4],
+    ["Gm9", 12, 4],
+    ["C9sus", 16, 4],
+    ["Fmaj9", 20, 2],
+    ["Am7", 22, 2],
+    ["Bbmaj9", 24, 2],
+    ["Bbm6", 26, 2],
+    ["Fmaj9", 28, 4]
+  ],
+  "cues": {
+    "hook": 0,
+    "step1": 4,
+    "step2": 8,
+    "step3": 12,
+    "step4": 16,
+    "result": 20,
+    "flip": 22,
+    "endLine": 24,
+    "cta": 26,
+    "fade": 29,
+    "end": 32
+  }
+}
