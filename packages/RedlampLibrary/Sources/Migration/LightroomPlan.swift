@@ -447,7 +447,7 @@ struct LightroomPlanner {
         }
         if !system.isEmpty {
             report.left.append(LightroomReport.Left(
-                what: "of Lightroom's own collections (\(system.sorted().joined(separator: ", ")))",
+                what: "Lightroom's own collections (\(system.sorted().joined(separator: ", ")))",
                 count: system.count,
                 why: "Lightroom keeps them for itself",
             ))

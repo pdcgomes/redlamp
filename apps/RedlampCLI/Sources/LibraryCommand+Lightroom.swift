@@ -92,7 +92,8 @@ extension LibraryCommand {
         let importer = LightroomImport(index: index)
         let outcome = try await importer.run(plan) { progress in
             let due = reported.withLock { last in
-                guard ContinuousClock.now - last >= .seconds(1) || progress.done == progress.total else { return false }
+                guard progress.total > 0, ContinuousClock.now - last >= .seconds(1) || progress.done == progress.total
+                else { return false }
                 last = ContinuousClock.now
                 return true
             }

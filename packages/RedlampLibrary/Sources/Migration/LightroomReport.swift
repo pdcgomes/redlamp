@@ -154,24 +154,27 @@ public extension LightroomReport {
             ("ratings", fields.ratings, differing.ratings), ("picks", fields.picks, differing.picks),
             ("rejects", fields.rejects, differing.rejects), ("colour labels", fields.labels, differing.labels),
             ("custom labels", fields.customLabels, differing.customLabels),
-            ("marks (the Quick Collection)", fields.marks, differing.marks),
+            ("marks, from the Quick Collection", fields.marks, differing.marks),
             ("titles", fields.titles, differing.titles), ("captions", fields.captions, differing.captions),
             ("creators", fields.creators, differing.creators), ("copyrights", fields.copyrights, differing.copyrights),
-            ("locations", fields.locations, differing.locations), ("with keywords", fields.keywords, 0),
-            ("in collections", fields.collections, 0),
+            ("locations", fields.locations, differing.locations), ("photos with keywords", fields.keywords, 0),
+            ("photos in collections", fields.collections, 0),
         ]
         lines.append("  coming across, for the photos found (\(Self.count(changing)) of them change):")
         for (name, count, differing) in fieldLines where count > 0 {
-            lines.append("    \(Self.count(count)) \(name)"
+            lines.append("    \(name): \(Self.count(count))"
                 + (differing > 0 ? ", \(Self.count(differing)) replacing another value" : ""))
         }
         if pairs > 0 {
-            lines.append("    \(Self.count(pairs)) JPEGs given their raws' fields, as Lightroom kept each pair as one")
+            lines
+                .append(
+                    "    JPEGs given their raws' fields, as Lightroom kept each pair as one photo: \(Self.count(pairs))",
+                )
         }
-        lines.append("    \(Self.count(keywords)) keywords, \(Self.count(synonyms)) synonyms, "
-            + "\(Self.count(notExported)) not exported, \(Self.count(people)) people")
-        lines.append("    \(Self.count(collections)) collections and \(Self.count(sets)) sets, "
-            + "\(Self.count(smartMapped.count)) of \(Self.count(smart.count)) smart collections")
+        lines.append("    keywords: \(Self.count(keywords)) (synonyms: \(Self.count(synonyms)), not exported: "
+            + "\(Self.count(notExported)), people: \(Self.count(people)))")
+        lines.append("    collections: \(Self.count(collections)), sets: \(Self.count(sets)), smart collections: "
+            + "\(Self.count(smartMapped.count)) of \(Self.count(smart.count))")
         for smart in smartMapped {
             lines.append("      \(smart.path): \(smart.query ?? "")")
             for difference in smart.differences {
@@ -191,10 +194,10 @@ public extension LightroomReport {
             lines.append("    the smart collection \(smart.path): \(smart.reasons.joined(separator: "; "))")
         }
         for item in left {
-            lines.append("    \(Self.count(item.count)) \(item.what): \(item.why)")
+            lines.append("    \(item.what) (\(Self.count(item.count))): \(item.why)")
         }
         if notFound > 0 {
-            lines.append("    \(Self.count(notFound)) photos not found in the library's folders:")
+            lines.append("    photos not found in the library's folders (\(Self.count(notFound))):")
             lines += notFoundPaths.map { "      \($0)" }
             if notFound > notFoundPaths.count {
                 lines.append("      and \(Self.count(notFound - notFoundPaths.count)) more")
