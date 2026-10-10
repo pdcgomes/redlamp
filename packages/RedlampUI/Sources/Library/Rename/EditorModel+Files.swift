@@ -307,10 +307,11 @@ extension EditorModel {
         var restoring: [LibraryItem] = []
         var keys: [URL: ContentKey] = [:]
         var saving: [URL] = []
-        for move in moves {
-            saving.append(URL(fileURLWithPath: move.from))
-            let to = library.listedURL(ofPath: move.to)
-            guard let from = library.listedURL(ofPath: move.from), library.index(of: from) != nil else {
+        let urls = await listedURLs(of: moves)
+        for (move, url) in zip(moves, urls) {
+            saving.append(url.file)
+            let to = url.to
+            guard let from = url.from, library.index(of: from) != nil else {
                 if let to, let item = step.items[move.id] {
                     restoring.append(FolderLibrary.item(item, at: to))
                     keys[to] = step.keys[move.id]
@@ -358,6 +359,25 @@ extension EditorModel {
         return saving
     }
 
+    /// Each move's file, and the URLs the folders shown give its photo where it is and where it goes, worked out off
+    /// the main thread: a thousand photos' take milliseconds. Should the folders shown change meanwhile, they're
+    /// worked out again for those shown then.
+    private func listedURLs(of moves: [(id: Int64, from: String, to: String)]) async
+        -> [(file: URL, from: URL?, to: URL?)] {
+        let urls: @Sendable (ListedURLs) -> [(file: URL, from: URL?, to: URL?)] = { listed in
+            moves.map { move in
+                (
+                    file: URL(fileURLWithPath: move.from),
+                    from: listed.url(ofPath: move.from),
+                    to: listed.url(ofPath: move.to),
+                )
+            }
+        }
+        let listed = library.listedURLs
+        let made = await Task.detached(priority: .userInitiated) { urls(listed) }.value
+        return library.listedURLs == listed ? made : urls(library.listedURLs)
+    }
+
     /// Once a batch has run: each photo shown where the index has it, should the batch have stopped, been rolled
     /// back or left some out.
     private func follow(
@@ -366,10 +386,11 @@ extension EditorModel {
         var corrections: [LibraryMoves.Move] = []
         var restoring: [LibraryItem] = []
         var keys: [URL: ContentKey] = [:]
+        let listed = library.listedURLs
         for move in moves {
             guard let path = paths[move.id], path != move.to else { continue }
-            let actual = library.listedURL(ofPath: path)
-            if let shown = library.listedURL(ofPath: move.to), library.index(of: shown) != nil {
+            let actual = listed.url(ofPath: path)
+            if let shown = listed.url(ofPath: move.to), library.index(of: shown) != nil {
                 corrections.append(LibraryMoves.Move(from: shown, to: actual))
             } else if let actual, library.index(of: actual) == nil, let item = step.items[move.id] {
                 restoring.append(FolderLibrary.item(item, at: actual))

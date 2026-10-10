@@ -21,6 +21,37 @@ struct LibraryMoves: Sendable {
     var keys: [URL: ContentKey] = [:]
 }
 
+/// The URLs the open folder's list gives photos by their paths, as `LibraryFolderList` makes them, its folder's own
+/// path worked out once.
+struct ListedURLs: Sendable, Equatable {
+    let folder: URL?
+    let includesSubfolders: Bool
+    private let top: String
+    private let below: String
+
+    init(folder: URL?, includesSubfolders: Bool) {
+        self.folder = folder
+        self.includesSubfolders = includesSubfolders
+        top = folder.map(LibraryService.path) ?? ""
+        below = top == "/" ? "/" : top + "/"
+    }
+
+    /// The URL of the photo at `path` (a folder's path, a slash and a name); nil for a photo outside the folders.
+    func url(ofPath path: String) -> URL? {
+        guard let folder else { return nil }
+        let directory = (path as NSString).deletingLastPathComponent
+        let name = (path as NSString).lastPathComponent
+        if directory == top {
+            return folder.appending(path: name, directoryHint: .notDirectory)
+        }
+        guard includesSubfolders, directory.hasPrefix(below) else { return nil }
+        return folder.appending(
+            path: String(directory.dropFirst(below.count)) + "/" + name,
+            directoryHint: .notDirectory,
+        )
+    }
+}
+
 extension FolderLibrary {
     /// What showing `LibraryMoves` changes, made off the main thread from the photos at `revision`.
     struct Moved: Sendable {
@@ -36,19 +67,12 @@ extension FolderLibrary {
     /// The URL the open folder's list gives a photo at `path` (a folder's path, a slash and a name), as
     /// `LibraryFolderList` makes them; nil for a photo outside the folders shown.
     func listedURL(ofPath path: String) -> URL? {
-        guard let folder = openFolder else { return nil }
-        let top = LibraryService.path(folder)
-        let directory = (path as NSString).deletingLastPathComponent
-        let name = (path as NSString).lastPathComponent
-        if directory == top {
-            return folder.appending(path: name, directoryHint: .notDirectory)
-        }
-        let below = top == "/" ? "/" : top + "/"
-        guard includesSubfolders, directory.hasPrefix(below) else { return nil }
-        return folder.appending(
-            path: String(directory.dropFirst(below.count)) + "/" + name,
-            directoryHint: .notDirectory,
-        )
+        listedURLs.url(ofPath: path)
+    }
+
+    /// What gives the photos of the folders shown now their URLs, for many at once, off the main thread.
+    var listedURLs: ListedURLs {
+        ListedURLs(folder: openFolder, includesSubfolders: includesSubfolders)
     }
 
     /// Shows `moves` at once: works out the photos' places off the main thread, then, once the photos shown
