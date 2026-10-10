@@ -157,7 +157,7 @@ def shortcuts(root: Path) -> list[Shortcut]:
     titles = {i: v.strip('"') for ids_, v in _cases(_switch(text, "public var title")) for i in ids_}
     category = {i: categories[v.lstrip(".")] for ids_, v in _cases(_switch(text, "public var category")) for i in ids_}
     combos: dict[str, list[list[str]]] = {}
-    for ids_, value in _cases(_switch(text, "public var combos")):
+    for ids_, value in _cases(_switch(text, "public var defaultCombos")):
         inner = value.strip()[1:-1].strip()
         parts = [p.strip() for p in re.split(r",\s*(?=\.char|KeyCombo)", inner) if p.strip()]
         for i in ids_:

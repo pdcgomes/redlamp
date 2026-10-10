@@ -459,9 +459,15 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .removeFromCollection: [KeyCombo(.delete)]
         case .newSmartCollection, .newCollectionSet, .addToCollection, .addToTargetCollection: []
         // Lightroom Classic's keys for the active keyword set's nine keywords.
-        case .keywordSet1, .keywordSet2, .keywordSet3, .keywordSet4, .keywordSet5, .keywordSet6, .keywordSet7,
-             .keywordSet8, .keywordSet9:
-            [.char(Character("\(keywordSetNumber ?? 0)"), option: true)]
+        case .keywordSet1: [.char("1", option: true)]
+        case .keywordSet2: [.char("2", option: true)]
+        case .keywordSet3: [.char("3", option: true)]
+        case .keywordSet4: [.char("4", option: true)]
+        case .keywordSet5: [.char("5", option: true)]
+        case .keywordSet6: [.char("6", option: true)]
+        case .keywordSet7: [.char("7", option: true)]
+        case .keywordSet8: [.char("8", option: true)]
+        case .keywordSet9: [.char("9", option: true)]
         case .importKeywords, .exportKeywords, .editCaptureTime: []
         // Finder's Put Back, in the Trash.
         case .putBack: [KeyCombo(.delete, command: true)]
