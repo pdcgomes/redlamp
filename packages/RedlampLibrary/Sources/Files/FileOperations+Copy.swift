@@ -63,6 +63,7 @@ public extension FileOperations {
                     row.fileID = nil
                     row.stack = nil
                     row.stackTop = false
+                    row.stackPosition = nil
                     rows.append(RemovedPhoto(
                         photo: row, folder: destination, keywords: original.keywords, copyOf: original.photo.id,
                     ))

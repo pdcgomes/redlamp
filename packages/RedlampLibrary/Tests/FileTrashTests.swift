@@ -203,7 +203,7 @@ struct FileTrashTests {
         row.location = PhotoLocation(
             country: "Portugal", state: "Lisboa", city: "Lisbon", sublocation: "Alfama", countryCode: "PT",
         )
-        row.stack = PhotoStack(id: UUID(), top: true)
+        row.stack = PhotoStack(id: UUID(), top: true, position: 0)
         row.otherFields = [.creator, .location]
         row.xmpSignature = 42
         row.cameraCaptured = FileSandbox.date(10)
@@ -258,6 +258,64 @@ struct FileTrashTests {
         #expect(try await sandbox.index.read { try $0.photo(id: id) } == row)
     }
 
+    @Test func `a photo trashed from the middle of a reordered stack comes back to its place, by Undo and by Put Back`(
+    ) async throws {
+        let simulated = SimulatedFileSystem(profile: .ssd)
+        let names = ["A", "B", "C", "D"].map { "Shoot/\($0).ARW" }
+        let sandbox = try await FileSandbox.make(
+            names.enumerated().map { .init($1, captured: FileSandbox.date(Double($0))) }, fileSystem: simulated,
+        )
+        defer { sandbox.remove() }
+        simulated.useTrash(sandbox.folder.url.appending(path: "Trash", directoryHint: .isDirectory))
+        let ids = try await sandbox.rows()
+        let photos = try names.map { try #require(ids[$0]) }
+        func stacks() async throws -> Stacks {
+            let engine = QueryEngine(index: sandbox.index)
+            try await engine.load()
+            return try await StackFinder.find(in: sandbox.index, store: engine.store ?? ColumnStore())
+        }
+        /// The stack's photos by name, in its order.
+        func order() async throws -> [String] {
+            let stack = try await stacks().first { $0.kind == .manual }?.photos ?? []
+            return try await sandbox.index.read { reader in try stack.compactMap { try reader.photo(id: $0)?.name } }
+        }
+        let metadata = LibraryMetadata(index: sandbox.index, paths: sandbox.paths)
+        try await metadata.run(metadata.plan(.stack(photos, top: photos[0]), in: stacks()))
+        try await metadata.run(metadata.plan(.move(photos[3], by: -3), in: stacks()))
+        let reordered = ["D.ARW", "A.ARW", "B.ARW", "C.ARW"]
+        #expect(try await order() == reordered)
+        let middle = photos[1]
+        func place() async throws -> Int? {
+            try await sandbox.index.read { try $0.photo(id: middle)?.stack?.position }
+        }
+        #expect(try await place() == 2)
+        let operations = sandbox.operations()
+
+        try await operations.run(operations.planTrash(photos: [middle]))
+        #expect(try await order() == ["D.ARW", "A.ARW", "C.ARW"], "the others keep their places")
+        #expect(try await operations.undo().isFinished)
+        #expect(try await order() == reordered, "Undo puts it back in its place")
+        #expect(try await place() == 2)
+
+        let trashed = try await operations.planTrash(photos: [middle])
+        try await operations.run(trashed)
+        #expect(try await operations.run(operations.planPutBack(batch: trashed.id)).isFinished)
+        #expect(try await order() == reordered, "Put Back puts it back in its place")
+        #expect(try await place() == 2)
+        #expect(try await sandbox.sidecar("Shoot/B.ARW")?.metadata?.stack?.position == 2, "its sidecar keeps it too")
+
+        // A batch an older build journaled has no places: the photo comes back in its stack, after the others.
+        let older = try await operations.planTrash(photos: [middle])
+        try await operations.run(older)
+        let file = operations.journal.folder.appending(path: FileJournal.fileName(of: older) + ".batch")
+        let journaled = try String(contentsOf: file, encoding: .utf8)
+        #expect(journaled.contains("\"stackPosition\":2"))
+        try Data(journaled.replacingOccurrences(of: ",\"stackPosition\":2", with: "").utf8).write(to: file)
+        #expect(try await sandbox.operations().undo().isFinished)
+        #expect(try await order() == ["D.ARW", "A.ARW", "C.ARW", "B.ARW"])
+        #expect(try await place() == nil)
+    }
+
     @Test func `a Trash batch journaled before rows kept stacks and other apps' fields still undoes`() async throws {
         let (sandbox, _, _) = try await Self.sandbox()
         defer { sandbox.remove() }
@@ -268,7 +326,7 @@ struct FileTrashTests {
 
         let added = [
             "customLabel", "creator", "copyright", "sublocation", "city", "province", "country", "countryCode",
-            "stack", "stackTop", "otherFields", "xmpSignature",
+            "stack", "stackTop", "otherFields", "xmpSignature", "stackPosition",
         ]
         func old(_ value: Any) -> Any {
             if let array = value as? [Any] {

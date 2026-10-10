@@ -369,6 +369,9 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
     /// Nil in batches journaled before the index kept stacks, organising fields' sources and `.xmp`
     /// signatures, as are `stack` and `xmpSignature`.
     public var stackTop: Bool?
+    /// The photo's place in its stack, from 0 at the top; nil while the stack is in capture order, and in batches
+    /// journaled before the index kept places (schema version 9), whose photos come back after the stack's others.
+    public var stackPosition: Int?
     /// `PhotoRecord.code(for:)` of the fields that are other apps'.
     public var otherFields: Int?
     public var xmpSignature: Int64?
@@ -419,6 +422,7 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
         countryCode = photo.location?.countryCode
         stack = photo.stack?.id
         stackTop = photo.stack?.top ?? false
+        stackPosition = photo.stack?.position
         otherFields = PhotoRecord.code(for: photo.otherFields)
         xmpSignature = photo.xmpSignature
         cameraCaptured = photo.cameraCaptured?.timeIntervalSince1970
@@ -441,7 +445,7 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
             location: PhotoRecord.storedLocation(
                 sublocation: sublocation, city: city, province: province, country: country, countryCode: countryCode,
             ),
-            stack: PhotoRecord.storedStack(id: stack?.uuidString, top: stackTop ?? false),
+            stack: PhotoRecord.storedStack(id: stack?.uuidString, top: stackTop ?? false, position: stackPosition),
             otherFields: PhotoRecord.fields(code: otherFields ?? 0), xmpSignature: xmpSignature,
             cameraCaptured: cameraCaptured.map(Date.init(timeIntervalSince1970:)), cameraOffset: cameraOffset,
         )
