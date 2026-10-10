@@ -785,9 +785,9 @@ def appear(c, p, draw):
 # Introducing Redlamp's Safelight scene frame for frame, laid out for the vertical frame. The lamp
 # warms in the dark under the hook, which stands in for the film's first line and goes as the lamp
 # settles into the logo; the brand's two lines come in under it, then where the hook was, the
-# episode's subtitle: its number in the series and its feature. All of it holds to be read, then the
-# logo rises to become the episode's header. Full-width lines can't sit under the lamp here, where the
-# apps' side buttons are, so the hook and the subtitle stand where the episode's caption does.
+# episode's subtitle, its title. All of it holds to be read, then the logo rises to become the
+# episode's header. Full-width lines can't sit under the lamp here, where the apps' side buttons
+# are, so the hook and the subtitle stand where the episode's caption does.
 
 SHEEN = "#f4c2bb"  # the lens's highlight: soft and off-centre, never white in the middle
 BRAND_LINES = (("A RAW PHOTO EDITOR", "FOR THE MAC."), ("FREE AND OPEN SOURCE.",))
@@ -846,16 +846,14 @@ def wrapped(text, chars=LINE_CHARS):
     return lines
 
 
-def subtitle(c, episode, feature):
-    """The episode's subtitle, where the caption stands: its number in the series over its feature."""
-    number, count = int(episode["id"][1:]), len(POSTS["episodes"])
-    c.text(c.w // 2, HEADER.y + 3, f"FEATURE {number} OF {count}", "muted", font="large", align="center")
-    caption(c, wrapped(feature))
+def subtitle(c, episode):
+    """The episode's subtitle, where the caption stands: its title from docs/social/posts.json."""
+    caption(c, wrapped(episode["title"].upper()))
 
 
 def opener(c, f, episode, hook, feature):
-    """Frame f of the opener for `episode`, with its hook's lines and its feature, which the subtitle
-    names and the header carries. As the film's scene goes: the lamp warms from frame 6 over 120 frames
+    """Frame f of the opener for `episode`, with its hook's lines, its title as the subtitle and its
+    feature in the header. As the film's scene goes: the lamp warms from frame 6 over 120 frames
     under the hook, which goes from its cue, and settles into the logo's mark from the settle cue; the
     flat logo lands on the frame after the score's bloom and REDLAMP comes in beside it; then the
     brand's lines, and the subtitle from its cue. They hold, and from the rise cue the subtitle goes
@@ -885,7 +883,7 @@ def opener(c, f, episode, hook, feature):
                 c.text(c.w // 2, top + 11 * i, line, "text", font="large", align="center")
 
         appear(c, ramp(f, cue[cue_name], 20) * (1 - rise), brand)
-    appear(c, ramp(f, cue["feature"], 20) * (1 - ramp(f, up, 8)), lambda c: subtitle(c, episode, feature))
+    appear(c, ramp(f, cue["feature"], 20) * (1 - ramp(f, up, 8)), lambda c: subtitle(c, episode))
     if f < up:
         appear(c, flat, lambda c: c.sprite(lx, LOGO_Y, *LAMP_MARK, scale=2))
         appear(c, words, lambda c: c.text(lx + 24, LOGO_Y + 1, "REDLAMP", "white", font="large", scale=2))

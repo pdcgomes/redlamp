@@ -17,7 +17,7 @@
   "episodes": [
     {
       "id": "e01",
-      "title": "Free",
+      "title": "Free alternative to Lightroom",
       "feature": "A free, open-source raw photo editor for Mac, with no subscription and no cloud.",
       "audience": "Everyone, and people paying a monthly subscription for photo editing.",
       "source": "README: Support Redlamp (free, no subscription, no cloud); Goals 8 (open source).",
@@ -258,8 +258,8 @@
       ],
       "file": "e01-a.mp4",
       "coverMs": 3333,
-      "caption": "A free raw photo editor for Mac, with no subscription and no cloud. Redlamp is open source, and it has Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development.\n\n#photoediting #rawphoto #lightroom #macos #photography",
-      "alt": "Pixel art of a photo editor on a Mac. A raw photo opens, and the words No subscription, No cloud and Open source appear one after another as sliders adjust it. Then the real photo, edited in Redlamp, appears before and after. The video ends with Download free, redlamp.app."
+      "caption": "A free raw photo editor for Mac, with no subscription and no cloud. Redlamp is open source, and it has Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Redlamp isn't affiliated with Adobe.\n\n#photoediting #rawphoto #lightroom #macos #photography",
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Free alternative to Lightroom. Then a photo editor on a Mac: a raw photo opens, and the words No subscription, No cloud and Open source appear one after another as sliders adjust it. Then the real photo, edited in Redlamp, appears before and after. The video ends with Download free, redlamp.app."
     },
     {
       "id": "e01-trial",
@@ -272,8 +272,8 @@
       "trial": "MANUAL",
       "file": "e01-b.mp4",
       "coverMs": 3333,
-      "caption": "A free raw photo editor for Mac, with no subscription and no cloud. Redlamp is open source, and it has Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development.\n\n#photoediting #rawphoto #lightroom #macos #photography",
-      "alt": "Pixel art of a photo editor on a Mac. A raw photo opens, and the words No subscription, No cloud and Open source appear one after another as sliders adjust it. Then the real photo, edited in Redlamp, appears before and after. The video ends with Download free, redlamp.app."
+      "caption": "A free raw photo editor for Mac, with no subscription and no cloud. Redlamp is open source, and it has Lightroom's layout and shortcuts. Download it at redlamp.app (link in bio). Needs an Apple Silicon Mac with macOS 26. It's in early development. Redlamp isn't affiliated with Adobe.\n\n#photoediting #rawphoto #lightroom #macos #photography",
+      "alt": "Pixel art of Redlamp's lamp lighting up in the dark and becoming its logo, with the title Free alternative to Lightroom. Then a photo editor on a Mac: a raw photo opens, and the words No subscription, No cloud and Open source appear one after another as sliders adjust it. Then the real photo, edited in Redlamp, appears before and after. The video ends with Download free, redlamp.app."
     },
     {
       "id": "e02",

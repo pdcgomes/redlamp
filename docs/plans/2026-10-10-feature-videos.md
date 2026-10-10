@@ -34,7 +34,7 @@ The owner asked for simple, direct language: nothing that reads as written by AI
 
 ## The format
 
-Every video opens with Redlamp's opener in pixel art, so the series looks and sounds like the rest of Redlamp's videos (the owner, 10 October 2026). It is the looks explainer's intro (`video/scripts/looks-frames.py` on the `promo/looks-explainer` branch), which redraws Introducing Redlamp's opening scene frame for frame, laid out for the vertical frame: the hook on the dark wall from the first frame, where the episode's caption stands; the lamp coming out of the dark and warming under it; the hook going as the lens settles into the logo; A RAW PHOTO EDITOR / FOR THE MAC. and FREE AND OPEN SOURCE. under the logo; then, where the hook was, the episode's subtitle, its number in the series over its feature (FEATURE 1 OF 10 / FREE), so people know what this one is about and that it isn't one they've seen. All of it holds for a bar to be read (the owner, 10 October 2026), then the logo rises to become the episode's header. The first two bars are the Introducing short's opening scene frame for frame, under its own sound; the third holds the scene's last chord, as the looks explainer and the app's welcome do: three bars of the film's 72 BPM grid, 10 s, as long as the film cut's own opening. The episode cuts in on its first hit, with the hook back in its place. Full-width lines can't sit under the lamp as they do in the 16:9 intro, where the apps' side buttons are, which is why the hook and the subtitle stand where the caption does.
+Every video opens with Redlamp's opener in pixel art, so the series looks and sounds like the rest of Redlamp's videos (the owner, 10 October 2026). It is the looks explainer's intro (`video/scripts/looks-frames.py` on the `promo/looks-explainer` branch), which redraws Introducing Redlamp's opening scene frame for frame, laid out for the vertical frame: the hook on the dark wall from the first frame, where the episode's caption stands; the lamp coming out of the dark and warming under it; the hook going as the lens settles into the logo; A RAW PHOTO EDITOR / FOR THE MAC. and FREE AND OPEN SOURCE. under the logo; then, where the hook was, the episode's subtitle, its title from `docs/social/posts.json` (FREE ALTERNATIVE / TO LIGHTROOM), so people know what this one is about and that it isn't one they've seen. The episodes aren't numbered, since there may be more (the owner, 10 October 2026). All of it holds for a bar to be read (the owner, 10 October 2026), then the logo rises to become the episode's header. The first two bars are the Introducing short's opening scene frame for frame, under its own sound; the third holds the scene's last chord, as the looks explainer and the app's welcome do: three bars of the film's 72 BPM grid, 10 s, as long as the film cut's own opening. The episode cuts in on its first hit, with the hook back in its place. Full-width lines can't sit under the lamp as they do in the 16:9 intro, where the apps' side buttons are, which is why the hook and the subtitle stand where the caption does.
 
 The episode follows one cue sheet, `video/src/features/cues.json`: 100 BPM at 30 fps, a beat every 18 frames, a bar every 2.4 s. The times below are the episode's own, from its first frame, 6.7 s into the video.
 
@@ -62,7 +62,7 @@ E01 set the template, and every episode is built the same way in `video/`:
 - **The real result**, through `scripts/features/results.py`, is rendered by the `redlamp` CLI (`$REDLAMP_CLI`, or `build/cli/redlamp`) from the owner's sidecar beside the raw: AFTER with his edit, BEFORE with its crop alone, and each step of a drag with the sliders moved so far, so the pixel photo changes as the real one does. Renders are kept in `public/features/<episode>/results/` and made again only when something that went into them changes.
 - **The frames**, `npm run features-frames -- --episode e01`: every frame drawn by pixelkit at 216 × 384, or at 1080 × 1920 while the real photo is on screen, where it shows at full resolution through the ordered dither that resolves it out of the pixel photo. A picture that comes out the same as another is written once, and `frames.json` lists each hook's frames.
 - **The score**, `npm run features-score -- --episode e01`: the theme in the chosen arrangement with the episode's sounds on their frames, with `score.json` for the storyboard sheet and a cue sheet of every sound for `scripts/score-report.py`.
-- **The opener** is `opener()` in `scripts/features/world.py`, timed by the cue sheet's `opener` section: three bars at 72 BPM, the first two (`scene`) the short's opening scene, which `scripts/features-score.py` checks against `src/introducing/cuts.json`, and the beats the hook goes, the lens settles, the brand's lines and the subtitle come in and the logo rises. The frames script draws it before each episode, with the episode's hook, its number and its feature.
+- **The opener** is `opener()` in `scripts/features/world.py`, timed by the cue sheet's `opener` section: three bars at 72 BPM, the first two (`scene`) the short's opening scene, which `scripts/features-score.py` checks against `src/introducing/cuts.json`, and the beats the hook goes, the lens settles, the brand's lines and the subtitle come in and the logo rises. The frames script draws it before each episode, with the episode's hook, its title and its feature.
 - **The composition**, `FeatureVideo` in Remotion Studio's Features folder, plays the frames and the two scores, with `episode`, `hook`, `score`, `opener` and `guides` props. With `opener` off it plays the episode alone, on its cue sheet's own frames, as `scripts/storyboard.mjs` and the review stills expect.
 - **The render**, `npm run features -- --episode e01 [--hook a] [--draft]`, writes `~/src/redlamp-social/renders/<the post's file>` and its cover, once the owner has approved the cut. A draft is half the size, named `…-draft.mp4`.
 
@@ -82,7 +82,7 @@ One theme for the series, in the same shape in every video so the series sounds 
 
 Each episode has five hooks. Hook A is posted first on both platforms. Hook B goes out two days later on Instagram as a trial reel, which only people who don't follow the account see, so the two hooks can be compared.
 
-### E01 Free
+### E01 Free alternative to Lightroom
 
 - **Shows:** a free, open-source raw photo editor for Mac, with no subscription and no cloud.
 - **For:** everyone, and people paying a monthly subscription for photo editing.
@@ -358,7 +358,7 @@ All times are 18:00 London time. The second hook of each goes out two days later
 
 | Date | Video | Platforms |
 | --- | --- | --- |
-| Tue 27 Oct | E01 Free | Instagram, TikTok |
+| Tue 27 Oct | E01 Free alternative to Lightroom | Instagram, TikTok |
 | Fri 30 Oct | E02 Subject mask | Instagram, TikTok |
 | Tue 3 Nov | E03 Film looks | Instagram, TikTok |
 | Fri 6 Nov | E04 Lightroom shortcuts | Instagram, TikTok |
@@ -386,7 +386,7 @@ The owner's photos go in `~/src/redlamp-social/photos/`, outside the repository,
 
 | Video | Photo | Result |
 | --- | --- | --- |
-| E01 Free | The cosplayer with orange hair: the raw, `DSC02372.ARW`, and his edit in Redlamp beside it | Before (the raw with the edit's crop alone) and after (the edit), and every step of the drags. Until his edit is saved, a stand-in: his JPEG's crop, found by matching it against the whole frame, with Exposure +1.00, Highlights −40, Shadows −60 and Vibrance +30 |
+| E01 Free alternative to Lightroom | The cosplayer with orange hair: the raw, `DSC02372.ARW`, and his edit in Redlamp beside it | Before (the raw with the edit's crop alone) and after (the edit), and every step of the drags. Until his edit is saved, a stand-in: his JPEG's crop, found by matching it against the whole frame, with Exposure +1.00, Highlights −40, Shadows −60 and Vibrance +30 |
 | E02 Subject mask | The owner's son at a colour run (`IMG_3557.jpg`) | The background darkened with an inverted Subject mask, before and after |
 | E03 Film looks | The street-food cook at the grill (`DSC03230 (2).jpg`) | The photo in Portra 400, Tri-X 400, CineStill 800T, Velvia 50 and HP5 Plus |
 | E04 Lightroom shortcuts | The man in the green shirt (`DSC03301 (2).jpg`) for the black-and-white step, and a capture of the app | The app window, then its shortcut list |
@@ -415,7 +415,7 @@ The first cut, for the owner's review in Studio, with hook A or B and the stand-
 
 - The hook each video leads with. A is the default, and B is tested as a trial reel.
 - The theme's arrangement: drive or pulse.
-- Whether "Lightroom" may appear on screen (E04 a, b, c, d and e, E05 a and c, E01 e, E10 d) as well as in the captions, never with Adobe's logo or interface. Whether film stock names may appear on screen (E03), with the README's trademark line in the caption. Whether "Fujifilm-style" may appear on screen (E08 b).
+- Whether "Lightroom" may appear on screen (E04 a, b, c, d and e, E05 a and c, E01 e, E10 d) as well as in the captions, never with Adobe's logo or interface. E01's title, FREE ALTERNATIVE TO LIGHTROOM, already names it in the opener, as the owner asked on 10 October, so E01's captions say Redlamp isn't affiliated with Adobe. Whether film stock names may appear on screen (E03), with the README's trademark line in the caption. Whether "Fujifilm-style" may appear on screen (E08 b).
 - The photos for the results above, in `~/src/redlamp-social/photos/`: the dancer's raw and its edit first, since four videos use it.
 
 ## Results
