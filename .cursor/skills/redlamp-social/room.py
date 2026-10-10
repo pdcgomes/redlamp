@@ -26,6 +26,10 @@ the room shows the post as posted and the publisher never posts it again. It the
 PUBLISHED block from that record, as room does too, and status leaves Instagram out of the post's
 platforms still to come.
 
+The owner can also mark an Instagram post Posted in the room itself, with its link. room copies each
+such mark into the same record (a link given later is added to its entry), and status lists the marks
+it hasn't copied yet, so the record stays the one place the publisher looks.
+
 Paths are this checkout's, so the script works in any worktree. Boards are rendered, not committed, so a
 board missing here is taken from the main checkout or another worktree that has it. The room is
 ~/.cursor/projects/<project>/canvases/social-room.canvas.tsx unless --canvas gives another path.
@@ -350,6 +354,37 @@ def published():
         return {}
 
 
+def marks(canvas):
+    """The owner's marks, from the room's data file beside it, which only the canvas writes."""
+    try:
+        return json.loads(canvas.with_name(canvas.name.replace(".canvas.tsx", ".canvas.data.json")).read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def marked_on_instagram(canvas, schedule, record):
+    """The Instagram posts the owner marked Posted in the room that the record lacks, or lacks the link of:
+    (post, its entry for the record)."""
+    data = marks(canvas)
+    pending = []
+    for post in schedule.get("posts", []):
+        if not isinstance(post, dict) or "instagram" not in post.get("platforms", []):
+            continue
+        pid = post.get("id")
+        mark = data.get(f"instagram:{pid}")
+        if not isinstance(mark, dict) or mark.get("state") != "posted":
+            continue
+        link = data.get(f"link:{pid}:instagram")
+        link = link if isinstance(link, str) and link.startswith("https://") else None
+        entry = record.get(pid)
+        if entry is None:
+            at = moment(mark.get("at")) or datetime.now(timezone.utc).replace(microsecond=0)
+            pending.append((pid, {"at": at.isoformat(), "by": "hand", **({"link": link} if link else {})}))
+        elif link and not entry.get("link"):
+            pending.append((pid, {**entry, "link": link}))
+    return pending
+
+
 def published_block(record):
     return ["// PUBLISHED:BEGIN (room.py writes this block from ~/src/redlamp-social/state/published.json)",
             "const PUBLISHED: Record<string, Published> = " + json.dumps(record, indent=2, ensure_ascii=False) + ";",
@@ -465,6 +500,10 @@ def status(canvas):
     now = datetime.now(timezone.utc)
     titles = {e.get("id"): e.get("title") for e in episodes}
     record = published()
+    pending = marked_on_instagram(canvas, schedule, record)
+    if pending:
+        print(f"\nMarked Posted on Instagram in the room, not yet in the publisher's record: "
+              f"{', '.join(pid for pid, _ in pending)}. Run room.py room to copy them.")
     if record:
         print("\nOn Instagram:")
         for pid, entry in record.items():
@@ -473,7 +512,9 @@ def status(canvas):
                   + (f", {entry['link']}" if entry.get("link") else ", no link yet"))
 
     def to_come(post):
-        return [p for p in post.get("platforms", []) if not (p == "instagram" and post.get("id") in record)]
+        marked = {pid for pid, _ in pending}
+        return [p for p in post.get("platforms", [])
+                if not (p == "instagram" and (post.get("id") in record or post.get("id") in marked))]
 
     timed = [(moment(post.get("at")), post) for post in posts if to_come(post)]
     due = sorted([pair for pair in timed if pair[0] and pair[0] > now], key=lambda pair: pair[0])[:3]
@@ -496,6 +537,12 @@ def room(canvas):
         return 1
     write_block(canvas, "POSTS", posts_block(schedule))
     record = published()
+    pending = marked_on_instagram(canvas, schedule, record)
+    if pending:
+        record.update(pending)
+        PUBLISHED.parent.mkdir(parents=True, exist_ok=True)
+        PUBLISHED.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n")
+        print(f"Copied the room's Instagram marks into {PUBLISHED}: {', '.join(pid for pid, _ in pending)}")
     write_block(canvas, "PUBLISHED", published_block(record))
     print(f"Wrote {len(schedule['episodes'])} episodes, {len(schedule['posts'])} posts and the {len(record)} on Instagram "
           f"into {canvas}")

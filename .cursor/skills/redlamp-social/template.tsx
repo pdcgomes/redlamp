@@ -237,14 +237,15 @@ type Tone = "good" | "waiting" | "active" | "quiet";
 
 /**
  * The owner's marks, kept in the room's .canvas.data.json, which agents read but never write: needsYou;
- * cut:<episode> and post:<post id>, where a post's approval keeps the caption it approved; tiktok:<post id>;
- * and link:<post id>:tiktok. Undo sets a mark to null.
+ * cut:<episode> and post:<post id>, where a post's approval keeps the caption it approved; instagram:<post id>
+ * and tiktok:<post id>, for posts the owner schedules or makes himself; and link:<post id>:<platform>. Undo sets
+ * a mark to null. room.py room copies an Instagram post marked Posted into the publisher's record.
  */
 type Mark = { state: "done" | "skipped" | "asked"; at: string };
 type Marks = Record<string, Mark>;
 type Approval = { state: "approved" | "held"; at: string; caption?: string };
-type TikTokMark = { state: "scheduled" | "posted" | "skipped"; at: string };
-type PlatformState = "planned" | TikTokMark["state"];
+type PostedMark = { state: "scheduled" | "posted" | "skipped"; at: string };
+type PlatformState = "planned" | PostedMark["state"];
 
 const NAME: Record<Platform, string> = { instagram: "Instagram", tiktok: "TikTok" };
 const STAGE: Record<Stage, { label: string; tone: Tone }> = {
@@ -486,12 +487,9 @@ function Facts({ rows, labelWidth = 72 }: { rows: [string, string][]; labelWidth
 
 // ---------------------------------------------------------------- platform states
 
-/** Posted once the publisher's record has the post, whoever posted it; planned until then. */
-function instagramState(post: Post): PlatformState {
-  return PUBLISHED[post.id] ? "posted" : "planned";
-}
-
-function tiktokState(mark: TikTokMark | null): PlatformState {
+/** Posted once the publisher's record has the post, whoever posted it; otherwise the owner's mark, or planned. */
+function platformState(post: Post, platform: Platform, mark: PostedMark | null): PlatformState {
+  if (platform === "instagram" && PUBLISHED[post.id]) return "posted";
   return mark?.state ?? "planned";
 }
 
@@ -499,19 +497,19 @@ function PlatformStatus({ state }: { state: PlatformState }) {
   return <Status tone={PLATFORM_STATE[state].tone} label={PLATFORM_STATE[state].label} />;
 }
 
-function TikTokCell({ post }: { post: Post }) {
-  const [mark] = useCanvasState<TikTokMark | null>(`tiktok:${post.id}`, null);
-  return <PlatformStatus state={tiktokState(mark)} />;
+function MarkCell({ post, platform }: { post: Post; platform: Platform }) {
+  const [mark] = useCanvasState<PostedMark | null>(`${platform}:${post.id}`, null);
+  return <PlatformStatus state={platformState(post, platform, mark)} />;
 }
 
 /** A post's state on one platform; nothing when it doesn't go there. */
 function PlatformCell({ post, platform }: { post: Post; platform: Platform }) {
   if (!post.platforms.includes(platform)) return null;
-  return platform === "tiktok" ? <TikTokCell post={post} /> : <PlatformStatus state={instagramState(post)} />;
+  return <MarkCell post={post} platform={platform} />;
 }
 
-/** Each platform a post goes to, with its state. A parent that holds the TikTok mark passes it in. */
-function PlatformList({ post, tiktok }: { post: Post; tiktok?: TikTokMark | null }) {
+/** Each platform a post goes to, with its state. A parent that holds the marks passes them in. */
+function PlatformList({ post, marks }: { post: Post; marks?: Partial<Record<Platform, PostedMark | null>> }) {
   return (
     <Inline gap={14}>
       {post.platforms.map((platform) => (
@@ -520,8 +518,8 @@ function PlatformList({ post, tiktok }: { post: Post; tiktok?: TikTokMark | null
             <Text as="span" size="small" weight="medium">
               {NAME[platform]}
             </Text>
-            {platform === "tiktok" && tiktok !== undefined ? (
-              <PlatformStatus state={tiktokState(tiktok)} />
+            {marks && marks[platform] !== undefined ? (
+              <PlatformStatus state={platformState(post, platform, marks[platform] ?? null)} />
             ) : (
               <PlatformCell post={post} platform={platform} />
             )}
@@ -880,23 +878,40 @@ function PostApproval({ post }: { post: Post }) {
   );
 }
 
-function TikTokControls({
+/** The owner's marks for a post on one platform. A post the publisher's record has shows as posted, with no buttons. */
+function PlatformControls({
+  post,
+  platform,
   mark,
   setMark,
   link,
   setLink,
 }: {
-  mark: TikTokMark | null;
-  setMark: SetCanvasState<TikTokMark | null>;
+  post: Post;
+  platform: Platform;
+  mark: PostedMark | null;
+  setMark: SetCanvasState<PostedMark | null>;
   link: string;
   setLink: SetCanvasState<string>;
 }) {
-  const set = (state: TikTokMark["state"] | null) => setMark(state === null ? null : { state, at: new Date().toISOString() });
+  const set = (state: PostedMark["state"] | null) => setMark(state === null ? null : { state, at: new Date().toISOString() });
+  const recorded = platform === "instagram" ? PUBLISHED[post.id] : undefined;
+  if (recorded) {
+    return (
+      <Inline gap={6}>
+        <Text as="span" size="small" weight="semibold">
+          {NAME[platform]}
+        </Text>
+        <Status tone={PLATFORM_STATE.posted.tone} label={`Posted ${when(recorded.at)}${recorded.by === "hand" ? ", by hand" : ""}`} />
+        {recorded.link?.startsWith("https://") ? <Link href={recorded.link}>Open</Link> : null}
+      </Inline>
+    );
+  }
   return (
     <Stack gap={8}>
       <Inline gap={6}>
         <Text as="span" size="small" weight="semibold">
-          TikTok
+          {NAME[platform]}
         </Text>
         {mark ? (
           <>
@@ -926,7 +941,7 @@ function TikTokControls({
       </Inline>
       {mark && mark.state !== "skipped" ? (
         <Row gap={8} align="center">
-          <TextInput value={link} onChange={(value) => setLink(value)} type="url" placeholder="The post's TikTok link" style={{ width: 360 }} />
+          <TextInput value={link} onChange={(value) => setLink(value)} type="url" placeholder={`The post's ${NAME[platform]} link`} style={{ width: 360 }} />
           {link.startsWith("https://") ? <Link href={link}>Open</Link> : null}
         </Row>
       ) : null}
@@ -935,8 +950,10 @@ function TikTokControls({
 }
 
 function PostBlock({ post }: { post: Post }) {
-  const [tiktok, setTikTok] = useCanvasState<TikTokMark | null>(`tiktok:${post.id}`, null);
-  const [link, setLink] = useCanvasState<string>(`link:${post.id}:tiktok`, "");
+  const [instagram, setInstagram] = useCanvasState<PostedMark | null>(`instagram:${post.id}`, null);
+  const [instagramLink, setInstagramLink] = useCanvasState<string>(`link:${post.id}:instagram`, "");
+  const [tiktok, setTikTok] = useCanvasState<PostedMark | null>(`tiktok:${post.id}`, null);
+  const [tiktokLink, setTikTokLink] = useCanvasState<string>(`link:${post.id}:tiktok`, "");
   return (
     <Stack gap={10}>
       <Divider />
@@ -949,7 +966,7 @@ function PostBlock({ post }: { post: Post }) {
             {hookLabel(post)}
           </Text>
         </Inline>
-        <PlatformList post={post} tiktok={tiktok} />
+        <PlatformList post={post} marks={{ instagram, tiktok }} />
       </div>
       {post.check ? <Note tone="waiting">{`Check: ${post.check}`}</Note> : null}
       <CopyBlock text={post.caption} />
@@ -960,7 +977,12 @@ function PostBlock({ post }: { post: Post }) {
         {`${post.file}, cover frame at ${(post.coverMs / 1000).toFixed(1)} s`}
       </Text>
       <PostApproval post={post} />
-      {post.platforms.includes("tiktok") ? <TikTokControls mark={tiktok} setMark={setTikTok} link={link} setLink={setLink} /> : null}
+      {post.platforms.includes("instagram") ? (
+        <PlatformControls post={post} platform="instagram" mark={instagram} setMark={setInstagram} link={instagramLink} setLink={setInstagramLink} />
+      ) : null}
+      {post.platforms.includes("tiktok") ? (
+        <PlatformControls post={post} platform="tiktok" mark={tiktok} setMark={setTikTok} link={tiktokLink} setLink={setTikTokLink} />
+      ) : null}
     </Stack>
   );
 }
