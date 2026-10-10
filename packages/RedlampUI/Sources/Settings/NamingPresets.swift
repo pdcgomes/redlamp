@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 import OSLog
 import RedlampLibrary
@@ -17,13 +17,21 @@ public final class NamingPresetStore {
     public private(set) var lastRename: NamingPreset?
     @ObservationIgnored private let url: URL?
     @ObservationIgnored private var unread: [Data] = []
+    /// The file is written off the main thread, in order, and before the app quits: a rename's writes took tens of
+    /// milliseconds of the main thread under load.
+    @ObservationIgnored private let writes = DispatchQueue(label: "app.redlamp.naming-presets", qos: .utility)
 
-    private static let log = Logger(subsystem: "app.redlamp.mac", category: "library")
+    private nonisolated static let log = Logger(subsystem: "app.redlamp.mac", category: "library")
     private static var stores: [URL: NamingPresetStore] = [:]
 
     /// Nil keeps them in memory only.
     public init(url: URL?) {
         self.url = url
+        if url != nil {
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.willTerminateNotification, object: nil, queue: nil,
+            ) { [writes] _ in writes.sync {} }
+        }
         guard let url, let data = try? Data(contentsOf: url),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return }
@@ -99,8 +107,14 @@ public final class NamingPresetStore {
         write()
     }
 
+    /// Returns once what was saved so far is on disk.
+    func flush() {
+        writes.sync {}
+    }
+
     private func write() {
         guard let url else { return }
+        let data: Data
         do {
             let encoder = JSONEncoder()
             var presets = try unread.map { try JSONSerialization.jsonObject(with: $0) }
@@ -111,13 +125,23 @@ public final class NamingPresetStore {
             if let lastRename {
                 object["lastRename"] = try JSONSerialization.jsonObject(with: encoder.encode(lastRename))
             }
-            let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
-            )
-            try data.write(to: url, options: .atomic)
+            data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
         } catch {
-            Self.log.error("The naming presets weren't saved: \(String(describing: error), privacy: .public)")
+            return Self.failed(error)
         }
+        writes.async {
+            do {
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
+                )
+                try data.write(to: url, options: .atomic)
+            } catch {
+                Self.failed(error)
+            }
+        }
+    }
+
+    private nonisolated static func failed(_ error: any Error) {
+        log.error("The naming presets weren't saved: \(String(describing: error), privacy: .public)")
     }
 }

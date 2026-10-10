@@ -291,6 +291,7 @@ extension RenameTests {
         #expect(!field.save(as: "Filename"), "a built-in preset's name is taken")
         #expect(store.all.count == NamingPreset.builtIn.count + 1)
 
+        store.flush()
         let again = NamingPresetStore(url: file)
         let saved = try #require(again.saved.first)
         #expect(saved.name == "Wedding Day" && saved.template.description == "{text:shoot}-{sequence:4}")
@@ -309,6 +310,7 @@ extension RenameTests {
         #expect(chooser.presets.titleOfSelectedItem == "Wedding Day")
 
         again.delete(saved.id)
+        again.flush()
         #expect(NamingPresetStore(url: file).saved.isEmpty)
     }
 
@@ -320,6 +322,7 @@ extension RenameTests {
         let store = NamingPresetStore(url: file)
         #expect(store.saved.isEmpty && store.counters["shoot"] == 12)
         try store.save("Mine", template: NamingTemplate(parsing: "{name}"), options: NamingOptions())
+        store.flush()
         let written = try String(contentsOf: file, encoding: .utf8)
         #expect(written.contains("{lunarphase}") && written.contains("Mine"))
     }

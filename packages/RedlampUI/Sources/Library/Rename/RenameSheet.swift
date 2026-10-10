@@ -310,10 +310,12 @@ final class RenameSheetController: NSViewController, NSTableViewDataSource, NSTe
         }
     }
 
+    /// Closes the sheet, the editor's actions coming back once AppKit has animated it away, so what they change isn't
+    /// laid out in each frame of it.
     private func close() {
         guard let sheet = view.window else { return }
-        editor?.isModalDialogOpen = false
         sheet.sheetParent?.endSheet(sheet)
+        editor?.isModalDialogOpen = false
         if Self.current === self {
             Self.current = nil
         }

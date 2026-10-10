@@ -28,6 +28,9 @@ final class MoveEditsSheetController: NSViewController {
     private let requested: ContinuousClock.Instant
 
     static let width: CGFloat = 520
+    /// The window the sheet is shown in, kept from one showing to the next: AppKit takes milliseconds making a new
+    /// window a sheet.
+    private static var kept: NSWindow?
 
     init(model: MoveEditsModel, editor: EditorModel, requested: ContinuousClock.Instant) {
         self.model = model
@@ -48,10 +51,11 @@ final class MoveEditsSheetController: NSViewController {
     ) -> MoveEditsSheetController? {
         guard let window = EditorWindowController.frontWindow, window.attachedSheet == nil else { return nil }
         let controller = MoveEditsSheetController(model: model, editor: editor, requested: requested)
-        let sheet = NSWindow(
+        let sheet = kept.flatMap { $0.sheetParent == nil && !$0.isVisible ? $0 : nil } ?? NSWindow(
             contentRect: CGRect(x: 0, y: 0, width: width, height: 300), styleMask: [.titled], backing: .buffered,
             defer: false,
         )
+        kept = sheet
         sheet.title = "Move Edits and Metadata"
         sheet.contentViewController = controller
         editor.isModalDialogOpen = true
@@ -206,10 +210,13 @@ final class MoveEditsSheetController: NSViewController {
         }
     }
 
+    /// Closes the sheet, the editor's actions coming back once AppKit has animated it away, so what they change isn't
+    /// laid out in each frame of it.
     func close() {
         guard let sheet = view.window else { return }
-        editor?.isModalDialogOpen = false
         sheet.sheetParent?.endSheet(sheet)
+        sheet.contentViewController = nil
+        editor?.isModalDialogOpen = false
         if Self.current === self {
             Self.current = nil
         }
