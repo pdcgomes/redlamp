@@ -3,91 +3,9 @@ import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
-/// The Masking tool's panel: masks list, create menu, components and local adjustments.
-@_spi(Harness) public struct MaskingPanel: View {
-    @Environment(EditorModel.self) private var model
-
-    public init() {}
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MasksHeaderBar()
-
-            if model.maskOutlines.isEmpty {
-                CreateMaskGrid(
-                    title: "Create New Mask",
-                    onPersonPart: { part in Task { await model.startAIMask(.people, part: part) } },
-                    onLandscapeClass: { cls in Task { await model.startAIMask(.landscape, landscape: cls) } },
-                ) { kind in model.startDrawing(kind) }
-                    .padding(.horizontal, Theme.panelPadding)
-                    .padding(.bottom, 8)
-                HStack {
-                    MaskPresetsMenu()
-                    Spacer()
-                }
-                .padding(.horizontal, Theme.panelPadding)
-                .padding(.bottom, 12)
-                MaskStatus()
-                if model.drawingKind != nil || model.isRefiningEdges {
-                    DrawingHint()
-                }
-            } else {
-                MaskList()
-                    .padding(.horizontal, Theme.panelPadding)
-                MaskActionsBar()
-                MaskStatus()
-
-                if model.drawingKind != nil || model.isRefiningEdges {
-                    DrawingHint()
-                }
-
-                Rectangle().fill(Theme.divider).frame(height: 1)
-
-                if let mask = model.selectedOutline {
-                    SelectedMaskEditor(mask: mask)
-                } else {
-                    NoMaskSelected()
-                }
-            }
-        }
-    }
-}
-
-// The Masking panel's parts, shared by the SwiftUI panel and its AppKit port. The lists
-// read `maskOutlines`, so dragging a mask's sliders doesn't re-render them.
-
-struct MasksHeaderBar: View {
-    @Environment(EditorModel.self) private var model
-    @State private var choosingOverlay = false
-
-    var body: some View {
-        @Bindable var model = model
-        HStack {
-            Text("Masks")
-                .font(Theme.panelTitleFont)
-                .foregroundStyle(Theme.value)
-            Spacer()
-            Toggle("Show Overlay", isOn: $model.showMaskOverlay)
-                .toggleStyle(.checkbox)
-                .controlSize(.small)
-                .font(Theme.captionFont)
-                .help("Show Overlay (O)")
-            Button {
-                choosingOverlay.toggle()
-            } label: {
-                Image(systemName: "circle.lefthalf.striped.horizontal")
-            }
-            .buttonStyle(.plain)
-            .help("Overlay mode, color and opacity")
-            .popover(isPresented: $choosingOverlay, arrowEdge: .leading) {
-                MaskOverlayOptions()
-                    .environment(model)
-            }
-        }
-        .padding(.horizontal, Theme.panelPadding)
-        .padding(.vertical, 10)
-    }
-}
+// The Masks panel's parts, shared by the SwiftUI panel (`MasksPanel`) and its AppKit port
+// (`MasksPanelView`). The lists read `maskOutlines`, so dragging a mask's sliders doesn't
+// re-render them.
 
 /// The overlay's mode, and for the modes that tint, its color and opacity, as Lightroom's overlay
 /// options.
@@ -271,27 +189,6 @@ private extension MaskCurves.Channel {
     }
 }
 
-struct MaskActionsBar: View {
-    @Environment(EditorModel.self) private var model
-
-    var body: some View {
-        HStack {
-            CreateMaskMenu(
-                title: "Create New Mask", systemImage: "plus",
-                onPersonPart: { part in Task { await model.startAIMask(.people, part: part) } },
-                onLandscapeClass: { cls in Task { await model.startAIMask(.landscape, landscape: cls) } },
-            ) { kind in
-                model.startDrawing(kind)
-            }
-            MaskPresetsMenu()
-            Spacer()
-            MaskActionsMenu()
-        }
-        .padding(.horizontal, Theme.panelPadding)
-        .padding(.vertical, 8)
-    }
-}
-
 /// What acts on every mask: Update AI Masks (here, or on every selected photo) and Delete All.
 struct MaskActionsMenu: View {
     @Environment(EditorModel.self) private var model
@@ -331,8 +228,6 @@ struct NoMaskSelected: View {
 /// Mask presets: Lightroom-style adaptive ones, which compute their masks for the photo, and
 /// the user's own.
 struct MaskPresetsMenu: View {
-    /// Its symbol alone, as the Masks panel's header has room for (`MasksPanelNext`).
-    var compact = false
     @Environment(EditorModel.self) private var model
 
     var body: some View {
@@ -353,62 +248,15 @@ struct MaskPresetsMenu: View {
                 }
             }
         } label: {
-            if compact {
-                Image(systemName: "wand.and.stars").font(Theme.labelFont)
-            } else {
-                Label("Presets", systemImage: "wand.and.stars").font(Theme.labelFont)
-            }
+            // Its symbol alone: with a label, New Mask beside it has no room at the inspector's width.
+            Image(systemName: "wand.and.stars").font(Theme.labelFont)
         }
         .menuStyle(.button)
         .controlSize(.small)
         .fixedSize()
-        .help(compact ? "Mask Presets" : "Apply a mask preset")
+        .help("Mask Presets")
         .accessibilityLabel("Mask Presets")
         .automationIdentifier("masks.presets")
-    }
-}
-
-/// An AI mask being computed, or why the last one couldn't be.
-struct MaskStatus: View {
-    @Environment(EditorModel.self) private var model
-
-    var body: some View {
-        if model.pendingModel != nil {
-            ModelDownloadNotice()
-                .padding(.horizontal, Theme.panelPadding)
-                .padding(.bottom, 10)
-        } else if let progress = model.modelDownloadProgress {
-            HStack(spacing: 8) {
-                ProgressView(value: progress).controlSize(.small)
-                Text("Downloading model… \(Int(progress * 100))%")
-            }
-            .font(Theme.captionFont)
-            .foregroundStyle(Theme.label)
-            .padding(.horizontal, Theme.panelPadding)
-            .padding(.bottom, 10)
-        } else if let kind = model.aiMaskProgress {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text(kind == .subject && model
-                    .aiMaskCount > 0 ? "Updating AI masks…" : "Finding \(kind.name.lowercased())…")
-                Spacer()
-            }
-            .font(Theme.captionFont)
-            .foregroundStyle(Theme.label)
-            .padding(.horizontal, Theme.panelPadding)
-            .padding(.bottom, 10)
-        } else if let message = model.maskMessage {
-            NoticeCard(message, tone: .caution, dismiss: { model.maskMessage = nil }) {
-                Button("Report…") {
-                    model.sendFeedback(FeedbackPrefill(featureID: FeedbackContext.suggestion(model), message: message))
-                }
-                .buttonStyle(.link)
-                .font(Theme.labelFont)
-                .help("Report a Bug about this message")
-            }
-            .padding(.horizontal, Theme.panelPadding)
-            .padding(.bottom, 10)
-        }
     }
 }
 
@@ -526,149 +374,10 @@ struct EdgeBrushSize: View {
     }
 }
 
-/// Every mask type, like Lightroom's Create New Mask menu. Types from later phases are
-/// visible but disabled, with their phase in the tooltip.
-struct CreateMaskGrid: View {
-    let title: String
-    /// People parts: the People tile opens a menu of them, as Create New Mask's menu does.
-    var onPersonPart: ((PersonPart) -> Void)?
-    /// Landscape classes: the Landscape tile opens a menu of them.
-    var onLandscapeClass: ((LandscapeClass) -> Void)?
-    let onCreate: (MaskKind) -> Void
-    @Environment(EditorModel.self) private var model
-
-    private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(Theme.sectionFont)
-                .tracking(0.6)
-                .foregroundStyle(Theme.secondaryLabel)
-            LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(MaskKind.creatable, id: \.self) { kind in
-                    Group {
-                        if kind == .people, let onPersonPart {
-                            Menu {
-                                ForEach(model.availablePersonParts, id: \.self) { part in
-                                    Button(part.name) { onPersonPart(part) }
-                                }
-                            } label: {
-                                tile(kind)
-                            }
-                            .menuStyle(.button)
-                            .menuIndicator(.hidden)
-                        } else if kind == .landscape, let onLandscapeClass {
-                            Menu {
-                                ForEach(LandscapeClass.allCases, id: \.self) { cls in
-                                    Button(cls.name) { onLandscapeClass(cls) }
-                                }
-                            } label: {
-                                tile(kind)
-                            }
-                            .menuStyle(.button)
-                            .menuIndicator(.hidden)
-                        } else {
-                            Button {
-                                onCreate(kind)
-                            } label: {
-                                tile(kind)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!model.canCreateMask(kind) || model.aiMaskProgress != nil)
-                    .help(kind.plannedPhase.map { "\(kind.name) arrives in \($0)" }
-                        ?? (model.canCreateMask(kind) ? kind.name : "\(kind.name) isn't available for this photo"))
-                }
-            }
-        }
-    }
-
-    private func tile(_ kind: MaskKind) -> some View {
-        VStack(spacing: 5) {
-            if model.aiMaskProgress == kind {
-                ProgressView().controlSize(.small).frame(height: 16)
-            } else {
-                Image(systemName: kind.symbol).font(.system(size: 16))
-            }
-            Text(kind.name)
-                .font(.system(size: 9.5))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, minHeight: 52)
-        .foregroundStyle(model.canCreateMask(kind) ? Theme.value : Theme.tertiaryLabel)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.well))
-        .contentShape(Rectangle())
-    }
-}
-
-struct CreateMaskMenu: View {
-    let title: String
-    let systemImage: String
-    /// Other masks that can be reused as a component.
-    var others: [MaskOutline] = []
-    var onReuse: (UUID) -> Void = { _ in }
-    /// People parts; the plain People item selects entire people.
-    var onPersonPart: ((PersonPart) -> Void)?
-    /// Landscape classes.
-    var onLandscapeClass: ((LandscapeClass) -> Void)?
-    let onCreate: (MaskKind) -> Void
-    @Environment(EditorModel.self) private var model
-
-    var body: some View {
-        Menu {
-            if !others.isEmpty {
-                Menu("Existing Mask") {
-                    ForEach(others) { other in
-                        Button(other.name) { onReuse(other.id) }
-                    }
-                }
-                Divider()
-            }
-            ForEach(MaskKind.creatable, id: \.self) { kind in
-                if kind == .people, let onPersonPart, model.canCreateMask(.people) {
-                    Menu {
-                        ForEach(model.availablePersonParts, id: \.self) { part in
-                            Button(part.name) { onPersonPart(part) }
-                        }
-                    } label: {
-                        Label(kind.name, systemImage: kind.symbol)
-                    }
-                } else if kind == .landscape, let onLandscapeClass, model.canCreateMask(.landscape) {
-                    Menu {
-                        ForEach(LandscapeClass.allCases, id: \.self) { cls in
-                            Button(cls.name) { onLandscapeClass(cls) }
-                        }
-                    } label: {
-                        Label(kind.name, systemImage: kind.symbol)
-                    }
-                } else {
-                    Button {
-                        onCreate(kind)
-                    } label: {
-                        Label(
-                            kind.plannedPhase.map { "\(kind.name) (\($0))" } ?? kind.name,
-                            systemImage: kind.symbol,
-                        )
-                    }
-                    .disabled(!model.canCreateMask(kind))
-                }
-            }
-        } label: {
-            Label(title, systemImage: systemImage).font(Theme.labelFont)
-        }
-        .menuStyle(.button)
-        .controlSize(.small)
-        .fixedSize()
-    }
-}
-
+/// The photo's masks, newest first: each row with its coverage, its name, its eye, and on the
+/// selected row and the one under the pointer a menu of the context menu's actions. The canvas
+/// previews the mask under the pointer.
 struct MaskList: View {
-    /// A menu button on the selected row and the one under the pointer, with the context menu's
-    /// actions, and the canvas previewing the mask under the pointer (`MasksPanelNext`).
-    var actionsOnScreen = false
     @Environment(EditorModel.self) private var model
     @State private var hovered: UUID?
     @State private var renaming: UUID?
@@ -682,14 +391,7 @@ struct MaskList: View {
             ForEach(model.maskOutlines.reversed()) { mask in
                 let selected = mask.id == model.selectedMaskID
                 HStack(spacing: 8) {
-                    if actionsOnScreen {
-                        MaskThumbnail(image: model.maskThumbnails[mask.id], symbol: mask.components.first?.kind?.symbol)
-                    } else {
-                        Image(systemName: mask.components.first?.kind?.symbol ?? "circle.dashed")
-                            .font(.system(size: 12))
-                            .frame(width: 18)
-                            .foregroundStyle(selected ? Theme.value : Theme.secondaryLabel)
-                    }
+                    MaskThumbnail(image: model.maskThumbnails[mask.id], symbol: mask.components.first?.kind?.symbol)
                     if renaming == mask.id {
                         TextField("Name", text: $draftName)
                             .textFieldStyle(.plain)
@@ -709,7 +411,7 @@ struct MaskList: View {
                         // The click's own flags, or the keyboard's when it arrives without them.
                         let option = NSApp.currentEvent?.modifierFlags.contains(.option) == true
                             || NSEvent.modifierFlags.contains(.option)
-                        if actionsOnScreen, option {
+                        if option {
                             model.showMaskAlone(mask.id)
                         } else {
                             model.toggleMaskVisibility(mask.id)
@@ -722,13 +424,10 @@ struct MaskList: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(mask.isVisible ? "Hide \(mask.name)" : "Show \(mask.name)")
                     .automationIdentifier("masks.row.\(mask.id.uuidString).eye")
-                    .help(actionsOnScreen
-                        ?
-                        (mask
-                            .isVisible ? "Hide mask. Option-click to show it alone" :
-                            "Show mask. Option-click to show it alone")
-                        : (mask.isVisible ? "Hide mask" : "Show mask"))
-                    if actionsOnScreen, selected || hovered == mask.id {
+                    .help(mask
+                        .isVisible ? "Hide mask. Option-click to show it alone" :
+                        "Show mask. Option-click to show it alone")
+                    if selected || hovered == mask.id {
                         Menu {
                             actions(for: mask)
                         } label: {
@@ -758,9 +457,7 @@ struct MaskList: View {
                     } else if hovered == mask.id {
                         hovered = nil
                     }
-                    if actionsOnScreen {
-                        model.hoveredMaskID = hovered
-                    }
+                    model.hoveredMaskID = hovered
                 }
                 // A row taken away under the pointer, as deleting its mask does, gets no hover's
                 // end from SwiftUI.
@@ -768,7 +465,7 @@ struct MaskList: View {
                     if hovered == mask.id {
                         hovered = nil
                     }
-                    if actionsOnScreen, model.hoveredMaskID == mask.id {
+                    if model.hoveredMaskID == mask.id {
                         model.hoveredMaskID = nil
                     }
                 }
@@ -787,11 +484,7 @@ struct MaskList: View {
                 }
             }
         }
-        .onDisappear {
-            if actionsOnScreen {
-                model.hoveredMaskID = nil
-            }
-        }
+        .onDisappear { model.hoveredMaskID = nil }
         // The list outlives photos and selections, so an unfinished rename mustn't.
         .onChange(of: model.selectedMaskID) { cancelRename() }
         .onChange(of: model.selection) { cancelRename() }
@@ -839,36 +532,27 @@ struct MaskList: View {
     }
 }
 
+/// The selected mask's settings: its name with Invert and Reset, Amount, its components, the
+/// selected component's own settings, then its adjustments.
 struct SelectedMaskEditor: View {
     let mask: MaskOutline
-    /// Add, Subtract and Intersect open the picker (`MasksPanelNext`) rather than menus.
-    var usesPicker = false
     @Environment(EditorModel.self) private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            if usesPicker {
-                // Invert and Amount lead the mask's settings (`MasksPanelNext`).
-                SubsectionHeader(title: mask.name, parameters: []) {
-                    MaskHeaderControls(mask: mask)
-                }
-                ParameterSlider(parameter: .maskAmount)
-                Spacer().frame(height: 6)
+            SubsectionHeader(title: mask.name, parameters: []) {
+                MaskHeaderControls(mask: mask)
             }
-            SubsectionHeader(title: usesPicker ? "Components, applied top to bottom" : "Components", parameters: [])
+            ParameterSlider(parameter: .maskAmount)
+            Spacer().frame(height: 6)
+            SubsectionHeader(title: "Components, applied top to bottom", parameters: [])
             ForEach(mask.components) { component in
-                ComponentRow(mask: mask, component: component, actionsOnScreen: usesPicker)
+                ComponentRow(mask: mask, component: component)
             }
-            Group {
-                if usesPicker {
-                    ComponentOperationButtons(mask: mask)
-                } else {
-                    ComponentOperationMenus(mask: mask)
-                }
-            }
-            .padding(.top, 4)
+            ComponentOperationButtons(mask: mask)
+                .padding(.top, 4)
 
-            switch MaskingPanel.componentTools(model) {
+            switch MasksPanel.componentTools(model) {
             case .radial:
                 ParameterSlider(parameter: .maskFeather)
                     .padding(.top, 6)
@@ -893,27 +577,18 @@ struct SelectedMaskEditor: View {
                 ParameterSlider(parameter: .maskAIFeather)
                     .padding(.top, 6)
                 ParameterSlider(parameter: .maskAIEdge)
-                if usesPicker, kind != .depthRange {
-                    AIComponentTools(mask: mask)
-                }
+                AIComponentTools(mask: mask)
             default:
                 EmptyView()
             }
 
-            if !usesPicker {
-                SubsectionHeader(title: mask.name, parameters: []) {
-                    ResetMaskButton(mask: mask)
-                }
-                ParameterSlider(parameter: .maskAmount)
-            } else {
-                Spacer().frame(height: 6)
-            }
+            Spacer().frame(height: 6)
             ParameterSlider(parameter: .maskDetail)
             Spacer().frame(height: 4)
             ForEach(ParameterID.localParameters.filter { !ParameterID.swatchParameters.contains($0) }, id: \.self) {
                 parameter in
                 ParameterSlider(parameter: parameter)
-                if MaskingPanel.gapAfter.contains(parameter) {
+                if MasksPanel.gapAfter.contains(parameter) {
                     Spacer().frame(height: 4)
                 }
             }
@@ -927,7 +602,7 @@ struct SelectedMaskEditor: View {
     }
 }
 
-extension MaskingPanel {
+extension MasksPanel {
     /// Local adjustments come in groups, like the Basic panel's.
     static let gapAfter: Set<ParameterID> = [.localTint, .localBlacks, .localDehaze, .localDefringe]
 
@@ -1177,39 +852,6 @@ struct RangeBar: View {
     }
 }
 
-/// Add, Subtract and Intersect: draw another component into the mask.
-struct ComponentOperationMenus: View {
-    let mask: MaskOutline
-    @Environment(EditorModel.self) private var model
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach([MaskOperation.add, .subtract, .intersect], id: \.self) { operation in
-                CreateMaskMenu(
-                    title: operation.name, systemImage: operation.symbol,
-                    others: model.maskOutlines.filter { $0.id != mask.id },
-                    onReuse: { model.addMaskReference($0, to: mask.id, operation: operation) },
-                    onPersonPart: { part in
-                        Task { await model.startAIMask(.people, part: part, operation: operation, addingTo: mask.id) }
-                    },
-                    onLandscapeClass: { cls in
-                        Task {
-                            await model.startAIMask(
-                                .landscape,
-                                landscape: cls,
-                                operation: operation,
-                                addingTo: mask.id,
-                            )
-                        }
-                    },
-                ) { kind in
-                    model.startDrawing(kind, operation: operation, addingTo: mask.id)
-                }
-            }
-        }
-    }
-}
-
 struct ResetMaskButton: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
@@ -1221,9 +863,8 @@ struct ResetMaskButton: View {
     }
 }
 
-/// Invert for the whole mask, and Reset, beside its name at the top of its settings
-/// (`MasksPanelNext`). The AppKit panel keeps a mask's settings through an Invert, so this
-/// reads the mask's state from the model.
+/// Invert for the whole mask, and Reset, beside its name at the top of its settings. The AppKit
+/// panel keeps a mask's settings through an Invert, so this reads the mask's state from the model.
 struct MaskHeaderControls: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
@@ -1264,17 +905,16 @@ struct AIComponentTools: View {
     }
 }
 
+/// A component of the selected mask: the operation's icon as a menu, its kind and name, its
+/// Invert, and a menu button for Delete and an AI component's refinements.
 struct ComponentRow: View {
     let mask: MaskOutline
     let component: MaskOutline.Component
-    /// The operation's icon as a menu, and a menu button for Delete and an AI component's
-    /// Refine Edges (`MasksPanelNext`).
-    var actionsOnScreen = false
     @Environment(EditorModel.self) private var model
 
-    /// "Subject 1"; in the new panel a People component names its part and person, "Face Skin · Person 2".
+    /// "Subject 1"; a People component names its part and person, "Face Skin · Person 2".
     private func title(_ index: Int) -> String {
-        guard actionsOnScreen, component.kind == .people else {
+        guard component.kind == .people else {
             return "\(component.kind?.name ?? "Newer Component") \(index)"
         }
         let part = component.part.flatMap(PersonPart.init(rawValue:)) ?? .entirePerson
@@ -1286,29 +926,21 @@ struct ComponentRow: View {
         let selected = component.id == model.selectedComponentOutline?.id
         let index = (mask.components.firstIndex(of: component) ?? 0) + 1
         HStack(spacing: 8) {
-            if actionsOnScreen {
-                Menu {
-                    operations
-                } label: {
-                    Image(systemName: component.operation.symbol)
-                        .font(.system(size: 9, weight: .bold))
-                }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .frame(width: 14)
-                .foregroundStyle(Theme.secondaryLabel)
-                .help("\(component.operation.name): choose how it combines")
-                .accessibilityLabel(component.operation.name)
-                .automationIdentifier("masks.component.\(component.id.uuidString).operation")
-            } else {
+            Menu {
+                operations
+            } label: {
                 Image(systemName: component.operation.symbol)
                     .font(.system(size: 9, weight: .bold))
-                    .frame(width: 14)
-                    .foregroundStyle(Theme.secondaryLabel)
-                    .help(component.operation.name)
             }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .frame(width: 14)
+            .foregroundStyle(Theme.secondaryLabel)
+            .help("\(component.operation.name): choose how it combines")
+            .accessibilityLabel(component.operation.name)
+            .automationIdentifier("masks.component.\(component.id.uuidString).operation")
             Image(systemName: component.kind?.symbol ?? "questionmark.square.dashed")
                 .font(.system(size: 11))
             Text(title(index))
@@ -1338,31 +970,20 @@ struct ComponentRow: View {
             .controlSize(.mini)
             .font(Theme.captionFont)
             .automationIdentifier("masks.component.\(component.id.uuidString).invert")
-            if actionsOnScreen {
-                Menu {
-                    refinements
-                    Button("Delete", role: .destructive) { model.deleteComponent(component.id, in: mask.id) }
-                } label: {
-                    Image(systemName: "ellipsis.circle").font(.system(size: 10))
-                }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .foregroundStyle(Theme.secondaryLabel)
-                .help(component.kind?.isAI == true ? "Refine Edges, Refine Edge Brush, Delete" : "Delete")
-                .accessibilityLabel("\(title(index))'s actions")
-                .automationIdentifier("masks.component.\(component.id.uuidString).menu")
-            } else {
-                Button {
-                    model.deleteComponent(component.id, in: mask.id)
-                } label: {
-                    Image(systemName: "trash").font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.secondaryLabel)
-                .help("Delete component")
+            Menu {
+                refinements
+                Button("Delete", role: .destructive) { model.deleteComponent(component.id, in: mask.id) }
+            } label: {
+                Image(systemName: "ellipsis.circle").font(.system(size: 10))
             }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(Theme.secondaryLabel)
+            .help(component.kind?.isAI == true ? "Refine Edges, Refine Edge Brush, Delete" : "Delete")
+            .accessibilityLabel("\(title(index))'s actions")
+            .automationIdentifier("masks.component.\(component.id.uuidString).menu")
         }
         .foregroundStyle(selected ? Theme.value : Theme.label)
         .padding(.horizontal, 8)
@@ -1375,7 +996,6 @@ struct ComponentRow: View {
         .automationIdentifier("masks.component.\(component.id.uuidString)")
         .onTapGesture { model.selectedComponentID = component.id }
         .onHover { inside in
-            guard actionsOnScreen else { return }
             if inside {
                 model.hoveredComponentID = component.id
             } else if model.hoveredComponentID == component.id {

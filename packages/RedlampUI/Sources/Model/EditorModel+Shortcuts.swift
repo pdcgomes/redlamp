@@ -292,6 +292,8 @@ public extension EditorModel {
             showShortcuts = false
         } else if drawingKind != nil || isRefiningEdges {
             cancelDrawing()
+        } else if peoplePicker != nil {
+            closePeoplePicker()
         } else if eyedropperActive {
             eyedropperActive = false
         } else if calibrationTargetActive || calibrationTarget != nil {

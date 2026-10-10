@@ -403,7 +403,7 @@ struct ProcessVersion: View {
                 if model.activeTool == .edit {
                     SwiftUIDevelopPanels()
                 } else if model.activeTool == .masking {
-                    MaskingPanel()
+                    MasksPanel()
                 } else if model.activeTool == .crop {
                     CropToolPanel()
                     ParameterSlider(parameter: .cropAngle)

@@ -73,7 +73,7 @@ struct ObjectSelectionTests {
         model.cancelDrawing()
         model.selectMask(mask.id)
         model.selectedComponentID = mask.components.first?.id
-        #expect(MaskingPanel.componentTools(model) == .objects)
+        #expect(MasksPanel.componentTools(model) == .objects)
         model.setSliderValue(.maskAIFeather, 30)
         model.setSliderValue(.maskAIEdge, -20)
         guard case let .ai(ai) = model.recipe.masks.first?.components.first?.shape else {

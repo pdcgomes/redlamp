@@ -2,7 +2,7 @@
 deck = "Name, hide, reorder and reuse masks; see what each one covers; choose how the overlay shows them; and keep the masks you make often as presets."
 sources = [
   "`README.md`: Masking",
-  "`packages/RedlampUI/Sources/Inspector/MasksPanelNext.swift` (the header, MaskThumbnail)",
+  "`packages/RedlampUI/Sources/Inspector/MasksPanel.swift` (the header, MaskThumbnail)",
   "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift` (MaskList, MaskOverlayOptions, MaskPresetsMenu, MaskActionsMenu)",
   "`packages/RedlampUI/Sources/Editor/MaskOverlayView.swift`",
   "`packages/RedlampUI/Sources/Model/EditorModel+Masking.swift`, `EditorModel+MaskPresets.swift`, `EditorModel+MaskThumbnails.swift`, `EditorModel+Shortcuts.swift`",

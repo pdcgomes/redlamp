@@ -3,7 +3,7 @@ deck = "Three components you draw yourself: a linear gradient for a sky or a for
 sources = [
   "`README.md`: Masking",
   "`packages/RedlampUI/Sources/Editor/MaskOverlayView.swift`",
-  "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift` (DrawingHint, BrushChoicePicker, AutoMaskToggle); `packages/RedlampUI/Sources/Inspector/MasksPanelNext.swift` (the picker)",
+  "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift` (DrawingHint, BrushChoicePicker, AutoMaskToggle); `packages/RedlampUI/Sources/Inspector/MasksPanel.swift` (the picker)",
   "`packages/RedlampUI/Sources/Model/BrushSettings.swift`, `EditorModel+Brush.swift`, `EditorModel+BrushSize.swift`",
   "`packages/RedlampEngineAPI/Sources/Masks.swift` (LinearMask, RadialMask, BrushStroke)",
   "`packages/RedlampEngineAPI/Sources/ParameterSpec.swift`",

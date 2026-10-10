@@ -30,7 +30,7 @@ final class InspectorPanelsView: PanelColumnScrollView {
                 ReferencePanelViews.calibration(model: model),
             ]
         case .masking:
-            [MaskingPanelView(model: model)]
+            [MasksPanelView(model: model)]
         case .crop:
             [
                 HostedControl(model: model, CropToolPanel()),

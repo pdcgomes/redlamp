@@ -4,8 +4,8 @@ import RedlampEngineAPI
 @_spi(Harness) import RedlampUI
 import SwiftUI
 
-/// The redesigned Masks panel (`docs/plans/2026-10-07-masks-panel-design.md`), built here before
-/// it replaces the editor's: Live on the real editor with the design's checklist, and States.
+/// The Masks panel (`docs/plans/2026-10-07-masks-panel-design.md`): Live on the real editor with
+/// the design's checklist, and States.
 extension HarnessScene {
     static var masksPanel: HarnessScene {
         var scene = HarnessScene(
@@ -47,7 +47,7 @@ private struct MasksLiveScene: View {
         HStack(spacing: 0) {
             CanvasArea(onOpen: {})
             ScrollView {
-                MasksPanelNext()
+                MasksPanel()
             }
             .frame(width: 316)
         }

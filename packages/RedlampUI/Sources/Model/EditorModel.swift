@@ -503,7 +503,7 @@ public final class EditorModel {
     /// photo's coordinates. A mask without one has its pin at its first component's centre.
     public internal(set) var maskPins: [UUID: ImagePoint] = [:]
 
-    /// The mask under the pointer in the Masks panel's list (`MasksPanelNext`), which the canvas
+    /// The mask under the pointer in the Masks panel's list (`MasksPanel`), which the canvas
     /// previews even with the overlay off.
     public var hoveredMaskID: UUID? {
         didSet {

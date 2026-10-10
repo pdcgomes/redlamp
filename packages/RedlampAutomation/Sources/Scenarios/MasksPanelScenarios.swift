@@ -132,13 +132,14 @@
         static let tools = Scenario(
             "masking.panel-tools",
             "The Masks panel's tools by their controls: a luminance range's stops and map, the brush's Auto Mask, "
-                +
-                "the overlay's options and Opacity, and an AI mask's Refine Edges and Refine Edge Brush with its Size",
+                + "the overlay's options and Opacity, an AI mask's Refine Edges and Refine Edge Brush with its Size, "
+                + "and a preset from the header",
             claims: [
                 .feature("masking.luminance-range"),
                 .feature("masking.brush"),
                 .feature("masking.overlay"),
                 .feature("masking.refine"),
+                .feature("masking.presets"),
             ],
         ) { app in
             try app.openMasks()
@@ -229,8 +230,18 @@
             try app.tap(.identifier("masks.hint.done"))
             try app.wait("the Refine Edge Brush put down") { !$0.isRefiningEdges }
             try app.expect(try app.main { $0.recipe.mask(mask) != nil }, "The Subject mask went")
-            try app.main { $0.deleteAllMasks() }
             app.covered(.feature("masking.refine"), via: .mouse)
+
+            // A preset from the header's Mask Presets menu.
+            if let preset = MaskPreset.builtIn.first(where: { $0.name == "Brighten Subject" }),
+               try app.main({ $0.canApply(preset) }) {
+                try app.choose(preset.name, inMenuOf: .identifier("masks.presets"))
+                try app.wait("the \(preset.name) preset", timeout: 180) { model in
+                    model.masks.contains { $0.name == preset.name } || model.maskMessage != nil
+                }
+                app.covered(.feature("masking.presets"), via: .mouse)
+            }
+            try app.main { $0.deleteAllMasks() }
         }
 
         static let people = Scenario(

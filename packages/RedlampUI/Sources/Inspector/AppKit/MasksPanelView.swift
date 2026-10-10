@@ -3,7 +3,7 @@ import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
-/// The Masks panel (`MasksPanelNext`) in AppKit, as the Develop panels are.
+/// The Masks panel (`MasksPanel`) in AppKit, as the Develop panels are.
 ///
 /// The selected mask's sliders are AppKit. The header, the picker, the list, the People picker,
 /// the component rows and the menus are the SwiftUI panel's own, hosted one by one; they read
@@ -27,7 +27,7 @@ final class MasksPanelView: ColumnView {
             .padding(.bottom, 12),
     )
     private lazy var list = panelRows.native(
-        MaskList(actionsOnScreen: true)
+        MaskList()
             .padding(.horizontal, Metrics.panelPadding)
             .padding(.bottom, 8)
             .background(MaskThumbnailRefresher()),
@@ -51,7 +51,7 @@ final class MasksPanelView: ColumnView {
     private struct Structure: Equatable {
         var outlines: [MaskOutline]
         var selected: MaskOutline?
-        /// Which component settings show (see `MaskingPanel.componentTools`).
+        /// Which component settings show (see `MasksPanel.componentTools`).
         var tools: MaskKind?
         var drawing: Bool
         var messages: Bool
@@ -82,7 +82,7 @@ final class MasksPanelView: ColumnView {
             let next = Structure(
                 outlines: model.maskOutlines,
                 selected: model.selectedOutline,
-                tools: MaskingPanel.componentTools(model),
+                tools: MasksPanel.componentTools(model),
                 drawing: model.drawingKind != nil || model.isRefiningEdges,
                 messages: model.aiMaskProgress != nil || model.maskMessage != nil || model.pendingModel != nil
                     || model.modelDownloadProgress != nil,
@@ -148,13 +148,13 @@ final class MasksPanelView: ColumnView {
             rows.gap(6),
             rows.header("Components, applied top to bottom", []),
         ]
-        views += mask.components.map { rows.native(ComponentRow(mask: mask, component: $0, actionsOnScreen: true)) }
+        views += mask.components.map { rows.native(ComponentRow(mask: mask, component: $0)) }
         views.append(rows.native(ComponentOperationButtons(mask: mask).padding(.top, 4)))
         views += componentTools(tools, mask: mask, rows: rows)
         views += [rows.gap(6), rows.slider(.maskDetail), rows.gap()]
         for parameter in ParameterID.localParameters where !ParameterID.swatchParameters.contains(parameter) {
             views.append(rows.slider(parameter))
-            if MaskingPanel.gapAfter.contains(parameter) {
+            if MasksPanel.gapAfter.contains(parameter) {
                 views.append(rows.gap())
             }
         }

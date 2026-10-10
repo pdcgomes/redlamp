@@ -3,7 +3,7 @@ deck = "Let Redlamp find the subject, the sky, people and their features, an obj
 sources = [
   "`README.md`: Masking",
   "`packages/RedlampEngineAPI/Sources/Masks.swift`",
-  "`packages/RedlampUI/Sources/Inspector/MasksPanelNext.swift`, `PeoplePickerView.swift`, `MaskingPanel.swift`",
+  "`packages/RedlampUI/Sources/Inspector/MasksPanel.swift`, `PeoplePickerView.swift`, `MaskingPanel.swift`",
   "`packages/RedlampUI/Sources/Model/EditorModel+AIMasks.swift`, `+PeoplePicker.swift`, `+Objects.swift`, `+EdgeBrush.swift`",
   "`packages/RedlampEngine/Sources/RedlampEngine+Models.swift`; `packages/RedlampMasking/Resources/Models/*.json`",
   "`docs/lightroom-comparison.md`: Masking",
@@ -36,7 +36,7 @@ People opens the People picker in the panel, where the list was, so the photo st
 2. Click the people to mask, or tick All when there are several.
 3. Under PARTS, tick what to mask: Entire Person, Face Skin, Body Skin, Eyebrows, Eye Sclera, Iris and Pupil, Lips, Teeth, Hair, Facial Hair or Clothes. Entire Person is ticked to start.
 4. With more than one person ticked, tick Separate masks, one for each person, to give each a mask of their own.
-5. Click Create Mask, or Create 3 Masks (or however many) with Separate masks. Cancel puts the list back.
+5. Click Create Mask, or Create 3 Masks (or however many) with Separate masks. Cancel, or [[Esc]], puts the list back.
 
 Each component made names its part and its person, as in Face Skin · Person 2, so you can leave someone out later by deleting their component. Opened from Add, Subtract or Intersect, the picker's title says which, as in People · Subtract from Sky, and its button reads Add, Subtract or Intersect. When nobody is found, the picker says No people were found in this photo.
 

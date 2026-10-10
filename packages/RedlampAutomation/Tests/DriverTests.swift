@@ -156,11 +156,19 @@ struct DriverTests {
         #expect(state.checked, "the checkbox tracks the press and reads the queued release")
 
         let opened = OpenedMenu()
+        // As the driver chooses, from a block the menu's tracking runs rather than inside the
+        // notification that it started.
         opened.watch { menu in
-            if let index = menu.items.firstIndex(where: { $0.title == "Second" }) {
-                menu.performActionForItem(at: index)
+            nonisolated(unsafe) let menu = menu
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue) {
+                MainActor.assumeIsolated {
+                    if let index = menu.items.firstIndex(where: { $0.title == "Second" }) {
+                        menu.performActionForItem(at: index)
+                    }
+                    menu.cancelTracking()
+                }
             }
-            menu.cancelTracking()
+            CFRunLoopWakeUp(CFRunLoopGetMain())
         }
         defer { opened.stop() }
         try await tap("test.menu")

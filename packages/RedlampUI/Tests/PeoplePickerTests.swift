@@ -64,6 +64,17 @@ struct PeoplePickerTests {
         #expect(model.activeTool == .masking)
     }
 
+    @Test func `Esc closes the picker before it leaves the Masking tool`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (model, _) = try await threePeople()
+        try await open(model)
+        #expect(model.perform(.cancel))
+        #expect(model.peoplePicker == nil)
+        #expect(model.activeTool == .masking, "the first Esc closes the picker")
+        #expect(model.perform(.cancel))
+        #expect(model.activeTool == .edit, "the second leaves the tool")
+    }
+
     @Test func `a person ticked gets a mask of their own, named for them`() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
         let (model, engine) = try await threePeople()

@@ -2,15 +2,15 @@ import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
-/// The Masks panel as redesigned (`docs/plans/2026-10-07-masks-panel-design.md`), built in the
-/// harness first: it replaces `MaskingPanel` in the editor once every task in the design's
-/// checklist works through it. From UX-20: one picker starts every mask, the list's actions sit
-/// in the header, and messages and the armed tool show at the top of the list. From UX-22: every
+/// The Masking tool's panel, as redesigned (`docs/plans/2026-10-07-masks-panel-design.md`), and
+/// the reference its AppKit port in the editor (`MasksPanelView`) is checked against. From UX-20:
+/// one picker starts every mask, the list's actions sit in the header, and messages and the
+/// armed tool show at the top of the list. From UX-22: every
 /// action is on screen, not only in context menus. From UX-23: each row shows its mask's
 /// coverage, the canvas previews the mask or component under the pointer, and pins sit where
 /// each mask covers most. From UX-21: People opens a picker of who is in the photo and which of
 /// their parts to mask.
-@_spi(Harness) public struct MasksPanelNext: View {
+@_spi(Harness) public struct MasksPanel: View {
     @Environment(EditorModel.self) private var model
 
     public init() {}
@@ -29,13 +29,13 @@ import SwiftUI
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 12)
             } else {
-                MaskList(actionsOnScreen: true)
+                MaskList()
                     .padding(.horizontal, Theme.panelPadding)
                     .padding(.bottom, 8)
                     .background(MaskThumbnailRefresher())
                 Rectangle().fill(Theme.divider).frame(height: 1)
                 if let mask = model.selectedOutline {
-                    SelectedMaskEditor(mask: mask, usesPicker: true)
+                    SelectedMaskEditor(mask: mask)
                 } else {
                     NoMaskSelected()
                 }
@@ -72,7 +72,7 @@ struct MasksHeaderNext: View {
                 MaskPicker(mode: .new) { picking = false }
                     .environment(model)
             }
-            MaskPresetsMenu(compact: true)
+            MaskPresetsMenu()
             headerToggle(
                 model.showMaskOverlay ? "circle.lefthalf.filled" : "circle", isOn: $model.showMaskOverlay,
                 help: "Show Overlay (O)", identifier: "masks.overlay",

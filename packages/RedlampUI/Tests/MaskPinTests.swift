@@ -159,7 +159,7 @@ struct PointerPreviewTests {
     }
 
     @Test func `a row of the new Masks panel previews its mask or component only while it's there`() async throws {
-        let (model, _, window, cleanup) = try await open { MasksPanelNext() }
+        let (model, _, window, cleanup) = try await open { MasksPanel() }
         defer { cleanup() }
         let (left, right) = (model.masks[0].id, model.masks[1].id)
 
