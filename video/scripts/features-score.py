@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-A feature video's score (src/features/FeatureVideo.tsx): the series' theme in one of its arrangements
-(scripts/features-theme.py), with the episode's own sounds on the frames their pictures land on. The
+A feature video's score (src/features/FeatureVideo.tsx): the episode's own track
+(scripts/features/music/<episode>.py), or E01's theme (scripts/features-theme.py) for an episode
+without one yet, with the episode's own sounds on the frames their pictures land on. The
 sounds come from the episode's board (scripts/features/boards/<episode>.py, sounds()), which times them
 on the series' cue sheet as it times the picture.
 
@@ -44,6 +45,15 @@ def load(path, name):
 
 
 theme = load(w.VIDEO / "scripts/features-theme.py", "features_theme")
+
+
+def music(key):
+    """The episode's own track, or E01's theme for an episode without one; a variation (e01-photo) plays
+    its episode's."""
+    base = key.split("-")[0]
+    path = w.VIDEO / f"scripts/features/music/{base}.py"
+    return load(path, f"music_{base}") if path.exists() else theme
+
 CLICK_UP = 0.07
 # The whole video's loudness, as the platforms measure it, in LUFS.
 TARGET = -14.0
@@ -158,9 +168,13 @@ def on_screen(events):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode", required=True)
-    parser.add_argument("--arrangement", default="synthwave", choices=list(theme.ARRANGEMENTS))
+    parser.add_argument("--arrangement", help="the arrangement the cut plays; the track's first unless given")
     args = parser.parse_args()
     key = args.episode.lower()
+    track = music(key)
+    arrangement = args.arrangement or next(iter(track.ARRANGEMENTS))
+    if arrangement not in track.ARRANGEMENTS:
+        sys.exit(f"{key}'s track has no arrangement called {arrangement}: choose from {', '.join(track.ARRANGEMENTS)}")
     board = load(w.VIDEO / f"scripts/features/boards/{key}.py", f"board_{key}")
     if not hasattr(board, "sounds"):
         sys.exit(f"{key}'s board has no sounds() yet, so its score can't be written.")
@@ -171,7 +185,7 @@ def main():
 
     out = w.VIDEO / "public/features" / key
     out.mkdir(parents=True, exist_ok=True)
-    for name, arrange in theme.ARRANGEMENTS.items():
+    for name, arrange in track.ARRANGEMENTS.items():
         buses, mastering = arrange(sounds=on_screen(events))
         # The last 1.6 s fade out with the picture, as the last chord dies away. What's mastered to the
         # target is the whole video, opener and all; the opener is the quieter, so the score sits a
@@ -187,7 +201,7 @@ def main():
         whole = np.concatenate([head, each])
         print(f"    score-{name}.wav: {s.loudness(each):.1f} LUFS; with opener-{name}.wav, {s.loudness(whole):.1f} LUFS, "
               f"true peak {s.true_peak(whole):.1f} dBFS")
-        if name == args.arrangement:
+        if name == arrangement:
             mix, intro = each, head
     s.write(out / "score.wav", mix)
     s.write(out / "opener.wav", intro)
@@ -195,7 +209,7 @@ def main():
     per = s.SR // w.FPS
     frames = len(mix) // per
     rms = np.sqrt((mix[: frames * per] ** 2).mean(axis=1).reshape(frames, per).mean(axis=1))
-    (out / "score.json").write_text(json.dumps({"fps": w.FPS, "arrangement": args.arrangement,
+    (out / "score.json").write_text(json.dumps({"fps": w.FPS, "arrangement": arrangement,
                                                 "level": [round(float(x), 4) for x in rms / rms.max()]}))
     counts = {}
     cues = dict(w.CUE)
@@ -203,7 +217,7 @@ def main():
         counts[kind] = counts.get(kind, 0) + 1
         cues[f"{kind.replace(' ', '-')}-{counts[kind]}"] = beat
     (out / "cues.json").write_text(json.dumps({**w.SHEET, "cues": cues}, indent=1))
-    print(f"==> public/features/{key}/score.wav ({args.arrangement}, {theme.TOTAL:.1f} s, {s.loudness(mix):.1f} LUFS, "
+    print(f"==> public/features/{key}/score.wav ({arrangement}, {theme.TOTAL:.1f} s, {s.loudness(mix):.1f} LUFS, "
           f"true peak {s.true_peak(mix):.1f} dBFS, {len(events)} sounds on screen)")
 
 

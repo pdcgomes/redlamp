@@ -1,5 +1,5 @@
 """
-E02, Subject mask, in the series' look (boards/e01.py): the person selected in one click by an AI mask
+E02, Subject mask, in the series' look (boards/e01.py): your subject selected in one click by an AI mask
 that runs on the Mac, the mask inverted to select the background, and the background darkened so the
 subject stands out. The editor is drawn as E01's dashboard is: the owner's photo of his son at a colour
 run in the photo panel as pixel art, its histogram and level under it, and the Masks panel below, with

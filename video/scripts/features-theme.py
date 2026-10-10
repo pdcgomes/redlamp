@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """
-The feature videos' theme (src/features/): one tune in D minor at 100 BPM, 8 bars and 19.2 seconds,
-in three arrangements, written from the series' cue sheet, src/features/cues.json, so every sound
-lands on the frame its picture does. Each is written from the bar before the episode's first frame
-(the cue sheet's `leadIn`), which plays under the end of Redlamp's opener.
+E01's theme for the feature videos (src/features/): one tune in D minor at 100 BPM, 8 bars and 19.2
+seconds, in three arrangements, written from the series' cue sheet, src/features/cues.json, so every
+sound lands on the frame its picture does. Each is written from the bar before the episode's first
+frame (the cue sheet's `leadIn`), which plays under the end of Redlamp's opener.
+
+Every later video has a synthwave track of its own (the owner, 10 October 2026), in
+scripts/features/music/<episode>.py, on the same grid and built from the pieces here that the series
+shares: `at` and `split`, the structure's cues, `lead_in` (the ramp out of the opener's held chord),
+`develop` (the glass sting on the drop, in the track's key) and the helpers between them. An episode
+without one yet plays this theme.
 
     python3 scripts/features-theme.py              # public/features/theme-synthwave.wav, theme-drive.wav, theme-pulse.wav
     python3 scripts/features-theme.py synthwave    # one of them
@@ -89,11 +95,13 @@ CHORDS = {
 }
 
 
-def chord_at(beat):
-    for name, first, length in sheet["chords"]:
+def chord_at(beat, chords=None):
+    """The chord at `beat`: this theme's, from the cue sheet, or a track's own `chords`."""
+    chords = chords or sheet["chords"]
+    for name, first, length in chords:
         if first <= beat < first + length:
             return name
-    return sheet["chords"][-1][0]
+    return chords[-1][0]
 
 
 # The riff, [beat, note, beats] from where it starts: A, D and E in the dotted rhythm, up to F on the
@@ -150,12 +158,37 @@ def trim(bus, cutoff):
     bus.send = s.highpass(bus.send, cutoff, order=2)
 
 
-def develop(bus, room):
-    """The sting on the drop, the same in every video: glass struck on D, A and E, its own reverb
-    swelling up into it."""
-    struck = sum(s.pan(s.glass(note, 4.0, velocity), p) for note, velocity, p in ((74, 0.9, -0.3), (81, 0.7, 0.2), (88, 0.5, 0.45)))
+def develop(bus, room, tonic=74):
+    """The sting on the drop, the series' own in every video: glass struck on the track's tonic, its
+    fifth and its ninth (D, A and E in this theme), its own reverb swelling up into it."""
+    struck = sum(s.pan(s.glass(tonic + up, 4.0, velocity), p) for up, velocity, p in ((0, 0.9, -0.3), (7, 0.7, 0.2), (14, 0.5, 0.45)))
     bus.add(at(DROP - 1), s.swell_into(struck, BEAT, room), gain=0.07, wet=0.0)
     bus.add(at(DROP), struck, gain=0.32, wet=0.5)
+
+
+def lead_in(buses, kicks, room, shared, drone, arp, echo, tone=None):
+    """
+    The bar before the first hit, under the opener's held D major chord (D, E, F sharp and A): an
+    arpeggio that comes in out of nothing on `shared`, notes the held chord and the track's first chord
+    have in common, opening as it grows to the first bar's levels for a note and its echo (`arp`,
+    `echo`); a kick muffled further than the first bar's, growing too; a drone on `drone` that carries
+    on under the first bar until the bass comes in; and the first hit's reverb swelling up into it.
+    `buses` are the arrangement's arpeggio, drums, bed and effects buses, and `tone(note, grown)` plays a
+    note of the arpeggio, a pluck unless the track has its own.
+    """
+    arps, drums, bed, fx = buses
+    for i, beat in enumerate(np.arange(-LEAD_IN, 0, 0.25)):
+        grown = ((beat + LEAD_IN + 0.25) / LEAD_IN) ** 1.6
+        note = shared[(0, 1, 2, 3, 2, 1, 3, 2)[i % 8]]
+        sound = tone(note, grown) if tone else s.pluck(note, 0.8, 0.18, bright=0.1 + 0.3 * grown)
+        arps.add(at(beat), sound, gain=arp * grown, pan_to=(-0.3, 0.3)[i % 2], wet=0.25)
+        arps.add(at(beat + 0.75), s.lowpass(sound, 2200), gain=echo * grown, pan_to=(0.4, -0.4)[i % 2], wet=0.4)
+    for beat in range(-LEAD_IN, 0):
+        drums.add(at(beat), s.lowpass(s.kick(0.9), 160), gain=0.45 * ((beat + LEAD_IN + 1) / LEAD_IN) ** 1.5, wet=0.02)
+        kicks.append(at(beat))
+    bed.add(at(-LEAD_IN), s.drone(drone, at(S1) - at(-LEAD_IN), cutoff=400, release=1.2, attack=PRE), gain=0.55, wet=0.3)
+    fx.add(at(-LEAD_IN), s.riser(PRE, 250, 4000, curve=2.6), gain=0.08, wet=0.3)
+    fx.add(at(-2), s.swell_into(s.boom(1.4, 0.7), at(0) - at(-2), room), gain=0.3, wet=0.0)
 
 
 def ui(fx):
@@ -422,23 +455,9 @@ def synthwave(sounds=ui):
     drums, low, pads, arps, lead, fx, bed = (s.Bus(LENGTH) for _ in range(7))
     kicks = []
 
-    # The lead-in, under the opener's held D major chord: the arpeggio comes in out of nothing on the
-    # notes D major and D minor share (A, D and E), opening as it grows into the first bar's, over a
-    # kick muffled further than the first bar's and growing too, and a drone on D and A that carries on
-    # under the first bar until the bass comes in. The first hit's reverb swells up into it, and the
+    # The lead-in, on the notes D major and D minor share (A, D and E) over a drone on D and A, so the
     # minor third comes in with the hit.
-    shared = [69, 74, 76, 81]
-    for i, beat in enumerate(np.arange(-LEAD_IN, 0, 0.25)):
-        grown = ((beat + LEAD_IN + 0.25) / LEAD_IN) ** 1.6
-        tone = s.pluck(shared[(0, 1, 2, 3, 2, 1, 3, 2)[i % 8]], 0.8, 0.18, bright=0.1 + 0.3 * grown)
-        arps.add(at(beat), tone, gain=0.13 * swell(0) * grown, pan_to=(-0.3, 0.3)[i % 2], wet=0.25)
-        arps.add(at(beat + 0.75), s.lowpass(tone, 2200), gain=0.05 * swell(0) * grown, pan_to=(0.4, -0.4)[i % 2], wet=0.4)
-    for beat in range(-LEAD_IN, 0):
-        drums.add(at(beat), s.lowpass(s.kick(0.9), 160), gain=0.45 * ((beat + LEAD_IN + 1) / LEAD_IN) ** 1.5, wet=0.02)
-        kicks.append(at(beat))
-    bed.add(at(-LEAD_IN), s.drone([38, 45, 50], at(S1) - at(-LEAD_IN), cutoff=400, release=1.2, attack=PRE), gain=0.55, wet=0.3)
-    fx.add(at(-LEAD_IN), s.riser(PRE, 250, 4000, curve=2.6), gain=0.08, wet=0.3)
-    fx.add(at(-2), s.swell_into(s.boom(1.4, 0.7), at(0) - at(-2), room), gain=0.3, wet=0.0)
+    lead_in((arps, drums, bed, fx), kicks, room, [69, 74, 76, 81], [38, 45, 50], 0.13 * swell(0), 0.05 * swell(0))
 
     # The first frame lands as a deep hit; the pads come in slowly under the arpeggio.
     drums.add(at(0), s.deep_kick(0.85), gain=0.6, wet=0.12)
