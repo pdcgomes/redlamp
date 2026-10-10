@@ -226,17 +226,21 @@ struct NoMaskSelected: View {
 }
 
 /// Mask presets: Lightroom-style adaptive ones, which compute their masks for the photo, and
-/// the user's own.
+/// the user's own. With several photos selected, a preset goes to each of them (UX-25).
 struct MaskPresetsMenu: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
         let presets = model.maskPresets
         let builtIn = Set(MaskPreset.builtIn.map(\.id))
+        let photos = model.isMultiSelecting ? model.selectedPhotos.count : nil
         Menu {
-            ForEach(presets) { preset in
-                Button(preset.name) { Task { await model.applyMaskPreset(preset) } }
-                    .disabled(!model.canApply(preset) || model.aiMaskProgress != nil)
+            if let photos {
+                Section("Apply to \(photos) Selected Photos") {
+                    choices(presets)
+                }
+            } else {
+                choices(presets)
             }
             let own = presets.filter { !builtIn.contains($0.id) }
             if !own.isEmpty {
@@ -254,9 +258,16 @@ struct MaskPresetsMenu: View {
         .menuStyle(.button)
         .controlSize(.small)
         .fixedSize()
-        .help("Mask Presets")
+        .help(photos.map { "Mask Presets, applied to the \($0) selected photos" } ?? "Mask Presets")
         .accessibilityLabel("Mask Presets")
         .automationIdentifier("masks.presets")
+    }
+
+    private func choices(_ presets: [MaskPreset]) -> some View {
+        ForEach(presets) { preset in
+            Button(preset.name) { Task { await model.applyMaskPreset(preset) } }
+                .disabled(!model.canApply(preset) || model.aiMaskProgress != nil)
+        }
     }
 }
 

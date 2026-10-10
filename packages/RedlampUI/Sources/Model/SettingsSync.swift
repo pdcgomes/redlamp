@@ -14,7 +14,8 @@ protocol SyncEditor: AnyObject {
 }
 
 /// Changes photos that aren't open, one at a time in the background: Sync Settings, Paste onto a
-/// selection, Update AI Masks across it (`docs/plans/2026-10-02-copy-paste-sync-design.md`).
+/// selection, Update AI Masks and mask presets across it
+/// (`docs/plans/2026-10-02-copy-paste-sync-design.md`).
 ///
 /// For each photo it reads the sidecar, pastes, recomputes the AI masks the paste brought (and an
 /// Auto white balance) in an engine of its own, so the open photo is never disturbed, and saves
@@ -35,6 +36,8 @@ public final class SettingsSync {
         case paste(EditRecipe, SettingsSelection)
         /// Every AI mask computed again with today's models.
         case updateAIMasks
+        /// A mask preset added as a new mask, its AI masks computed for each photo.
+        case applyMaskPreset(MaskPreset)
         /// Each photo's sensor dust (found across the selection) healed, a source found for each speck.
         case healDust([URL: [DetectedSpot]])
         /// Each photo of the run as the open photo's step left it: its edit before the run, with
@@ -187,6 +190,21 @@ public final class SettingsSync {
     private enum Landed<T> {
         case saved(T)
         case inEditor(EditorOutcome)
+    }
+
+    /// A change worked out for one photo: the edit it leaves, how many of the AI masks it
+    /// recomputed couldn't be, and why a preset's mask wasn't added, when it wasn't.
+    private struct Applied {
+        var recipe: EditRecipe
+        var failedMasks = 0
+        var missedPreset: MissedPreset?
+    }
+
+    private enum MissedPreset {
+        /// An AI mask it needs couldn't be computed for the photo.
+        case notMade
+        /// The photo has as many masks as it can.
+        case full
     }
 
     init(store: SidecarStore = SidecarStore(), makeEngine: @escaping () -> (any EditingEngine)?) {
@@ -413,6 +431,8 @@ public final class SettingsSync {
         var editedSince = 0
         var changedMeanwhile = 0
         var failedMasks = 0
+        var presetsNotMade = 0
+        var presetsFull = 0
         let inRun = job.session != nil && run?.session == job.session
         for url in job.photos {
             guard !Task.isCancelled else { break }
@@ -467,6 +487,11 @@ public final class SettingsSync {
             guard let applied = await applying(change, to: start, current: original, url, &engine) else { continue }
             let next = applied.recipe
             failedMasks += applied.failedMasks
+            switch applied.missedPreset {
+            case .notMade: presetsNotMade += 1
+            case .full: presetsFull += 1
+            case nil: break
+            }
             guard next != original else {
                 if var member {
                     member.reached.formUnion(job.steps)
@@ -515,9 +540,13 @@ public final class SettingsSync {
             }
             job.done(url, next)
         }
+        var preset: (name: String, notMade: Int, full: Int)?
+        if case let .applyMaskPreset(applied) = job.change {
+            preset = (applied.name, presetsNotMade, presetsFull)
+        }
         report = Self.report(
             skipped: skipped, editedSince: editedSince, changedMeanwhile: changedMeanwhile, failedMasks: failedMasks,
-            cancelled: Task.isCancelled,
+            preset: preset, cancelled: Task.isCancelled,
         )
         progress = nil
         if !queue.isEmpty {
@@ -549,7 +578,7 @@ public final class SettingsSync {
     /// brings, and an Auto white balance, computed for that photo. Nil when it changes nothing.
     private func applying(
         _ change: Change, to start: EditRecipe, current: EditRecipe, _ url: URL, _ engine: inout (any EditingEngine)?,
-    ) async -> (recipe: EditRecipe, failedMasks: Int)? {
+    ) async -> Applied? {
         var next = start
         var masks: Set<UUID>?
         var autoWhiteBalance = false
@@ -568,6 +597,21 @@ public final class SettingsSync {
             }
         case .updateAIMasks:
             masks = nil
+        case let .applyMaskPreset(preset):
+            masks = []
+            guard next.masks.count < MaskLayer.maximumLayers else { return Applied(recipe: start, missedPreset: .full) }
+            // Computed only on this photo: an engine that couldn't open it still has another open.
+            var opened: (any EditingEngine)?
+            if !preset.aiKinds.isEmpty {
+                engine = engine ?? makeEngine()
+                if let engine, await (try? engine.open(url)) != nil {
+                    opened = engine
+                }
+            }
+            guard let mask = try? await EditorModel.mask(of: preset, engine: opened) else {
+                return Applied(recipe: start, missedPreset: .notMade)
+            }
+            next.masks.append(mask)
         case let .healDust(found):
             masks = []
             let specks = found[url] ?? []
@@ -604,7 +648,7 @@ public final class SettingsSync {
                 }
             }
         }
-        return (next, failedMasks)
+        return Applied(recipe: next, failedMasks: failedMasks)
     }
 
     /// `edit` with the photo's own exposure anchor (`EditRecipe.anchored`), its camera read from the
@@ -636,7 +680,8 @@ public final class SettingsSync {
     }
 
     private static func report(
-        skipped: Int, editedSince: Int, changedMeanwhile: Int, failedMasks: Int, cancelled: Bool,
+        skipped: Int, editedSince: Int, changedMeanwhile: Int, failedMasks: Int,
+        preset: (name: String, notMade: Int, full: Int)? = nil, cancelled: Bool,
     ) -> String? {
         var parts: [String] = []
         if cancelled {
@@ -657,6 +702,16 @@ public final class SettingsSync {
         if failedMasks > 0 {
             parts.append("\(failedMasks) AI mask\(failedMasks == 1 ? "" : "s") couldn't be computed for its photo.")
         }
+        if let preset, preset.notMade > 0 {
+            let photos = "\(preset.notMade) photo\(preset.notMade == 1 ? " was" : "s were")"
+            let them = preset.notMade == 1 ? "it" : "them"
+            parts.append("\(photos) left alone: \(preset.name)'s masks couldn't be made for \(them).")
+        }
+        if let preset, preset.full > 0 {
+            let photos = "\(preset.full) photo\(preset.full == 1 ? " was" : "s were")"
+            let have = preset.full == 1 ? "it has" : "they have"
+            parts.append("\(photos) left alone: \(have) \(MaskLayer.maximumLayers) masks already.")
+        }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 }
@@ -666,7 +721,17 @@ private extension SettingsSync.Change {
         switch self {
         case .paste, .follow: .paste
         case .updateAIMasks: .mask(nil)
+        case let .applyMaskPreset(preset): .mask(preset.components.first.flatMap(\.kind))
         case .healDust: .retouch
+        }
+    }
+}
+
+private extension MaskPreset.Component {
+    var kind: MaskKind? {
+        switch self {
+        case let .shape(shape, _, _): shape.kind
+        case let .ai(kind, _, _, _): kind
         }
     }
 }

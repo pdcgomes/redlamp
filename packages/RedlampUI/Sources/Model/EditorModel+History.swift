@@ -48,12 +48,14 @@ public extension EditorModel {
 
 extension EditorModel {
     /// Records the edit as a step. With `value`, the step shows the value it changed in `previous`
-    /// and now, or only now when they read the same.
+    /// and now, or only now when they read the same. `autoSyncs` false for a step that reaches the
+    /// rest of the selection another way.
     func recordHistory(
         _ action: HistoryAction,
         _ title: String,
         from previous: EditRecipe? = nil,
         value: ((EditRecipe) -> String)? = nil,
+        autoSyncs: Bool = true,
     ) {
         guard opening == nil else { return }
         let after = value?(recipe)
@@ -61,7 +63,7 @@ extension EditorModel {
         let prior = history.indices.contains(historyIndex) ? history[historyIndex].recipe : previous
         defer {
             // A paste reaches the selection itself.
-            if action != .paste, let prior {
+            if autoSyncs, action != .paste, let prior {
                 autoSync(from: prior)
             }
         }

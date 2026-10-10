@@ -1,8 +1,8 @@
 import Foundation
 import RedlampEngineAPI
 
-/// Sync Settings, and Paste and Update AI Masks across a selection: the active photo's own change
-/// is a step in its history as usual; the others go through `SettingsSync`.
+/// Sync Settings, and Paste, Update AI Masks and mask presets across a selection: the active
+/// photo's own change is a step in its history as usual; the others go through `SettingsSync`.
 public extension EditorModel {
     /// The selection's photos other than the open one.
     var otherSelectedPhotos: [URL] {
@@ -106,6 +106,9 @@ extension EditorModel: SyncEditor {
             paste(source, selection, name: title)
         case .change(.updateAIMasks):
             await updateAIMasks()
+            guard currentVisit == visit else { return isOpen(url) ? .left : .notOpen }
+        case let .change(.applyMaskPreset(preset)):
+            await addMaskPreset(preset, autoSyncs: false)
             guard currentVisit == visit else { return isOpen(url) ? .left : .notOpen }
         case let .change(.healDust(found)):
             guard await healDustInEditor(found[url] ?? [], on: url) else { return isOpen(url) ? .left : .notOpen }

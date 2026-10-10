@@ -1692,11 +1692,14 @@ public final class EditorModel {
     }
 
     /// Applies a change as one step. `value` reads the value it changed, to show it before and after.
-    func commit(_ next: EditRecipe, _ action: HistoryAction, _ title: String, value: ((EditRecipe) -> String)? = nil) {
+    func commit(
+        _ next: EditRecipe, _ action: HistoryAction, _ title: String, value: ((EditRecipe) -> String)? = nil,
+        autoSyncs: Bool = true,
+    ) {
         guard next != recipe else { return }
         let previous = recipe
         recipe = next
-        recordHistory(action, title, from: previous, value: value)
+        recordHistory(action, title, from: previous, value: value, autoSyncs: autoSyncs)
         requestRender()
         scheduleSave()
     }
