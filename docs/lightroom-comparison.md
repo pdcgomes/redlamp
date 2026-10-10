@@ -112,7 +112,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Brush, with Auto Mask and pen pressure | Yes | Done | | | MSK-16 | |
 | Color and luminance range | Yes | Done | | | MSK-05 | |
 | Subject, Sky and Background | Yes | Done | | | MSK-08, MSK-17 | Computed on the Mac; photos are never uploaded. Sky also uses Depth Anything 3, an open model trained partly on data Redlamp couldn't use itself. Edges are solved when a mask is made, not refined again as you edit |
-| People and their parts | Yes | Done | | | MSK-08, MSK-13 | Face parts from Apple Vision; body skin, clothes and hair from SAM 3, a download under Meta's SAM License |
+| People and their parts | Yes | Done | | | MSK-08, MSK-13, UX-21 | A picker shows who is in the photo as crops to tick, with the parts to mask and a mask for each person if you like. Face parts from Apple Vision; body skin, clothes and hair from SAM 3, a download under Meta's SAM License |
 | Objects | Yes | Done | | | MSK-10 | Hover to preview, click to select (Segment Anything 2.1, an 80 MB download, an open model trained partly on data Redlamp couldn't use itself) |
 | Objects by rectangle and brush | Yes | Done | | | MSK-19 | |
 | Landscape | Yes | Done | | | MSK-17, MSK-22 | Water, vegetation, mountains, architecture, ground and snow, from SAM 3 (a 988 MB download under Meta's SAM License) |
@@ -122,6 +122,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Feather and Edge sliders for AI masks | Yes | Done | | | MSK-18 | Lightroom Classic 15.5 added the sliders |
 | Mask presets (Blue Sky, Whiten Teeth and others) | Yes | Done | | | | Save your own from any mask |
 | Add, Subtract, Intersect, invert and duplicate | Yes | Done | | | UX-24 | A component or the whole mask inverted; Duplicate and Invert inverts the copy as a whole |
+| A masks panel with a thumbnail of each mask, and its overlay on hover | Yes | Done | | | UX-20, UX-22, UX-23, UX-24 | One picker for every mask and component, a menu on each mask and component, pins where each mask covers most, and Option-click on an eye to show one mask alone |
 | Reorder masks and components, every overlay mode and its opacity | Yes | Done | | | MSK-21 | |
 | Local adjustments in masks | Yes | Done | | | MSK-03, MSK-24 | Local Whites and Blacks move the end points as the global sliders do, for new edits (process 13) |
 | Local Whites and Blacks as true end points | Yes | Done | | | MSK-24 | |
@@ -204,7 +205,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Readout points pinned on the photo | No | Planned | | P3 | UX-40 | As Photoshop's colour samplers, with values that stay while sliders move |
 | Panel on/off switches | Yes | Undecided | | | UX-30 | Turn a panel's settings off and on without losing them |
 | Typing a slider's value | Yes | Done | | | UX-01 | Arithmetic works too (`x+15`) |
-| A value on every control, and values that scrub when dragged | Yes | In progress | | P2 | UX-28, UX-29 | The grading wheels, curve points, Base Look Amount and the Masks panel's sizes and ranges get values |
+| A value on every control, and values that scrub when dragged | Yes | Done | | | UX-28, UX-29 | Including the grading wheels, the curve's points, Base Look Amount and the Masks panel's sizes and ranges, each typed or scrubbed |
 | Lightroom Classic's keyboard shortcuts | Yes | Done | | | | 98 actions on 96 key bindings |
 | Command palette | No | Done | | | UX-07 | Every action and slider from the keyboard (⌘K) |
 | Sensor clipping and a colour-assessment view | No | Done | | | UX-05 | |

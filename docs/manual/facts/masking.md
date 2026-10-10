@@ -4,7 +4,7 @@ Every fact below cites a repository-relative path and line numbers. Facts marked
 reasoned from the code rather than read as a literal string. Where `README.md` and the code disagree,
 both are reported and the code's version is named.
 
-Read from the code at commit `9675a809` (9 October 2026), where the new Masks panel's files are as
+Read from the code at commit `fdf996aa` (9 October 2026), where the new Masks panel's files are as
 read here: `packages/RedlampUI/Sources/Inspector/MasksPanelNext.swift`,
 `packages/RedlampUI/Sources/Inspector/AppKit/MasksPanelView.swift`,
 `packages/RedlampUI/Sources/Inspector/MaskingPanel.swift`,
