@@ -50,8 +50,16 @@ enum Theme {
         Palette.trackFill.color
     }
 
-    static var thumb: Color {
-        Palette.thumb.color
+    static var panelEditedDot: Color {
+        Color(nsColor: Palette.panelEditedDot)
+    }
+
+    static var card: Color {
+        Palette.card.color
+    }
+
+    static var cardHover: Color {
+        Palette.cardHover.color
     }
 
     static var accent: Color {
@@ -74,7 +82,13 @@ enum Theme {
     static let rowHeight = Metrics.rowHeight
     static let panelPadding = Metrics.panelPadding
     static let panelSymbolSlot = Metrics.panelSymbolSlot
-    static let panelSwitchSize = Metrics.panelSwitchSize
+    static let panelEyeTarget = Metrics.panelEyeTarget
+    static let panelEyePointSize = Metrics.panelEyePointSize
+    static let editedDotSize = Metrics.editedDotSize
+    static let panelCardMargin = Metrics.panelCardMargin
+    static let panelCardGap = Metrics.panelCardGap
+    static let panelCardRadius = Metrics.panelCardRadius
+    static let panelCardPadding = Metrics.panelCardPadding
     static let switchedOffOpacity = Metrics.switchedOffOpacity
     static let thumbSize = Metrics.thumbSize
 }

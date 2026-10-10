@@ -5,7 +5,7 @@ import RedlampEngineAPI
 import Testing
 @_spi(Harness) @testable import RedlampUI
 
-/// The Develop panels' switches (UX-30): a header's switch turns its panel off or on as one
+/// The Develop panels' switches (UX-30): the eye on a header turns its panel off or on as one
 /// History step, without expanding it.
 @MainActor
 struct PanelSwitchUITests {
@@ -52,7 +52,7 @@ struct PanelSwitchUITests {
         try await Task.sleep(for: .milliseconds(20))
     }
 
-    @Test func `clicking the switch turns the panel off in one step, without expanding it`() async throws {
+    @Test func `clicking the eye turns the panel off in one step, without expanding it`() async throws {
         let (model, panel, _, cleanup) = try await openEditor()
         defer { cleanup() }
         let toggle = try panelSwitch(in: panel)
@@ -62,7 +62,7 @@ struct PanelSwitchUITests {
         try click(toggle)
         #expect(!model.isOn(.detail))
         #expect(model.history.count == steps + 1 && model.history.last?.name == "Detail Off")
-        #expect(model.expandedPanels.isEmpty, "the switch doesn't expand the panel")
+        #expect(model.expandedPanels.isEmpty, "the eye doesn't expand the panel")
         #expect(model.value(.sharpenAmount) == 70, "the panel keeps its settings")
         #expect(model.isEdited(.detail), "the edited dot still shows")
         try await settle()
@@ -75,6 +75,24 @@ struct PanelSwitchUITests {
         #expect(!model.isOn(.detail))
         try click(toggle)
         #expect(model.isOn(.detail) && model.history.last?.name == "Detail On")
+    }
+
+    /// The eye at the header's trailing edge, a comfortable target; the panel a card, so a
+    /// collapsed one is its header alone.
+    @Test func `the eye sits at the header's trailing edge, and the Develop panels are cards`() async throws {
+        let (_, panel, window, cleanup) = try await openEditor()
+        defer { cleanup() }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let header = try #require(panel.subviews.first { $0.accessibilityIdentifier() == "panel.detail.header" })
+        let eye = try panelSwitch(in: panel)
+        #expect(eye.frame.width >= 20 && eye.frame.height >= 20)
+        #expect(eye.frame.maxX <= header.bounds.width && eye.frame.minX > header.bounds.width - 40, "\(eye.frame)")
+        #expect(panel.layer?.cornerRadius == Metrics.panelCardRadius)
+        #expect(panel.height(forWidth: 300) == Metrics.panelHeaderHeight, "a collapsed card has no divider")
+        let plain = PanelSectionView(title: "Folders", rows: [], actions: .init(
+            isExpanded: { false }, isEdited: { false }, toggle: { _ in }, reset: {},
+        ))
+        #expect(plain.height(forWidth: 300) == Metrics.panelHeaderHeight + 1, "the left column's keep their divider")
     }
 
     @Test func `changing a setting of a panel that's off turns it on in that change's step`() async throws {
@@ -128,7 +146,7 @@ struct PanelSwitchUITests {
         #expect(model.isOn(.detail))
     }
 
-    @Test func `Basic has no switch, and every other panel's settings are its switch's`() {
+    @Test func `Basic has no eye, and every other panel's settings are its switch's`() {
         let model = EditorModel(engine: StubEngine())
         #expect(PanelID.basic.switchable == nil && model.isOn(.basic))
         model.setPanel(.basic, on: false)

@@ -1724,7 +1724,7 @@ public final class EditorModel {
         panel.switchable.map { !panelsOff.contains($0) } ?? true
     }
 
-    /// Turns a panel off or on from its header's switch (UX-30), as one step: "Detail Off".
+    /// Turns a panel off or on from the eye on its header (UX-30), as one step: "Detail Off".
     public func setPanel(_ panel: PanelID, on: Bool) {
         guard let switchable = panel.switchable, isOn(panel) != on else { return }
         var next = recipe

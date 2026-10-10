@@ -1,10 +1,11 @@
 import AppKit
 
-/// A collapsible Develop panel: a header (an optional on/off switch, chevron, glyph, title,
-/// optional badge, and a dot when the panel has edits), its rows, and a divider.
+/// A collapsible panel: a header (chevron, glyph, title, optional badge, then at the trailing
+/// edge a dot when the panel has edits and, for a Develop panel that can be turned off, an eye),
+/// its rows, and a divider, or in the card style a card of its own.
 ///
 /// Click the header to expand or collapse (Option-click for Solo Mode), double-click to
-/// reset the panel. Clicking the switch turns the panel off or on without expanding it; while
+/// reset the panel. Clicking the eye turns the panel off or on without expanding it; while
 /// it's off, its title and rows are dimmed and stay usable. A collapsed panel's rows leave the
 /// window, so they cost nothing.
 public final class PanelSectionView: NSView, HeightProviding {
@@ -13,7 +14,7 @@ public final class PanelSectionView: NSView, HeightProviding {
         public var isEdited: @MainActor () -> Bool
         public var toggle: @MainActor (_ solo: Bool) -> Void
         public var reset: @MainActor () -> Void
-        /// Whether the panel is on, for a panel with a switch.
+        /// Whether the panel is on, for a panel with an eye.
         public var isOn: (@MainActor () -> Bool)?
         public var setOn: (@MainActor (Bool) -> Void)?
 
@@ -34,10 +35,20 @@ public final class PanelSectionView: NSView, HeightProviding {
         }
     }
 
+    /// How a panel sits in its column.
+    public enum Style: Sendable {
+        /// The column's full width, with a divider under it: the left column's panels.
+        case plain
+        /// A card with rounded corners, a fill a step above the column and a hairline edge, which
+        /// the column insets and spaces (`cardColumnInsets`): the Develop panels.
+        case card
+    }
+
     private let header: PanelHeaderView
     private let body: ColumnView
     private let divider = DividerView()
     private let actions: Actions
+    private let style: Style
     private var trackers: [Tracker] = []
     private(set) var isExpanded = false
     private(set) var isOn = true
@@ -47,34 +58,57 @@ public final class PanelSectionView: NSView, HeightProviding {
         top: 0, left: Metrics.panelPadding, bottom: Metrics.panelBottomPadding, right: Metrics.panelPadding,
     )
 
+    /// The margin a column of cards leaves around them; `Metrics.panelCardGap` goes between them.
+    public static let cardColumnInsets = NSEdgeInsets(
+        top: Metrics.panelCardGap, left: Metrics.panelCardMargin, bottom: Metrics.panelCardMargin,
+        right: Metrics.panelCardMargin,
+    )
+
     /// `accessory` (a button) sits at the header's trailing edge. Rows that pad themselves (a
-    /// list whose highlight reaches past its text) can be given other `insets`. With
-    /// `switchSlot`, the header keeps room for a switch at its leading edge, so titles line up
-    /// whether a panel has one (`actions.isOn`) or not.
+    /// list whose highlight reaches past its text) can be given other `insets`; in a card, the
+    /// rows' sides come in as its padding does. With `eyeSlot`, a header without an eye keeps
+    /// its room, so the edited dots of a column line up.
     public init(
         title: String,
         symbol: String? = nil,
         badge: String? = nil,
         accessory: NSView? = nil,
-        switchSlot: Bool = false,
+        style: Style = .plain,
+        eyeSlot: Bool = false,
         insets: NSEdgeInsets = PanelSectionView.bodyInsets,
         rows: [NSView],
         actions: Actions,
     ) {
-        let panelSwitch = actions.isOn.map { _ in
-            PanelSwitchView(title: title) { on in actions.setOn?(on) }
+        let eye = actions.isOn.map { _ in
+            PanelEyeView(title: title) { on in actions.setOn?(on) }
         }
+        let padding = style == .card ? Metrics.panelCardPadding : Metrics.panelPadding
         header = PanelHeaderView(
-            title: title, symbol: symbol, badge: badge, accessory: accessory,
-            panelSwitch: panelSwitch, switchSlot: switchSlot || panelSwitch != nil,
+            title: title, symbol: symbol, badge: badge, accessory: accessory, eye: eye,
+            eyeSlot: eyeSlot || eye != nil, padding: padding, highlightsOnHover: style == .card,
         )
+        var insets = insets
+        if style == .card {
+            let narrower = Metrics.panelPadding - Metrics.panelCardPadding
+            insets.left = max(0, insets.left - narrower)
+            insets.right = max(0, insets.right - narrower)
+        }
         body = ColumnView(spacing: Metrics.panelRowSpacing, insets: insets, views: rows)
         self.actions = actions
+        self.style = style
         super.init(frame: CGRect(x: 0, y: 0, width: 316, height: Metrics.panelHeaderHeight))
         wantsLayer = true
         clipsToBounds = true
         addSubview(header)
-        addSubview(divider)
+        if style == .card {
+            layer?.cornerRadius = Metrics.panelCardRadius
+            layer?.cornerCurve = .continuous
+            layer?.backgroundColor = Palette.card.cgColor
+            layer?.borderWidth = 1
+            layer?.borderColor = Palette.divider.cgColor
+        } else {
+            addSubview(divider)
+        }
         header.onClick = { [weak self] solo in self?.actions.toggle(solo) }
         header.onDoubleClick = {
             // The first click already toggled the panel; put it back, then reset.
@@ -88,12 +122,12 @@ public final class PanelSectionView: NSView, HeightProviding {
         fatalError("init(coder:) is not supported")
     }
 
-    /// Names the section and its header for VoiceOver and the regression suite, such as
-    /// `panel.basic` and `panel.basic.header`.
+    /// Names the section, its header and its eye for VoiceOver and the regression suite, such as
+    /// `panel.detail`, `panel.detail.header` and `panel.detail.switch`.
     public func identify(as identifier: String) {
         setAccessibilityIdentifier(identifier)
         header.setAccessibilityIdentifier("\(identifier).header")
-        header.panelSwitch?.setAccessibilityIdentifier("\(identifier).switch")
+        header.eye?.setAccessibilityIdentifier("\(identifier).switch")
     }
 
     override public var isFlipped: Bool {
@@ -112,8 +146,13 @@ public final class PanelSectionView: NSView, HeightProviding {
         set { header.menuProvider = newValue }
     }
 
+    /// The divider's point, which a card hasn't.
+    private var dividerHeight: CGFloat {
+        style == .card ? 0 : 1
+    }
+
     public func height(forWidth width: CGFloat) -> CGFloat {
-        Metrics.panelHeaderHeight + (isExpanded ? body.height(forWidth: width) : 0) + 1
+        Metrics.panelHeaderHeight + (isExpanded ? body.height(forWidth: width) : 0) + dividerHeight
     }
 
     override public var intrinsicContentSize: NSSize {
@@ -170,7 +209,7 @@ public final class PanelSectionView: NSView, HeightProviding {
         header.isExpanded = expanded
         if expanded {
             if body.superview == nil {
-                addSubview(body, positioned: .below, relativeTo: divider)
+                addSubview(body, positioned: .above, relativeTo: header)
             }
             body.alphaValue = animated ? 0 : bodyAlpha
         }
@@ -208,15 +247,18 @@ public final class PanelSectionView: NSView, HeightProviding {
     }
 }
 
-/// The panel title bar: the switch or its slot, chevron, glyph, title and badge, then at the
-/// trailing edge the edited dot or an accessory.
+/// The panel title bar: chevron, glyph, title and badge, then at the trailing edge the eye (or
+/// its slot), and left of it the edited dot or an accessory.
 final class PanelHeaderView: NSView {
     let title: String
     let symbol: String?
     let badge: String?
     let accessory: NSView?
-    let panelSwitch: PanelSwitchView?
-    let switchSlot: Bool
+    let eye: PanelEyeView?
+    let eyeSlot: Bool
+    /// From the header's sides to its first and last glyph.
+    let padding: CGFloat
+    let highlightsOnHover: Bool
     var onClick: (_ solo: Bool) -> Void = { _ in }
     var onDoubleClick: () -> Void = {}
     var menuProvider: (@MainActor () -> NSMenu)?
@@ -245,7 +287,7 @@ final class PanelHeaderView: NSView {
     var isOn = true {
         didSet {
             if isOn != oldValue {
-                panelSwitch?.isOn = isOn
+                eye?.isOn = isOn
                 needsDisplay = true
             }
         }
@@ -262,23 +304,25 @@ final class PanelHeaderView: NSView {
     private var hoverArea: NSTrackingArea?
 
     init(
-        title: String, symbol: String?, badge: String?, accessory: NSView? = nil, panelSwitch: PanelSwitchView? = nil,
-        switchSlot: Bool = false,
+        title: String, symbol: String?, badge: String?, accessory: NSView? = nil, eye: PanelEyeView? = nil,
+        eyeSlot: Bool = false, padding: CGFloat = Metrics.panelPadding, highlightsOnHover: Bool = false,
     ) {
         self.title = title
         self.symbol = symbol
         self.badge = badge
         self.accessory = accessory
-        self.panelSwitch = panelSwitch
-        self.switchSlot = switchSlot
+        self.eye = eye
+        self.eyeSlot = eyeSlot
+        self.padding = padding
+        self.highlightsOnHover = highlightsOnHover
         super.init(frame: .zero)
         wantsLayer = true
         layerContentsRedrawPolicy = .onSetNeedsDisplay
         if let accessory {
             addSubview(accessory)
         }
-        if let panelSwitch {
-            addSubview(panelSwitch)
+        if let eye {
+            addSubview(eye)
         }
     }
 
@@ -291,30 +335,38 @@ final class PanelHeaderView: NSView {
         true
     }
 
-    /// The switch at the leading edge; an accessory where the edited dot would be.
+    /// The eye's hit target, its glyph's right edge at the padding.
+    private var eyeFrame: CGRect {
+        let side = Metrics.panelEyeTarget
+        let glyph = Symbol.layoutSize("eye", pointSize: Metrics.panelEyePointSize, weight: .regular).width
+        let center = CGPoint(x: bounds.width - padding - glyph / 2, y: bounds.height / 2)
+        return PixelGrid.centered(CGSize(width: side, height: side), at: center, scale: backingScale)
+    }
+
+    /// Where the edited dot and an accessory end: left of the eye's slot, or at the padding.
+    private var trailingEdge: CGFloat {
+        eyeSlot ? eyeFrame.minX : bounds.width - padding
+    }
+
     override func layout() {
         super.layout()
-        if let panelSwitch {
-            let size = Metrics.panelSwitchSize
-            panelSwitch.frame = PixelGrid.centered(
-                size, at: CGPoint(x: Metrics.panelPadding + size.width / 2, y: bounds.height / 2), scale: backingScale,
-            )
-        }
+        eye?.frame = eyeFrame
         guard let accessory else { return }
         let size = accessory.intrinsicContentSize
         accessory.frame = PixelGrid.centered(
-            size, at: CGPoint(x: bounds.width - Metrics.panelPadding - size.width / 2, y: bounds.height / 2),
-            scale: backingScale,
+            size, at: CGPoint(x: trailingEdge - size.width / 2, y: bounds.height / 2), scale: backingScale,
         )
     }
 
     override func draw(_: NSRect) {
         hasBeenDisplayed = true
         let scale = backingScale
-        var x = Metrics.panelPadding
+        var x = padding
         let midY = bounds.height / 2
-        if switchSlot {
-            x += Metrics.panelSwitchSize.width + 8
+
+        if highlightsOnHover, isHovering {
+            Palette.cardHover.nsColor.setFill()
+            bounds.fill(using: .sourceOver)
         }
 
         // Turned about its frame's center, as SwiftUI's `rotationEffect` does.
@@ -357,9 +409,11 @@ final class PanelHeaderView: NSView {
             )
         }
 
-        if isEdited {
-            Palette.editedDot.nsColor.setFill()
-            NSBezierPath(ovalIn: CGRect(x: bounds.width - Metrics.panelPadding - 4, y: midY - 2, width: 4, height: 4))
+        if isEdited, accessory == nil {
+            let size = Metrics.editedDotSize
+            let gap: CGFloat = eyeSlot ? 2 : 0
+            Palette.panelEditedDot.setFill()
+            NSBezierPath(ovalIn: CGRect(x: trailingEdge - gap - size, y: midY - size / 2, width: size, height: size))
                 .fill()
         }
     }
@@ -395,9 +449,9 @@ final class PanelHeaderView: NSView {
     }
 }
 
-/// A panel header's on/off switch: a small toggle that turns the panel off or on with a click,
-/// without expanding it, and acts as a switch for VoiceOver.
-final class PanelSwitchView: NSView {
+/// A panel header's eye: `eye` while the panel is on, `eye.slash` while it's off. A click turns
+/// the panel off or on without expanding it; VoiceOver reads it as a switch.
+final class PanelEyeView: NSView {
     let title: String
     let onChange: (Bool) -> Void
 
@@ -410,10 +464,20 @@ final class PanelSwitchView: NSView {
         }
     }
 
+    private var isHovering = false {
+        didSet {
+            if isHovering != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
+    private var hoverArea: NSTrackingArea?
+
     init(title: String, onChange: @escaping (Bool) -> Void) {
         self.title = title
         self.onChange = onChange
-        super.init(frame: CGRect(origin: .zero, size: Metrics.panelSwitchSize))
+        super.init(frame: CGRect(x: 0, y: 0, width: Metrics.panelEyeTarget, height: Metrics.panelEyeTarget))
         wantsLayer = true
         layerContentsRedrawPolicy = .onSetNeedsDisplay
         toolTip = Self.toolTip(title, on: true)
@@ -433,18 +497,39 @@ final class PanelSwitchView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        Metrics.panelSwitchSize
+        NSSize(width: Metrics.panelEyeTarget, height: Metrics.panelEyeTarget)
+    }
+
+    /// Quiet while on, clearer while off, brighter under the pointer.
+    var glyphColor: RGBA {
+        isHovering ? Palette.labelHover : isOn ? Palette.tertiaryLabel : Palette.secondaryLabel
     }
 
     override func draw(_: NSRect) {
-        let track = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let radius = track.height / 2
-        (isOn ? Palette.trackFill : Palette.track).nsColor.setFill()
-        NSBezierPath(roundedRect: track, xRadius: radius, yRadius: radius).fill()
-        let knob = track.height - 4
-        let knobX = isOn ? track.maxX - 2 - knob : track.minX + 2
-        Palette.thumb.nsColor.setFill()
-        NSBezierPath(ovalIn: CGRect(x: knobX, y: track.minY + 2, width: knob, height: knob)).fill()
+        Symbol.draw(
+            isOn ? "eye" : "eye.slash", pointSize: Metrics.panelEyePointSize, color: glyphColor,
+            centeredAt: CGPoint(x: bounds.midX, y: bounds.midY), scale: backingScale,
+        )
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea {
+            removeTrackingArea(hoverArea)
+        }
+        let area = NSTrackingArea(
+            rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self,
+        )
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
+    override func mouseEntered(with _: NSEvent) {
+        isHovering = true
+    }
+
+    override func mouseExited(with _: NSEvent) {
+        isHovering = false
     }
 
     override func mouseDown(with _: NSEvent) {

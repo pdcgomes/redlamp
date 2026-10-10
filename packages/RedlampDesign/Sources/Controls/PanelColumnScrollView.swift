@@ -6,8 +6,10 @@ open class PanelColumnScrollView: NSView {
     public let scrollView = OverlayScrollView()
     public let document: PanelColumnDocumentView
 
-    public init(views: [NSView]) {
-        document = PanelColumnDocumentView(views: views)
+    /// A column of cards (`PanelSectionView.Style.card`) is given `spacing` between them and
+    /// `insets` around them (`PanelSectionView.cardColumnInsets`).
+    public init(spacing: CGFloat = 0, insets: NSEdgeInsets = NSEdgeInsets(), views: [NSView]) {
+        document = PanelColumnDocumentView(spacing: spacing, insets: insets, views: views)
         super.init(frame: .zero)
         scrollView.documentView = document
         addSubview(scrollView)
@@ -45,8 +47,8 @@ public final class PanelColumnDocumentView: ColumnView, ColumnHost {
     /// Sizes the document now, for an animation that needs the new frames up front.
     var sizeNow: () -> Void = {}
 
-    public init(views: [NSView]) {
-        super.init(views: views)
+    override public init(spacing: CGFloat = 0, insets: NSEdgeInsets = NSEdgeInsets(), views: [NSView] = []) {
+        super.init(spacing: spacing, insets: insets, views: views)
     }
 
     @available(*, unavailable)

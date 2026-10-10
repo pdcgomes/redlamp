@@ -208,7 +208,7 @@ Followed from a pixel of the developed photo back to the image point it shows, t
 
 ### Panel switches
 
-`panelsOff` lists the Develop panels switched off from their headers, as in Lightroom: any of `toneCurve`, `colorMixer`, `colorGrading`, `detail`, `lens`, `transform`, `effects` and `calibration`, in that order. Basic has no switch. A panel that's off keeps its settings and renders as though each of them left the photo alone:
+`panelsOff` lists the Develop panels switched off with the eye on their headers, as in Lightroom: any of `toneCurve`, `colorMixer`, `colorGrading`, `detail`, `lens`, `transform`, `effects` and `calibration`, in that order. Basic has no eye and can't be switched off. A panel that's off keeps its settings and renders as though each of them left the photo alone:
 
 - **Detail:** no sharpening and no noise reduction, though `detail.sharpen.amount` and `detail.noise.color` have defaults that act.
 - **Lens Corrections:** none of its corrections: not the lens correction the photo's file carries (whatever `lens.profile` says), the manual Distortion and Vignetting, Remove Chromatic Aberration or Defringe.

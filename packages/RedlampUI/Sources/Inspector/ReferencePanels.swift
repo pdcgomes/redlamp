@@ -366,7 +366,7 @@ struct ProcessVersion: View {
     public init() {}
 
     public var body: some View {
-        LazyVStack(spacing: 0) {
+        LazyVStack(spacing: Theme.panelCardGap) {
             BasicPanel()
             ToneCurvePanel()
             ColorMixerPanel()
@@ -377,6 +377,9 @@ struct ProcessVersion: View {
             EffectsPanel()
             CalibrationPanel()
         }
+        .padding(.horizontal, Theme.panelCardMargin)
+        .padding(.top, Theme.panelCardGap)
+        .padding(.bottom, Theme.panelCardMargin)
     }
 }
 

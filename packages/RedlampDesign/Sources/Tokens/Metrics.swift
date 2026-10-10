@@ -14,8 +14,17 @@ public enum Metrics {
     public static let panelHeaderHeight: CGFloat = 32
     /// The width a panel header's glyph is centered in.
     public static let panelSymbolSlot: CGFloat = 16
-    /// A panel header's on/off switch, at its leading edge.
-    public static let panelSwitchSize = CGSize(width: 20, height: 12)
+    /// A panel header's eye, at its trailing edge: the hit target, and the glyph's size.
+    public static let panelEyeTarget: CGFloat = 22
+    public static let panelEyePointSize: CGFloat = 12
+    /// The dot on a header whose panel has edits.
+    public static let editedDotSize: CGFloat = 5
+    /// Develop panels as cards: the column's margin around them, the gap between them, their
+    /// corners, and the padding inside them.
+    public static let panelCardMargin: CGFloat = 8
+    public static let panelCardGap: CGFloat = 6
+    public static let panelCardRadius: CGFloat = 6
+    public static let panelCardPadding: CGFloat = 10
     /// A switched-off panel's title and rows: dimmed, still usable.
     public static let switchedOffOpacity: CGFloat = 0.45
     public static let controlRowMinHeight: CGFloat = 24

@@ -78,6 +78,21 @@ public enum Palette {
         current.editedDot
     }
 
+    /// The dot on a Develop panel's header whose panel has edits: a tint of the theme's accent.
+    public static var panelEditedDot: NSColor {
+        accent.withAlphaComponent(0.8)
+    }
+
+    /// A Develop panel's card, a step above the panel background (`PanelSectionView.Style.card`).
+    public static var card: RGBA {
+        current.card
+    }
+
+    /// A card's header under the pointer.
+    public static var cardHover: RGBA {
+        current.cardHover
+    }
+
     /// Focus, selection and "Reset" affordances. The system accent, as SwiftUI's
     /// `Color.accentColor` resolves it, unless the theme sets its own.
     public static var accent: NSColor {
@@ -140,6 +155,20 @@ public struct PaletteTokens: Sendable, Hashable {
         self.nativeTint = nativeTint
         self.caution = caution
         self.info = info
+    }
+
+    /// Whether the panels are dark: their background's luminance is below half.
+    public var isDark: Bool {
+        0.2126 * panelBackground.red + 0.7152 * panelBackground.green + 0.0722 * panelBackground.blue < 0.5
+    }
+
+    /// A step above the panel background: lighter on dark, whiter on light.
+    public var card: RGBA {
+        isDark ? RGBA(red: value.red, green: value.green, blue: value.blue, alpha: 0.05) : RGBA(white: 1, alpha: 0.55)
+    }
+
+    public var cardHover: RGBA {
+        RGBA(red: value.red, green: value.green, blue: value.blue, alpha: isDark ? 0.035 : 0.03)
     }
 
     public func notice(_ tone: NoticeTone) -> NoticeColors {

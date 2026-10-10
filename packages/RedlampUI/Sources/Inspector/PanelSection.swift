@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// A collapsible Develop panel. Option-click the header for Solo Mode (only one panel
-/// open), double-click to reset the panel. The switch at its leading edge turns the panel off
+/// A collapsible Develop panel, drawn as a card. Option-click the header for Solo Mode (only one
+/// panel open), double-click to reset the panel. The eye at its trailing edge turns the panel off
 /// or on (UX-30); while it's off, its title and rows are dimmed and stay usable.
 struct PanelSection<Content: View>: View {
     let panel: PanelID
@@ -15,9 +15,9 @@ struct PanelSection<Content: View>: View {
     var body: some View {
         let expanded = model.expandedPanels.contains(panel)
         let on = model.isOn(panel)
+        let shape = RoundedRectangle(cornerRadius: Theme.panelCardRadius, style: .continuous)
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                PanelSwitch(panel: panel)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(Theme.secondaryLabel)
@@ -42,10 +42,16 @@ struct PanelSection<Content: View>: View {
                         .background(Capsule().fill(Theme.selection))
                 }
                 Spacer()
-                EditedDot(panel: panel)
+                HStack(spacing: 2) {
+                    EditedDot(panel: panel)
+                    PanelEye(panel: panel)
+                }
+                // The eye's glyph, not its hit target, ends at the padding.
+                .padding(.trailing, -3)
             }
-            .padding(.horizontal, Theme.panelPadding)
+            .padding(.horizontal, Theme.panelCardPadding)
             .frame(height: 32)
+            .background(hovering ? Theme.cardHover : .clear)
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
             .onTapGesture(count: 2) { model.resetPanel(panel) }
@@ -70,33 +76,33 @@ struct PanelSection<Content: View>: View {
                     content
                 }
                 .opacity(on ? 1 : Theme.switchedOffOpacity)
-                .padding(.horizontal, Theme.panelPadding)
+                .padding(.horizontal, Theme.panelCardPadding)
                 .padding(.bottom, 14)
                 .transition(.opacity)
             }
-
-            Rectangle().fill(Theme.divider).frame(height: 1)
         }
+        .background(Theme.card, in: shape)
+        .overlay(shape.strokeBorder(Theme.divider, lineWidth: 1))
+        .clipShape(shape)
     }
 }
 
-/// The header's on/off switch, or the room for one in Basic, so titles line up.
-private struct PanelSwitch: View {
+/// The header's eye, or the room for one in Basic, so the edited dots line up.
+private struct PanelEye: View {
     let panel: PanelID
     @Environment(EditorModel.self) private var model
+    @State private var hovering = false
 
     var body: some View {
-        let size = Theme.panelSwitchSize
+        let side = Theme.panelEyeTarget
         if panel.switchable != nil {
             let on = model.isOn(panel)
-            let knob = size.height - 4
-            Capsule()
-                .fill(on ? Theme.trackFill : Theme.track)
-                .overlay(alignment: on ? .trailing : .leading) {
-                    Circle().fill(Theme.thumb).frame(width: knob, height: knob).padding(.horizontal, 2)
-                }
-                .frame(width: size.width, height: size.height)
+            Image(systemName: on ? "eye" : "eye.slash")
+                .font(.system(size: Theme.panelEyePointSize))
+                .foregroundStyle(hovering ? Theme.labelHover : on ? Theme.tertiaryLabel : Theme.secondaryLabel)
+                .frame(width: side, height: side)
                 .contentShape(Rectangle())
+                .onHover { hovering = $0 }
                 .onTapGesture { model.setPanel(panel, on: !on) }
                 .help("Turn \(panel.title) \(on ? "off" : "on")")
                 .accessibilityElement()
@@ -106,7 +112,7 @@ private struct PanelSwitch: View {
                 .accessibilityAction { model.setPanel(panel, on: !on) }
                 .accessibilityIdentifier("panel.\(panel.rawValue).switch")
         } else {
-            Color.clear.frame(width: size.width, height: size.height)
+            Color.clear.frame(width: side, height: side)
         }
     }
 }
@@ -120,8 +126,8 @@ private struct EditedDot: View {
     var body: some View {
         if model.isEdited(panel) {
             Circle()
-                .fill(Theme.editedDot)
-                .frame(width: 4, height: 4)
+                .fill(Theme.panelEditedDot)
+                .frame(width: Theme.editedDotSize, height: Theme.editedDotSize)
                 .help("This panel has edits")
         }
     }

@@ -342,7 +342,7 @@
         /// expanding the panel; Undo takes it back, and a change in the panel turns it on.
         static let panelSwitches = Scenario(
             "develop.panel-switches",
-            "Panel switches: Effects' switch turns its vignette off and on in the photo, as History steps with Undo",
+            "Panel switches: Effects' eye turns its vignette off and on in the photo, as History steps with Undo",
             claims: [.feature("workspace.panels"), .feature("develop.effects")],
         ) { app in
             try app.openWorking()
@@ -369,7 +369,7 @@
             try app.wait("Effects off again") { !$0.isOn(.effects) }
             try app.click(.identifier("panel.effects.switch"))
             try app.wait("Effects On, as a History step") { $0.isOn(.effects) && $0.history.last?.name == "Effects On" }
-            // The header's menu has the switch too, and changing a setting of a panel that's off
+            // The header's menu turns panels off and on too, and changing a setting of a panel that's off
             // turns it back on.
             try app.rightClick(.panelHeader(.detail), choosing: "Turn Detail Off")
             try app.wait("Detail off from the header's menu") { !$0.isOn(.detail) }
