@@ -66,12 +66,14 @@ final class LargeListRows: Sendable {
         let values: CullingValues
     }
 
+    /// The columns `badges(of:)` reads after each photo's ID, folder and name, in the order it takes them.
+    private static let badgeColumns = "sidecar_modified, rating, flag, label, custom_label, marked, other_fields"
+
     /// The URLs of the photos `ids` and what their rows' badges show of culling's fields
     /// (`LibraryFolderList.Mapping.metadata`), for culling photos whose rows aren't read, without reading or keeping
     /// their rows; photos the index no longer has are left out. Read as `urls(of:)` reads theirs.
     func badges(of ids: [Int64]) async throws -> [Int64: Badges] {
-        try await read(ids, columns: "sidecar_modified, rating, flag, label, custom_label, marked, other_fields") {
-            row, url in
+        try await read(ids, columns: Self.badgeColumns) { row, url in
             Badges(url: url, values: CullingValues(LibraryFolderList.Mapping.metadata(
                 rating: row.int(at: 4), flag: PhotoRecord.flag(code: row.int(at: 5)),
                 label: PhotoRecord.label(code: row.int(at: 6)), customLabel: row.string(at: 7),
