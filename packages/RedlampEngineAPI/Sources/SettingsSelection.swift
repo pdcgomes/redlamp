@@ -29,6 +29,9 @@ public struct SettingsItem: Sendable, Hashable, Identifiable {
     /// Ticked the first time the checklist opens: everything but what belongs to one photo, its
     /// framing and its spots.
     public let selectedByDefault: Bool
+    /// The panel whose settings the item holds, if a switch turns it off: pasting the item brings
+    /// the source's switch for that panel with it.
+    public let panel: SwitchablePanel?
 
     init(
         _ id: String, _ name: String, _ parameters: [ParameterID] = [], fields: Set<EditField> = [],
@@ -39,6 +42,9 @@ public struct SettingsItem: Sendable, Hashable, Identifiable {
         self.parameters = parameters
         self.fields = fields
         self.selectedByDefault = selectedByDefault
+        panel = SwitchablePanel.allCases.first { panel in
+            parameters.contains(where: panel.parameters.contains) || !panel.fields.isDisjoint(with: fields)
+        }
     }
 }
 
@@ -171,6 +177,9 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
     /// Masks to take away from the target, if the source no longer has them: those an Auto Sync
     /// step deleted. Never saved.
     public var removedMasks: Set<UUID> = []
+    /// Panels whose switch alone is pasted, without their settings: those an Auto Sync step
+    /// turned off or on. Never saved.
+    public var panelSwitches: Set<SwitchablePanel> = []
 
     private enum CodingKeys: String, CodingKey {
         case items, masks, excludedMasks
@@ -178,11 +187,13 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
 
     public init(
         items: Set<String>, masks: Bool = true, excludedMasks: Set<UUID> = [], removedMasks: Set<UUID> = [],
+        panelSwitches: Set<SwitchablePanel> = [],
     ) {
         self.items = items
         self.masks = masks
         self.excludedMasks = excludedMasks
         self.removedMasks = removedMasks
+        self.panelSwitches = panelSwitches
     }
 
     /// The first time: everything but a photo's own framing, white balance included.
@@ -206,11 +217,12 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
     }
 
     public var isEmpty: Bool {
-        items.isEmpty && !masks && removedMasks.isEmpty
+        items.isEmpty && !masks && removedMasks.isEmpty && panelSwitches.isEmpty
     }
 
     /// What changed from `old` to `new` (one history step, for Auto Sync): the items with a
-    /// parameter or field that differs, the masks added or changed, and the masks taken away.
+    /// parameter or field that differs, the masks added or changed, the masks taken away, and the
+    /// panels switched off or on.
     public static func changes(from old: EditRecipe, to new: EditRecipe) -> SettingsSelection {
         let items = SettingsGroup.allItems.filter { item in
             item.parameters.contains { old[$0] != new[$0] } || item.fields.contains { !old.matches(new, in: $0) }
@@ -220,6 +232,7 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
             items: Set(items.map(\.id)), masks: !changed.isEmpty,
             excludedMasks: changed.isEmpty ? [] : Set(new.masks.map(\.id)).subtracting(changed),
             removedMasks: Set(old.masks.map(\.id)).subtracting(new.masks.map(\.id)),
+            panelSwitches: old.panelsOff.symmetricDifference(new.panelsOff),
         )
     }
 
@@ -235,6 +248,7 @@ public struct SettingsSelection: Codable, Sendable, Hashable {
         return SettingsSelection(
             items: items.union(other.items), masks: masks, excludedMasks: excluded,
             removedMasks: removedMasks.union(other.removedMasks),
+            panelSwitches: panelSwitches.union(other.panelSwitches),
         )
     }
 }
@@ -255,7 +269,8 @@ public struct CopiedSettings: Sendable, Hashable {
 
 public extension EditRecipe {
     /// This edit with `selection` of `source` pasted onto it. Each ticked item takes the source's
-    /// values, defaults included, so a slider the source left alone resets this edit's. Masks merge
+    /// values, defaults included, so a slider the source left alone resets this edit's, and the
+    /// source's switch for the item's panel, so the item looks the same on both. Masks merge
     /// by identity: a pasted mask replaces this edit's mask with the same id (pasted before from the
     /// same source) and is otherwise added, up to the layer limit, so pasting twice changes
     /// nothing. Masks the selection removes go, unless the source has them again. Everything
@@ -269,6 +284,13 @@ public extension EditRecipe {
             for field in item.fields {
                 result.take(field, from: source)
             }
+        }
+        // After the settings, whose changes turn a panel on.
+        let switches = selection.panelSwitches.union(SettingsGroup.allItems.compactMap { item in
+            selection.includes(item) ? item.panel : nil
+        })
+        for panel in switches {
+            result.setPanel(panel, on: source.isOn(panel))
         }
         for mask in source.masks where selection.includes(mask: mask.id) {
             if let index = result.masks.firstIndex(where: { $0.id == mask.id }) {

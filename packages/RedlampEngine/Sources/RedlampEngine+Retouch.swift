@@ -8,7 +8,9 @@ public extension RedlampEngine {
         guard let current = currentSession() else { return nil }
         return await withCheckedContinuation { continuation in
             renderQueue.async { [self] in
-                continuation.resume(returning: try? findRetouchSource(for: spot, recipe: recipe, session: current))
+                continuation.resume(
+                    returning: try? findRetouchSource(for: spot, recipe: recipe.rendered, session: current),
+                )
             }
         }
     }
@@ -17,7 +19,7 @@ public extension RedlampEngine {
         guard let current = currentSession() else { return [] }
         return await withCheckedContinuation { continuation in
             renderQueue.async { [self] in
-                let found = try? findDust(recipe: recipe, sensitivity: sensitivity, session: current)
+                let found = try? findDust(recipe: recipe.rendered, sensitivity: sensitivity, session: current)
                 continuation.resume(returning: found ?? [])
             }
         }
@@ -34,7 +36,7 @@ public extension RedlampEngine {
             let found = await withCheckedContinuation { continuation in
                 renderQueue.async { [self] in
                     let specks = try? findSpecks(
-                        recipe: photo.recipe, sensitivity: min(sensitivity + 15, 100), session: session,
+                        recipe: photo.recipe.rendered, sensitivity: min(sensitivity + 15, 100), session: session,
                     )
                     let open = currentSession()
                     if open !== session {

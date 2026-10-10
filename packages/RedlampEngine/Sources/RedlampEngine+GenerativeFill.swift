@@ -62,6 +62,7 @@ public extension RedlampEngine {
         for spot: RetouchSpot, in recipe: EditRecipe, seeds: [Int], options: GenerativeFillOptions,
         progress: @escaping @Sendable (Double) -> Void,
     ) async throws -> [GeneratedFill] {
+        let recipe = recipe.rendered
         guard let directory = await generativeModelDirectory() else {
             throw EngineError.generativeFillUnavailable("Generative fill's model isn't installed.")
         }

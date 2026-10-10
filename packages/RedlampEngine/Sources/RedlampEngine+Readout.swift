@@ -11,7 +11,9 @@ public extension RedlampEngine {
         guard let current = currentSession() else { return nil }
         return await withCheckedContinuation { continuation in
             renderQueue.async { [self] in
-                continuation.resume(returning: try? readout(at: point, area: area, recipe: recipe, session: current))
+                continuation.resume(
+                    returning: try? readout(at: point, area: area, recipe: recipe.rendered, session: current),
+                )
             }
         }
     }

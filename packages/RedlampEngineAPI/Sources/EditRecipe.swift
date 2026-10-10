@@ -91,10 +91,29 @@ public struct EditRecipe: Sendable, Hashable {
     public var treatment: Treatment = .color
     public var baseLook: BaseLookReference = BuiltInBaseLook.color.reference
     public var whiteBalanceMode: WhiteBalanceMode = .asShot
-    public var pointCurve: [CurvePoint] = EditRecipe.linearPointCurve
+    public var pointCurve: [CurvePoint] = EditRecipe.linearPointCurve {
+        didSet {
+            if pointCurve != oldValue {
+                turnOn(.toneCurve)
+            }
+        }
+    }
+
     public private(set) var values: [ParameterID: Double] = [:]
     /// Point Color's swatches, right after the Color Mixer.
-    public var pointColor: [PointColorSwatch] = []
+    public var pointColor: [PointColorSwatch] = [] {
+        didSet {
+            if pointColor != oldValue {
+                turnOn(.colorMixer)
+            }
+        }
+    }
+
+    /// The panels switched off (UX-30), which render as `rendered` says. Changing a setting of a
+    /// panel that's off turns it back on.
+    public var panelsOff: Set<SwitchablePanel> = []
+    /// Switched-off panels a newer Redlamp named, written back unchanged.
+    public private(set) var unknownPanelsOff: [String] = []
     /// Local adjustments, applied in order on top of the global edit.
     public var masks: [MaskLayer] = []
     /// Heal and Clone spots, applied in order before everything else.
@@ -126,10 +145,14 @@ public struct EditRecipe: Sendable, Hashable {
             guard !parameter.isMaskScoped, !parameter.isSpotScoped, !parameter.isPointColorScoped else { return }
             let spec = parameter.spec
             let clamped = spec.clamp(newValue)
+            let previous = values[parameter]
             if abs(clamped - spec.defaultValue) < 1e-9 {
                 values[parameter] = nil
             } else {
                 values[parameter] = clamped
+            }
+            if values[parameter] != previous {
+                turnOn(panelHolding: parameter)
             }
         }
     }
@@ -139,8 +162,21 @@ public struct EditRecipe: Sendable, Hashable {
     }
 
     public mutating func reset(_ parameters: some Sequence<ParameterID>) {
-        for parameter in parameters {
+        for parameter in parameters where values[parameter] != nil {
             values[parameter] = nil
+            turnOn(panelHolding: parameter)
+        }
+    }
+
+    private mutating func turnOn(panelHolding parameter: ParameterID) {
+        if !panelsOff.isEmpty, let panel = SwitchablePanel(holding: parameter) {
+            panelsOff.remove(panel)
+        }
+    }
+
+    private mutating func turnOn(_ panel: SwitchablePanel) {
+        if !panelsOff.isEmpty {
+            panelsOff.remove(panel)
         }
     }
 
@@ -158,6 +194,8 @@ public struct EditRecipe: Sendable, Hashable {
             && exposureAnchor == nil
             && crop.isFull
             && orientation.isIdentity
+            && panelsOff.isEmpty
+            && unknownPanelsOff.isEmpty
             && unknownValues.isEmpty
             && unknownFields.isEmpty
     }
@@ -182,7 +220,7 @@ public struct EditRecipe: Sendable, Hashable {
 extension EditRecipe: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case version, processVersion, treatment, baseLook, whiteBalance, pointCurve, values, pointColor, masks
-        case appliedRecipe, exposureAnchor, crop, orientation, spots
+        case appliedRecipe, exposureAnchor, crop, orientation, spots, panelsOff
         /// Format version 1's name for `baseLook`; read, never written.
         case profile
     }
@@ -212,6 +250,14 @@ extension EditRecipe: Codable {
         exposureAnchor = try container.decodeIfPresent(ExposureAnchor.self, forKey: .exposureAnchor)
         crop = try container.decodeIfPresent(CropRect.self, forKey: .crop) ?? .full
         orientation = try container.decodeIfPresent(ImageOrientation.self, forKey: .orientation) ?? .identity
+        // After the settings, whose setters turn panels on.
+        for name in try container.decodeIfPresent([String].self, forKey: .panelsOff) ?? [] {
+            if let panel = SwitchablePanel(rawValue: name) {
+                panelsOff.insert(panel)
+            } else if !unknownPanelsOff.contains(name) {
+                unknownPanelsOff.append(name)
+            }
+        }
         unknownFields = try decoder.container(keyedBy: DynamicCodingKey.self)
             .unknownFields(excluding: Set(CodingKeys.allCases.map(\.stringValue)))
     }
@@ -246,6 +292,9 @@ extension EditRecipe: Codable {
         }
         if !orientation.isIdentity {
             try container.encode(orientation, forKey: .orientation)
+        }
+        if !panelsOff.isEmpty || !unknownPanelsOff.isEmpty {
+            try container.encode(panelsOff.sorted().map(\.rawValue) + unknownPanelsOff, forKey: .panelsOff)
         }
     }
 }

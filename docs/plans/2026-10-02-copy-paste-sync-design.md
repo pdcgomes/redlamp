@@ -34,12 +34,14 @@ Lightroom's model: choose which settings carry from one photo to others, then pa
 
 Check All and Check None. A group's checkbox ticks or clears its items, and shows mixed when only some are ticked. A group the source leaves at defaults still shows: pasting it resets the target's.
 
+**Panel switches (UX-30, 2026-10-10).** A panel's switch travels with its settings: pasting any item of a switchable panel (Tone Curve, Color Mixer with Point Color, Color Grading, Detail, Lens Corrections, Transform, Effects, Calibration) gives the target that panel's switch as the source has it. That is the simplest rule under which what was copied looks the same on the target as on the source: the pasted values are the source's, and so is whether they apply. Its cost is that the target's other settings in that panel follow the switch too: pasting only Sharpening from a photo whose Detail is off turns the target's Detail off, its noise reduction with it. Process Version, though listed under Calibration, brings no switch. The checklist has no item for switches of their own.
+
 ## Model (`RedlampEngineAPI`)
 
 - **`SettingsItem`:** a stable id (`basic.exposure`, `lens.manual`, `crop.frame`), a name, whether it is ticked the first time, and what it covers: parameters, and fields of `EditRecipe` (treatment, base look and applied recipe, white balance mode, point curve, crop, orientation, process version). Every parameter belongs to exactly one item; a test checks the catalog covers them all, and mask-scoped parameters none.
 - **`SettingsGroup`:** a name and its items, in panel order. `SettingsGroup.all` is the catalog.
 - **`SettingsSelection`** (`Codable`, remembered in user defaults): the ticked item ids, whether masks are ticked by default, and the source's masks left out by id.
-- **`EditRecipe.pasting(_ source: EditRecipe, _ selection: SettingsSelection) -> EditRecipe`:** for each ticked item the target takes the source's values, defaults included, so an untouched slider resets the target's. Masks merge by identity, at most `MaskLayer.maximumLayers`. Everything else stays the target's, including values and fields written by a newer Redlamp. Pure, so it is unit-tested exhaustively and the CLI can use it.
+- **`EditRecipe.pasting(_ source: EditRecipe, _ selection: SettingsSelection) -> EditRecipe`:** for each ticked item the target takes the source's values, defaults included, so an untouched slider resets the target's, and the source's switch for the item's panel (`SettingsItem.panel`). Masks merge by identity, at most `MaskLayer.maximumLayers`. Everything else stays the target's, including values and fields written by a newer Redlamp. Pure, so it is unit-tested exhaustively and the CLI can use it.
 - **`CopiedSettings`:** the source edit, its selection and the source photo's URL: the clipboard.
 
 ## The open photo (step 2)
@@ -56,7 +58,7 @@ Check All and Check None. A group's checkbox ticks or clears its items, and show
 
 ## Auto Sync (step 5)
 
-A toggle beside the filmstrip's selection count (⌥⇧⌘A). While it is on with several photos selected, each history step on the active photo is pasted onto the others: only what that step changed (the parameters, fields and masks that differ from the step before), through the worker, coalesced while steps arrive. A slider drag syncs when it ends. Turning it on doesn't sync anything by itself.
+A toggle beside the filmstrip's selection count (⌥⇧⌘A). While it is on with several photos selected, each history step on the active photo is pasted onto the others: only what that step changed (the parameters, fields and masks that differ from the step before, and the panels switched off or on), through the worker, coalesced while steps arrive. A step that only turns a panel off or on carries the switch alone (`SettingsSelection.panelSwitches`), so the other photos keep their own settings in that panel. A slider drag syncs when it ends. Turning it on doesn't sync anything by itself.
 
 ## The filmstrip's context menu (step 6, decided 2026-10-04)
 

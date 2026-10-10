@@ -377,6 +377,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     func renderFrame(_ request: RenderRequest, session: ImageSession) throws -> RenderedFrame {
+        let request = request.rendered
         let state = signposts.beginInterval("Render")
         defer { signposts.endInterval("Render", state) }
         let clock = ContinuousClock()
@@ -656,6 +657,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
     }
 
     func renderStillNow(_ request: StillRequest, session: ImageSession) throws -> CGImage {
+        let request = request.rendered
         // A photo no longer open (the editor moved on, or let go of it, while this waited) or
         // never open, as a focus stack's preview, is rendered without the detail stage keeping
         // anything for it, nor evicting what it keeps for the photo open. Its retouches and masks
@@ -741,7 +743,7 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
 
     public func autoTone(for recipe: EditRecipe) async -> [ParameterID: Double] {
         guard let current = session.withLock({ $0 }) else { return [:] }
-        return ImageAnalysis.autoTone(session: current, recipe: recipe)
+        return ImageAnalysis.autoTone(session: current, recipe: recipe.rendered)
     }
 
     public func detectLines() async -> [DetectedLine] {
@@ -753,7 +755,9 @@ public final class RedlampEngine: EditingEngine, @unchecked Sendable {
         guard let current = session.withLock({ $0 }) else { return nil }
         return await withCheckedContinuation { continuation in
             renderQueue.async { [self] in
-                continuation.resume(returning: try? sampleEditGuide(at: point, recipe: recipe, session: current))
+                continuation.resume(
+                    returning: try? sampleEditGuide(at: point, recipe: recipe.rendered, session: current),
+                )
             }
         }
     }

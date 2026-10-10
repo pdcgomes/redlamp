@@ -13,6 +13,9 @@ public extension Recipe {
     ///
     /// White balance modes that depend on the photo (As Shot, Auto) are resolved through
     /// `whiteBalance`; when it returns nil the edit keeps its temperature and tint.
+    ///
+    /// A switched-off panel (UX-30) comes back on when the recipe changes one of its settings, as
+    /// any change does, or sets one to a value that does something, so the recipe's look shows.
     func apply(
         to edit: EditRecipe,
         amount: Double = 100,
@@ -78,6 +81,15 @@ public extension Recipe {
                 for parameter in group.parameters {
                     blend(parameter, to: settings[parameter])
                 }
+            }
+        }
+        let controlled = Set(includes.flatMap(\.parameters))
+        for panel in result.panelsOff {
+            let curve = panel == .toneCurve && includes.contains(.toneCurve) && result.hasPointCurve
+            if curve || panel.parameters.contains(where: {
+                controlled.contains($0) && abs(result[$0] - SwitchablePanel.neutralValue($0)) > 1e-9
+            }) {
+                result.setPanel(panel, on: true)
             }
         }
         result.appliedRecipe = AppliedRecipe(id: id, version: version, name: name, amount: t * 100)

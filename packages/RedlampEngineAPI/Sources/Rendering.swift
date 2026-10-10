@@ -301,3 +301,22 @@ public enum EngineError: Error, LocalizedError, Codable, Sendable, Equatable {
         }
     }
 }
+
+public extension RenderRequest {
+    /// The request with its edits as the engine renders them (`EditRecipe.rendered`).
+    var rendered: RenderRequest {
+        var request = self
+        request.recipe = recipe.rendered
+        request.comparison = comparison?.rendered
+        return request
+    }
+}
+
+public extension StillRequest {
+    /// The request with its edit as the engine renders it (`EditRecipe.rendered`).
+    var rendered: StillRequest {
+        var request = self
+        request.recipe = recipe.rendered
+        return request
+    }
+}

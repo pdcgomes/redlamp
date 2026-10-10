@@ -305,6 +305,8 @@ struct SidecarSchemaTests {
         #expect(strings("#/$defs/aiMask/properties/part/enum")
             == Set(PersonPart.allCases.map(\.rawValue) + LandscapeClass.allCases.map(\.rawValue)))
         #expect(strings("#/$defs/retouchSpot/properties/mode/enum") == Set(RetouchSpot.Mode.allCases.map(\.rawValue)))
+        #expect(strings("#/$defs/recipe/properties/panelsOff/items/enum") ==
+            Set(SwitchablePanel.allCases.map(\.rawValue)))
         #expect(strings("#/$defs/metadata/properties/label/enum") == Set(ColorLabel.allCases.map(\.rawValue)))
         #expect(strings("#/$defs/metadata/properties/flag/enum") == Set([PhotoFlag.pick, .reject].map(\.rawValue)))
 
@@ -471,6 +473,7 @@ enum RichSidecar {
         ]
         recipe.masks = masks()
         recipe.spots = spots()
+        recipe.panelsOff = [.detail, .effects]
         return recipe
     }
 

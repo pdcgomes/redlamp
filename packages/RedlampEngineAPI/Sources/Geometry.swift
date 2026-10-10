@@ -131,6 +131,7 @@ public struct GeometryMap: Sendable, Equatable {
     /// `lens` is the photo's own correction (`ImageInfo.lensCorrection`), which the edit applies
     /// or not; every map of a photo must be given it, so overlays and renders agree.
     public init(recipe: EditRecipe, imageSize: PixelSize, includesCrop: Bool = true, lens: LensCorrection?) {
+        let recipe = recipe.rendered
         self.init(
             imageSize: imageSize, orientation: recipe.orientation, crop: includesCrop ? recipe.crop : .full,
             angle: recipe[.cropAngle], transform: Transform(recipe: recipe),
@@ -140,9 +141,10 @@ public struct GeometryMap: Sendable, Equatable {
     }
 
     /// The lens profile an edit applies: from its source's process version (5, or 6 for
-    /// Fujifilm's), while Enable Profile Corrections is on.
+    /// Fujifilm's), while Enable Profile Corrections and the Lens Corrections panel are on.
     public static func profile(_ lens: LensCorrection?, recipe: EditRecipe) -> LensCorrection? {
-        guard let lens, recipe.processVersion >= lens.source.process, recipe[.lensProfile] > 0.5 else { return nil }
+        guard let lens, recipe.processVersion >= lens.source.process, recipe.isOn(.lens), recipe[.lensProfile] > 0.5
+        else { return nil }
         return lens.scaled(
             distortion: recipe[.lensProfileDistortion] / 100, vignetting: recipe[.lensProfileVignetting] / 100,
         )
@@ -321,7 +323,8 @@ public struct GeometryMap: Sendable, Equatable {
     public static func constrained(
         _ crop: CropRect, recipe: EditRecipe, imageSize: PixelSize, lens: LensCorrection?,
     ) -> CropRect {
-        constrained(
+        let recipe = recipe.rendered
+        return constrained(
             crop, imageSize: imageSize, orientation: recipe.orientation, angle: recipe[.cropAngle],
             transform: Transform(recipe: recipe),
             lensDistortion: -recipe[.lensDistortion] / 100 * maximumDistortion,
@@ -416,9 +419,10 @@ public extension EditRecipe {
         .transformRotate, .transformAspect, .transformScale, .transformOffsetX, .transformOffsetY,
     ]
 
-    /// This edit with `other`'s crop, angle, Transform and orientation: a Before view framed
-    /// like the After.
+    /// This edit with `other`'s crop, angle, Transform and orientation, as `other` renders them: a
+    /// Before view framed like the After.
     func withGeometry(of other: EditRecipe) -> EditRecipe {
+        let other = other.rendered
         var framed = self
         framed.crop = other.crop
         framed.orientation = other.orientation

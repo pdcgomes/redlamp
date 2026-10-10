@@ -107,7 +107,15 @@
         "appliedRecipe": { "$ref": "#/$defs/appliedRecipe" },
         "exposureAnchor": { "$ref": "#/$defs/exposureAnchor" },
         "crop": { "$ref": "#/$defs/cropRect", "default": { "left": 0, "top": 0, "right": 1, "bottom": 1 } },
-        "orientation": { "$ref": "#/$defs/orientation", "default": { "quarterTurns": 0, "mirrored": false } }
+        "orientation": { "$ref": "#/$defs/orientation", "default": { "quarterTurns": 0, "mirrored": false } },
+        "panelsOff": {
+          "type": "array",
+          "items": {
+            "enum": ["toneCurve", "colorMixer", "colorGrading", "detail", "lens", "transform", "effects", "calibration"]
+          },
+          "default": [],
+          "description": "The Develop panels switched off, in panel order: each renders as though its settings left the photo alone, and keeps them. Written only when a panel is off. A name a newer Redlamp wrote is kept."
+        }
       },
       "additionalProperties": { "description": "Fields written by a newer Redlamp: kept and written back unchanged." }
     },

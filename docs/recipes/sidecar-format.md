@@ -94,6 +94,7 @@ A **snapshot** is a named version of the edit, as in Lightroom: `{"id", "name", 
 | `exposureAnchor` | object? | | `{"stops", "source", "camera"}`: under Redlamp Reproduction, where the photo's camera puts a metered grey. Written only with that look. See [Exposure anchor](#exposure-anchor). |
 | `crop` | rect | full frame | Written only when it isn't the full frame. See [Crop and geometry](#crop-and-geometry). |
 | `orientation` | object | none | Written only when the photo is turned or flipped. See [Crop and geometry](#crop-and-geometry). |
+| `panelsOff` | [string] | `[]` | The Develop panels switched off, in panel order. Written only when a panel is off. See [Panel switches](#panel-switches). |
 
 A reader needs none of these keys: `{}` is an unedited photo at process version 1. Snapshots and history steps hold recipes too, in the same form.
 
@@ -204,6 +205,18 @@ Every value is a number, switches and the frame style included. The defaults are
 - **Transform** is the `transform.…` parameters: a virtual camera tilted (Vertical), turned (Horizontal) and rolled (Rotate) about the frame's center, then stretched (Aspect), scaled and offset.
 
 Followed from a pixel of the developed photo back to the image point it shows, the geometry applies in this order: the crop and its angle, then Transform, then `orientation`, then lens distortion (the manual Distortion slider, then the photo's own lens profile).
+
+### Panel switches
+
+`panelsOff` lists the Develop panels switched off from their headers, as in Lightroom: any of `toneCurve`, `colorMixer`, `colorGrading`, `detail`, `lens`, `transform`, `effects` and `calibration`, in that order. Basic has no switch. A panel that's off keeps its settings and renders as though each of them left the photo alone:
+
+- **Detail:** no sharpening and no noise reduction, though `detail.sharpen.amount` and `detail.noise.color` have defaults that act.
+- **Lens Corrections:** none of its corrections: not the lens correction the photo's file carries (whatever `lens.profile` says), the manual Distortion and Vignetting, Remove Chromatic Aberration or Defringe.
+- **Tone Curve:** neither the parametric sliders nor `pointCurve`.
+- **Color Mixer:** neither its bands nor the edit's `pointColor` swatches, which the panel shows. A mask's own swatches still apply.
+- **Color Grading, Transform, Effects** (the camera-recipe settings `basic.dynamicRange`, `effects.colorChrome`, `effects.colorChromeBlue` and `wb.shift.…` included) **and Calibration:** none of their settings.
+
+Masks, Basic, the crop, orientation and spots, and the Base Look are never switched off. Changing a setting of a panel that's off turns the panel back on. Without the key every panel is on, so every edit made before it renders as it did. A panel name a newer Redlamp wrote is kept and written back. A Redlamp from before panel switches (0.2.8 and earlier) keeps `panelsOff` as an unknown key and writes it back, but renders every panel on.
 
 ### Point Color
 

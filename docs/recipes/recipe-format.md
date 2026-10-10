@@ -81,6 +81,8 @@ A package, inside `embeddedBaseLooks`:
 
 A recipe's Amount (0…200) moves every included value from the photo's current value towards the recipe's: 0 changes nothing, 100 is the recipe exactly, 200 goes twice as far, clamped to each slider's range. Temperature interpolates in mireds. The Base Look's amount scales with it. The edit records `appliedRecipe: {id, version, name, amount}` for provenance only; rendering never reads it.
 
+Recipes have no panel switches (UX-30). A recipe captured from an edit with a panel switched off holds that panel's settings as they render, at the values that leave the photo alone: a Detail panel that's off is captured as no sharpening and no noise reduction. Applying a recipe turns a switched-off panel back on when it changes one of the panel's settings, as any change does, or sets one to a value that does something, so the recipe looks the same on every photo. Importing a Lightroom preset (EDT-11) reads no panel switches.
+
 ## Dialects
 
 `source` keeps a recipe as it was first written. Version 1 knows one dialect:

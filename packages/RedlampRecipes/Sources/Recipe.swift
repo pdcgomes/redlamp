@@ -109,7 +109,8 @@ public struct Recipe: Sendable, Hashable, Identifiable {
         baseLook?.contentHash != nil
     }
 
-    /// Captures an edit as a recipe that controls `includes`.
+    /// Captures an edit as a recipe that controls `includes`, as the edit renders: a switched-off
+    /// panel's settings are captured at the values that leave the photo alone (UX-30).
     public static func capture(
         _ edit: EditRecipe,
         id: String = RecipeNamespace.newLocalID(),
@@ -118,6 +119,7 @@ public struct Recipe: Sendable, Hashable, Identifiable {
         includes: Set<RecipeSettingGroup>,
         embedding looks: [BaseLookPackage] = [],
     ) -> Recipe {
+        let edit = edit.rendered
         var values: [ParameterID: Double] = [:]
         for group in includes {
             for parameter in group.parameters where !edit.isDefault(parameter) {

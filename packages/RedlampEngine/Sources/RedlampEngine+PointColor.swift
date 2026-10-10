@@ -10,7 +10,9 @@ public extension RedlampEngine {
         return await withCheckedContinuation { continuation in
             renderQueue.async { [self] in
                 continuation.resume(
-                    returning: try? samplePointColorInput(at: point, radius: radius, recipe: recipe, session: current),
+                    returning: try? samplePointColorInput(
+                        at: point, radius: radius, recipe: recipe.rendered, session: current,
+                    ),
                 )
             }
         }
