@@ -544,7 +544,7 @@ struct MaskList: View {
 }
 
 /// The selected mask's settings: its name with Invert and Reset, Amount, its components, the
-/// selected component's own settings, then its adjustments.
+/// selected component's own settings, then its effect and adjustments.
 struct SelectedMaskEditor: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
@@ -596,6 +596,7 @@ struct SelectedMaskEditor: View {
             Spacer().frame(height: 6)
             ParameterSlider(parameter: .maskDetail)
             Spacer().frame(height: 4)
+            MaskEffectMenu(mask: mask)
             ForEach(ParameterID.localParameters.filter { !ParameterID.swatchParameters.contains($0) }, id: \.self) {
                 parameter in
                 ParameterSlider(parameter: parameter)
@@ -860,6 +861,72 @@ struct RangeBar: View {
                 dragging = nil
                 model.endEdit(.mask(kind), historyName)
             }
+    }
+}
+
+/// The mask's effect, above its sliders, as Lightroom's Effect menu: Redlamp's effects and the
+/// user's each set the mask's sliders and Curves, and the menu shows which one it has (UX-27).
+/// Save Current Settings as Effect… keeps the mask's own, and Delete Effect takes them away.
+struct MaskEffectMenu: View {
+    let mask: MaskOutline
+    @Environment(EditorModel.self) private var model
+    /// Save Current Settings as Effect… is asking for a name.
+    @State private var naming = false
+    @State private var name = ""
+
+    var body: some View {
+        let own = model.userMaskEffects
+        let current = model.maskEffect(of: mask.id)
+        ControlRow(label: "Effect") {
+            Menu {
+                choices(MaskEffect.builtIn, current: current)
+                if !own.isEmpty {
+                    Divider()
+                    choices(own, current: current)
+                }
+                Divider()
+                Button("Save Current Settings as Effect…") {
+                    name = model.recipe.mask(mask.id)?.name ?? mask.name
+                    naming = true
+                }
+                .disabled(model.recipe.mask(mask.id)?.isAdjusted != true)
+                if !own.isEmpty {
+                    Menu("Delete Effect") {
+                        ForEach(own) { effect in
+                            Button(effect.name, role: .destructive) { model.deleteMaskEffect(effect.id) }
+                        }
+                    }
+                }
+            } label: {
+                Text(model.effectTitle(of: mask.id)).font(Theme.labelFont)
+            }
+            .menuStyle(.button)
+            .controlSize(.small)
+            .help("Set the mask's sliders and Curves from an effect, or keep them as one")
+            .automationIdentifier("masks.mask.effect")
+        }
+        .alert("Save Effect", isPresented: $naming) {
+            TextField("Name", text: $name)
+            Button("Save") { model.saveMaskEffect(from: mask.id, name: name) }
+                .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("An effect with the same name is replaced.")
+        }
+    }
+
+    private func choices(_ effects: [MaskEffect], current: MaskEffect?) -> some View {
+        ForEach(effects) { effect in
+            Button {
+                model.applyMaskEffect(effect, to: mask.id)
+            } label: {
+                if effect.id == current?.id {
+                    Label(effect.name, systemImage: "checkmark")
+                } else {
+                    Text(effect.name)
+                }
+            }
+        }
     }
 }
 

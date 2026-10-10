@@ -6,10 +6,10 @@ import SwiftUI
 /// The Masks panel (`MasksPanel`) in AppKit, as the Develop panels are.
 ///
 /// The selected mask's sliders are AppKit. The header, the picker, the list, the People and
-/// Landscape pickers, the component rows and the menus are the SwiftUI panel's own, hosted one
-/// by one; they read the model and update themselves, so they are made once. Only the selected
-/// mask's settings are rebuilt, when its name, its components or its tools change; dragging a
-/// slider touches only that slider.
+/// Landscape pickers, the component rows, the Effect row and the menus are the SwiftUI panel's
+/// own, hosted one by one; they read the model and update themselves, so they are made once. Only
+/// the selected mask's settings are rebuilt, when its name, its components or its tools change;
+/// dragging a slider, or choosing an effect, touches only the sliders it moves.
 final class MasksPanelView: ColumnView {
     private let model: EditorModel
     private var tracker: Tracker?
@@ -146,7 +146,8 @@ final class MasksPanelView: ColumnView {
     }
 
     /// The selected mask's settings, in `SelectedMaskEditor`'s order: the mask's name with
-    /// Invert and Amount, its components, the selected component's settings, then the adjustments.
+    /// Invert and Amount, its components, the selected component's settings, then the effect and
+    /// the adjustments.
     private func editorColumn(_ mask: MaskOutline, tools: MaskKind?, rows: PanelRows) -> ColumnView {
         var views: [NSView] = [
             rows.header(mask.name, [], accessory: rows.native(HStack { MaskHeaderControls(mask: mask) })),
@@ -157,7 +158,7 @@ final class MasksPanelView: ColumnView {
         views += mask.components.map { rows.native(ComponentRow(mask: mask, component: $0)) }
         views.append(rows.native(ComponentOperationButtons(mask: mask).padding(.top, 4)))
         views += componentTools(tools, mask: mask, rows: rows)
-        views += [rows.gap(6), rows.slider(.maskDetail), rows.gap()]
+        views += [rows.gap(6), rows.slider(.maskDetail), rows.gap(), rows.native(MaskEffectMenu(mask: mask))]
         for parameter in ParameterID.localParameters where !ParameterID.swatchParameters.contains(parameter) {
             views.append(rows.slider(parameter))
             if MasksPanel.gapAfter.contains(parameter) {

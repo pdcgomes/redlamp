@@ -611,6 +611,8 @@ public final class EditorModel {
     public var objectSelection = ObjectSelection.rectangle
     /// Bumped when the user's mask presets change, so menus listing them update.
     var maskPresetsVersion = 0
+    /// The user's mask effects; a test gives the model a store of its own.
+    @ObservationIgnored var maskEffectStore = MaskEffectStore.shared
     public var expandedPanels: Set<PanelID> = [.basic, .toneCurve, .colorMixer]
     public var expandedSidebarSections = Set(SidebarSection.allCases)
     public var soloMode = false

@@ -112,6 +112,27 @@ struct MasksPanelViewTests {
         #expect(panel.arrangedViews.elementsEqual([header, picker], by: ===), "the picker comes back")
     }
 
+    @Test func `choosing an effect moves the mask's sliders and keeps its settings`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let panel = MasksPanelView(model: model)
+        let window = window(panel, height: 900)
+        defer { window.orderOut(nil) }
+        try await draw(0.5, in: model, window: window)
+        let mask = try #require(model.selectedMaskID)
+        let settings = try #require(panel.arrangedViews.last)
+        let dodge = try #require(MaskEffect.builtIn.first { $0.name == "Dodge" })
+
+        model.applyMaskEffect(dodge, to: mask)
+        try await settle(window)
+        #expect(model.sliderValue(.localExposure) == 0.35)
+        #expect(panel.arrangedViews.last === settings, "an effect changes only the sliders' values")
+        model.undo()
+        try await settle(window)
+        #expect(model.sliderValue(.localExposure) == 0)
+        #expect(panel.arrangedViews.last === settings)
+    }
+
     @Test func `the drawing hint, messages and the pickers go where the design has them`() async throws {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }
