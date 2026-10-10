@@ -10,7 +10,8 @@ import SwiftUI
 /// - Thumbnails: a cell scrolling into view asks for its thumbnail on screen; the collection
 ///   view's prefetching asks for the next ones at look-ahead priority and cancels them when the
 ///   strip turns back. A thumbnail arriving sets only its own cell.
-/// - Changes: the library's row diffs become inserts and deletes; a badge redraws its cell.
+/// - Changes: the library's row diffs become inserts and deletes; a badge redraws its cell. The frames of the focus
+///   stacks the app suggests are marked, as in the grid.
 /// - The cells are the grid's, in its order (`GridOrder`): grouped (LIB-41, `LibraryGroups`), the groups' cells one
 ///   group after another without their headers, a closed group's left out; stacks (LIB-28, `LibraryStacks`)
 ///   closed, each one cell with its count. The strip shows them afresh as they change, and while it shows them,
@@ -31,6 +32,9 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
     private var stacksObservation: LibraryObservation?
     private var groupsObservation: LibraryObservation?
     private var tracker: Tracker?
+    private var suggestionTracker: Tracker?
+    /// The frames of the focus stacks the app suggests merging (`EditorModel.stackSuggestions`), as last followed.
+    private var suggestedFrames: Set<URL> = []
     /// The grid's groups or stacks as last followed; nil while it shows the list as it is, when the items are the
     /// photos' rows.
     private var shownOrder: GridOrder?
@@ -110,7 +114,10 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         groupsObservation = nil
         tracker?.cancel()
         tracker = nil
+        suggestionTracker?.cancel()
+        suggestionTracker = nil
         guard window != nil else { return }
+        suggestedFrames = Set(model.stackSuggestions.flatMap(\.frames))
         reload()
         observation = model.library.observe { [weak self] diff in self?.apply(diff) }
         editObservation = model.editRenders.observe { [weak self] urls in self?.editsShown(urls) }
@@ -127,6 +134,16 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
                 cameIntoSight()
             } else if inSight {
                 follow(selection, marking: photos)
+            }
+        }
+        // The focus stacks suggested, marked on their frames' cells.
+        suggestionTracker = Tracker { [weak self] in
+            guard let self else { return }
+            let frames = Set(model.stackSuggestions.flatMap(\.frames))
+            guard frames != suggestedFrames else { return }
+            suggestedFrames = frames
+            for case let cell as FilmstripCellView in collectionView.subviews {
+                cell.isFocusSuggested = cell.item.map { frames.contains($0.url) } == true
             }
         }
         needsPlace = true
@@ -348,6 +365,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
         item.cell.rendersEdit = model.editRenders.renders(photo)
         item.cell.configure(photo, image: shown?.image, edit: shown?.edit)
         item.cell.stackBadges = stackBadges(ofItem: index)
+        item.cell.isFocusSuggested = suggestedFrames.contains(photo.url)
         item.cell.isSelected = photo.url == selected
         item.cell.isInSelection = photo.url != selected && marked.contains(model.library.photoIDs[row])
         item.cell.onClick = { [weak self] modifiers in
@@ -501,6 +519,7 @@ extension FilmstripStripView {
             let rewritten = item.cell.item?.modified != photo.modified
             item.cell.rendersEdit = model.editRenders.renders(photo)
             item.cell.configure(photo, image: nil)
+            item.cell.isFocusSuggested = suggestedFrames.contains(photo.url)
             if rewritten {
                 item.cell.setImage(nil)
             }

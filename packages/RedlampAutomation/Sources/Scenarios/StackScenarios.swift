@@ -9,7 +9,8 @@
 
         static let detectAndMerge = Scenario(
             "stack.detect-merge-workspace",
-            "A focus bracket is found, merged from the menu, and worked in the Stack workspace",
+            "A focus bracket is found and its frames marked in the filmstrip, merged from the menu, and worked in the "
+                + "Stack workspace",
             claims: [
                 .feature("focus-stacking.detection"),
                 .feature("focus-stacking.merging"),
@@ -36,6 +37,21 @@
                 }
             try app.settle()
             try app.wait("the stack to be found", timeout: 120) { !$0.stackSuggestions.isEmpty }
+            // Its frames marked in the filmstrip, as VoiceOver reads them, the strip kept up past the 5 s it shows for.
+            let frames = try app.main { model in
+                model.applyDebugCommand("filmstrip", "shown")
+                return model.stackSuggestions.first?.frames.map(\.lastPathComponent) ?? []
+            }
+            do {
+                defer { try? app.main { $0.applyDebugCommand("filmstrip", "hidden") } }
+                try app.wait("the filmstrip to mark the bracket's frames", timeout: 10) { _ in
+                    guard let window = Views.editorWindow else { return false }
+                    return frames.allSatisfy { name in
+                        Views.accessible("filmstrip.\(name)", in: window)?.accessibilityValue() as? String
+                            == "suggested for a focus stack"
+                    }
+                }
+            }
             app.covered(.feature("focus-stacking.detection"), via: .model)
             // Merge writes the stack document and opens the Stack workspace on it.
             try app.choose(.mergeFocusStack, expectPerformed: false)

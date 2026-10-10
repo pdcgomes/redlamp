@@ -169,6 +169,38 @@ struct FilmstripTests {
         #expect(cell(strip, 3)?.image === neighbourImage)
     }
 
+    @Test func `the frames of a focus stack suggested are marked as the grid marks them, until it's set aside`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, strip, window) = try await showStrip(count: 20)
+        defer { window.contentView = nil }
+        // The suggestions are the test's: what the folder's own frames are found to be doesn't replace them.
+        model.library.onStacks = nil
+        let frames = (2 ..< 5).map { model.items[$0].url }
+        model.stackSuggestions = [StackSuggestion(frames: frames)]
+        try await eventually { cell(strip, 2)?.isFocusSuggested == true }
+        #expect((0 ..< 8).map { cell(strip, $0)?.isFocusSuggested == true } == [
+            false, false, true, true, true, false, false, false,
+        ])
+        #expect(cell(strip, 3)?.accessibilityValue() as? String == "suggested for a focus stack")
+        #expect(cell(strip, 3)?.toolTip == "\(frames[1].lastPathComponent), suggested for a focus stack")
+        #expect(cell(strip, 5)?.accessibilityValue() == nil && cell(strip, 5)?.toolTip == model.items[5].name)
+
+        // A frame's cell made later, as the strip scrolls to it, is marked as it's shown.
+        model.stackSuggestions = [StackSuggestion(frames: [model.items[15].url, model.items[16].url])]
+        try await eventually { cell(strip, 2)?.isFocusSuggested == false }
+        #expect((0 ..< 8).allSatisfy { cell(strip, $0)?.isFocusSuggested == false })
+        strip.center(row: 15, animated: false)
+        strip.collectionView.layoutSubtreeIfNeeded()
+        #expect(cell(strip, 15)?.isFocusSuggested == true && cell(strip, 14)?.isFocusSuggested == false)
+
+        let reloads = strip.reloads
+        model.dismissStack(model.stackSuggestions[0])
+        try await eventually { cell(strip, 15)?.isFocusSuggested == false }
+        #expect(cell(strip, 16)?.isFocusSuggested == false && cell(strip, 15)?.accessibilityValue() == nil)
+        #expect(strip.reloads == reloads, "the cells changed, not the strip")
+    }
+
     @Test func `the selected photo's cell is highlighted`() async throws {
         defer { cleanUp() }
         let (model, strip, window) = try await showStrip(count: 20)

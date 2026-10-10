@@ -41,6 +41,15 @@ final class FilmstripCellView: NSView {
         set { badges.stackBadges = newValue }
     }
 
+    /// A frame of a focus stack the app suggests merging (LIB-28), marked as the grid's cells mark it.
+    var isFocusSuggested = false {
+        didSet {
+            guard isFocusSuggested != oldValue else { return }
+            badges.isFocusSuggested = isFocusSuggested
+            describe()
+        }
+    }
+
     /// A click, with the modifier keys held (⌘ and ⇧ select several photos).
     var onClick: ((NSEvent.ModifierFlags) -> Void)?
     /// The photo's context menu (`FilmstripMenu`).
@@ -117,10 +126,17 @@ final class FilmstripCellView: NSView {
         badges.item = item
         badges.hasImage = thumbnail.contents != nil
         badges.uneditedPreview = showsUneditedPreview
-        toolTip = item.name
         layer?.opacity = item.metadata.flag == .reject ? 0.45 : 1
         setAccessibilityLabel(item.name)
         setAccessibilityIdentifier("filmstrip.\(item.url.lastPathComponent)")
+        describe()
+    }
+
+    /// The tooltip and what VoiceOver reads after the name, as the grid's cells say them.
+    private func describe() {
+        let suggested = isFocusSuggested ? "suggested for a focus stack" : nil
+        toolTip = [item?.name, suggested].compactMap(\.self).joined(separator: ", ")
+        setAccessibilityValue(suggested)
     }
 
     func setImage(_ image: CGImage?, edit: EditDigest? = nil) {
@@ -200,8 +216,8 @@ final class FilmstripCellView: NSView {
     }
 }
 
-/// The cell's badges: edited, flag or reject, stars, colour or custom label, the mark, focus stack, a stack's
-/// count and a pair's extensions (LIB-28), and a cloud for photos only in iCloud Drive.
+/// The cell's badges: edited, flag or reject, stars, colour or custom label, the mark, focus stack or a focus stack
+/// suggested, a stack's count and a pair's extensions (LIB-28), and a cloud for photos only in iCloud Drive.
 final class FilmstripBadgesView: LayerDrawnView {
     var item: LibraryItem? {
         didSet {
@@ -213,6 +229,13 @@ final class FilmstripBadgesView: LayerDrawnView {
     var stackBadges: (count: GridBadges.Kind?, pair: GridBadges.Kind?) = (nil, nil) {
         didSet {
             guard stackBadges.count != oldValue.count || stackBadges.pair != oldValue.pair else { return }
+            setNeedsContentDisplay()
+        }
+    }
+
+    var isFocusSuggested = false {
+        didSet {
+            guard isFocusSuggested != oldValue else { return }
             setNeedsContentDisplay()
         }
     }
@@ -279,14 +302,18 @@ final class FilmstripBadgesView: LayerDrawnView {
         case nil:
             break
         }
+        // A focus stack suggested takes a stack document's place, as in the grid.
+        let suggested = !badges.stack && isFocusSuggested
         if badges.stack {
             Symbol.draw(
                 "square.stack.3d.down.right.fill", pointSize: 8, color: white.opacity(0.85),
                 centeredAt: CGPoint(x: rect.width - 25, y: 9), scale: scale,
             )
+        } else if suggested, let image = GridBadges.image(.focusSuggestion, scale: scale) {
+            drawUpright(image, in: CGRect(x: rect.width - 33, y: 1, width: 16, height: 16), context)
         }
         if let count = stackBadges.count, let image = GridBadges.image(count, scale: scale) {
-            let right = rect.width - (badges.stack ? 34 : 18)
+            let right = rect.width - (badges.stack || suggested ? 34 : 18)
             drawUpright(
                 image,
                 in: CGRect(origin: CGPoint(x: right - count.size.width, y: 2), size: count.size),
