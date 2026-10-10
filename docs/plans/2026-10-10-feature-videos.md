@@ -1,6 +1,6 @@
 # Redlamp feature videos for Instagram and TikTok
 
-Ten vertical videos, each about one Redlamp feature and 29.2 seconds long with Redlamp's opener. In every video Redlamp's editor, drawn in pixel art as a colourful dashboard, shows the feature step by step and then its result before and after, and the video ends with "Download free" and "redlamp.app". They are made in the promo studio (`.cursor/skills/redlamp-promo-studio/SKILL.md`) and run from the social room (`.cursor/skills/redlamp-social/SKILL.md`).
+Eleven vertical videos, each about one Redlamp feature and 29.2 seconds long with Redlamp's opener. In every video Redlamp's editor, drawn in pixel art as a colourful dashboard, shows the feature step by step and then its result before and after, and the video ends with "Download free" and "redlamp.app". They are made in the promo studio (`.cursor/skills/redlamp-promo-studio/SKILL.md`) and run from the social room (`.cursor/skills/redlamp-social/SKILL.md`).
 
 The captions, posting times and alt text are in [`docs/social/posts.json`](../social/posts.json). The social room shows them, and the Instagram publisher posts from them, so the file is the one place they change.
 
@@ -126,13 +126,13 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 
 | Bar | Time | Picture | Words | Sound |
 | --- | --- | --- | --- | --- |
-| 1 | 0.0 s | The dashboard: the photo as opened, labelled as its raw (IMG_3557.DNG), in pixel art, its histogram and level, and the Masks panel with SUBJECT, SKY, BACKGROUND and PEOPLE in their accents, and the mask's INVERT and EXPOSURE dim until there is a mask. | SUBJECT MASK (the title, held from the opener) | A deep hit on the first frame, then the arpeggio over a kick muffled as if through a wall. |
-| 2 | 2.4 s | The pointer comes in and clicks SUBJECT on the bar's third beat; the AI MODEL card: DOWNLOAD 0 B, ON YOUR MAC, its chip running from the click. | CLICK SUBJECT | The riff starts; a click on SUBJECT. |
-| 3 | 4.8 s | The red overlay fills up the boy from his shirt to his hair in three sixteenths, the background clear; the EDGE ×3 card magnifies the edge of his hair under it. | SELECTED / ACCURATELY | Four soft blips rising as the overlay fills. |
-| 4 | 7.2 s | INVERT is clicked on the bar's second beat; the overlay moves to the background, and the INVERT card's mask thumbnail turns over from SUBJECT to BACKGROUND. | INVERT IT FOR / THE BACKGROUND | The riff's answer and the full beat; a click on INVERT. |
-| 5 | 9.6 s | The mask's EXPOSURE goes down to −1.00, a step a beat; the background darkens and the boy stands out, and the LEVEL card shows the background's level falling below his. | DARKEN THE / BACKGROUND | A click on the knob and a slider tick a beat; toms fall into the stop. |
-| 6 | 12.0 s | The photo fills the stage as opened, then develops into the edit at 13.2 s: the background a stop darker, the boy as he was. | BEFORE AND AFTER | The drop and the sting; a tick on the flip. |
-| 7 | 14.4 s | The end card. | AI MASKS THAT RUN / ON YOUR MAC, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
+| 1 | 0.0 s | The dashboard: the photo as opened, labelled as its raw (IMG_3557.DNG), in pixel art, its histogram and level, and the Masks panel with SUBJECT, SKY, BACKGROUND and PEOPLE in their accents, and the mask's INVERT and EXPOSURE dim until there is a mask. | SUBJECT MASK (the title, held from the opener) | A deep hit on the first frame, and the music turns to B minor: a bass rolling in sixteenths and an electric piano arpeggio, over a kick muffled as if through a wall. |
+| 2 | 2.4 s | The pointer comes in and clicks SUBJECT on the bar's third beat; the AI MODEL card: DOWNLOAD 0 B, ON YOUR MAC, its chip running from the click. | CLICK SUBJECT | The riff starts on a pulse lead, over a kick on every beat; a click on SUBJECT. |
+| 3 | 4.8 s | The red overlay fills up the boy from his shirt to his hair in three sixteenths, the background clear; the EDGE ×3 card magnifies the edge of his hair under it. | SELECTED / ACCURATELY | Claps come in on 2 and 4; four soft blips climb A major as the overlay fills. |
+| 4 | 7.2 s | INVERT is clicked on the bar's second beat; the overlay moves to the background, and the INVERT card's mask thumbnail turns over from SUBJECT to BACKGROUND. | INVERT IT FOR / THE BACKGROUND | The riff's answer and the full beat, a snare with the claps; a click on INVERT. |
+| 5 | 9.6 s | The mask's EXPOSURE goes down to −1.00, a step a beat; the background darkens and the boy stands out, and the LEVEL card shows the background's level falling below his. | DARKEN THE / BACKGROUND | A click on the knob and a slider tick a beat; toms rise into the stop, and the riff's A sharp holds through it. |
+| 6 | 12.0 s | The photo fills the stage as opened, then develops into the edit at 13.2 s: the background a stop darker, the boy as he was. | BEFORE AND AFTER | The drop on B, brass stabs on the offbeats, and the sting; a tick on the flip. |
+| 7 | 14.4 s | The end card. | AI MASKS THAT RUN / ON YOUR MAC, then DOWNLOAD FREE / REDLAMP.APP | The track's closing phrase, down through A sharp to B on the last hit. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
 ### E03 Film looks
@@ -343,14 +343,39 @@ Each episode has five hooks. Hook A is posted first on both platforms. Hook B go
 | 7 | 14.4 s | The end card. | FOCUS STACKING / IN YOUR EDITOR, then DOWNLOAD FREE / REDLAMP.APP | The theme's last phrase. |
 | 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
 
+### E11 Command palette
+
+- **Shows:** every action and Develop slider from the keyboard. ⌘K opens the command palette; a few letters find a setting; ↵ on a slider shrinks the palette to a slider bar over the photo, which ← → step (⇧ ten at a time, ⌥ finer); ↑ ↓ move to the next slider; and a value, or `x+0.3`, can be typed in. A run of presses is one history step. No pointer appears in the video.
+- **For:** Lightroom users who edit from the keyboard, and people who use a command palette in other apps.
+- **Source:** README, Workspace, Command palette, and "Adjusting from the keyboard"; Lightroom comparison, command palette (Lightroom: No; Redlamp: Done, UX-07). The owner points out that no other photo editor works this way (10 October 2026). The sources back the comparison with Lightroom, so that's the claim the video makes, in hook B, and it doesn't say no editor does.
+- **Posts:** Tue 1 Dec, 18:00 (A); Thu 3 Dec, Instagram trial reel (B). It takes the first of the reserves' two slots.
+
+| ID | Hook |
+| --- | --- |
+| a | EVERY SLIDER / FROM THE KEYBOARD |
+| b | LIGHTROOM HAS NO / COMMAND PALETTE |
+| c | PRESS COMMAND K / FOR ANY SETTING |
+| d | FIND ANY SLIDER / IN A FEW LETTERS |
+| e | A COMMAND PALETTE / FOR YOUR PHOTOS |
+
+| Bar | Time | Picture | Words | Sound |
+| --- | --- | --- | --- | --- |
+| 1 | 0.0 s | The dashboard: a pixel-art photo as opened, its histogram and level, and the Basic panel's sliders as meters at zero. | COMMAND PALETTE (the title, held from the opener) | A deep hit on the first frame, then the track's first bar. |
+| 2 | 2.4 s | ⌘ and K go down on the beat as keycaps, and the palette opens over the photo: its search field, actions with their shortcuts beside them, sliders with their values, and the pickers. | PRESS COMMAND K | A key click for each key; the riff starts. |
+| 3 | 4.8 s | E, X and P are typed, one a beat; the list narrows to EXPOSURE with its value, above the actions that match. | EVERY SLIDER / AND ACTION | A key click a letter. |
+| 4 | 7.2 s | ↵ shrinks the palette to a slider bar over the photo; → steps EXPOSURE up a beat at a time, and the photo brightens. | STEP IT WITH / THE ARROW KEYS | A key click and a slider tick a beat; the full beat comes in. |
+| 5 | 9.6 s | ↓ moves the bar to CONTRAST, and 20 is typed and set with ↵; a card: ONE HISTORY STEP. | NEXT SLIDER, / TYPE A VALUE | Key clicks on the beats; toms fall into the stop. |
+| 6 | 12.0 s | The photo fills the stage as opened, then develops into the edit at 13.2 s. | ALL FROM THE / KEYBOARD | The drop and the sting. |
+| 7 | 14.4 s | The end card. | A COMMAND PALETTE / FOR YOUR PHOTOS, then DOWNLOAD FREE / REDLAMP.APP | The track's last phrase. |
+| 8 | 16.8 s | The card holds and fades. | DOWNLOAD FREE / REDLAMP.APP | The last chord dies away. |
+
 ### Reserves
 
-Two of these go out on Tue 1 Dec and Fri 4 Dec, chosen from the first eight posts' numbers.
+One of these goes out on Fri 4 Dec, chosen from the first eight posts' numbers. The command palette, the first reserve, became E11 (the owner, 10 October 2026).
 
-- **Command palette:** type a setting and its value, such as EXPOSURE 0.7, and it's set (README, Workspace, Command palette).
 - **Masks for eyes, lips and teeth:** People masks and their parts (README, Masking).
 - **Film effects:** halation, grain, light leaks and frames (README, Film simulations; Lightroom comparison).
-- **All ten results:** a cut of the ten videos' results.
+- **All the results:** a cut of the videos' results.
 
 ## Schedule
 
@@ -368,7 +393,8 @@ All times are 18:00 London time. The second hook of each goes out two days later
 | Fri 20 Nov | E08 Camera recipes | Instagram, TikTok |
 | Tue 24 Nov | E09 Remove by name | Instagram, TikTok |
 | Fri 27 Nov | E10 Focus stacking | Instagram, TikTok |
-| Tue 1 Dec and Fri 4 Dec | Two reserves | Instagram, TikTok |
+| Tue 1 Dec | E11 Command palette | Instagram, TikTok |
+| Fri 4 Dec | One reserve | Instagram, TikTok |
 
 Each group of four is approved by the Friday before it starts: 23 October, 6 November and 20 November.
 
@@ -432,12 +458,13 @@ The first cut, in E01's dashboard look with the synthwave score and the lead-in,
 - **Picture:** every frame was drawn with no warning from the kit or the safe zones (483 pictures for both hooks' 876 frames, the opener's included), and the storyboard drawn with the covered zones outlined (`--zones`) shows every word clear of them. Each click comes after the words that ask for it, SUBJECT two beats into its bar and INVERT one beat in, where E01's presses land with its words. The cards come up over the park at the photo's left, clear of the boy. The LEVEL card measures the pixel photo: the background's brightness falls from 0.38 to 0.27 while the boy's stays at 0.34.
 - **Sound:** the score measures −13.1 LUFS, and the whole video −14.0 LUFS with a true peak of −1.1 dBFS (drive and pulse −14.0 LUFS and −1.2 dBFS). It climbs from −16.3 LUFS under the hook to −10.8 on the drop, with 20.9% of its energy under 60 Hz. The overlay's fill has a sound of its own, `fill` in `features-score.py`: four blips climbing G minor a sixteenth apart, an octave over the arpeggio, each about −31 dBFS, as loud as a click and 7 to 8 dB under the music in their band. Above 2.5 kHz, 10 of the 11 sounds on screen land within 5 ms of their beats (median −0.5 ms); INVERT's button release reads 21 ms late, under the riff's note, an arpeggio note and a hat on the same eighth. Taken out of the score by subtracting the arrangement without them, all 11 land within 1 ms.
 - **Drafts:** both are 29.2 s (876 frames) and measure −14.1 LUFS with a true peak of −1.5 dBFS by ffmpeg. The episode's score starts exactly 10 s in, by cross-correlating each draft's audio with it.
+- **E02's track:** E02 now has a synthwave track of its own, `video/scripts/features/music/e02.py`, in B minor, the relative minor of the opener's held D major chord. Its lead-in plays the arpeggio's electric piano on A, D and F sharp over a drone on D, F sharp and A, and on the hit the bass drops to B under them. The chords fall by fifths, Bm9, Em9, A13 and D6/9 a bar each, then Gmaj9 to F#7 into the drop on Bm9, and Gmaj9 to F#7 again into the last hit, every voicing with F sharp on top. The riff, on a hollow pulse lead, climbs B minor from B to A, the A pushed a sixteenth early and gliding in, then steps down and sighs from D onto C sharp; the answer ends on A sharp, held through the stop and resolving to B on the drop. Under it a bass rolls in sixteenths from the first frame, pumped by a kick on every beat; brass pads swell in on each chord, and an FM electric piano plays the arpeggio in eighths; claps come in with the second step and a snare with the third; toms rise into the stop; and brass stabs play the offbeats from the drop. The pulse lead, the brass and the electric piano are new instruments in `video/scripts/synth.py` (`pulse_lead`, `brass`, `fm`), and the fill's blips now climb A major (C sharp, E, F sharp and A) over A13. The score measures −13.1 LUFS, and the whole video −14.0 LUFS with a true peak of −1.2 dBFS. By bar it climbs from −15.6 LUFS under the hook through −14.4, −14.4, −12.7 and −12.7 to −10.9 on the drop, then −12.1 and −18.5, with 22.8% of its energy under 60 Hz. The 400 ms either side of the cut both measure −13.8 LUFS, and between the first bar's kicks the level sits at −19.6 to −21.5 dB, within 3 dB of the held chord's −18.7. Above 2.5 kHz, 10 of the 11 sounds on screen land within 1 ms of their beats; the Exposure drag's button release, on the stop, reads 18 ms early under the riser, and taken out of the score all 11 land within 1 ms. Both drafts are 29.2 s and measure −14.0 LUFS with a true peak of −2.4 dBFS by ffmpeg, the score starting exactly 10 s in. E01's renders are unchanged, byte for byte.
 - **Not checked:** how it plays at full speed and size, and how the fill's blips sit in the mix on a phone. Those are for the owner's viewing in Studio.
 
 ## For the owner to decide
 
 - The hook each video leads with. A is the default, and B is tested as a trial reel.
-- Whether "Lightroom" may appear on screen (E04 a, b, c, d and e, E05 a and c, E01 e, E10 d) as well as in the captions, never with Adobe's logo or interface. E01's title, FREE ALTERNATIVE TO LIGHTROOM, already names it in the opener, as the owner asked on 10 October, so E01's captions say Redlamp isn't affiliated with Adobe. Whether film stock names may appear on screen (E03), with the README's trademark line in the caption. Whether "Fujifilm-style" may appear on screen (E08 b).
+- Whether "Lightroom" may appear on screen (E04 a, b, c, d and e, E05 a and c, E01 e, E10 d, E11 b) as well as in the captions, never with Adobe's logo or interface. E01's title, FREE ALTERNATIVE TO LIGHTROOM, already names it in the opener, as the owner asked on 10 October, so E01's captions say Redlamp isn't affiliated with Adobe. Whether film stock names may appear on screen (E03), with the README's trademark line in the caption. Whether "Fujifilm-style" may appear on screen (E08 b).
 - Whether any episode should also have a version with the real photo, as E01 has. Its photos would go in `~/src/redlamp-social/photos/`, as [Real results](#real-results) lists.
 
 ## Results

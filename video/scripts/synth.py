@@ -261,6 +261,22 @@ def saw_lead(note, length, velocity=1.0, cutoff=2200, detune=7, vibrato=0.0):
     return out * envelope(n, 0.005, 0.22, 0.7, 0.12, hold=length)[:, None] * velocity * 0.35
 
 
+def pulse_lead(note, length, velocity=1.0, glide=None, duty=0.3, cutoff=2400, detune=6, vibrato=0.0):
+    """A hollow lead, stereo: two pulses `duty` of a cycle wide and a few cents apart, through a low-pass
+    that opens a little at each note and settles below `cutoff`, held for `length` seconds, with a
+    `vibrato` (in semitones) that comes in after the attack. Given `glide`, the note before it, it slides
+    from that note's pitch into its own, as a monosynth's portamento does."""
+    n = int(round((length + 0.15) * SR))
+    t = np.arange(n) / SR
+    pitch = note + (0.0 if glide is None else (glide - note) * np.exp(-t / 0.03))
+    pitch = pitch + vibrato * np.sin(2 * np.pi * 5.2 * t) * np.clip((t - 0.15) / 0.2, 0, 1)
+    opening = cutoff * (0.7 + 0.8 * np.exp(-t / 0.08))
+    out = np.zeros((n, 2))
+    for i, cents in enumerate((-detune, detune)):
+        out += pan(harmonics(hz(pitch + cents / 100), n, pulse_partials(duty)[:48], cutoff=opening), (-0.3, 0.3)[i])
+    return out * envelope(n, 0.005, 0.25, 0.7, 0.12, hold=length)[:, None] * velocity * 0.35
+
+
 def supersaw(notes, seconds, voices=7, spread=22, cutoff=4200, attack=0.02, release=0.25):
     """A wide pad of detuned saws for each note, stereo."""
     n = int(round((seconds + release) * SR))
@@ -281,6 +297,23 @@ def stab(notes, velocity=1.0, length=0.5, cutoff=6000):
     return pad * (np.exp(-t / 0.16) * velocity)[:, None]
 
 
+def brass(notes, seconds, velocity=1.0, cutoff=1800, attack=0.06, release=0.3, detune=6):
+    """A poly-synth's brass, stereo: two saws a few cents apart for each note, scooping up into pitch,
+    through a low-pass that blares open over `attack` and falls back to `cutoff`; held for `seconds`.
+    Short, it's a stab; with a slow `attack`, a swell."""
+    n = int(round((seconds + release) * SR))
+    t = np.arange(n) / SR
+    rise = np.clip(t / attack, 0, 1)
+    opening = 120 + cutoff * velocity * rise**1.5 * (1 + 0.8 * np.exp(-np.maximum(t - attack, 0) / 0.2))
+    scoop = -0.15 * np.exp(-t / 0.05)
+    out = np.zeros((n, 2))
+    for j, note in enumerate(notes):
+        spread = 0.3 + 0.5 * j / max(1, len(notes) - 1)
+        for i, cents in enumerate((-detune, detune)):
+            out += pan(harmonics(hz(note + scoop + cents / 100), n, SAW[:40], cutoff=opening), (-spread, spread)[i])
+    return out / (2 * len(notes) ** 0.5) * envelope(n, attack * 0.6, 10, 1.0, release, hold=seconds)[:, None] * velocity
+
+
 def bell(note, seconds=3.0, velocity=1.0):
     """Glass: a few inharmonic partials with long, separate decays."""
     t = times(seconds)
@@ -288,6 +321,16 @@ def bell(note, seconds=3.0, velocity=1.0):
     for ratio, amp, tau in ((1, 1, 2.0), (2.0, 0.28, 1.3), (2.76, 0.2, 0.9), (4.07, 0.08, 0.5), (5.4, 0.04, 0.35)):
         out += amp * np.sin(2 * np.pi * hz(note) * ratio * t + rng.uniform(0, 6.3)) * np.exp(-t / tau)
     return out * np.clip(t / 0.002, 0, 1) * velocity * 0.3
+
+
+def fm(note, length=0.6, velocity=1.0, ratio=1.0, index=2.5, decay=0.3):
+    """An electric piano as an FM synthesiser plays it, or with a higher `ratio` a bell: a sine whose
+    phase a second sine, `ratio` times its frequency, pushes about by `index` at the strike and less as
+    the note rings on over `decay` seconds, so it's brightest as it's struck and mellows as it dies."""
+    t = times(length)
+    phase = 2 * np.pi * phase_of(hz(note), len(t))
+    depth = index * velocity * (0.2 + 0.8 * np.exp(-t / decay))
+    return np.sin(phase + depth * np.sin(ratio * phase)) * envelope(len(t), 0.002, 0.6, 0.0, 0.04) * velocity * 0.4
 
 
 # ---------------------------------------------------------------- effects

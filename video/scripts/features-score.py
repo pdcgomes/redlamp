@@ -72,10 +72,10 @@ def release(velocity):
 
 
 def rising(velocity):
-    """Four soft blips climbing G minor a sixteenth apart, an octave over the arpeggio, as a mask's
-    overlay fills."""
+    """Four soft blips climbing A major a sixteenth apart, an octave over the arpeggio, as a mask's
+    overlay fills: C sharp, E, F sharp and A, the notes of E02's A13 under it."""
     step = int(round(theme.BEAT / 4 * s.SR))
-    run = [s.blip(note, velocity, 0.07, duty=0.5) for note in (86, 89, 91, 94)]
+    run = [s.blip(note, velocity, 0.07, duty=0.5) for note in (85, 88, 90, 93)]
     out = np.zeros(step * (len(run) - 1) + len(run[-1]))
     for i, tone in enumerate(run):
         out[i * step : i * step + len(tone)] += tone
@@ -216,7 +216,8 @@ def main():
     for beat, kind, _ in events:
         counts[kind] = counts.get(kind, 0) + 1
         cues[f"{kind.replace(' ', '-')}-{counts[kind]}"] = beat
-    (out / "cues.json").write_text(json.dumps({**w.SHEET, "cues": cues}, indent=1))
+    chords = w.SHEET["chords"] if track is theme else track.CHORDS
+    (out / "cues.json").write_text(json.dumps({**w.SHEET, "chords": chords, "cues": cues}, indent=1))
     print(f"==> public/features/{key}/score.wav ({arrangement}, {theme.TOTAL:.1f} s, {s.loudness(mix):.1f} LUFS, "
           f"true peak {s.true_peak(mix):.1f} dBFS, {len(events)} sounds on screen)")
 
