@@ -49,6 +49,7 @@ Intro.
 test("parseCameras reads the verified, camera bench and evaluation tables, and LibRaw's list by make", () => {
   const cameras = parseCameras(doc);
   assert.equal(cameras.libraw, "0.22.2");
+  assert.equal(cameras.fork, null);
   assert.deepEqual(cameras.verified, [
     {
       camera: "Sony ILCE-7M3 (A7 III)",
@@ -90,6 +91,16 @@ test("parseCameras reads the verified, camera bench and evaluation tables, and L
     },
     { make: "Sony", models: [{ name: "ILCE-7M3 (A7 III)", mark: "verified" }] },
   ]);
+});
+
+test("parseCameras reads the commit and the fork when LibRaw is built from Redlamp's fork", () => {
+  const forked = doc
+    .replace("**LibRaw:** 0.22.2", "**LibRaw:** 4abfcd2 ([Redlamp's fork](https://github.com/pdcgomes/redlamp-libraw))")
+    .replace("## Supported by LibRaw 0.22.2", "## Supported by LibRaw 4abfcd2");
+  const cameras = parseCameras(forked);
+  assert.equal(cameras.libraw, "4abfcd2");
+  assert.equal(cameras.fork, "https://github.com/pdcgomes/redlamp-libraw");
+  assert.equal(cameras.makes.length, 3);
 });
 
 test("parseCameras asks for the generator when the LibRaw list is missing", () => {

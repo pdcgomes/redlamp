@@ -854,6 +854,94 @@
       0.7616
     ]
   },
+  "Nikon_Z5-II_HE-star.NEF" : {
+    "asShotMultipliers" : [
+      1.6758,
+      1,
+      1.3672
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 2672,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z5_2",
+    "orientation" : 0,
+    "sampleChecksum" : "3573c8a2f47f52b5",
+    "whiteLevel" : 16383,
+    "width" : 4000
+  },
+  "Nikon_Z5-II_HE.NEF" : {
+    "asShotMultipliers" : [
+      1.6523,
+      1,
+      1.373
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 2672,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z5_2",
+    "orientation" : 0,
+    "sampleChecksum" : "5934e2cfa10ec6c7",
+    "whiteLevel" : 16383,
+    "width" : 4000
+  },
+  "Nikon_Z50-II_HE-star.NEF" : {
+    "asShotMultipliers" : [
+      2.1367,
+      1,
+      1.2598
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 3728,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z50_2",
+    "orientation" : 0,
+    "sampleChecksum" : "b3258fa9ff36ecfc",
+    "whiteLevel" : 16383,
+    "width" : 3728
+  },
+  "Nikon_Z50-II_HE.NEF" : {
+    "asShotMultipliers" : [
+      2.1445,
+      1,
+      1.2578
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      1008,
+      1008,
+      1008,
+      1008
+    ],
+    "height" : 3728,
+    "layout" : "Bayer RGGB",
+    "make" : "Nikon",
+    "model" : "Z50_2",
+    "orientation" : 0,
+    "sampleChecksum" : "827c5770ff253e86",
+    "whiteLevel" : 16383,
+    "width" : 5600
+  },
   "OM-System_OM-1-Mark-II.orf" : {
     "asShotMultipliers" : [
       2.2813,

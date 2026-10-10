@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 const link = "text-paper underline decoration-hairline-strong underline-offset-3 hover:decoration-paper";
 
 export default function CamerasPage() {
-  const { libraw, verified, bench, evaluated, makes } = cameras();
+  const { libraw, fork, verified, bench, evaluated, makes } = cameras();
   const supported = makes.reduce((sum, make) => sum + make.models.length, 0);
   const commit = sourceCommit();
   // A camera verified in more than one format has a row for each.
@@ -44,10 +44,22 @@ export default function CamerasPage() {
             Redlamp opens raw files with{" "}
             <a href="https://www.libraw.org" className={link}>
               LibRaw
-            </a>{" "}
-            {libraw}, an open-source library that reads the formats of more than a thousand cameras, used under the
-            CDDL-1.0. LibRaw only unpacks the sensor data and the file&apos;s metadata: black levels, white balance,
-            demosaicing, highlight reconstruction, colour and everything after are Redlamp&apos;s own, on the GPU.
+            </a>
+            {fork ? "" : ` ${libraw}`}, an open-source library that reads the formats of more than a thousand cameras,
+            used under the CDDL-1.0. LibRaw only unpacks the sensor data and the file&apos;s metadata: black levels,
+            white balance, demosaicing, highlight reconstruction, colour and everything after are Redlamp&apos;s own, on
+            the GPU.
+            {fork && (
+              <>
+                {" "}
+                Redlamp builds LibRaw from{" "}
+                <a href={fork} className={link}>
+                  its own fork
+                </a>{" "}
+                at commit {libraw}: LibRaw&apos;s development version, with a decoder for Nikon&apos;s High Efficiency
+                raws (HE and HE*) that LibRaw doesn&apos;t read yet.
+              </>
+            )}
           </p>
           <p className="mt-4 text-[17px] leading-relaxed text-mute">
             LibRaw reading a camera&apos;s files isn&apos;t the same as Redlamp having checked them. Below, the cameras
@@ -90,7 +102,9 @@ export default function CamerasPage() {
           <p className="mt-3 text-[15px] leading-relaxed text-mute">
             Each has a CC0 sample in Redlamp&apos;s decode tests, which check its layout, crop, black and white levels,
             white balance, colour matrix, orientation and sensor data on every test run. A colour reference means its
-            default rendering is also compared with a recorded one (CIEDE2000).
+            default rendering is also compared with a recorded one (CIEDE2000). A camera marked as having no colour
+            matrix yet opens and develops, but LibRaw doesn&apos;t know its colour response yet, so its colours
+            won&apos;t be right until it does.
           </p>
         </div>
         <div className="surface mt-6 overflow-hidden">

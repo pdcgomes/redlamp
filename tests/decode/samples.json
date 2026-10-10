@@ -2,7 +2,7 @@
   "version": 1,
   "description": "The camera coverage set: one CC0 sample per main camera maker and format from raw.pixls.us, beside the development samples in tests/fixtures/raw. `mise run fixtures` downloads them into tests/fixtures/cameras (never committed) and checks each file's SHA-256; the decode regression suite and the camera colour goldens check every one.",
   "gaps": [
-    "Nikon's High Efficiency NEFs (HE and HE*) decode through Redlamp's LibRaw (CAM-12, CAM-30), whose bench checks all 28 CC0 files of the six bodies that write them. The Z5 II's and Z50 II's aren't in this set: LibRaw has no colour matrix for either body (CAM-21). Bodies without a verified sample, such as the ZR, are refused.",
+    "Nikon's High Efficiency NEFs (HE and HE*) decode through Redlamp's LibRaw (CAM-12, CAM-30), whose bench checks all 28 CC0 files of the six bodies that write them. The Z5 II's and Z50 II's are here for their decoding and as colour references, but LibRaw has no colour matrix for either body, so their colours can't be right yet (CAM-21). Bodies without a verified sample, such as the ZR, are refused.",
     "Sony's 15-bit YCbCr ARWs (the A1 II's, the RX1R III's, the FX2's) render with a magenta cast (CAM-21).",
     "No CC0 samples of the Leica M11, SL3 or Q3, or of iPhones after the 12 Pro.",
     "Sigma's Foveon X3F files, GoPro's GPR and JPEG XL mosaic DNGs aren't supported."
@@ -324,6 +324,50 @@
       "url": "https://raw.pixls.us/getfile.php/7814/nice/Nikon%20-%20Z6_3%20-%208bit%20compressed%20%283%3A2%29.NEF",
       "sha256": "1c7be7b9081fcbd8bb75b28a8432531fae4dc56acda6b7f41a32625fb2555600",
       "megabytes": 8.74,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z5-II_HE.NEF",
+      "camera": "Nikon Z5 II",
+      "mode": "8bit compressed (3:2)",
+      "covers": "High Efficiency (HE) NEF, DX crop; LibRaw has no colour matrix for the body (CAM-21)",
+      "url": "https://raw.pixls.us/getfile.php/7737/nice/Nikon%20-%20Z5_2%20-%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "196971ea960cfa6f5c0a19cebe515ac118e079c57ceeef850ab3a4995dc7d20f",
+      "megabytes": 5.89,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z5-II_HE-star.NEF",
+      "camera": "Nikon Z5 II",
+      "mode": "8bit compressed (3:2)",
+      "covers": "High Efficiency* (HE*) NEF, DX crop; no colour matrix (CAM-21)",
+      "url": "https://raw.pixls.us/getfile.php/7742/nice/Nikon%20-%20Z5_2%20-%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "276ef4ad5f02e7917eb959c2f4fcfd19bf2fe9f6b9e3725a93877e43e6ec8eed",
+      "megabytes": 8.3,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z50-II_HE.NEF",
+      "camera": "Nikon Z50 II",
+      "mode": "8bit compressed (3:2)",
+      "covers": "High Efficiency (HE) NEF, 5600 photosites wide; no colour matrix (CAM-21)",
+      "url": "https://raw.pixls.us/getfile.php/7764/nice/Nikon%20-%20Z50_2%20-%208bit%20compressed%20%283%3A2%29.NEF",
+      "sha256": "71c12d398e6f5a01e0e32c2211c40cafdb29e85ba1e17c4f65e7a4e958754c54",
+      "megabytes": 11.86,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Nikon_Z50-II_HE-star.NEF",
+      "camera": "Nikon Z50 II",
+      "mode": "8bit compressed (1:1)",
+      "covers": "High Efficiency* (HE*) NEF, 1:1 crop; no colour matrix (CAM-21)",
+      "url": "https://raw.pixls.us/getfile.php/7766/nice/Nikon%20-%20Z50_2%20-%208bit%20compressed%20%281%3A1%29.NEF",
+      "sha256": "605f903e4c07a534c812288bfe3b0ce00716cfb0905c134f7e418e228f455040",
+      "megabytes": 11.38,
       "license": "CC0-1.0",
       "source": "raw.pixls.us"
     }

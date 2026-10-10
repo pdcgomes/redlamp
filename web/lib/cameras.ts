@@ -29,6 +29,8 @@ export type CameraMark = "verified" | "tested" | "problem" | "working" | "unconf
 export type CameraMake = { make: string; models: { name: string; mark: CameraMark }[] };
 export type Cameras = {
   libraw: string;
+  /** Redlamp's LibRaw fork when the build comes from it rather than from LibRaw itself. */
+  fork: string | null;
   verified: VerifiedCamera[];
   bench: BenchCamera[];
   evaluated: EvaluatedCamera[];
@@ -52,6 +54,7 @@ function link(cell: string): Link | null {
 export function parseCameras(markdown: string): Cameras {
   const libraw = markdown.match(/^## Supported by LibRaw (\S+)$/m)?.[1];
   if (!libraw) throw new Error('docs/cameras.md has no "## Supported by LibRaw <version>" list: run scripts/camera-list.py --apply');
+  const fork = markdown.match(/^\*\*LibRaw:\*\* \S+ \(\[Redlamp's fork\]\(([^)]+)\)\)/m)?.[1] ?? null;
   const rows = tableRows(markdown, "Camera");
   const verified = rows
     .filter((row) => row.section === "Verified by the decode tests")
@@ -89,5 +92,5 @@ export function parseCameras(markdown: string): Cameras {
     }
   }
   if (verified.length === 0 || makes.length === 0) throw new Error("docs/cameras.md: a camera list is empty");
-  return { libraw, verified, bench, evaluated, makes };
+  return { libraw, fork, verified, bench, evaluated, makes };
 }
