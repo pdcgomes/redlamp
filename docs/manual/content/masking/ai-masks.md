@@ -3,8 +3,9 @@ deck = "Let Redlamp find the subject, the sky, people and their features, an obj
 sources = [
   "`README.md`: Masking",
   "`packages/RedlampEngineAPI/Sources/Masks.swift`",
-  "`packages/RedlampUI/Sources/Inspector/MasksPanel.swift`, `PeoplePickerView.swift`, `MaskingPanel.swift`",
-  "`packages/RedlampUI/Sources/Model/EditorModel+AIMasks.swift`, `+PeoplePicker.swift`, `+Objects.swift`, `+EdgeBrush.swift`",
+  "`packages/RedlampUI/Sources/Inspector/MasksPanel.swift`, `PeoplePickerView.swift`, `LandscapePickerView.swift`, `MaskingPanel.swift`",
+  "`packages/RedlampUI/Sources/Model/EditorModel+AIMasks.swift`, `+PeoplePicker.swift`, `+LandscapePicker.swift`, `+Objects.swift`, `+EdgeBrush.swift`",
+  "`packages/RedlampEngine/Sources/RedlampEngine+Masks.swift` (landscapeFound)",
   "`packages/RedlampEngine/Sources/RedlampEngine+Models.swift`; `packages/RedlampMasking/Resources/Models/*.json`",
   "`docs/lightroom-comparison.md`: Masking",
 ]
@@ -19,7 +20,7 @@ AI masks are found by models that run on your Mac; photos are never uploaded. Su
 | Sky | The sky, through branches and wires | Built into macOS, and Depth Anything 3 when downloaded | None |
 | People | Each person, or one part of each | Built into macOS; SAM 3 for four parts | None, or 988.1 MB |
 | Objects | The thing you click, box or brush | Segment Anything 2.1 (tiny) | 79.6 MB |
-| Landscape | One kind of landscape, such as Water | SAM 3 | 988.1 MB |
+| Landscape | The kinds of landscape you tick, such as Water and Vegetation | SAM 3 | 988.1 MB |
 | Depth Range | A band of distance from the camera | The photo's depth map, or Depth Anything V2 (small) | None, or 49.8 MB |
 
 ## Make one
@@ -38,7 +39,7 @@ People opens the People picker in the panel, where the list was, so the photo st
 4. With more than one person ticked, tick Separate masks, one for each person, to give each a mask of their own.
 5. Click Create Mask, or Create 3 Masks (or however many) with Separate masks. Cancel, or [[Esc]], puts the list back.
 
-Each component made names its part and its person, as in Face Skin · Person 2, so you can leave someone out later by deleting their component. Opened from Add, Subtract or Intersect, the picker's title says which, as in People · Subtract from Sky, and its button reads Add, Subtract or Intersect. When nobody is found, the picker says No people were found in this photo.
+Each component made names its part and its person, as in Face Skin · Person 2, so you can leave someone out later by deleting their component. Opened from Add, Subtract or Intersect, the picker's title says which, as in People · Subtract from Sky, and its button reads Add, Subtract or Intersect. Subtract takes away every part you tick. Intersect takes one part at a time, because a mask's components apply in turn: with two ticked, the picker says Intersect takes one part at a time, and its button waits. When nobody is found, the picker says No people were found in this photo.
 
 A part marked SAM 3 needs that model. Ticking it asks to download it, as described under [](#masking.ai.downloading-a-model), and Not Now unticks the part again.
 
@@ -58,7 +59,18 @@ To brush over things rather than box them, set Drag to Brush in the same strip b
 
 ## Landscape
 
-Click Landscape in the picker, then one kind: Water, Vegetation, Mountains, Architecture, Natural Ground, Artificial Ground or Snow. Each part of the photo belongs to one kind only, so a Water mask and a Natural Ground mask never overlap. Sky is a mask of its own, not a kind of landscape. Two presets make Landscape masks with their adjustments ready, Brighten Snow and Enhance Vegetation, described under [](#masking.manage.mask-presets).
+Landscape opens the Landscape picker in the panel, where the list was, as People does:
+
+1. Click Landscape in the picker. Redlamp finds the kinds of landscape in the photo and lists them under REGIONS, each with its share of the photo, as in Vegetation 34%. A kind alone in the photo starts ticked.
+2. Tick the kinds to mask. Those Redlamp knows are Water, Vegetation, Mountains, Architecture, Natural Ground, Artificial Ground and Snow; the picker lists the ones it found.
+3. With more than one ticked, tick Separate masks, one for each region, to give each a mask of its own.
+4. Click Create Mask, or Create 2 Masks (or however many) with Separate masks. Cancel, or [[Esc]], puts the list back.
+
+A mask of one kind is named after it, as in Water; a mask of several is named Landscape, and each of its components reads its kind. Each part of the photo belongs to one kind only, so a Water mask and a Natural Ground mask never overlap, and the shares never add up to more than the photo. Sky is a mask of its own, not a kind of landscape. When nothing is found, the picker says No landscape regions were found in this photo.
+
+Opened from Add, Subtract or Intersect, the picker's title says which, as in Landscape · Subtract from Sky. Subtract takes away every kind you tick; Intersect takes one at a time, as it does in the People picker.
+
+Landscape needs SAM 3; the first time, the picker asks to download it, as described under [](#masking.ai.downloading-a-model), and the Landscape picker opens once it's downloaded. Two presets make Landscape masks with their adjustments ready, Brighten Snow and Enhance Vegetation, described under [](#masking.manage.mask-presets).
 
 ## Downloading a model
 

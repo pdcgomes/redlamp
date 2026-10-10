@@ -6,6 +6,7 @@ sources = [
   "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift` (MaskList, MaskOverlayOptions, MaskPresetsMenu, MaskActionsMenu)",
   "`packages/RedlampUI/Sources/Editor/MaskOverlayView.swift`",
   "`packages/RedlampUI/Sources/Model/EditorModel+Masking.swift`, `EditorModel+MaskPresets.swift`, `EditorModel+MaskThumbnails.swift`, `EditorModel+Shortcuts.swift`",
+  "`packages/RedlampUI/Sources/Model/SettingsSync.swift`, `EditorModel+Sync.swift`; `packages/RedlampUI/Sources/Filmstrip/FilmstripView.swift` (presets on several photos)",
   "`packages/RedlampEngineAPI/Sources/Rendering.swift` (MaskOverlayStyle), `MaskPresets.swift`",
 ]
 +++
@@ -100,6 +101,12 @@ Mask Presets, the wand at the top of the panel, lists Redlamp's presets and then
 | Enhance Vegetation | Landscape › Vegetation | Saturation +12, Texture +10, Shadows +10 |
 
 Even Skin Tone leaves the skin's lightness alone, which keeps a face's shading and texture. Its Body Skin needs SAM 3; without it, the preset evens the face alone.
+
+### On several photos
+
+With several photos selected in the filmstrip, the presets sit under Apply to 5 Selected Photos, with your count, and a preset goes to every one of them. The open photo gets it as a step of its history. The others get it in the background, one at a time, each with its AI masks found for that photo, while the filmstrip shows how far it has gone, as in Apply Blue Sky: 2 of 5, with Cancel beside it.
+
+A photo the preset's masks can't be found in, such as a Smooth Skin on a photo with no face, is left as it was, and so is a photo with 16 masks already; the filmstrip says how many were left alone, and why. Undo Sync Settings, in the Photo menu, takes the preset back from the other photos, and Undo from the open one. To apply a preset to the open photo alone, select only that photo.
 
 ### Save your own
 

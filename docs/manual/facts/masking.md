@@ -14,7 +14,9 @@ read here: `packages/RedlampUI/Sources/Inspector/MasksPanelNext.swift`,
 `packages/RedlampAutomation/Sources/Scenarios/MasksPanelScenarios.swift`. Switching the editor to the
 new panel renames `MasksPanelNext` to `MasksPanel` and removes the old panel's parts from
 `MaskingPanel.swift`, so their line numbers move after that commit; check a fact against the code
-before reusing it.
+before reusing it. The facts for UX-25 (a preset on every selected photo, §8) and UX-26 (the
+Landscape picker, §2.11 and §3), and the People picker's Subtract and Intersect (§2.8), were read on
+10 October 2026 from the code that landed them, where `MasksPanelNext` is `MasksPanel`.
 
 This sheet describes the **new Masks panel** (`MasksPanelNext` and its AppKit port `MasksPanelView`),
 designed in `docs/plans/2026-10-07-masks-panel-design.md` and built as tracker rows UX-20 to UX-24.
@@ -66,7 +68,8 @@ says that is **no longer true**. One line each; the section that replaces it is 
 | `ai-masks.md:34` | "People opens a list of parts … In the grid of tiles, People makes an Entire Person mask straight away" | People opens the **People picker** in the panel, where the list was: the people found as crops to tick, the parts as checkboxes, Separate masks, and a create button | §2.8 |
 | `ai-masks.md:39-41` (caution) | "These parts don't offer to download SAM 3: until it's downloaded they report that they need it" | Ticking a part that needs SAM 3 **asks to download it** in the panel; Not Now unticks the part | §2.8, §5 |
 | `ai-masks.md:50` | "choose Brush beside Drag in the panel" | Drag is in the **strip under the header** while Objects is armed, not in the panel's body | §2.3 |
-| `ai-masks.md:54` | "Choose Landscape, then one kind" | The Landscape tile in the picker opens the same menu of seven classes; the regions picker (UX-26) is **not built** | §2.5 |
+| `ai-masks.md:54` | "Choose Landscape, then one kind" | The Landscape tile opens the **Landscape picker** in the list's place: the regions found with their share of the photo, to tick; Separate masks; Create (UX-26) | §2.11 |
+| `managing.md:88` | A preset makes a mask on the photo | With several photos selected, the menu's header reads **Apply to N Selected Photos** and a preset goes to every one of them (UX-25) | §8 |
 | `ai-masks.md:71` | "choose Update AI Masks from the … menu beside Presets" | The … menu is at the right of the header, after Pins | §2.2 |
 | `ai-masks.md:85-91` | "Right-click an AI component for two more ways to work on its edge" | **Refine Edges** and **Refine Edge Brush** are buttons under the component's Feather and Edge, as well as on the row's menu button and the context menu | §2.7, §5 |
 | `ai-masks.md:91` | The Refine Edge Brush's "Size slider, from 1 to 100 and 12 to start, is in the panel" | It is in the **strip under the header**, with a **value field** beside the slider | §2.3, §2.10 |
@@ -85,10 +88,9 @@ Also changed outside the panel but inside Part 3's subject:
 - `docs/lightroom-comparison.md:130` now marks **Point Color inside masks** as Done (TON-29); the old
   sheet listed it as the one masking row not done.
 
-**Not built yet,** so the manual must not describe it: the **Landscape picker** (UX-26, the regions SAM 3
-finds with their share of the photo) and **mask presets applied to every selected photo** (UX-25) are
-both "Not started" (`docs/research/research-tracker.md:331-332`). **Effect presets** for a mask's
-adjustments are UX-27, also not started (`:333`).
+**Built since:** the **Landscape picker** (UX-26, §2.11) and **mask presets applied to every
+selected photo** (UX-25, §8). **Not built yet,** so the manual must not describe it: **effect
+presets** for a mask's adjustments, UX-27.
 
 **One gap to be aware of:** at this commit the editor still builds the **old** panel —
 `packages/RedlampUI/Sources/Inspector/AppKit/InspectorPanelsView.swift:32-33` returns
@@ -480,16 +482,17 @@ Note the AI group's order differs from `MaskKind.creatable`: the picker puts **P
   `packages/RedlampEngineAPI/Sources/Masks.swift:763-770`) **(inferred)**.
 - **The People tile** opens the People picker (§2.8) and closes the popover — it is not a menu
   (`:242-248`).
-- **The Landscape tile is a menu** of the seven classes, as the old grid's was (`:249-258`):
-  Water, Vegetation, Mountains, Architecture, Natural Ground, Artificial Ground, Snow
-  (`packages/RedlampEngineAPI/Sources/Masks.swift:465-482`). The menu indicator is hidden, so the tile
-  looks like the others (`:258`).
-- **Every other tile is a button** (`:259-265`), whose action (`choose(_:)`, `:291-307`) does one of
-  three things:
+- **The Landscape tile** opens the Landscape picker (§2.11) and closes the popover; when SAM 3 isn't
+  on this Mac it first asks for it **inside the picker**, which stays open, and the Landscape picker
+  opens once the download is done — `chooseLandscape()`,
+  `packages/RedlampUI/Sources/Inspector/MasksPanel.swift:302-314`;
+  `EditorModel+AIMasks.swift:102-103`. (Until UX-26 it was a menu of the seven classes.)
+- **Every other tile is a button**, whose action (`choose(_:)`, `MasksPanel.swift:290-301`) does one of
+  two things:
   1. an AI kind whose model isn't on this Mac: records the question and **leaves the picker open**, so
-     the download notice appears inside it (`:294-298`);
-  2. People or Landscape with their model ready: closes the picker and computes the mask (`:300-301`);
-  3. anything else: closes the picker and **arms the tool** on the canvas (`:302-303`).
+     the download notice appears inside it;
+  2. anything else: closes the picker and **arms the tool** on the canvas, or, for Subject, Sky,
+     Background and Depth Range, computes the mask.
 - Automation identifier per tile: `masks.picker.<rawValue>`, e.g. `masks.picker.radial`,
   `masks.picker.luminanceRange`, `masks.picker.people` (`:270`).
 
@@ -760,7 +763,12 @@ Identifier `masks.people.separate`.
 **The buttons** (`:33-45`), on one row, at the small control size:
 - **Cancel** at the left — the Escape key presses it; identifier `masks.people.cancel`.
 - the create button at the right — the Return key presses it; identifier `masks.people.create`.
-  It is disabled when nobody is ticked, no part is ticked, or an AI mask is being computed (`:42`).
+  It is disabled when nobody is ticked, no part is ticked, more than one part is ticked in a picker
+  opened from Intersect, or an AI mask is being computed (`PeoplePicker.canCreate`,
+  `EditorModel+PeoplePicker.swift:17-20`; `PeoplePickerView.swift:47`). Opened from Intersect with two
+  parts or more ticked, the picker says **"Intersect takes one part at a time."**
+  (`PeoplePickerView.swift:32-36`): a mask's components combine in order, so it can't be intersected
+  with several parts at once **(inferred from `combineMaskCoverage`)**.
 
 **The create button's title** (`createTitle`, `:163-168`):
 
@@ -775,15 +783,18 @@ Identifier `masks.people.separate`.
 **What Create makes** (`createPeopleMasks`,
 `packages/RedlampUI/Sources/Model/EditorModel+PeoplePicker.swift:133-219`):
 - one component per person per part, each named for its person (`:185-191`);
-- added to the target with the picker's operation, when opened from Add, Subtract or Intersect
-  (`:193-199`), history `"\(operation.name) \(title)"`;
+- added to the target with the picker's operation, when opened from Add, Subtract or Intersect, **every
+  component** taking the operation, so Subtract takes away each part ticked (`:199-208`); history
+  `"\(operation.name) \(title)"`. (Before 10 October only the first component took it, and the rest
+  were added back.)
 - one mask per person with Separate masks on (`:200-207`), history **"New \<title> Masks"**;
 - otherwise one mask holding them all (`:208-217`), history **"New \<title>"**. The mask's name is the
   part's name for a single part, otherwise **People**; when one person of several is ticked, it is
   named for them ("Face Skin · Person 2").
 - Parts the model found none of are reported as **"Not found: Teeth, Lips."** (`:181-183`); when none
   of the parts was found at all, the usual `"No <part> were found in this photo."` (`:177-180`).
-- The picker closes when the masks are made (`:218`).
+- The picker closes when the masks are made (`:226`), with Esc (`EditorModel+Shortcuts.swift:295-296`),
+  and when another photo opens (`EditorModel.swift:954-956`).
 
 ### 2.9 Pins on the canvas
 
@@ -856,6 +867,52 @@ Four of the Masks panel's values are **value fields** rather than read-only read
 
   A `FieldSpec` formats as `String(format: "%.<digits>f", value) + unit`, so Opacity reads `55%` and a
   stop reads `40` (`packages/RedlampDesign/Sources/Controls/ValueFieldSpec.swift:44-46`).
+
+### 2.11 The Landscape picker (`LandscapePickerView`, UX-26)
+
+`packages/RedlampUI/Sources/Inspector/LandscapePickerView.swift`; the model's side in
+`packages/RedlampUI/Sources/Model/EditorModel+LandscapePicker.swift`. Opened by the Landscape tile from
+New Mask or from Add, Subtract or Intersect (§2.5), it takes the list's place, as the People picker
+does — `MasksPanel.swift:27-28`; `AppKit/MasksPanelView.swift:124-126`. Opening it closes the People
+picker and the other way round (`EditorModel+LandscapePicker.swift:26`, `EditorModel+PeoplePicker.swift:38`).
+
+- **Title** (`:12-15`): **New Landscape Mask**, or from a mask's buttons **Landscape · Subtract from
+  Sky** (and Add to, Intersect with).
+- **While the regions are found:** a spinner and **"Finding regions…"** (`:64-70`).
+- **The regions**, under a **REGIONS** heading (`:53-62`): one checkbox per Landscape class SAM 3
+  finds, in Lightroom's order (Water, Vegetation, Mountains, Architecture, Natural Ground, Artificial
+  Ground, Snow), each with its share of the photo at the right, as in **34%**, or **<1%** for a sliver
+  (`:74-96`). Tooltip: **"Water covers 21% of the photo"** (`:89`). Identifier
+  `masks.landscape.region.<rawValue>`, e.g. `masks.landscape.region.water` (`:90`).
+- A region is listed when it covers more than 0.1% of the photo, the share a Landscape mask needs too —
+  `RedlampEngine.landscapeMinimumShare`, `packages/RedlampEngine/Sources/RedlampEngine+Masks.swift:580-596`,
+  `:604`. The share is measured on SAM 3's own class map, the photo squashed to a square, which keeps
+  each class's share **(inferred)**. Classes never overlap: each pixel belongs to one
+  (`SAM3Concepts.classes`, `packages/RedlampMasking/Sources/SAM3Concepts.swift:76-83`).
+- **A region alone in the photo starts ticked**; with several, none is
+  (`EditorModel+LandscapePicker.swift:40`).
+- **None found:** **"No landscape regions were found in this photo."** (`:50`).
+- **Separate masks, one for each region** — a checkbox shown for a new mask with two regions or more
+  ticked (`:17-25`); identifier `masks.landscape.separate`.
+- **From Intersect** with two regions or more ticked: **"Intersect takes one region at a time."**, and
+  the button is disabled (`:26-30`; `LandscapePicker.canCreate`, `EditorModel+LandscapePicker.swift:14-17`).
+- **Cancel** (`:32-34`, Esc too, `EditorModel+Shortcuts.swift:297-298`) and the create button
+  (`:36-41`, Return), titled **Create Mask**, **Create 2 Masks** with Separate masks, or **Add**,
+  **Subtract**, **Intersect** from a mask's buttons (`:98-103`). Disabled with nothing ticked or while
+  an AI mask is being computed (`:40`).
+- **What Create makes** (`createLandscapeMasks`, `EditorModel+LandscapePicker.swift:61-113`): one
+  component per region ticked; one mask named for the region when there's one, **Landscape** when
+  there are several, history **New Water** or **New Landscape** (`:91`, `:107-111`); with Separate
+  masks, one mask per region named for it, in one step, **New Landscape Masks** (`:99-105`); from a
+  mask's buttons, the components added to it, each with the operation, so Subtract takes away every
+  region ticked, history **Add Water**, **Subtract Landscape** (`:94-98`). A region that couldn't be
+  made is named, **"Not found: Vegetation."**, and the rest are made (`:84-89`).
+- **Each component's row reads its class**, **Water** (`ComponentRow.title`,
+  `packages/RedlampUI/Sources/Inspector/MaskingPanel.swift:926-931`).
+- It closes when the masks are made, and when another photo opens (`EditorModel.swift:954-956`).
+- Landscape needs SAM 3 (988.1 MB), asked for in the picker the first time (§2.5, §5). SAM 3 is offered
+  to everyone since DEC-27 (`packages/RedlampMasking/Resources/Models/sam3.json`: `cleared`, not
+  `evaluationOnly`); the design's "with evaluation models" predates that.
 
 ---
 
@@ -1078,22 +1135,19 @@ Full detail in §4. In summary:
 
 ### Landscape, its categories, and the adaptive presets
 
-- **The Landscape tile opens a menu of classes** — there is no plain "Landscape" command —
-  `packages/RedlampUI/Sources/Inspector/MasksPanelNext.swift:249-258`.
-- Classes in menu order, with their exact labels — `LandscapeClass.allCases`,
+- **The Landscape tile opens the Landscape picker** (§2.11): the regions found, with their share of
+  the photo, to tick.
+- The classes, with their exact labels — `LandscapeClass.allCases`,
   `packages/RedlampEngineAPI/Sources/Masks.swift:465-482`:
   1. **Water** 2. **Vegetation** 3. **Mountains** 4. **Architecture** 5. **Natural Ground**
   6. **Artificial Ground** 7. **Snow** (marked in the code as "Lightroom Classic 15's", `:468`)
 - Sky is a mask kind of its own, not a Landscape class (`:464`). Each pixel belongs to exactly one
   class (`:464`).
-- The mask is named after the class, e.g. "Mountains"; history **New Mountains** —
-  `EditorModel+AIMasks.swift:67-78`.
+- A mask of one region is named after the class, e.g. "Mountains"; of several, **Landscape** (§2.11).
 - Failure message: `"No mountains were found in this photo."` — plural only for Mountains (`:490-493`).
 - Needs SAM 3 (988.1 MB), and the picker asks for it in place — see §5.
-- **The adaptive Landscape presets** are mask presets, in the Presets menu, not in the Landscape
-  submenu: **Brighten Snow** and **Enhance Vegetation** — see §8.
-- **The Landscape picker** of the design (the regions SAM 3 finds, with their share of the photo) is
-  **not built**: UX-26 is "Not started" (`docs/research/research-tracker.md:332`).
+- **The adaptive Landscape presets** are mask presets, in the Presets menu: **Brighten Snow** and
+  **Enhance Vegetation** — see §8.
 - Controls: Feather and Edge (§5).
 
 ---
@@ -1596,6 +1650,32 @@ SAM 3 isn't downloaded **(inferred from the field's name and its single use)**.
 - Brighten Snow and Enhance Vegetation both make a Landscape mask; which class each uses is carried
   beside the components in `landscapeClasses` (`MaskPresets.swift:23`, `:43-50`), defaulting to
   Vegetation for presets saved before that field existed (`:50`).
+
+### On several photos (UX-25)
+
+- With **several photos selected** in the filmstrip, the presets sit under a header,
+  **"Apply to 3 Selected Photos"** (the count is the selection's), and the menu's tooltip reads
+  **"Mask Presets, applied to the 3 selected photos"** — `MaskingPanel.swift:236-264`.
+- A preset then goes to **every selected photo** — `applyMaskPreset`,
+  `packages/RedlampUI/Sources/Model/EditorModel+MaskPresets.swift:44-57`:
+  - the open photo gets it as a step of its own history, **Apply \<preset name\>** (`:59-81`), which
+    Auto Sync doesn't repeat on the others, so they get it once (`:55-56`, `autoSyncs: false`);
+  - the other photos get it in the background, one at a time, through Settings Sync, each with its AI
+    masks found for that photo — `SettingsSync.Change.applyMaskPreset`,
+    `packages/RedlampUI/Sources/Model/SettingsSync.swift:39-40`, `:600-614`, with the same step in each
+    photo's history; a photo open in the editor when the batch reaches it gets it there
+    (`EditorModel+Sync.swift:110-112`).
+- While it runs, the filmstrip's bar reads **"Apply Blue Sky: 2 of 5"** with **Cancel** —
+  `packages/RedlampUI/Sources/Filmstrip/FilmstripView.swift:16-21`.
+- Photos it can't reach are **left alone** and named in the filmstrip's bar after the batch
+  (`FilmstripView.swift:33-38`; `SettingsSync.swift:704-714`):
+  - **"2 photos were left alone: Smooth Skin's masks couldn't be made for them."** — an AI mask the
+    preset needs wasn't found there (an optional part, such as Even Skin Tone's Body Skin, is left out
+    instead, as on the open photo; `EditorModel+MaskPresets.swift:99-101`);
+  - **"1 photo was left alone: it has 16 masks already."**
+- **Undo Sync Settings** (Photo menu) puts the other photos back; the open photo's step is undone with
+  its own Undo (`SettingsSync.undo`, `SettingsSync.swift:354-368`; `ShortcutAction.swift:215`).
+- With one photo selected, a preset goes to that photo alone, as before.
 
 ### Saving your own
 
