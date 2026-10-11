@@ -63,6 +63,8 @@ struct QueryParserTests {
             ("date:2024-06..2024-08", Self.filter(.date, .equal, .dateRange(.month(2024, 6), .month(2024, 8)))),
             ("date:2019..", Self.filter(.date, .equal, .dateRange(.year(2019), nil))),
             ("date:..today", Self.filter(.date, .equal, .dateRange(nil, .today))),
+            ("focal35>=70", Self.filter(.focal35, .greaterOrEqual, .number(70))),
+            ("WIDEST:1.2..2", Self.filter(.widestAperture, .equal, .numberRange(1.2, 2))),
             ("folder:Trips", Self.filter(.folder, .equal, .text("Trips"))),
             ("in:\"Trips/2024\"", Self.filter(.folder, .equal, .text("Trips/2024"))),
             ("name:DSC_12", Self.filter(.name, .equal, .text("DSC_12"))),
@@ -162,8 +164,8 @@ struct QueryParserTests {
             (
                 "is:sharp",
                 3 ..< 8,
-                "is takes a trait: long-exposure, panorama, high-resolution, low-light, no-location, unpicked-moment or "
-                    + "damaged",
+                "is takes a trait: long-exposure, panorama, high-resolution, low-light, no-location, wide-open, "
+                    + "telephoto, ultra-wide, unpicked-moment or damaged",
             ),
             ("aspect:3:0", 7 ..< 10, "aspect is the long side over the short"),
             ("orientation:sideways", 12 ..< 20, "orientation is landscape, portrait, square or none"),

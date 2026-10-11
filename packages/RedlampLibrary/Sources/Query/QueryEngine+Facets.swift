@@ -5,6 +5,8 @@ import RedlampDocument
 public enum Facet: String, Sendable, Hashable, CaseIterable {
     case camera, lens, rating, flag, label, year, month, folder, kind
     case day, iso, focal, aperture
+    /// The focal length in 35 mm terms, and the lens's widest aperture.
+    case focal35, widestAperture
     /// IPTC Core's creator, and its location's city and country.
     case creator, city, country
     /// A label's name outside the five colours.
@@ -130,6 +132,15 @@ extension ColumnStore {
         case .aperture:
             return try FacetCounts(
                 facet: facet, values: numbered(counts(matches, aperture, size: 1 << 16), .aperture, scale: 100),
+            )
+        case .focal35:
+            return try FacetCounts(
+                facet: facet, values: numbered(counts(matches, focal35s, size: 1 << 16), .focal35, scale: 10),
+            )
+        case .widestAperture:
+            return try FacetCounts(
+                facet: facet,
+                values: numbered(counts(matches, widestApertures, size: 1 << 16), .widestAperture, scale: 100),
             )
         case .creator:
             let names = creatorNames

@@ -39,12 +39,15 @@ public struct ColumnStore: Sendable {
         /// Pixels.
         public var width: Int?
         public var height: Int?
+        /// The widest f-number of its lens at its focal length, and its focal length in 35 mm terms.
+        public var widestAperture: Double?
+        public var focal35: Double?
 
         public init(
             _ hot: HotColumns, shutter: Double? = nil, details: Details = [], sidecarModified: Double? = nil,
             size: Int64 = 0, modified: Double? = nil, state: PhotoRecord.State = [], creator: String? = nil,
             copyright: String? = nil, location: PhotoLocation? = nil, customLabel: String? = nil, width: Int? = nil,
-            height: Int? = nil,
+            height: Int? = nil, widestAperture: Double? = nil, focal35: Double? = nil,
         ) {
             self.hot = hot
             self.shutter = shutter
@@ -59,6 +62,8 @@ public struct ColumnStore: Sendable {
             self.customLabel = customLabel
             self.width = width
             self.height = height
+            self.widestAperture = widestAperture
+            self.focal35 = focal35
         }
     }
 
@@ -111,6 +116,10 @@ public struct ColumnStore: Sendable {
     private(set) var aspects = StoreColumn<UInt16>()
     /// `ColumnEncoding.orientation`.
     private(set) var orientations = StoreColumn<UInt8>()
+    /// The widest aperture as `aperture` keeps an aperture, and the 35 mm focal length as `focal` keeps a focal
+    /// length.
+    private(set) var widestApertures = StoreColumn<UInt16>()
+    private(set) var focal35s = StoreColumn<UInt16>()
     /// The rows holding a photo.
     private(set) var live = RowBits(rows: 0)
 
@@ -252,6 +261,8 @@ public struct ColumnStore: Sendable {
             store.megapixels.append(contentsOf: columns.megapixels)
             store.aspects.append(contentsOf: columns.aspects)
             store.orientations.append(contentsOf: columns.orientations)
+            store.widestApertures.append(contentsOf: columns.widestApertures)
+            store.focal35s.append(contentsOf: columns.focal35s)
             keys.append(contentsOf: part.keys)
             largest = max(largest, columns.ids.max() ?? -1)
         }
@@ -407,7 +418,7 @@ public struct ColumnStore: Sendable {
             + bytes(iso) + bytes(aperture) + bytes(focal) + bytes(shutter) + bytes(kinds) + bytes(nameRanks)
             + bytes(editedAt) + bytes(sizes) + bytes(modifiedAt) + bytes(states) + bytes(live.words)
             + bytes(creators) + bytes(copyrights) + bytes(customLabels) + bytes(places) + bytes(megapixels)
-            + bytes(aspects) + bytes(orientations)
+            + bytes(aspects) + bytes(orientations) + bytes(widestApertures) + bytes(focal35s)
         let orders = bytes(byCaptured) + bytes(byName) + bytes(byRating) + bytes(byEdited)
             + (byModified.map { bytes($0) } ?? 0) + (bySize.map { bytes($0) } ?? 0)
         let codes = bytes(cameraIDs) + bytes(lensIDs) + (cameraCodes.capacity + lensCodes.capacity) * 16
@@ -449,6 +460,8 @@ extension ColumnStore {
         megapixels.reserveCapacity(count)
         aspects.reserveCapacity(count)
         orientations.reserveCapacity(count)
+        widestApertures.reserveCapacity(count)
+        focal35s.reserveCapacity(count)
     }
 
     /// Adds a row for a photo the store doesn't hold.
@@ -482,6 +495,7 @@ extension ColumnStore {
         let place: UInt32
         let megapixels, aspect: UInt16
         let orientation: UInt8
+        let widestAperture, focal35: UInt16
     }
 
     /// `row`'s values, giving codes to the cameras, lenses and names it's the first to have.
@@ -509,6 +523,8 @@ extension ColumnStore {
             megapixels: ColumnEncoding.megapixels(width: row.width, height: row.height),
             aspect: ColumnEncoding.aspect(width: row.width, height: row.height),
             orientation: ColumnEncoding.orientation(width: row.width, height: row.height),
+            widestAperture: ColumnEncoding.aperture(row.widestAperture),
+            focal35: ColumnEncoding.focal(row.focal35),
         )
     }
 
@@ -538,6 +554,8 @@ extension ColumnStore {
         megapixels.append(values.megapixels)
         aspects.append(values.aspect)
         orientations.append(values.orientation)
+        widestApertures.append(values.widestAperture)
+        focal35s.append(values.focal35)
     }
 
     /// Writes `row`'s columns at `index`, which keeps its place in every order: only the values that
@@ -565,6 +583,8 @@ extension ColumnStore {
         megapixels.write(values.megapixels, at: index)
         aspects.write(values.aspect, at: index)
         orientations.write(values.orientation, at: index)
+        widestApertures.write(values.widestAperture, at: index)
+        focal35s.write(values.focal35, at: index)
     }
 
     /// Takes a row out: its photo is gone from the store, and from every order once `removeFromOrders`
@@ -716,6 +736,8 @@ extension ColumnStore {
         megapixels = kept(megapixels)
         aspects = kept(aspects)
         orientations = kept(orientations)
+        widestApertures = kept(widestApertures)
+        focal35s = kept(focal35s)
         self.live = RowBits(rows: ids.count, filled: true)
         let ids = ids
         rowOfID.withUnsafeMutableBufferPointer { rowOfID in
@@ -827,6 +849,8 @@ extension ColumnStore {
         try put(.megapixels, megapixels)
         try put(.aspects, aspects)
         try put(.orientations, orientations)
+        try put(.widestApertures, widestApertures)
+        try put(.focal35s, focal35s)
         try put(.rowOfID, rowOfID)
         try put(.byCaptured, byCaptured)
         try put(.byName, byName)
@@ -848,7 +872,7 @@ extension ColumnStore {
              .nameRanks:
             adoptField(section, pages: pages, count: count)
         case .editedAt, .sizes, .modifiedAt, .states, .creators, .copyrights, .customLabels, .places, .megapixels,
-             .aspects, .orientations:
+             .aspects, .orientations, .widestApertures, .focal35s:
             adoptDetail(section, pages: pages, count: count)
         case .rowOfID, .byCaptured, .byName, .byRating, .byEdited, .byModified, .bySize, .live:
             adoptOrder(section, pages: pages, count: count)
@@ -889,6 +913,8 @@ extension ColumnStore {
         case .megapixels: megapixels = StoreColumn(pages: pages, count: count)
         case .aspects: aspects = StoreColumn(pages: pages, count: count)
         case .orientations: orientations = StoreColumn(pages: pages, count: count)
+        case .widestApertures: widestApertures = StoreColumn(pages: pages, count: count)
+        case .focal35s: focal35s = StoreColumn(pages: pages, count: count)
         default: break
         }
     }
@@ -917,7 +943,7 @@ extension ColumnStore {
             iso.ownPages, aperture.ownPages, focal.ownPages, shutter.ownPages, kinds.ownPages, nameRanks.ownPages,
             editedAt.ownPages, sizes.ownPages, modifiedAt.ownPages, states.ownPages, creators.ownPages,
             copyrights.ownPages, customLabels.ownPages, places.ownPages, megapixels.ownPages, aspects.ownPages,
-            orientations.ownPages, rowOfID.ownPages,
+            orientations.ownPages, widestApertures.ownPages, focal35s.ownPages, rowOfID.ownPages,
         ]
         let optional: [Int?] = [byModified?.ownPages, bySize?.ownPages]
         let orders: [Int] = [byCaptured.ownPages, byName.ownPages, byRating.ownPages, byEdited.ownPages]
@@ -931,7 +957,7 @@ extension ColumnStore {
             ids.count, folders.count, captured.count, cameras.count, lenses.count, packed.count, iso.count,
             aperture.count, focal.count, shutter.count, kinds.count, nameRanks.count, editedAt.count, sizes.count,
             modifiedAt.count, states.count, creators.count, copyrights.count, customLabels.count, places.count,
-            megapixels.count, aspects.count, orientations.count,
+            megapixels.count, aspects.count, orientations.count, widestApertures.count, focal35s.count,
         ]
         let optional: [Int?] = [byModified?.count, bySize?.count]
         let orders: [Int] = [byCaptured.count, byName.count, byRating.count, byEdited.count] + optional

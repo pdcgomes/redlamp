@@ -261,6 +261,8 @@ public extension SmartRules {
         case .iso: "ISO"
         case .aperture: "Aperture"
         case .focal: "Focal Length"
+        case .focal35: "35 mm Focal Length"
+        case .widestAperture: "Widest Aperture"
         case .shutter: "Shutter Speed"
         case .date: "Capture Date"
         case .folder: "Folder"

@@ -20,7 +20,7 @@ enum ColumnSnapshot {
     enum Section: UInt32, CaseIterable, Sendable {
         case ids = 1, folders, captured, cameras, lenses, packed, iso, aperture, focal, shutter, kinds
         case nameRanks, editedAt, sizes, modifiedAt, states, creators, copyrights, customLabels, places
-        case megapixels, aspects, orientations, rowOfID
+        case megapixels, aspects, orientations, widestApertures, focal35s, rowOfID
         case byCaptured, byName, byRating, byEdited, byModified, bySize
         case live, names
 
@@ -30,7 +30,7 @@ enum ColumnSnapshot {
             case .folders, .shutter, .nameRanks, .editedAt, .sizes, .modifiedAt, .places, .rowOfID, .byCaptured,
                  .byName, .byRating, .byEdited, .byModified, .bySize: 4
             case .cameras, .lenses, .packed, .iso, .aperture, .focal, .creators, .copyrights, .megapixels,
-                 .aspects: 2
+                 .aspects, .widestApertures, .focal35s: 2
             case .kinds, .states, .customLabels, .orientations, .names: 1
             }
         }
@@ -60,7 +60,7 @@ enum ColumnSnapshot {
     static let magic: UInt64 = 0x534E_4D55_4C4F_4352 // "RCOLUMNS", little-endian
     /// The file's layout: bumped whenever a section is added, removed or changes its values, the name
     /// order's included (`FinderOrder`).
-    static let format: UInt32 = 3
+    static let format: UInt32 = 4
     static let headerBytes = 72
     static let entryBytes = 40
 

@@ -306,7 +306,7 @@ enum LibraryQueryValues {
 
     static func value(_ text: String, for field: LibraryQuery.Field) throws(Invalid) -> LibraryQuery.Value {
         switch field {
-        case .rating, .iso, .aperture, .focal, .shutter, .megapixels, .aspect:
+        case .rating, .iso, .aperture, .focal, .focal35, .widestAperture, .shutter, .megapixels, .aspect:
             try numeric(text, for: field)
         case .date:
             try dates(text)
@@ -334,6 +334,14 @@ enum LibraryQueryValues {
         case .focal:
             return try numbers(text, invalid: "focal is millimetres, or a range such as 24..70") {
                 number($0, unit: "mm")
+            }
+        case .focal35:
+            return try numbers(text, invalid: "focal35 is millimetres in 35 mm terms, or a range such as 24..70") {
+                number($0, unit: "mm")
+            }
+        case .widestAperture:
+            return try numbers(text, invalid: "widest is an f-number, or a range such as 1.2..2") {
+                number($0, unit: nil)
             }
         case .shutter:
             return try numbers(text, invalid: "shutter is seconds, such as 1/250 or 2, or a range") {

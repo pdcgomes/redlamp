@@ -63,6 +63,10 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case aperture = "f"
         /// Millimetres.
         case focal
+        /// The focal length in 35 mm terms, in millimetres: the same angle of view whatever the sensor's size.
+        case focal35
+        /// The widest f-number the lens had at the photo's focal length (`widest`).
+        case widestAperture = "widest"
         /// Seconds.
         case shutter
         /// When the photo was taken (`taken`).
@@ -122,7 +126,8 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         /// Whether it can be compared with `<`, `<=`, `>` and `>=`, and take ranges.
         public var isOrdered: Bool {
             switch self {
-            case .rating, .iso, .aperture, .focal, .shutter, .date, .megapixels, .aspect: true
+            case .rating, .iso, .aperture, .focal, .focal35, .widestAperture, .shutter, .date, .megapixels,
+                 .aspect: true
             default: false
             }
         }
@@ -165,9 +170,10 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case orientation(PhotoOrientation?)
     }
 
-    /// A trait (LIB-06): a name for a query over the index's fields, written `is:` and its name, and
-    /// offered as the filter bar completes what's typed; or, for `unpicked-moment`, for photos found
-    /// from their moments (LIB-41), and for `damaged`, for those Library Health finds (LIB-40).
+    /// A trait (LIB-06): a name for a query over the index's fields (for `wide-open`, a comparison of
+    /// two of them), written `is:` and its name, and offered as the filter bar completes what's typed;
+    /// or, for `unpicked-moment`, for photos found from their moments (LIB-41), and for `damaged`, for
+    /// those Library Health finds (LIB-40).
     public enum Trait: String, Sendable, Hashable, CaseIterable {
         /// A second or more: `shutter>=1`.
         case longExposure = "long-exposure"
@@ -179,6 +185,13 @@ public indirect enum LibraryQuery: Sendable, Hashable {
         case lowLight = "low-light"
         /// No GPS position: `-has:gps`.
         case noLocation = "no-location"
+        /// At the lens's widest aperture for its focal length (`widest`), within a sixth of a stop
+        /// (`ColumnEncoding.isWideOpen`).
+        case wideOpen = "wide-open"
+        /// 70 mm or longer in 35 mm terms, the short telephoto's start: `focal35>=70`.
+        case telephoto
+        /// Shorter than 24 mm in 35 mm terms, the frame's short side: `focal35<24`.
+        case ultraWide = "ultra-wide"
         /// In a moment without a pick (`MomentCoverage`), among the photos the query filters as the
         /// Tighter–Looser setting it's run with finds their moments: a source's photos for its filter,
         /// the library's for a search, and the library's at the default setting for a smart
@@ -197,6 +210,9 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .highResolution: "High Resolution"
             case .lowLight: "Low Light"
             case .noLocation: "No Location"
+            case .wideOpen: "Wide Open"
+            case .telephoto: "Telephoto"
+            case .ultraWide: "Ultra Wide"
             case .unpickedMoment: "Moments without a Pick"
             case .damaged: "Damaged Files"
             }
@@ -204,11 +220,17 @@ public indirect enum LibraryQuery: Sendable, Hashable {
 
         /// Other words completion finds it by, besides its name and title.
         var synonyms: [String] {
-            self == .damaged ? ["unreadable"] : []
+            switch self {
+            case .damaged: ["unreadable"]
+            case .wideOpen: ["wideopen"]
+            case .ultraWide: ["ultrawide"]
+            default: []
+            }
         }
 
-        /// The query it stands for; nil for `unpicked-moment`, which depends on the other photos of
-        /// its moment, and for `damaged`, which Library Health's check finds.
+        /// The query it stands for; nil for `wide-open`, which compares two of a photo's fields, for
+        /// `unpicked-moment`, which depends on the other photos of its moment, and for `damaged`, which
+        /// Library Health's check finds.
         public var query: LibraryQuery? {
             switch self {
             case .longExposure: .filter(Filter(.shutter, .greaterOrEqual, [.number(1)]))
@@ -216,7 +238,9 @@ public indirect enum LibraryQuery: Sendable, Hashable {
             case .highResolution: .filter(Filter(.megapixels, .greaterOrEqual, [.number(40)]))
             case .lowLight: .filter(Filter(.iso, .greaterOrEqual, [.number(3200)]))
             case .noLocation: .not(.filter(Filter(.has, .equal, [.detail(.gps)])))
-            case .unpickedMoment, .damaged: nil
+            case .telephoto: .filter(Filter(.focal35, .greaterOrEqual, [.number(70)]))
+            case .ultraWide: .filter(Filter(.focal35, .less, [.number(24)]))
+            case .wideOpen, .unpickedMoment, .damaged: nil
             }
         }
     }

@@ -38,7 +38,7 @@ struct QueryDifferentialTests {
 
         private mutating func value(for field: LibraryQuery.Field, ranges: Bool) -> LibraryQuery.Value {
             switch field {
-            case .rating, .iso, .aperture, .focal, .shutter, .megapixels, .aspect:
+            case .rating, .iso, .aperture, .focal, .focal35, .widestAperture, .shutter, .megapixels, .aspect:
                 number(Self.numbers[field] ?? [], ranges: ranges)
             case .date: date(ranges: ranges)
             case .flag: .flag(random.pick([.pick, .reject, nil]))
@@ -60,7 +60,7 @@ struct QueryDifferentialTests {
             case .sublocation, .city, .state, .country, .countryCode:
                 .text(part(of: random.pick(Self.places.flatMap(\.self).filter { !$0.isEmpty } + ["Nowhere"])))
             case .orientation: .orientation(random.pick([nil] + PhotoOrientation.allCases))
-            case .trait: .trait(random.pick(LibraryQuery.Trait.allCases.filter { $0.query != nil }))
+            case .trait: .trait(random.pick(LibraryQuery.Trait.allCases.filter { $0.query != nil || $0 == .wideOpen }))
             }
         }
 
@@ -70,6 +70,8 @@ struct QueryDifferentialTests {
             .iso: [64, 100, 200, 250, 800, 1600, 3200, 6400, 12800],
             .aperture: [1.2, 1.4, 1.6, 1.7, 1.78, 2, 2.8, 4, 5.6, 8, 16],
             .focal: [5.1, 6.765, 18.3, 23, 24, 35, 50, 70, 85, 200, 400],
+            .focal35: [13, 23.9, 24, 26, 35, 52.5, 69.9, 70, 85, 300, 600],
+            .widestAperture: [0.95, 1.2, 1.4, 1.7, 1.78, 1.8, 2, 2.8, 4, 5.6],
             .shutter: [1.0 / 8000, 1.0 / 1000, 1.0 / 250, 1.0 / 30, 0.25, 1, 2, 30],
             .megapixels: [0.1, 1, 12.2, 24, 40, 44.8, 48, 61],
             .aspect: [1, 4.0 / 3, 1.5, 16.0 / 9, 2, 3],
@@ -93,6 +95,19 @@ struct QueryDifferentialTests {
                 UPDATE photos SET creator = ?, copyright = ?, sublocation = ?, city = ?, province = ?, country = ?,
                   country_code = ?, custom_label = CASE WHEN label = 0 THEN ? END WHERE id = ?
                 """)
+                // Widest apertures a sixth of a stop either side of the photo's own, and 35 mm focal lengths
+                // either side of the traits' 24 and 70 mm.
+                let lens = try writer.database.prepare("""
+                UPDATE photos SET widest_aperture = aperture * ?, focal35 = coalesce(focal35, ?) WHERE id = ?
+                """)
+                let widths: [Double?] = [1, 1 / 1.0594, 1 / 1.0596, 1.2, nil]
+                let focals: [Double?] = [23.9, 24, 69.9, 70, nil, 120]
+                for (number, id) in ids.enumerated() where number % 2 == 1 {
+                    try lens.bind(widths[number / 2 % widths.count], at: 1)
+                    try lens.bind(focals[number / 2 % focals.count], at: 2)
+                    try lens.bind(id, at: 3)
+                    try lens.run()
+                }
                 let resize = try writer.database.prepare("UPDATE photos SET width = ?, height = ? WHERE id = ?")
                 let sizes = [(12000, 4000), (8192, 5464), (4000, 6000), (3024, 4032)]
                 for (number, id) in ids.enumerated() where number % 3 == 0 {

@@ -57,7 +57,7 @@ extension IndexQueries {
             try statement.bind(id, at: 1)
             let found = try statement.first { row in
                 var columns = Self.columnRow(row)
-                if row.bool(at: 34) {
+                if row.bool(at: Self.columnRowCount) {
                     columns.details.insert(.keywords)
                 }
                 return columns
@@ -72,15 +72,20 @@ extension IndexQueries {
         return try statement.first { $0.string(at: 0) } ?? nil
     }
 
-    /// What `columnRow` reads, columns 0 to 33.
+    /// What `columnRow` reads, columns 0 to 35.
     private static var columnRowSQL: String {
         """
         p.id, p.folder, p.captured, p.camera, p.lens, p.rating, p.flag, p.label, p.marked, p.edited, p.iso, \
         p.aperture, p.focal, p.kind, p.name, p.shutter, \(ColumnEncoding.locationSQL), \(ColumnEncoding.titleSQL), \
         \(ColumnEncoding.captionSQL), \(ColumnEncoding.xmpSQL), p.sidecar_modified, p.size, p.modified, p.state, \
         p.creator, p.copyright, p.sublocation, p.city, p.province, p.country, p.country_code, p.custom_label, \
-        p.width, p.height
+        p.width, p.height, p.widest_aperture, p.focal35
         """
+    }
+
+    /// The columns `columnRowSQL` selects.
+    private static var columnRowCount: Int32 {
+        36
     }
 
     /// The photo's row as `columnRowSQL` selects it, without keywords.
@@ -110,6 +115,8 @@ extension IndexQueries {
         columns.customLabel = row.string(at: 31)
         columns.width = row.optionalInt(at: 32)
         columns.height = row.optionalInt(at: 33)
+        columns.widestAperture = row.optionalDouble(at: 34)
+        columns.focal35 = row.optionalDouble(at: 35)
         return columns
     }
 }

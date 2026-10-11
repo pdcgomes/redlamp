@@ -77,6 +77,27 @@ enum ColumnEncoding {
 
     static let focalSQL = scaledSQL("p.focal", by: "10", limit: "65535")
 
+    /// The widest aperture and the 35 mm focal length, as `aperture` and `focal` keep theirs.
+    static let widestApertureSQL = scaledSQL("p.widest_aperture", by: "100", limit: "65535")
+    static let focal35SQL = scaledSQL("p.focal35", by: "10", limit: "65535")
+
+    /// Whether a photo shot at `aperture` was at its lens's widest, `widest`, both as `aperture` keeps them: within a
+    /// sixth of a stop, half the third of a stop most cameras set apertures in, as EXIF rounds f/1.78 to 1.8 and
+    /// f/3.56 to 3.5. Neither when either is unknown.
+    @inline(__always)
+    static func isWideOpen(aperture: UInt16, widest: UInt16) -> Bool {
+        aperture > 0 && widest > 0 && UInt64(aperture) * wideOpenScale <= UInt64(widest) * wideOpenLimit
+    }
+
+    /// A sixth of a stop in f-number, 2^(1/12), as `wideOpenLimit` over `wideOpenScale`.
+    static let wideOpenLimit: UInt64 = 1_059_463
+    static let wideOpenScale: UInt64 = 1_000_000
+
+    static let wideOpenSQL = """
+    (\(apertureSQL) > 0 AND \(widestApertureSQL) > 0 \
+    AND \(apertureSQL) * \(wideOpenScale) <= \(widestApertureSQL) * \(wideOpenLimit))
+    """
+
     /// Microseconds, 1 to 4,294,967,295 (71 minutes).
     static func shutter(_ shutter: Double?) -> UInt32 {
         UInt32(scaled(shutter, by: 1_000_000, limit: Double(UInt32.max)))

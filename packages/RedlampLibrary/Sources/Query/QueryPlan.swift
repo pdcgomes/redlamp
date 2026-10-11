@@ -24,6 +24,10 @@ indirect enum QueryPlan: Sendable, Hashable {
         case iso(Range<Int64>)
         case aperture(Range<Int64>)
         case focal(Range<Int64>)
+        case focal35(Range<Int64>)
+        case widestAperture(Range<Int64>)
+        /// The rows whose aperture is their lens's widest (`ColumnEncoding.isWideOpen`).
+        case wideOpen
         case shutter(Range<Int64>)
         case megapixels(Range<Int64>)
         case aspect(Range<Int64>)
@@ -195,6 +199,8 @@ indirect enum QueryPlan: Sendable, Hashable {
         case .iso: return .leaf(.iso(range))
         case .aperture: return .leaf(.aperture(range))
         case .focal: return .leaf(.focal(range))
+        case .focal35: return .leaf(.focal35(range))
+        case .widestAperture: return .leaf(.widestAperture(range))
         case .shutter: return .leaf(.shutter(range))
         case .megapixels: return .leaf(.megapixels(range))
         case .aspect: return .leaf(.aspect(range))
@@ -206,6 +212,7 @@ indirect enum QueryPlan: Sendable, Hashable {
         trait: LibraryQuery.Trait, store: ColumnStore, vocabulary: QueryVocabulary, today: Int, moments: MomentScope,
     ) -> QueryPlan {
         switch trait {
+        case .wideOpen: return .leaf(.wideOpen)
         case .unpickedMoment: return .leaf(.rows(.unpickedMoments(moments)))
         case .damaged: return .leaf(.rows(.damaged))
         default:
@@ -483,6 +490,12 @@ extension ColumnStore {
             Self.fill(&words, aperture, within: range)
         case let .focal(range):
             Self.fill(&words, focal, within: range)
+        case let .focal35(range):
+            Self.fill(&words, focal35s, within: range)
+        case let .widestAperture(range):
+            Self.fill(&words, widestApertures, within: range)
+        case .wideOpen:
+            Self.fill(&words, aperture, widestApertures) { ColumnEncoding.isWideOpen(aperture: $0, widest: $1) ? 1 : 0 }
         case let .shutter(range):
             Self.fill(&words, shutter, within: range)
         case let .megapixels(range):
@@ -560,6 +573,32 @@ extension ColumnStore {
                         word |= test(column[first + offset]) << UInt64(offset)
                     }
                     words[index] = word
+                }
+            }
+        }
+    }
+
+    /// Each word of `words` from 64 rows of `first` and `second`, a bit for each as `test` gives it.
+    @inline(__always)
+    private static func fill<T, U>(
+        _ words: inout ContiguousArray<UInt64>,
+        _ first: StoreColumn<T>,
+        _ second: StoreColumn<U>,
+        _ test: (T, U) -> UInt64,
+    ) {
+        let rows = min(first.count, second.count)
+        words.withUnsafeMutableBufferPointer { words in
+            first.withUnsafeBufferPointer { first in
+                second.withUnsafeBufferPointer { second in
+                    for index in words.indices {
+                        let start = index << 6
+                        let count = max(0, min(64, rows - start))
+                        var word: UInt64 = 0
+                        for offset in 0 ..< count {
+                            word |= test(first[start + offset], second[start + offset]) << UInt64(offset)
+                        }
+                        words[index] = word
+                    }
                 }
             }
         }

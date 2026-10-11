@@ -117,6 +117,8 @@ struct QuerySQL: Sendable, Hashable {
                 return "(\(ColumnEncoding.kindSQL) = \(kind.rawValue))"
             case let (.orientation, .orientation(orientation)):
                 return "(\(ColumnEncoding.orientationSQL) = \(orientation?.code ?? 0))"
+            case (.trait, .trait(.wideOpen)):
+                return ColumnEncoding.wideOpenSQL
             case let (.trait, .trait(trait)):
                 // `is:unpicked-moment` and `is:damaged` need the column store: the engine waits for it rather
                 // than ask SQL.
@@ -137,6 +139,8 @@ struct QuerySQL: Sendable, Hashable {
             case .iso: ColumnEncoding.isoSQL
             case .aperture: ColumnEncoding.apertureSQL
             case .focal: ColumnEncoding.focalSQL
+            case .focal35: ColumnEncoding.focal35SQL
+            case .widestAperture: ColumnEncoding.widestApertureSQL
             case .shutter: ColumnEncoding.shutterSQL
             case .megapixels: ColumnEncoding.megapixelsSQL
             case .aspect: ColumnEncoding.aspectSQL
@@ -241,8 +245,11 @@ enum QueryRanges {
         case .aperture:
             encode = { Int64(ColumnEncoding.aperture($0)) }
             all = 1 ... Int64(UInt16.max)
-        case .focal:
+        case .focal, .focal35:
             encode = { Int64(ColumnEncoding.focal($0)) }
+            all = 1 ... Int64(UInt16.max)
+        case .widestAperture:
+            encode = { Int64(ColumnEncoding.aperture($0)) }
             all = 1 ... Int64(UInt16.max)
         case .shutter:
             encode = { Int64(ColumnEncoding.shutter($0)) }

@@ -60,8 +60,8 @@ final class FilterColumnRow: NSObject {
     static func title(_ name: String, _ column: FacetColumn) -> String {
         switch column {
         case .iso: "ISO \(name)"
-        case .focal: "\(name) mm"
-        case .aperture: "f/\(name)"
+        case .focal, .focal35: "\(name) mm"
+        case .aperture, .widestAperture: "f/\(name)"
         case .label: name == "none" ? "No Label" : ColorLabel(rawValue: name) == nil ? name : name.capitalized
         case .flag: ["pick": "Picked", "reject": "Rejected", "none": "Unflagged"][name] ?? name
         case .rating: Int(name).map { $0 == 0 ? "Unrated" : String(repeating: "★", count: $0) } ?? name
@@ -247,7 +247,9 @@ public extension FacetColumn {
         case .lens: "Lens"
         case .iso: "ISO Speed"
         case .focal: "Focal Length"
+        case .focal35: "35 mm Focal Length"
         case .aperture: "Aperture"
+        case .widestAperture: "Widest Aperture"
         case .keyword: "Keyword"
         case .label: "Label"
         case .folder: "Folder"
