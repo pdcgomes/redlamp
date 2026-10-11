@@ -82,6 +82,7 @@ struct PhotoMetadataReaderTests {
             title: "Tram 28", caption: "The tram climbing to Graça.", creator: "Pedro Gomes; Ana Silva",
             copyright: "© 2026 Pedro Gomes",
             location: .init(country: "Portugal", state: "Lisboa", city: "Lisbon", sublocation: "Alfama"),
+            widestAperture: 2.8,
         ))
         #expect(metadata.cameraName == "Nikon Z 8")
     }

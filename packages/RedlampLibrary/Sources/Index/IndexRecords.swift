@@ -178,7 +178,8 @@ public struct PhotoRecord: Sendable, Hashable {
     public var title: String?
     public var caption: String?
     public var state: State
-    /// How far indexing has got with the photo, in the indexer's terms.
+    /// How far indexing has got with the photo, in the indexer's terms: 0 before its file is read, 1 once it is,
+    /// and `lensToRead` for a photo read before the index kept its lens's fields.
     public var indexed: Int
     /// A label's name outside the five colours, when `label` is nil.
     public var customLabel: String?
@@ -199,6 +200,10 @@ public struct PhotoRecord: Sendable, Hashable {
     public var cameraOffset: Int?
     /// When change tracking found its file gone, while `state` has `.missing`.
     public var missingSince: Date?
+    /// The widest f-number its lens had at its focal length (`LensOptics.widestAperture`).
+    public var widestAperture: Double?
+    /// Its focal length in 35 mm terms, in whole millimetres (`LensOptics.focal35`).
+    public var focal35: Double?
 
     public init(
         id: Int64 = 0, folder: Int64, name: String, kind: Kind? = nil, size: Int64 = 0,
@@ -212,6 +217,7 @@ public struct PhotoRecord: Sendable, Hashable {
         customLabel: String? = nil, creator: String? = nil, copyright: String? = nil,
         location: PhotoLocation? = nil, stack: PhotoStack? = nil, otherFields: Set<XMPField> = [],
         xmpSignature: Int64? = nil, cameraCaptured: Date? = nil, cameraOffset: Int? = nil, missingSince: Date? = nil,
+        widestAperture: Double? = nil, focal35: Double? = nil,
     ) {
         self.id = id
         self.folder = folder
@@ -255,7 +261,13 @@ public struct PhotoRecord: Sendable, Hashable {
         self.cameraCaptured = cameraCaptured
         self.cameraOffset = cameraOffset
         self.missingSince = missingSince
+        self.widestAperture = widestAperture
+        self.focal35 = focal35
     }
+
+    /// `indexed` of a photo read before the index kept its lens's widest aperture and 35 mm focal length (schema
+    /// version 12): the indexer reads its file again for those two alone.
+    public static let lensToRead = 2
 
     /// The `other_fields` column: a bit for each field, in `XMPField`'s order.
     public static func code(for fields: Set<XMPField>) -> Int {

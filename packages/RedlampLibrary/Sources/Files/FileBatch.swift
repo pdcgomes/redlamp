@@ -410,6 +410,10 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
     /// When a missing photo's file was found gone (DEC-59); nil in batches journaled before the index kept it
     /// (schema version 11), which had no missing photos.
     public var missingSince: Double?
+    /// The widest aperture of its lens and its focal length in 35 mm terms; nil in batches journaled before the index
+    /// kept them (schema version 12).
+    public var widestAperture: Double?
+    public var focal35: Double?
 
     public init(_ photo: PhotoRecord) {
         id = photo.id
@@ -459,6 +463,8 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
         cameraCaptured = photo.cameraCaptured?.timeIntervalSince1970
         cameraOffset = photo.cameraOffset
         missingSince = photo.missingSince?.timeIntervalSince1970
+        widestAperture = photo.widestAperture
+        focal35 = photo.focal35
     }
 
     /// The row in `folder`.
@@ -480,7 +486,8 @@ public struct IndexedPhoto: Sendable, Hashable, Codable {
             stack: PhotoRecord.storedStack(id: stack?.uuidString, top: stackTop ?? false, position: stackPosition),
             otherFields: PhotoRecord.fields(code: otherFields ?? 0), xmpSignature: xmpSignature,
             cameraCaptured: cameraCaptured.map(Date.init(timeIntervalSince1970:)), cameraOffset: cameraOffset,
-            missingSince: missingSince.map(Date.init(timeIntervalSince1970:)),
+            missingSince: missingSince.map(Date.init(timeIntervalSince1970:)), widestAperture: widestAperture,
+            focal35: focal35,
         )
     }
 }

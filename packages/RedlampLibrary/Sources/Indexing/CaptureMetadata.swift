@@ -19,6 +19,10 @@ public struct CaptureMetadata: Sendable, Hashable, Codable {
     public var shutter: Double?
     /// In millimetres, as the lens reports it rather than its 35 mm equivalent.
     public var focalLength: Double?
+    /// The widest f-number the lens had at `focalLength` (`LensOptics.widestAperture`).
+    public var widestAperture: Double?
+    /// The focal length in 35 mm terms, in whole millimetres (`LensOptics.focal35`).
+    public var focal35: Double?
     /// When the photo was taken by the camera's clock: the time it showed, read as if it were UTC. The
     /// library sorts and filters by that wall-clock time, which every camera records, rather than by
     /// the moment, which needs a zone most files leave out; the moment is `captured` minus
@@ -59,7 +63,7 @@ public struct CaptureMetadata: Sendable, Hashable, Codable {
         pixelSize: PixelSize? = nil, orientation: Int? = nil, latitude: Double? = nil, longitude: Double? = nil,
         rating: Int? = nil, label: String? = nil, keywords: [String] = [], title: String? = nil,
         caption: String? = nil, creator: String? = nil, copyright: String? = nil, location: Location? = nil,
-        xmp: XMPSource? = nil,
+        xmp: XMPSource? = nil, widestAperture: Double? = nil, focal35: Double? = nil,
     ) {
         self.make = make
         self.model = model
@@ -83,6 +87,8 @@ public struct CaptureMetadata: Sendable, Hashable, Codable {
         self.copyright = copyright
         self.location = location
         self.xmp = xmp
+        self.widestAperture = widestAperture
+        self.focal35 = focal35
     }
 
     /// The camera's name to show and group by, like `ImageInfo.cameraName` for a decoded raw: the maker

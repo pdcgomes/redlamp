@@ -22,6 +22,10 @@ extension LibraryIndexer {
             case sidecar
             /// Nothing it's read from changed, but its row's state or file identifier did.
             case refresh
+            /// Nothing it's read from changed, but it was read before the index kept its lens's widest aperture and
+            /// 35 mm focal length (`PhotoRecord.lensToRead`): its file is read again for those alone, and its row
+            /// refreshed.
+            case lens
         }
 
         let kind: Kind
@@ -192,11 +196,15 @@ extension LibraryIndexer {
                 }
             }
             let rootIDs = records.flatMap { $0.roots.map(\.id) }
-            let (folders, holdingMissing) = try await indexer.index.read { reader in
-                try (rootIDs.flatMap { try reader.folders(inRoot: $0) }, reader.foldersWithMissingPhotos())
+            let (folders, holdingMissing, holdingLenses) = try await indexer.index.read { reader in
+                try (
+                    rootIDs.flatMap { try reader.folders(inRoot: $0) }, reader.foldersWithMissingPhotos(),
+                    reader.foldersWithLensesToRead(),
+                )
             }
             state.withLock { state in
                 state.holdingMissing = holdingMissing
+                state.holdingLenses = holdingLenses
                 for folder in folders {
                     state.folders[folder.path] = folder
                     state.paths[folder.id] = folder.path
@@ -377,6 +385,9 @@ extension LibraryIndexer {
         /// compared with its rows even when its signature is the one it was indexed at, as a folder that comes back
         /// whole has.
         var holdingMissing: [Int64: Set<String>] = [:]
+        /// The folders holding photos whose lens's fields are still to read (`PhotoRecord.lensToRead`), by ID: each is
+        /// compared with its rows even when its signature is the one it was indexed at.
+        var holdingLenses: Set<Int64> = []
         /// The names of the photos in folders listed with a new signature.
         var names: [String: Set<String>] = [:]
         /// The names in folders listed only to see whether a photo left them; nil for one that's gone.
@@ -509,7 +520,8 @@ extension LibraryIndexer.Run {
             volume.photos.hold()
         }
         if let existing, !returned, existing.signature == signature.rawValue,
-           existing.indexedSignature == signature.rawValue {
+           existing.indexedSignature == signature.rawValue,
+           !state.withLock({ $0.holdingLenses.contains(existing.id) }) {
             state.withLock { _ = $0.unchanged.insert(item.path) }
             volume.walk.add(found)
             return
@@ -560,12 +572,15 @@ extension LibraryIndexer.Run {
                 continue
             }
             // A photo that couldn't be read is read again each time its folder is listed.
+            let lens = row.indexed == PhotoRecord.lensToRead
             if row.size != entry.size || !Self.same(row.modified, entry.modified) || row.indexed == 0
                 || row.xmpSignature != Self.xmpSignature(xmp, darktable)
                 || (row.sidecarModified != nil && sidecar == nil) || row.state.contains(.unreadable) {
                 jobs.append(job(.changed, row))
             } else if !Self.same(row.sidecarModified, sidecar?.modified) {
-                jobs.append(job(.sidecar, row))
+                jobs.append(job(lens ? .changed : .sidecar, row))
+            } else if lens {
+                jobs.append(job(.lens, row))
             } else if !row.state.isEmpty || row.fileID != entry.fileIdentifier {
                 jobs.append(job(.refresh, row))
             }

@@ -162,6 +162,18 @@ public enum PhotoMetadataReader {
         guard found.make != nil || found.model != nil || found.captured != nil || found.pixelSize != nil else {
             return nil
         }
+        let dng = properties[kCGImagePropertyDNGDictionary] as? [CFString: Any] ?? [:]
+        found.widestAperture = LensOptics.widestAperture(
+            lens: found.lens,
+            specification: numbers(exif[kCGImagePropertyExifLensSpecification])
+                ?? numbers(aux[kCGImagePropertyExifAuxLensInfo]) ?? numbers(dng[kCGImagePropertyDNGLensInfo]) ?? [],
+            apex: number(exif[kCGImagePropertyExifMaxApertureValue]), focal: found.focalLength,
+            aperture: found.aperture,
+        )
+        found.focal35 = LensOptics.focal35(
+            written: positive(exif[kCGImagePropertyExifFocalLenIn35mmFilm]), focal: found.focalLength,
+            make: found.make, model: found.model, focalPlane: focalPlane(properties, exif: exif),
+        )
         // ImageIO logs an error each time it's asked about an image it can't size, and a head it can't
         // size is read again whole.
         guard isWholeFile || found.pixelSize != nil else { return found }
@@ -300,5 +312,33 @@ public enum PhotoMetadataReader {
 
     private static func positive(_ value: Any?) -> Double? {
         number(value).flatMap { $0 > 0 && $0.isFinite ? $0 : nil }
+    }
+}
+
+extension PhotoMetadataReader {
+    /// EXIF's focal plane resolution with the size of the image it's of: EXIF's PixelXDimension and PixelYDimension,
+    /// which in a RAF are its embedded preview's, as the resolution is, else the image's own, before its orientation.
+    static func focalPlane(_ properties: [CFString: Any], exif: [CFString: Any]) -> LensOptics.FocalPlane? {
+        guard let x = positive(exif[kCGImagePropertyExifFocalPlaneXResolution]),
+              let unit = number(exif[kCGImagePropertyExifFocalPlaneResolutionUnit]).flatMap({ Int(exactly: $0) })
+        else { return nil }
+        var width = exif[kCGImagePropertyExifPixelXDimension] as? Int ?? 0
+        var height = exif[kCGImagePropertyExifPixelYDimension] as? Int ?? 0
+        if width <= 0 || height <= 0 {
+            width = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
+            height = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
+        }
+        return LensOptics.FocalPlane(
+            xResolution: x, yResolution: positive(exif[kCGImagePropertyExifFocalPlaneYResolution]) ?? x, unit: unit,
+            width: width, height: height,
+        )
+    }
+
+    /// A list of numbers, such as EXIF's LensSpecification, whose items ImageIO gives as numbers or text; nil when
+    /// any item isn't one.
+    static func numbers(_ value: Any?) -> [Double]? {
+        guard let items = value as? [Any], !items.isEmpty else { return nil }
+        let numbers = items.compactMap { number($0).flatMap { $0.isFinite ? $0 : nil } }
+        return numbers.count == items.count ? numbers : nil
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 extension LibraryIndex {
     /// A step from one schema version to the next, run in a transaction.
@@ -8,7 +9,7 @@ extension LibraryIndex {
     static let migrations: [Migration] = [
         createVersion1, migrateToVersion2, migrateToVersion3, migrateToVersion4, migrateToVersion5,
         migrateToVersion6, migrateToVersion7, migrateToVersion8, migrateToVersion9, migrateToVersion10,
-        migrateToVersion11,
+        migrateToVersion11, migrateToVersion12,
     ]
 
     /// The version of the schema this build makes and opens.
@@ -67,6 +68,16 @@ extension LibraryIndex {
             try database.execute(schemaVersion11)
         }
         try database.execute(schemaVersion11Index)
+    }
+
+    /// Adds no column to an index that has them already, one set back to an earlier version.
+    static func migrateToVersion12(_ database: SQLiteDatabase) throws {
+        let column = try database.prepare("SELECT 1 FROM pragma_table_info('photos') WHERE name = 'focal35'")
+        if try column.first({ _ in true }) == nil {
+            try database.execute(schemaVersion12)
+        }
+        try LensFunctions.register(on: database)
+        try database.execute(schemaVersion12Fill)
     }
 
     /// Brings `database` up to the last version `migrations` knows, one step per transaction.
@@ -273,4 +284,85 @@ extension LibraryIndex {
     static let schemaVersion11Index = """
     CREATE INDEX IF NOT EXISTS photos_missing ON photos (folder) WHERE state & 1 != 0;
     """
+
+    /// The lens's widest aperture at the photo's focal length and the focal length in 35 mm terms (LIB-06), for the
+    /// traits Wide Open, Telephoto and Ultra Wide (`LensOptics`). Adding the columns rewrites no row.
+    static let schemaVersion12 = """
+    ALTER TABLE photos ADD COLUMN widest_aperture REAL;          -- an f-number
+    ALTER TABLE photos ADD COLUMN focal35 REAL;                  -- millimetres
+    """
+
+    /// Fills the two from what the index keeps of photos already read, where that allows: the widest aperture from
+    /// the lens's name, and the 35 mm focal length from the camera's make and model for the cameras whose crop factor
+    /// `LensOptics` knows. The index doesn't keep EXIF's lens specification or 35 mm focal length, so every photo
+    /// read is marked to be read again for the two (`PhotoRecord.lensToRead`), and `photos_lens_unread` lists the
+    /// folders holding such photos, for the indexer to find them however long ago the folders changed.
+    static let schemaVersion12Fill = """
+    UPDATE photos SET indexed = 2,
+      widest_aperture = coalesce(widest_aperture,
+        (SELECT redlamp_widest_aperture(l.name, photos.focal) FROM lenses l WHERE l.id = photos.lens)),
+      focal35 = coalesce(focal35,
+        (SELECT redlamp_focal35(c.make, c.model, photos.focal) FROM cameras c WHERE c.id = photos.camera))
+    WHERE indexed = 1;
+    CREATE INDEX IF NOT EXISTS photos_lens_unread ON photos (folder) WHERE indexed = 2 AND state = 0;
+    """
+}
+
+/// What schema version 12's migration computes from the index's own tables: `LensOptics` registered with SQLite.
+enum LensFunctions {
+    static func register(on database: SQLiteDatabase) throws {
+        let flags = SQLITE_UTF8 | SQLITE_DETERMINISTIC
+        let results = [
+            sqlite3_create_function_v2(
+                database.handle, "redlamp_widest_aperture", 2, flags, nil, widestApertureFunction, nil, nil, nil,
+            ),
+            sqlite3_create_function_v2(
+                database.handle,
+                "redlamp_focal35",
+                3,
+                flags,
+                nil,
+                focal35Function,
+                nil,
+                nil,
+                nil,
+            ),
+        ]
+        if let failed = results.first(where: { $0 != SQLITE_OK }) {
+            throw SQLiteError(code: failed, message: "couldn't register the lens functions", sql: nil)
+        }
+    }
+}
+
+private func text(_ value: OpaquePointer?) -> String? {
+    sqlite3_value_text(value).map { String(cString: $0) }
+}
+
+private func real(_ value: OpaquePointer?) -> Double? {
+    sqlite3_value_type(value) == SQLITE_NULL ? nil : sqlite3_value_double(value)
+}
+
+private func result(_ context: OpaquePointer?, _ number: Double?) {
+    if let number {
+        sqlite3_result_double(context, number)
+    } else {
+        sqlite3_result_null(context)
+    }
+}
+
+/// `redlamp_widest_aperture(lens, focal)`: the widest f-number the lens's name gives at `focal`.
+private func widestApertureFunction(
+    _ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?,
+) {
+    guard let values, let lens = text(values[0]) else { return sqlite3_result_null(context) }
+    result(context, LensOptics.widestAperture(lens: lens, focal: real(values[1])))
+}
+
+/// `redlamp_focal35(make, model, focal)`: `focal` in 35 mm terms, for a camera whose crop factor `LensOptics` knows.
+private func focal35Function(_ context: OpaquePointer?, _: Int32, _ values: UnsafeMutablePointer<OpaquePointer?>?) {
+    guard let values else { return sqlite3_result_null(context) }
+    result(
+        context,
+        LensOptics.focal35(written: nil, focal: real(values[2]), make: text(values[0]), model: text(values[1])),
+    )
 }

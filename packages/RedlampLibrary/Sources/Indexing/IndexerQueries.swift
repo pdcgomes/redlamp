@@ -32,6 +32,16 @@ public extension IndexQueries {
         return folders
     }
 
+    /// The folders holding photos whose lens's fields are still to read (`PhotoRecord.lensToRead`), as
+    /// `photos_lens_unread` finds them.
+    func foldersWithLensesToRead() throws -> Set<Int64> {
+        var folders: Set<Int64> = []
+        try database.cached("""
+        SELECT DISTINCT folder FROM photos WHERE indexed = \(PhotoRecord.lensToRead) AND state = 0
+        """).forEachRow { folders.insert($0.int64(at: 0)) }
+        return folders
+    }
+
     /// A query of the missing photos' IDs, as `photos_missing` answers it.
     static var missingPhotos: String {
         "SELECT id FROM photos WHERE state & \(PhotoRecord.State.missing.rawValue) != 0"

@@ -52,15 +52,60 @@ extension LibraryIndexer.Run {
             photo.listed = job.existing
             count(photo, in: job.folder)
             await batcher.add([.photo(photo)])
-        case .refresh:
-            guard var record = job.existing else { return }
-            record.state = []
-            record.missingSince = nil
-            record.fileID = job.entry.fileIdentifier
-            var photo = LibraryIndexer.PendingPhoto(folder: job.folder, record: record, isNew: false)
-            photo.listed = job.existing
-            count(photo, in: job.folder)
-            await batcher.add([.photo(photo)])
+        case .refresh, .lens:
+            try await refresh(job, on: volume, priority: priority, lane: lane)
+        }
+    }
+
+    /// Writes the row of a photo nothing it's read from changed, with its state and file identifier as its listing
+    /// found them, and for a `.lens` job, its lens's fields read again.
+    private func refresh(
+        _ job: LibraryIndexer.PhotoJob, on volume: LibraryIndexer.VolumeWork, priority: VolumeIO.Priority,
+        lane: WorkScheduler.Lane,
+    ) async throws {
+        guard var record = job.existing else { return }
+        if job.kind == .lens {
+            if let metadata = try await lensMetadata(of: job, on: volume, priority: priority, lane: lane) {
+                record.widestAperture = metadata.widestAperture
+                record.focal35 = metadata.focal35
+            }
+            record.indexed = 1
+        }
+        record.state = []
+        record.missingSince = nil
+        record.fileID = job.entry.fileIdentifier
+        var photo = LibraryIndexer.PendingPhoto(folder: job.folder, record: record, isNew: false)
+        photo.listed = job.existing
+        count(photo, in: job.folder)
+        await batcher.add([.photo(photo)])
+    }
+
+    /// What the photo's file says of its lens, for a photo read before the index kept its lens's fields: its head
+    /// read again, and the file itself where the head doesn't hold its metadata, as `read` reads them. Nil when the
+    /// file is gone or can't be read, which the photo's next full read finds.
+    private func lensMetadata(
+        of job: LibraryIndexer.PhotoJob, on volume: LibraryIndexer.VolumeWork, priority: VolumeIO.Priority,
+        lane: WorkScheduler.Lane,
+    ) async throws -> CaptureMetadata? {
+        let io = volume.io
+        let url = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
+        let size = Int(job.entry.size)
+        guard size > 0 else { return nil }
+        do {
+            let head = try await io.read(url, range: 0 ..< PhotoMetadataReader.headLength, priority: priority)
+            state.withLock { $0.summary.headsRead += 1 }
+            let found = try await indexer.scheduler.run(lane) {
+                head.count >= size
+                    ? PhotoMetadataReader.read(head: head, fileSize: size, url: url)
+                    : PhotoMetadataReader.headMetadata(head, fileSize: size, url: url)
+            }
+            guard found == nil, head.count < size else { return found }
+            _ = try await io.read(
+                url, range: PhotoMetadataReader.headLength ..< min(size, Self.chargedFileRead), priority: priority,
+            )
+            return try await indexer.scheduler.run(lane) { PhotoMetadataReader.read(url: url) }
+        } catch where VolumeIO.isNotFound(error) || Self.isDamage(error, on: io) {
+            return nil
         }
     }
 
@@ -312,8 +357,12 @@ extension LibraryIndexer.Run {
         let photo = URL(fileURLWithPath: job.folder + "/" + job.entry.name, isDirectory: false)
         guard let mac = await sidecarLocator().onThisMac(photo), let saved = Self.modified(mac) else { return job }
         let kind: LibraryIndexer.PhotoJob.Kind
+        let lens = row.indexed == PhotoRecord.lensToRead
         if !Self.same(recorded, saved) {
+            guard !lens else { return job }
             kind = .sidecar
+        } else if lens {
+            kind = .lens
         } else if !row.state.isEmpty || row.fileID != job.entry.fileIdentifier {
             kind = .refresh
         } else {
@@ -383,7 +432,7 @@ extension LibraryIndexer.Run {
             width: metadata?.pixelSize?.width, height: metadata?.pixelSize?.height, orientation: metadata?.orientation,
             latitude: metadata?.latitude, longitude: metadata?.longitude, edited: edited,
             sidecarModified: job.sidecar?.modified, xmpModified: job.xmpModified, indexed: 1,
-            xmpSignature: job.xmpSignature,
+            xmpSignature: job.xmpSignature, widestAperture: metadata?.widestAperture, focal35: metadata?.focal35,
         )
         show(organising, in: &record)
         return record

@@ -469,6 +469,8 @@ extension LibraryIndex.Writer {
         try statement.bind(photo.cameraOffset, at: 45)
         try statement.bind(photo.stack?.position, at: 46)
         try statement.bind(photo.missingSince?.timeIntervalSince1970, at: 47)
+        try statement.bind(photo.widestAperture, at: 48)
+        try statement.bind(photo.focal35, at: 49)
     }
 
     /// The ID an `INSERT ... RETURNING id` returns. SQLite makes the change at the first step.
