@@ -194,9 +194,11 @@ struct LargeSourceTests {
         let sandbox = SourcesSandbox()
         defer { sandbox.remove() }
         let diffs = DiffLog()
-        let (model, _, window) = try await open(sandbox, count: 40, diffs: diffs)
+        let (model, grid, window) = try await open(sandbox, count: 40, diffs: diffs)
         defer { window.contentView = nil }
         let library = model.library
+        // The grid's cells have their rows, which they read themselves.
+        try await sandbox.eventually { !grid.cells.isEmpty && grid.cells.values.allSatisfy { $0.item != nil } }
         final class Revealed {
             var photos: [URL] = []
         }
