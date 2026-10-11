@@ -98,7 +98,7 @@ struct QueryMomentTests {
         #expect(Self.unpicked.description == "is:unpicked-moment")
         #expect(LibraryQuery.Trait.unpickedMoment.title == "Moments without a Pick")
         #expect(LibraryQuery.Trait.unpickedMoment.query == nil)
-        #expect(LibraryQuery.Trait.allCases.filter { $0.query == nil } == [.unpickedMoment, .damaged])
+        #expect(LibraryQuery.Trait.allCases.filter { $0.query == nil } == [.wideOpen, .unpickedMoment, .damaged])
         for text in ["is:unpicked-moment rating>=3", "-is:unpicked-moment", "(is:panorama,unpicked-moment OR kw:x) a"] {
             let query = try LibraryQuery(parsing: text)
             #expect(query.findsMoments, "\(text)")

@@ -209,6 +209,8 @@ struct FileTrashTests {
         row.cameraCaptured = FileSandbox.date(10)
         row.cameraOffset = -18000
         row.missingSince = FileSandbox.date(11)
+        row.widestAperture = 2.8
+        row.focal35 = 105
         return row
     }
 
