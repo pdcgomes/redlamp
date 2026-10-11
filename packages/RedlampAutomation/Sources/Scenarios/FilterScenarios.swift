@@ -129,6 +129,7 @@
 
     enum FilterScenarios {
         static let all: [Scenario] = [text, columns, sources, empty, suggestion, moments, momentsPerformance, damaged]
+            + LensScenarios.all
 
         private static let raws: Set<String> = ["arw", "raf", "cr3", "nef", "dng", "orf", "pef", "rw2", "3fr"]
 
