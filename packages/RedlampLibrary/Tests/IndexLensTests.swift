@@ -27,7 +27,7 @@ struct IndexLensTests {
         ])
     }
 
-    @Test func `version 12 fills the fields from lens names and cameras, and marks the photos read to read again`(
+    @Test func `version 12 fills the fields from lens names and cameras, and marks the photos to read again for them`(
     ) async throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appending(path: "Index.sqlite")
@@ -41,7 +41,7 @@ struct IndexLensTests {
             INSERT INTO photos (id, folder, name, kind, size, modified, camera, lens, aperture, focal, indexed, state)
             VALUES (1, 1, 'A.ARW', 1, 1, 0, 1, 1, 1.8, 85, 1, 0), (2, 1, 'B.CR3', 1, 1, 0, 2, 2, 5.6, 55, 1, 0),
               (3, 1, 'C.CR3', 1, 1, 0, 2, 3, 2.8, 40, 1, 0), (4, 2, 'D.JPG', 2, 1, 0, NULL, NULL, NULL, NULL, 0, 0),
-              (5, 2, 'E.ARW', 1, 1, 0, 1, 1, 1.8, 85, 1, 1);
+              (5, 2, 'E.ARW', 1, 1, 0, 1, 1, 1.8, 85, 1, 1), (6, 3, 'F.PNG', 5, 1, 0, NULL, NULL, NULL, NULL, 1, 0);
             """)
         }
         await older.close()
@@ -50,7 +50,7 @@ struct IndexLensTests {
         defer { index.closeAndWait() }
         let (photos, folders, version) = try await index.read { reader in
             try (
-                (1 ... 5).map { try reader.photo(id: $0) },
+                (1 ... 6).map { try reader.photo(id: $0) },
                 reader.foldersWithLensesToRead(),
                 reader.database.userVersion,
             )
@@ -59,13 +59,15 @@ struct IndexLensTests {
         let sony = try #require(photos[0])
         #expect(sony.widestAperture == 1.8 && sony.focal35 == nil && sony.indexed == PhotoRecord.lensToRead)
         let kit = try #require(photos[1])
-        #expect(kit.widestAperture == 5.6 && kit.focal35 == 88 && kit.indexed == PhotoRecord.lensToRead)
+        #expect(kit.widestAperture == 5.6 && kit.focal35 == 88 && kit.indexed == 1, "both known: not read again")
         let unnamed = try #require(photos[2])
-        #expect(unnamed.widestAperture == nil && unnamed.focal35 == 64)
+        #expect(unnamed.widestAperture == nil && unnamed.focal35 == 64 && unnamed.indexed == PhotoRecord.lensToRead)
         let unread = try #require(photos[3])
         #expect(unread.widestAperture == nil && unread.focal35 == nil && unread.indexed == 0)
         let missing = try #require(photos[4])
         #expect(missing.widestAperture == 1.8 && missing.indexed == PhotoRecord.lensToRead)
+        let screenshot = try #require(photos[5])
+        #expect(screenshot.widestAperture == nil && screenshot.focal35 == nil && screenshot.indexed == 1)
         #expect(folders == [1], "a missing photo's folder isn't listed for them, nor an unread one's")
     }
 

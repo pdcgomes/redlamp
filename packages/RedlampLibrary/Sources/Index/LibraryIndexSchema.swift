@@ -294,16 +294,19 @@ extension LibraryIndex {
 
     /// Fills the two from what the index keeps of photos already read, where that allows: the widest aperture from
     /// the lens's name, and the 35 mm focal length from the camera's make and model for the cameras whose crop factor
-    /// `LensOptics` knows. The index doesn't keep EXIF's lens specification or 35 mm focal length, so every photo
-    /// read is marked to be read again for the two (`PhotoRecord.lensToRead`), and `photos_lens_unread` lists the
-    /// folders holding such photos, for the indexer to find them however long ago the folders changed.
+    /// `LensOptics` knows. The index doesn't keep EXIF's lens specification or 35 mm focal length, so a photo with a
+    /// focal length or an aperture that's still without either is marked to be read again for the two
+    /// (`PhotoRecord.lensToRead`), and `photos_lens_unread` lists the folders holding such photos, for the indexer to
+    /// find them however long ago the folders changed. Reading again the others would find what the index has.
     static let schemaVersion12Fill = """
-    UPDATE photos SET indexed = 2,
-      widest_aperture = coalesce(widest_aperture,
-        (SELECT redlamp_widest_aperture(l.name, photos.focal) FROM lenses l WHERE l.id = photos.lens)),
-      focal35 = coalesce(focal35,
-        (SELECT redlamp_focal35(c.make, c.model, photos.focal) FROM cameras c WHERE c.id = photos.camera))
-    WHERE indexed = 1;
+    UPDATE photos SET widest_aperture = lens.widest, focal35 = lens.focal35,
+      indexed = CASE WHEN (lens.focal35 IS NULL AND photos.focal IS NOT NULL)
+        OR (lens.widest IS NULL AND (photos.focal IS NOT NULL OR photos.aperture IS NOT NULL)) THEN 2 ELSE 1 END
+    FROM (SELECT p.id AS id, coalesce(p.widest_aperture, redlamp_widest_aperture(l.name, p.focal)) AS widest,
+        coalesce(p.focal35, redlamp_focal35(c.make, c.model, p.focal)) AS focal35
+      FROM photos p LEFT JOIN lenses l ON l.id = p.lens LEFT JOIN cameras c ON c.id = p.camera
+      WHERE p.indexed = 1) AS lens
+    WHERE photos.id = lens.id;
     CREATE INDEX IF NOT EXISTS photos_lens_unread ON photos (folder) WHERE indexed = 2 AND state = 0;
     """
 }

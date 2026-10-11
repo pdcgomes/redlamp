@@ -224,8 +224,8 @@ struct LensBenchTests {
                 + "name, %ld with a 35 mm focal length from their camera, %ld to read again in %ld folders",
             Self.photoCount, Self.milliseconds(elapsed), widest, focal35, marked, folders,
         ))
-        #expect(marked == Self.photoCount && folders == Self.photoCount / 1000)
-        #expect(widest > Self.photoCount / 2 && focal35 > 0 && focal35 < Self.photoCount)
+        #expect(widest == Self.photoCount && focal35 > 0 && focal35 < Self.photoCount)
+        #expect(marked == Self.photoCount - focal35 && folders == Self.photoCount / 1000)
     }
 
     /// lib-1m's own index, copied, brought to version 11 and timed to 12. With `REDLAMP_LENS_BENCH=1`, which
@@ -248,20 +248,22 @@ struct LensBenchTests {
             let started = ContinuousClock.now
             let index = try await LibraryIndex.open(at: copy)
             let elapsed = ContinuousClock.now - started
-            let (widest, focal35, total) = try await index.read { reader in
+            let (widest, focal35, marked, total) = try await index.read { reader in
                 func count(_ sql: String) throws -> Int {
                     try reader.database.prepare(sql).first { $0.int(at: 0) } ?? 0
                 }
                 return try (
                     count("SELECT count(*) FROM photos WHERE widest_aperture IS NOT NULL"),
                     count("SELECT count(*) FROM photos WHERE focal35 IS NOT NULL"),
+                    count("SELECT count(*) FROM photos WHERE indexed = \(PhotoRecord.lensToRead)"),
                     count("SELECT count(*) FROM photos"),
                 )
             }
             await index.close()
             Self.report(String(
                 format: "lib-1m, run %ld: migration to version 12 in %.0f ms; of %ld photos, %ld with a widest aperture, "
-                    + "%ld with a 35 mm focal length", run, Self.milliseconds(elapsed), total, widest, focal35,
+                    + "%ld with a 35 mm focal length, %ld to read again",
+                run, Self.milliseconds(elapsed), total, widest, focal35, marked,
             ))
             #expect(widest > 0 && total == 1_000_000)
         }
