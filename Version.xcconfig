@@ -1,5 +1,5 @@
 // Semver, with the stage as a pre-release suffix until 1.0: -prealpha, then -alpha and -beta.
-MARKETING_VERSION = 0.3.2-alpha
+MARKETING_VERSION = 0.3.3-alpha
 // Release builds replace this with the number of commits on main, so build numbers only go up.
 CURRENT_PROJECT_VERSION = 1
 // The firmware model's two hosted files (TON-50), in the app's Info.plist. Empty here, so the
