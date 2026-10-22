@@ -47,6 +47,12 @@ struct DevelopParams {
                               // w how far the tone curve is left out (Redlamp Reproduction's Amount, 0...1)
     float4 recipe;            // x color chrome, y chrome FX blue (0...1), z dynamic-range highlight compression
     float4 haze;              // xyz airlight (pyramid camera RGB), w Dehaze (slider / 100); needs the haze map
+    float4 veil;              // process 18: xyz the veil negative Dehaze adds (the airlight, tinted as scattered light
+                              // is), w 1 = it is added by the haze map rather than evenly
+    float4 veilAmount;        // process 18: how much haze negative Dehaze adds: the share of the way to the veil is
+                              // 1 - exp(-a^z (x + y h)), h the added-haze map times the veil's light to the power w
+    float4 veilBlend;         // process 18: how the veil is blended: x the compression v / (v + x) of the scene's
+                              // light it is blended in, y how far it greys at -100, z the most of the way it goes
     float4 glow;              // x halation amount, y halation radius, z bloom amount, w bloom radius (radii as fractions of the long side)
     float4 grain2;            // x colour grain (0 monochrome, 1 independent per layer), y 1 = process 2 grain;
                               // z 1 = masks' Whites and Blacks move the end points (process 13), w global Blacks / 100

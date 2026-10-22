@@ -29,7 +29,8 @@ struct SessionCacheTests {
     /// Everything a session holds: each of its textures once, and its analysis copy.
     private func held(_ session: ImageSession) -> Int {
         var textures: [any MTLTexture] = [
-            session.pyramid, session.hazeMap, session.refinedHaze, session.toneBase, session.clarityBase,
+            session.pyramid, session.hazeMap, session.refinedHaze, session.addedHaze, session.toneBase,
+            session.clarityBase,
             session.glowSource, session.glowLights, session.noiseGain,
         ]
         textures += [session.hueSatMaps?.cool, session.hueSatMaps?.warm, session.gainTableMap?.texture]

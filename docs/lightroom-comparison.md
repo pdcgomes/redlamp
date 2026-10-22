@@ -48,7 +48,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | White balance: presets, Temp and Tint, eyedropper and Auto | Yes | Done | | | | A camera white-balance model built on each camera's colour matrix |
 | Exposure, Contrast, Highlights, Shadows, Whites and Blacks | Yes | Done | | | TON-02, TON-05 | Highlights and Shadows keep the texture inside each region for new edits |
 | Auto settings | Yes | Done | | | | A heuristic Auto, as a starting point |
-| Texture, Clarity and Dehaze | Yes | Done | | | TON-06, TON-27 | Clarity and Dehaze follow the photo's edges for new edits, so a skyline gets no bright and dark bands |
+| Texture, Clarity and Dehaze | Yes | Done | | | TON-06, TON-27 | Clarity and Dehaze follow the photo's edges for new edits, so a skyline gets no bright and dark bands. Negative Dehaze adds haze where the haze map finds it, as Lightroom's does (process 18) |
 | Vibrance and Saturation | Yes | Done | | | TON-07 | Boosts stop at the edge of the output's colours instead of clipping |
 | Tone curve: parametric and point curves | Yes | Done | | | | With split points and the point curve's presets |
 | Tone curve: separate red, green and blue curves | Yes | Done | | | TON-40 | Chosen from a Channel menu under the point curve; Lightroom presets' channel curves come across |

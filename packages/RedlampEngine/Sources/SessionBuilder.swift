@@ -81,6 +81,7 @@ struct SessionBuilder {
             airlight: maps.airlight,
             hazeMap: maps.hazeMap,
             refinedHaze: maps.refinedHaze,
+            addedHaze: maps.addedHaze,
             toneBase: maps.toneBase,
             clarityBase: maps.clarityBase,
             glowSource: maps.glowSource,
@@ -207,9 +208,10 @@ struct SessionBuilder {
             throw EngineError.renderFailed(error.localizedDescription)
         }
         let refinedHaze = try Haze.refined(blocks: hazeBlocks).texture(device: device)
+        let addedHaze = try Haze.added(blocks: hazeBlocks).texture(device: device)
         return ImageMaps(
-            analysis: analysis, airlight: airlight, hazeMap: hazeMap, refinedHaze: refinedHaze, toneBase: toneBase,
-            clarityBase: clarityBase, glowSource: glowSource, glowLights: glowLights,
+            analysis: analysis, airlight: airlight, hazeMap: hazeMap, refinedHaze: refinedHaze, addedHaze: addedHaze,
+            toneBase: toneBase, clarityBase: clarityBase, glowSource: glowSource, glowLights: glowLights,
         )
     }
 

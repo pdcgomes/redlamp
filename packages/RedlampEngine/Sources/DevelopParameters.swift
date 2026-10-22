@@ -297,6 +297,9 @@ enum DevelopParameters {
         p.outputSize = SIMD4(Float(outputSize.width), Float(outputSize.height), Float(scale), 0)
         p.region = SIMD4(Float(region.x), Float(region.y), Float(region.width), Float(region.height))
         p.haze = SIMD4(session.airlight, Float(recipe[.dehaze] / 100))
+        p.veil = SIMD4(Haze.veil(airlight: session.airlight), recipe.processVersion >= 18 ? 1 : 0)
+        p.veilAmount = SIMD4(Haze.addedHaze.floor, Haze.addedHaze.scale, Haze.addedHaze.exponent, Haze.addedHaze.light)
+        p.veilBlend = SIMD4(Haze.veilBlend.compression, Haze.veilBlend.greying, Haze.veilBlend.ceiling, 0)
 
         let (layers, components, overlayIndex, curves) = maskBuffers(
             recipe.masks, aspect: full.aspectRatio, overlay: maskOverlay, masks: masks,

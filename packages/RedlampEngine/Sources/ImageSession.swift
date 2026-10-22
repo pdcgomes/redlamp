@@ -39,6 +39,8 @@ final class ImageSession: @unchecked Sendable {
     let hazeMap: any MTLTexture
     /// The refined haze map (process 8): a guided filter's coefficients (see `Haze.Refined`).
     let refinedHaze: any MTLTexture
+    /// The added-haze map (process 18): a guided filter's coefficients (see `Haze.added`).
+    let addedHaze: any MTLTexture
     /// Edge-aware Highlights and Shadows' base: a guided filter's coefficients (see `ToneBase`).
     let toneBase: any MTLTexture
     /// Edge-aware Clarity's base: a guided filter's coefficients (see `ClarityBase`).
@@ -109,6 +111,7 @@ final class ImageSession: @unchecked Sendable {
         airlight: SIMD3<Float>,
         hazeMap: any MTLTexture,
         refinedHaze: any MTLTexture,
+        addedHaze: any MTLTexture,
         toneBase: any MTLTexture,
         clarityBase: any MTLTexture,
         glowSource: any MTLTexture,
@@ -133,6 +136,7 @@ final class ImageSession: @unchecked Sendable {
         self.airlight = airlight
         self.hazeMap = hazeMap
         self.refinedHaze = refinedHaze
+        self.addedHaze = addedHaze
         self.toneBase = toneBase
         self.clarityBase = clarityBase
         self.glowSource = glowSource
@@ -187,6 +191,7 @@ final class ImageSession: @unchecked Sendable {
         airlight = maps.airlight
         hazeMap = maps.hazeMap
         refinedHaze = maps.refinedHaze
+        addedHaze = maps.addedHaze
         toneBase = maps.toneBase
         clarityBase = maps.clarityBase
         glowSource = maps.glowSource
@@ -230,6 +235,7 @@ final class ImageSession: @unchecked Sendable {
         airlight = original.airlight
         hazeMap = maps.hazeMap
         refinedHaze = maps.refinedHaze
+        addedHaze = maps.addedHaze
         toneBase = maps.toneBase
         clarityBase = maps.clarityBase
         glowSource = maps.glowSource
@@ -262,15 +268,15 @@ final class ImageSession: @unchecked Sendable {
     /// The maps made from its pixels.
     var maps: ImageMaps {
         ImageMaps(
-            analysis: analysis, airlight: airlight, hazeMap: hazeMap, refinedHaze: refinedHaze, toneBase: toneBase,
-            clarityBase: clarityBase, glowSource: glowSource, glowLights: glowLights,
+            analysis: analysis, airlight: airlight, hazeMap: hazeMap, refinedHaze: refinedHaze, addedHaze: addedHaze,
+            toneBase: toneBase, clarityBase: clarityBase, glowSource: glowSource, glowLights: glowLights,
         )
     }
 
     /// What the session holds: each of its textures once, its analysis copy and its raw source.
     var allocatedBytes: Int {
         var textures: [any MTLTexture] = [
-            pyramid, hazeMap, refinedHaze, toneBase, clarityBase, glowSource, glowLights, noiseGain,
+            pyramid, hazeMap, refinedHaze, addedHaze, toneBase, clarityBase, glowSource, glowLights, noiseGain,
         ]
         textures += [hueSatMaps?.cool, hueSatMaps?.warm, gainTableMap?.texture].compactMap(\.self)
         var seen = Set<ObjectIdentifier>()
@@ -351,6 +357,7 @@ struct ImageMaps {
     let airlight: SIMD3<Float>
     let hazeMap: any MTLTexture
     let refinedHaze: any MTLTexture
+    let addedHaze: any MTLTexture
     let toneBase: any MTLTexture
     let clarityBase: any MTLTexture
     let glowSource: any MTLTexture

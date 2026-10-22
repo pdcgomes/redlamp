@@ -861,6 +861,20 @@ static inline float3 sceneOfColor(
     return max((scene - ends.y) / (1.0f - ends.y), 0.0f) / ends.x;
 }
 
+// Negative Dehaze's veil (process 18), `added` of the way from the pixel: blended in the scene's light
+// (white balance and exposure applied) compressed by v / (v + c), which lifts shadows as linear light
+// would and gives a bright sky's highlights less, then greyed `greying` of the way to its luminance.
+static float3 addedVeil(float3 camera, float3 veil, float added, float greying, constant DevelopParams &p) {
+    float c = p.veilBlend.x;
+    float3 gain = max(p.wbRatio.xyz * p.tone.x, float3(1e-6f));
+    float3 v = max(camera, 0.0f) * gain;
+    float3 a = max(veil, 0.0f) * gain;
+    float3 u = v / (v + c) * (1.0f - added) + a / (a + c) * added;
+    float y = dot(u, float3(0.25f, 0.5f, 0.25f));
+    u = clamp(y + (u - y) * (1.0f - greying), 0.0f, 0.999f);
+    return c * u / (1.0f - u) / gain;
+}
+
 kernel void rl_develop(
     texture2d<float, access::sample> source [[texture(0)]],
     texture2d<float, access::write> out [[texture(1)]],
@@ -881,6 +895,7 @@ kernel void rl_develop(
     texture3d<float, access::sample> gainTable [[texture(11)]],
     texture2d<float, access::sample> toneBase [[texture(12)]],
     texture2d<float, access::sample> refinedHaze [[texture(13)]],
+    texture2d<float, access::sample> addedHaze [[texture(16)]],
     constant float4 *lensTable [[buffer(5)]],
     constant float *maskCurves [[buffer(6)]],
     texture2d_array<float, access::sample> maskEdges [[texture(14)]],
@@ -1011,8 +1026,12 @@ kernel void rl_develop(
 
     // Scene-referred: white balance (global and local), camera matrix, exposure.
     // Dehaze, in the camera RGB the haze map was measured in: invert I = J t + A (1 - t), with the
-    // transmission t from the dark channel prior; negative values add a neutral veil a little
-    // darker than the airlight.
+    // transmission t from the dark channel prior. Negative values add haze: from process 18 the
+    // same model run forward, with 1 - t from the added-haze map (`Haze.added`: the blocks' dark
+    // channel at its minimum over a patch, blurred over a tenth of the frame, as Lightroom's is), so
+    // it thickens with distance and over bright unsaturated things and leaves texture and dark
+    // saturated things their own, toward the airlight tinted as scattered light is
+    // (`Haze.veilTint`); before, an even blend toward a neutral veil a little darker than the airlight.
     float dehaze = p.haze.w + localDehaze;
     if (dehaze != 0.0f) {
         constexpr sampler hazeSampler(coord::normalized, filter::linear, address::clamp_to_edge);
@@ -1030,6 +1049,23 @@ kernel void rl_develop(
             for (int k = 0; k < splitCount; k++) {
                 splitInside[k] = max((splitInside[k] - airlight) / transmission + airlight, 0.0f);
                 splitOutside[k] = max((splitOutside[k] - airlight) / transmission + airlight, 0.0f);
+            }
+        } else if (p.veil.w > 0.5f) {
+            // How hazy the added-haze map finds the scene, relative to the airlight, in the veil's
+            // own light, so a dim fog's airlight doesn't read the road as hazier than a bright sky's.
+            float2 guided = addedHaze.sample(hazeSampler, sourceUV).rg;
+            float3 light = max(p.veil.xyz * p.wbRatio.xyz * p.tone.x, float3(1e-4f));
+            float haze = max(guided.x * hazeGuide + guided.y, 0.0f)
+                * pow(dot(light, float3(1.0f / 3.0f)), p.veilAmount.w);
+            float amount = min(-dehaze, 1.0f);
+            float depth = pow(amount, p.veilAmount.z) * (p.veilAmount.x + p.veilAmount.y * haze);
+            float added = min(1.0f - exp(-depth), p.veilBlend.z);
+            float greying = p.veilBlend.y * added * amount;
+            float3 veil = p.veil.xyz;
+            camera = addedVeil(camera, veil, added, greying, p);
+            for (int k = 0; k < splitCount; k++) {
+                splitInside[k] = addedVeil(splitInside[k], veil, added, greying, p);
+                splitOutside[k] = addedVeil(splitOutside[k], veil, added, greying, p);
             }
         } else {
             float veil = 0.8f * (airlight.r + airlight.g + airlight.b) / 3.0f;

@@ -11,8 +11,9 @@ struct HazeParams {
     float4 airlight;          // xyz airlight in the pyramid's camera RGB, w Gaussian sigma
 };
 
-// Each map texel: the darkest channel, relative to the airlight, over its block of pixels, and
-// (for the refined map's guide, `Haze.guide`) the block's mean brightness relative to it.
+// Each map texel: the darkest channel, relative to the airlight, over its block of pixels, the
+// block's mean brightness relative to it (the refined map's guide, `Haze.guide`), and the mean of
+// its pixels' own darkest channel (the added-haze map's input, `Haze.added`).
 kernel void rl_haze_dark(
     texture2d<float, access::read> pyramid [[texture(0)]],
     texture2d<float, access::write> out [[texture(1)]],
@@ -26,15 +27,18 @@ kernel void rl_haze_dark(
     float3 airlight = max(p.airlight.xyz, float3(1e-3f));
     float darkest = 1.0f;
     float brightness = 0.0f;
+    float haze = 0.0f;
     for (int y = start.y; y < end.y; y++) {
         for (int x = start.x; x < end.x; x++) {
             float3 v = max(pyramid.read(uint2(x, y), 0).rgb, 0.0f) / airlight;
-            darkest = min(darkest, min3(v.r, v.g, v.b));
+            float own = min3(v.r, v.g, v.b);
+            darkest = min(darkest, own);
             brightness += (v.r + v.g + v.b) / 3.0f;
+            haze += clamp(own, 0.0f, 1.0f);
         }
     }
-    int2 count = max(end - start, int2(1));
-    out.write(float4(clamp(darkest, 0.0f, 1.0f), brightness / float(count.x * count.y), 0.0f, 0.0f), gid);
+    float count = float(max(end.x - start.x, 1) * max(end.y - start.y, 1));
+    out.write(float4(clamp(darkest, 0.0f, 1.0f), brightness / count, haze / count, 0.0f), gid);
 }
 
 // One direction of the patch minimum, or of the smoothing blur.

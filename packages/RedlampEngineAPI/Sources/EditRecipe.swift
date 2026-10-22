@@ -108,8 +108,13 @@ public struct EditRecipe: Sendable, Hashable {
     /// 17: a lens profile made on another body than the photo's, found in Camera Raw's folders, or
     /// made for a fisheye, corrects a raw that carries no correction
     /// (`LCPProfileLibrary.widerMatchingProcess`).
+    /// 18: negative Dehaze adds haze where the haze map finds haze (`Haze.added`, the dark channel
+    /// at its minimum over a patch and blurred over a tenth of the frame), toward the airlight tinted
+    /// as scattered light is (`Haze.veil`), instead of an even grey blend, so the far distance and
+    /// bright unsaturated things fog over while texture and dark saturated things nearby keep their
+    /// own, and the result reads as haze rather than a white layer.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 17
+    public static let currentProcessVersion = 18
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

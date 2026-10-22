@@ -173,17 +173,20 @@ struct HazeTests {
         #expect(Array(grown[5...]).allSatisfy { $0 == 0.1 }, "nothing crosses the wall: \(grown)")
     }
 
-    @Test func `refined Dehaze leaves no glow beside the tree`() throws {
+    /// A session on a synthetic linear scene of `edgeWidth` by `edgeHeight`, as a raw.
+    private static func syntheticSession(
+        named name: String, _ scene: (_ x: Int, _ y: Int) -> SIMD3<Float>,
+    ) throws -> ImageSession {
         let device = try #require(MTLCreateSystemDefaultDevice())
         let queue = try #require(device.makeCommandQueue())
         let kernels = try KernelLibrary(device: device)
-        let width = Self.edgeWidth
-        let height = Self.edgeHeight
+        let width = edgeWidth
+        let height = edgeHeight
         let white: Float = 65535
         var samples = [UInt16](repeating: 0, count: width * height * 3)
         for y in 0 ..< height {
             for x in 0 ..< width {
-                let value = Self.edgeScene(x: x, y: y)
+                let value = scene(x, y)
                 for channel in 0 ..< 3 {
                     samples[(y * width + x) * 3 + channel] = UInt16((value[channel] * white).rounded())
                 }
@@ -194,11 +197,15 @@ struct HazeTests {
             whiteLevel: white, asShotMultipliers: SIMD3(1, 1, 1), cameraToSRGB: [1, 0, 0, 0, 1, 0, 0, 0, 1],
             xyzToCamera: nil, orientation: 0, baselineExposure: 0,
             info: ImageInfo(
-                url: URL(fileURLWithPath: "/tree.dng"), pixelSize: PixelSize(width: width, height: height),
+                url: URL(fileURLWithPath: "/\(name)"), pixelSize: PixelSize(width: width, height: height),
                 isRaw: true, sensorDescription: "synthetic",
             ),
         )
-        let session = try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
+        return try SessionBuilder(device: device, queue: queue, kernels: kernels).build(decoded)
+    }
+
+    @Test func `refined Dehaze leaves no glow beside the tree`() throws {
+        let session = try Self.syntheticSession(named: "tree.dng", Self.edgeScene)
         let engine = try RedlampEngine()
         func glow(process: Int) throws -> Float {
             var recipe = EditRecipe()
@@ -251,5 +258,114 @@ struct HazeTests {
         // This scene is barely hazy, so the prior finds little to remove.
         #expect(lifted < base * 0.97, "\(base) → \(lifted)")
         #expect(added > base * 1.1, "\(base) → \(added)")
+    }
+
+    // MARK: - Added haze (process 18)
+
+    private static let wall = 100 ..< 300
+    private static let books = 468 ..< 668
+
+    /// A bright, neutral wall on the left and dark, saturated books on the right, each a ramp of
+    /// brightness down the frame, so a veil shows as the ramp flattening. The wall's brightest rows
+    /// set the airlight, so the prior finds the wall hazy and the books clear, and the veil's cool
+    /// tint shows against the wall's grey.
+    private static func fogScene(x: Int, y: Int) -> SIMD3<Float> {
+        let ramp = 0.7 + 0.3 * Float(y) / Float(edgeHeight)
+        return (x < edgeWidth / 2 ? SIMD3(0.52, 0.52, 0.52) : SIMD3(0.2, 0.065, 0.035)) * ramp
+    }
+
+    /// The frame's pixels as RGB, in the encoding frames are drawn in.
+    private static func pixels(of frame: RenderedFrame) -> [SIMD3<Float>] {
+        let surface = frame.surface
+        IOSurfaceLock(surface, .readOnly, nil)
+        defer { IOSurfaceUnlock(surface, .readOnly, nil) }
+        let width = IOSurfaceGetWidth(surface)
+        let height = IOSurfaceGetHeight(surface)
+        let rowBytes = IOSurfaceGetBytesPerRow(surface)
+        let base = IOSurfaceGetBaseAddress(surface)
+        return (0 ..< width * height).map { index in
+            let row = (base + (index / width) * rowBytes).assumingMemoryBound(to: Float16.self)
+            let x = index % width
+            return SIMD3(Float(row[x * 4]), Float(row[x * 4 + 1]), Float(row[x * 4 + 2]))
+        }
+    }
+
+    /// Over `columns`, away from the frame's edges: the mean luminance, the ramp's variation (the
+    /// luminance's standard deviation over its mean) and blue over red, in the frame's encoding.
+    private static func region(
+        _ columns: Range<Int>,
+        of pixels: [SIMD3<Float>],
+    ) -> (lum: Float, ramp: Float, cool: Float) {
+        var count = 0.0
+        var sum = 0.0
+        var sumSquares = 0.0
+        var blueOverRed = 0.0
+        for y in 100 ..< edgeHeight - 100 {
+            for x in columns {
+                let pixel = pixels[y * edgeWidth + x]
+                let lum = Double(dot(pixel, SIMD3(0.2126, 0.7152, 0.0722)))
+                count += 1
+                sum += lum
+                sumSquares += lum * lum
+                blueOverRed += Double(pixel.z / max(pixel.x, 1e-3))
+            }
+        }
+        let mean = sum / count
+        return (Float(mean), Float((sumSquares / count - mean * mean).squareRoot() / mean), Float(blueOverRed / count))
+    }
+
+    @Test func `added haze thickens on the bright wall and leaves the dark books clear`() throws {
+        let session = try Self.syntheticSession(named: "fog.dng", Self.fogScene)
+        let engine = try RedlampEngine()
+        func render(process: Int, dehaze: Double) throws -> [SIMD3<Float>] {
+            var recipe = EditRecipe()
+            recipe.processVersion = process
+            recipe[.dehaze] = dehaze
+            return try Self.pixels(of: engine.renderFrame(
+                RenderRequest(recipe: recipe, targetSize: session.orientedSize, generation: 0), session: session,
+            ))
+        }
+        // What -100 does to each region against 0: how much of the ramp's variation is left, how
+        // far the luminance rose, and how blue over red moved.
+        struct Change {
+            var wallRamp: Float
+            var booksRamp: Float
+            var wallLift: Float
+            var booksLift: Float
+            var wallCool: Float
+            var booksCool: Float
+        }
+        var changes: [Int: Change] = [:]
+        for process in [17, 18] {
+            let base = try render(process: process, dehaze: 0)
+            let hazed = try render(process: process, dehaze: -100)
+            let wall = (Self.region(Self.wall, of: base), Self.region(Self.wall, of: hazed))
+            let books = (Self.region(Self.books, of: base), Self.region(Self.books, of: hazed))
+            changes[process] = Change(
+                wallRamp: wall.1.ramp / wall.0.ramp, booksRamp: books.1.ramp / books.0.ramp,
+                wallLift: wall.1.lum - wall.0.lum, booksLift: books.1.lum - books.0.lum,
+                wallCool: wall.1.cool - wall.0.cool, booksCool: books.1.cool - books.0.cool,
+            )
+            print("process \(process): the wall \(wall.0) → \(wall.1), the books \(books.0) → \(books.1)")
+        }
+        let even = try #require(changes[17])
+        let byMap = try #require(changes[18])
+        // The veil swallows the wall, flattening its ramp, while the books keep theirs; the even
+        // blend lifted the books into its grey, which flattened their ramp more than the wall's.
+        #expect(byMap.wallRamp < byMap.booksRamp - 0.3, "process 18: \(byMap)")
+        #expect(even.wallRamp > even.booksRamp, "process 17: \(even)")
+        // The books rise about as far as under the even blend (the veil's clear parts are lifted too),
+        // but keep most of their ramp and more of their colour, where the grey blend flattened both.
+        #expect(
+            byMap.booksRamp > 2 * even.booksRamp,
+            "the books kept \(byMap.booksRamp) of their ramp against \(even.booksRamp)",
+        )
+        #expect(
+            byMap.booksCool < even.booksCool,
+            "blue over red on the books rose \(byMap.booksCool) against \(even.booksCool)",
+        )
+        // The veil is cooler than the grey wall it lies over; the even blend's grey leaves it grey.
+        #expect(byMap.wallCool > 0.01, "blue over red changed by \(byMap.wallCool)")
+        #expect(abs(even.wallCool) < 0.005, "blue over red changed by \(even.wallCool) under the even blend")
     }
 }
