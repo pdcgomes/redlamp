@@ -67,11 +67,22 @@ The glow is a radial gradient from filament through safelight to the deep red, f
 
 The path is a cubic Bézier from the tile's top edge, on the side nearer the target, rising above the target and coming down into it. Its first control point is 1.25 times the rise above the start and a tenth of the way across; its second is above the target by 0.4 times the rise, at least 50 px, and 30% of the way back. It's walked by distance along it, from a table of 96 samples, so the curve doesn't change the shot's speed, and the head moves with the 1.35th power of time, gathering speed into the target.
 
-The beam is soft light stamped every 3.5 px along the path: two soft spots drawn once, in safelight and filament, growing and brightening towards the head, under a thin hot core that crackles a little across the path. Once the head arrives, the tail drains into the button in 0.3 s. Sparks are short strokes that cool from white to filament to safelight as they fade, slowed by the air and pulled down.
+The beam is soft light stamped every 3.5 px along the path: one soft spot drawn once, safelight with filament at its centre 9/25 of its width, growing and brightening towards the head, under a thin hot core that crackles a little across the path. Once the head arrives, the tail drains into the button in 0.3 s. Sparks are short strokes that cool from white to filament to safelight as they fade, slowed by the air and pulled down.
 
 ### The button
 
-At the hit, Web Animations scale the button (1, 1.15, 0.96, 1.04, 1 over 1.7 s), light its border, give it a halo of box-shadows, and spin its star a full turn, growing to 1.9 times and turning filament, over 1.2 s. The two lights chasing round its edge are a conic gradient with two bright stops and their tails, stroked round the button's pill at 1.15 turns a second.
+At the hit, Web Animations scale the button (1, 1.15, 0.96, 1.04, 1 over 1.7 s), light its border and a 1 px ring round it, give it a halo, and spin its star a full turn, growing to 1.9 times and turning filament, over 1.2 s. The halo's two glows, box-shadows blurred 18 and 46 px, are on layers of their own round the button that swell with it and fade, so the browser paints each blur once rather than in every frame. The two lights chasing round its edge are a conic gradient with two bright stops and their tails, stroked round the button's pill at 1.15 turns a second.
+
+### Keeping frames cheap
+
+The clock advances by at most 1/20 s a frame, so when frames take longer the sequence plays in slow motion. On phones it did, from the moment the shot left the lamp, as the owner found on 29 October 2026. What each frame draws is kept within reach of a phone:
+
+- The lamp's glow on the wall is blurred 64 px and scaled in every frame. While the nudge plays it carries `will-change: transform`; without it, the browser blurs it again at each new size.
+- The beam stamps one spot at each point rather than two. The sparks and the motes set each of their colours once a frame and fade by `globalAlpha`, rather than giving every stroke a colour of its own to parse.
+- The light behind the lamp is filled as a circle rather than the square round it, and isn't drawn once it has faded.
+- The halo's glows are painted once, on layers of their own.
+
+They were measured at a phone's size in headless Chrome. Drawing on an emulated GPU, on a Mac under heavy load, a frame of the charge took a median 67 ms rather than 150 ms, and a frame of the shot 100 ms rather than 267 ms, so the shot ran at 2.1 times its length rather than 5.3. On a software canvas, the nudge's own drawing takes 3.0 ms a frame of the shot rather than 3.4 ms. Every frame looks as it did: captured with the same random numbers at the same ticks, none differs by more than 25 levels of 255, and those on at most 0.1% of its pixels.
 
 ### The sign
 
@@ -117,5 +128,5 @@ A drag holds the point of the sign that was grabbed and moves it to the pointer,
 
 ## Known issues
 
-- When the shot hits the button, a real browser stutters for a few frames. In headless Chrome the nudge's own script takes at most 1.2 ms a frame, so the time goes into painting. The likely cause is the button's halo and border, animated as box-shadows inside the header's frosted glass, which the browser repaints in every frame. The fix is to draw the halo on the canvas and keep only the scale on the button.
-- Apart from the owner watching it on a Mac, it has been checked only in headless Chrome; other browsers and real phones are untried.
+- When the shot hit the button, a real browser stuttered for a few frames, most likely repainting the halo's blurred box-shadows inside the header's frosted glass in every frame. Those glows are now painted once, on layers of their own; the button's border, its 1 px ring and its star's 6 px glow still repaint in every frame of the hit. Whether the stutter has gone hasn't been checked in a real browser.
+- The changes for phones were measured only in headless Chrome, which draws differently from a phone. Safari, which draws a canvas on the CPU, and real phones are untried since.

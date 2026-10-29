@@ -146,11 +146,17 @@ function inView(parts: Parts): boolean {
 
 // ---------------------------------------------------------------- the charge, the shot and the aura
 
-type Mote = { radius: number; start: number; angle: number; spin: number; pull: number; age: number; width: number; colour: Colour };
+type Mote = { radius: number; start: number; angle: number; spin: number; pull: number; age: number; width: number };
 type Spark = { x: number; y: number; vx: number; vy: number; age: number; life: number; width: number; fall: number };
 type Ray = { angle: number; rate: number; phase: number; spread: number };
 type Path = { length: number; at: (along: number) => Point & { angle: number } };
-type Lights = Record<"safelight" | "filament" | "hot", HTMLCanvasElement>;
+type Lights = Record<"safelight" | "filament" | "hot" | "beam", HTMLCanvasElement>;
+
+/** What the beam stamps along its length: a safelight spot and a filament spot `width` as wide, at these strengths at its head. */
+const beamLight = { safelight: 0.13, filament: 0.32, width: 9 / 25 };
+
+/** The glows in the halo round the GitHub button at the hit, under its 1 px ring: top shadow first, as a box-shadow lists them. */
+const glows = ["0 0 18px 3px rgb(224 64 46 / 0.7)", "0 0 46px 12px rgb(224 64 46 / 0.35)"];
 
 /**
  * Runs the sequence on a canvas over the page. Calls `onDrop` when the sign is due, or `onEnd`
@@ -163,16 +169,22 @@ function play(canvas: HTMLCanvasElement, parts: Parts, onDrop: () => void, onEnd
     return () => {};
   }
   const ctx = context;
-  const lights: Lights = { safelight: spot(safelight), filament: spot(filament), hot: spot(hot) };
+  const spots = { safelight: spot(safelight), filament: spot(filament), hot: spot(hot) };
+  const lights: Lights = { ...spots, beam: beamSpot(spots.safelight, spots.filament) };
   const rays: Ray[] = Array.from({ length: 18 }, (_, i) => ({
     angle: (i / 18) * Math.PI * 2 + Math.random() * 0.3,
     rate: 2 + Math.random() * 4,
     phase: Math.random() * Math.PI * 2,
     spread: 0.035 + Math.random() * 0.045,
   }));
-  const motes: Mote[] = [];
+  // By colour, so each colour is set once a frame.
+  const motes = new Map<Colour, Mote[]>([
+    [filament, []],
+    [safelight, []],
+  ]);
   const sparks: Spark[] = [];
   const animations: Animation[] = [];
+  const layers: HTMLElement[] = [];
   let width = 0;
   let height = 0;
   let density = 1;
@@ -201,10 +213,17 @@ function play(canvas: HTMLCanvasElement, parts: Parts, onDrop: () => void, onEnd
     if (parts.glow) parts.glow.style.transform = "";
   };
 
+  // The glow is scaled in every frame; without this, the browser blurs it again at each new size.
+  if (parts.glow) parts.glow.style.willChange = "transform";
+  const release = () => {
+    if (parts.glow) parts.glow.style.willChange = "";
+  };
+
   const finish = () => {
     cancelAnimationFrame(frame);
     frame = 0;
     restore();
+    release();
     canvas.style.display = "none";
   };
 
@@ -215,7 +234,7 @@ function play(canvas: HTMLCanvasElement, parts: Parts, onDrop: () => void, onEnd
       owed += (30 + 220 * p * p) * dt;
       for (; owed >= 1; owed -= 1) {
         const start = size * (0.75 + 0.85 * Math.random());
-        motes.push({
+        const mote = {
           radius: start,
           start,
           angle: Math.random() * Math.PI * 2,
@@ -223,52 +242,85 @@ function play(canvas: HTMLCanvasElement, parts: Parts, onDrop: () => void, onEnd
           pull: size * (0.35 + 0.5 * Math.random()),
           age: 0,
           width: 0.8 + Math.random() * 1.4,
-          colour: Math.random() < 0.55 ? filament : safelight,
-        });
+        };
+        motes.get(Math.random() < 0.55 ? filament : safelight)?.push(mote);
       }
     }
     const urgency = (1 + 4 * p * p) * (time > charge ? 5 : 1);
     ctx.lineCap = "round";
-    for (let i = motes.length - 1; i >= 0; i -= 1) {
-      const mote = motes[i];
-      const was = around(lens, mote.radius, mote.angle);
-      mote.age += dt;
-      mote.radius -= mote.pull * urgency * (1 + 2.2 * (1 - mote.radius / mote.start)) * dt;
-      mote.angle += mote.spin * (1 + 2 * p) * dt;
-      if (mote.radius < size * 0.3) {
-        motes.splice(i, 1);
-        continue;
+    for (const [colour, group] of motes) {
+      ctx.strokeStyle = rgba(colour, 1);
+      for (let i = group.length - 1; i >= 0; i -= 1) {
+        const mote = group[i];
+        const was = around(lens, mote.radius, mote.angle);
+        mote.age += dt;
+        mote.radius -= mote.pull * urgency * (1 + 2.2 * (1 - mote.radius / mote.start)) * dt;
+        mote.angle += mote.spin * (1 + 2 * p) * dt;
+        if (mote.radius < size * 0.3) {
+          group.splice(i, 1);
+          continue;
+        }
+        const now = around(lens, mote.radius, mote.angle);
+        ctx.globalAlpha = Math.min(1, mote.age / 0.2) * (0.35 + 0.65 * p);
+        ctx.lineWidth = mote.width;
+        ctx.beginPath();
+        ctx.moveTo(was.x, was.y);
+        ctx.lineTo(2 * now.x - was.x, 2 * now.y - was.y);
+        ctx.stroke();
       }
-      const now = around(lens, mote.radius, mote.angle);
-      ctx.strokeStyle = rgba(mote.colour, Math.min(1, mote.age / 0.2) * (0.35 + 0.65 * p));
-      ctx.lineWidth = mote.width;
-      ctx.beginPath();
-      ctx.moveTo(was.x, was.y);
-      ctx.lineTo(2 * now.x - was.x, 2 * now.y - was.y);
-      ctx.stroke();
     }
+    ctx.globalAlpha = 1;
   };
 
   const strike = (at: Point, heading: number) => {
     burst(sparks, at, heading, 34, 2.4, [160, 560], [0.4, 0.9], 900);
     burst(sparks, at, 0, 18, Math.PI * 2, [120, 360], [0.35, 0.7], 900);
-    const halo = (a: number) =>
-      `0 0 0 1px rgb(255 176 138 / ${0.85 * a}), 0 0 18px 3px rgb(224 64 46 / ${0.7 * a}), 0 0 46px 12px rgb(224 64 46 / ${0.35 * a})`;
     const spring = "cubic-bezier(0.33, 1, 0.68, 1)";
+    const rest = "rgb(243 238 232 / 0.16)";
+    // The button swells and springs back as it lights, `lit` giving its halo's strength and its border's colour.
+    const swell = (lit: (strength: number, border: string) => Keyframe): Keyframe[] => [
+      { transform: "scale(1)", ...lit(0, rest), easing: spring },
+      { transform: "scale(1.15)", ...lit(1, "rgb(255 176 138 / 0.95)"), offset: 0.07, easing: spring },
+      { transform: "scale(0.96)", offset: 0.2, easing: spring },
+      { transform: "scale(1.04)", offset: 0.34, easing: spring },
+      { transform: "scale(0.995)", offset: 0.48, easing: spring },
+      { transform: "scale(1)", ...lit(0.5, "rgb(255 176 138 / 0.55)"), offset: 0.62 },
+      { transform: "scale(1)", ...lit(0, rest) },
+    ];
+    const box = parts.button.getBoundingClientRect();
     animations.push(
       parts.button.animate(
-        [
-          { transform: "scale(1)", boxShadow: halo(0), borderColor: "rgb(243 238 232 / 0.16)", easing: spring },
-          { transform: "scale(1.15)", boxShadow: halo(1), borderColor: "rgb(255 176 138 / 0.95)", offset: 0.07, easing: spring },
-          { transform: "scale(0.96)", offset: 0.2, easing: spring },
-          { transform: "scale(1.04)", offset: 0.34, easing: spring },
-          { transform: "scale(0.995)", offset: 0.48, easing: spring },
-          { transform: "scale(1)", boxShadow: halo(0.5), borderColor: "rgb(255 176 138 / 0.55)", offset: 0.62 },
-          { transform: "scale(1)", boxShadow: halo(0), borderColor: "rgb(243 238 232 / 0.16)" },
-        ],
+        swell((strength, border) => ({ boxShadow: `0 0 0 1px rgb(255 176 138 / ${0.85 * strength})`, borderColor: border })),
         { duration: 1700 },
       ),
     );
+    // The halo's glows, each on a layer of its own round the button that swells with it and fades:
+    // the browser paints each blur once, where on the button it would paint them in every frame.
+    const parent = parts.button.offsetParent;
+    if (parent) {
+      const origin = parent.getBoundingClientRect();
+      const radius = getComputedStyle(parts.button).borderRadius;
+      for (const shadow of [...glows].reverse()) {
+        const layer = document.createElement("span");
+        layer.setAttribute("aria-hidden", "true");
+        Object.assign(layer.style, {
+          position: "absolute",
+          left: `${box.left - origin.left - parent.clientLeft}px`,
+          top: `${box.top - origin.top - parent.clientTop}px`,
+          width: `${box.width}px`,
+          height: `${box.height}px`,
+          borderRadius: radius,
+          boxShadow: shadow,
+          opacity: "0",
+          pointerEvents: "none",
+        });
+        parts.button.before(layer);
+        layers.push(layer);
+        const fade = layer.animate(swell((strength) => ({ opacity: strength })), { duration: 1700 });
+        fade.onfinish = () => layer.remove();
+        animations.push(fade);
+      }
+    }
     const glyph = parts.star?.querySelector("svg");
     if (glyph) {
       animations.push(
@@ -327,6 +379,7 @@ function play(canvas: HTMLCanvasElement, parts: Parts, onDrop: () => void, onEnd
       parts.glow.style.transform = `scale(${Math.min(grown, (window.innerWidth - 8) / parts.glow.offsetWidth)})`;
     } else if (parts.glow?.style.transform) {
       parts.glow.style.transform = "";
+      release();
     }
 
     // Behind the lamp: everything drawn here is cut away wherever the icon is, and kept off the header.
@@ -413,7 +466,9 @@ function play(canvas: HTMLCanvasElement, parts: Parts, onDrop: () => void, onEnd
   return () => {
     cancelAnimationFrame(frame);
     for (const animation of animations) animation.cancel();
+    for (const layer of layers) layer.remove();
     restore();
+    release();
   };
 }
 
@@ -456,13 +511,17 @@ function backlight(ctx: CanvasRenderingContext2D, rays: Ray[], lens: Point, size
   const flicker = 0.88 + 0.12 * Math.sin(time * 53) * Math.sin(time * 31);
   const strength = (0.15 + 0.85 * p * p) * (1 + 0.4 * squash) * (1 - after) ** 2 * flicker;
   const reach = size * (0.72 + 0.6 * p * p - 0.25 * focus - 0.15 * squash + 0.6 * after);
-  const corona = ctx.createRadialGradient(lens.x, lens.y, size * 0.3, lens.x, lens.y, reach);
-  corona.addColorStop(0, rgba(filament, 0.95 * strength));
-  corona.addColorStop(0.35, rgba(safelight, 0.7 * strength));
-  corona.addColorStop(0.7, rgba(deep, 0.22 * strength));
-  corona.addColorStop(1, rgba(deep, 0));
-  ctx.fillStyle = corona;
-  ctx.fillRect(lens.x - reach, lens.y - reach, reach * 2, reach * 2);
+  if (strength > 0) {
+    const corona = ctx.createRadialGradient(lens.x, lens.y, size * 0.3, lens.x, lens.y, reach);
+    corona.addColorStop(0, rgba(filament, 0.95 * strength));
+    corona.addColorStop(0.35, rgba(safelight, 0.7 * strength));
+    corona.addColorStop(0.7, rgba(deep, 0.22 * strength));
+    corona.addColorStop(1, rgba(deep, 0));
+    ctx.fillStyle = corona;
+    ctx.beginPath();
+    ctx.arc(lens.x, lens.y, reach, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   const shine = smoothstep(0.05, 0.5, p) * (1 - 0.55 * focus) * (1 - squash);
   if (shine <= 0) return;
@@ -492,11 +551,11 @@ function beam(ctx: CanvasRenderingContext2D, lights: Lights, path: Path, from: n
   const span = to - from;
   if (span <= 0) return;
   const count = Math.max(2, Math.ceil((path.length * span) / 3.5));
+  const strength = beamLight.safelight + beamLight.filament;
   for (let i = 0; i <= count; i += 1) {
     const f = i / count;
     const point = path.at(from + span * f);
-    glow(ctx, lights.safelight, point, 9 + 16 * f, 0.13 * f ** 1.2);
-    glow(ctx, lights.filament, point, 3 + 6 * f, 0.32 * f ** 1.2);
+    glow(ctx, lights.beam, point, 9 + 16 * f, strength * f ** 1.2);
   }
   ctx.lineCap = "butt";
   const pieces = 8;
@@ -608,29 +667,43 @@ function burst(
   }
 }
 
+/** How a spark cools as it fades: its colour from each fraction of its life to the next. */
+const cooling: [Colour, number, number][] = [
+  [hot, 0, 0.3],
+  [filament, 0.3, 0.65],
+  [safelight, 0.65, 1],
+];
+
 /** Moves and draws the sparks, which cool from white to filament to red as they fade. */
 function fly(ctx: CanvasRenderingContext2D, sparks: Spark[], dt: number) {
-  ctx.lineCap = "round";
   const keep = Math.exp(-2.6 * dt);
-  for (let i = sparks.length - 1; i >= 0; i -= 1) {
-    const spark = sparks[i];
+  let kept = 0;
+  for (const spark of sparks) {
     spark.age += dt;
-    if (spark.age >= spark.life) {
-      sparks.splice(i, 1);
-      continue;
-    }
+    if (spark.age >= spark.life) continue;
     spark.vx *= keep;
     spark.vy = spark.vy * keep + spark.fall * dt;
     spark.x += spark.vx * dt;
     spark.y += spark.vy * dt;
-    const k = spark.age / spark.life;
-    ctx.strokeStyle = rgba(k < 0.3 ? hot : k < 0.65 ? filament : safelight, 0.95 * (1 - k));
-    ctx.lineWidth = spark.width * (1 - 0.5 * k);
-    ctx.beginPath();
-    ctx.moveTo(spark.x - spark.vx * 0.022, spark.y - spark.vy * 0.022);
-    ctx.lineTo(spark.x, spark.y);
-    ctx.stroke();
+    sparks[kept++] = spark;
   }
+  sparks.length = kept;
+  // Light adds up in any order, so the sparks are drawn a colour at a time.
+  ctx.lineCap = "round";
+  for (const [colour, from, to] of cooling) {
+    ctx.strokeStyle = rgba(colour, 1);
+    for (const spark of sparks) {
+      const k = spark.age / spark.life;
+      if (k < from || k >= to) continue;
+      ctx.globalAlpha = 0.95 * (1 - k);
+      ctx.lineWidth = spark.width * (1 - 0.5 * k);
+      ctx.beginPath();
+      ctx.moveTo(spark.x - spark.vx * 0.022, spark.y - spark.vy * 0.022);
+      ctx.lineTo(spark.x, spark.y);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** A soft round light, drawn once and stamped wherever the effects need one. */
@@ -647,6 +720,24 @@ function spot(colour: Colour): HTMLCanvasElement {
     fall.addColorStop(1, rgba(colour, 0));
     ctx.fillStyle = fall;
     ctx.fillRect(0, 0, 128, 128);
+  }
+  return canvas;
+}
+
+/** The beam's safelight and filament spots as one, so the beam stamps one light at each point rather than two. */
+function beamSpot(safelight: HTMLCanvasElement, filament: HTMLCanvasElement): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const strength = beamLight.safelight + beamLight.filament;
+    const inner = 64 * beamLight.width;
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = beamLight.safelight / strength;
+    ctx.drawImage(safelight, 0, 0, 128, 128);
+    ctx.globalAlpha = beamLight.filament / strength;
+    ctx.drawImage(filament, 64 - inner, 64 - inner, inner * 2, inner * 2);
   }
   return canvas;
 }
