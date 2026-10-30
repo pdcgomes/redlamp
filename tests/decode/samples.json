@@ -129,6 +129,50 @@
       "source": "raw.pixls.us"
     },
     {
+      "file": "Canon_EOS-5D-Mark-IV_mRAW.CR2",
+      "camera": "Canon EOS 5D Mark IV",
+      "mode": "sRAW1 (mRAW) (3:2)",
+      "covers": "Canon's mRAW (sRAW1), 5040 × 3360: YCbCr that LibRaw converts to RGB, its chroma shared by each 2 × 2 block, beside the same body's full raw (CAM-33)",
+      "url": "https://raw.pixls.us/getfile.php/982/nice/Canon%20-%20EOS%205D%20Mark%20IV%20-%20sRAW1%20%28mRAW%29%20%283%3A2%29.CR2",
+      "sha256": "3ea2d03556747afcafa24f13fee69106f383dfaf3a2f436f8331f14518f20037",
+      "megabytes": 21.13,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-5D-Mark-IV_sRAW.CR2",
+      "camera": "Canon EOS 5D Mark IV",
+      "mode": "sRAW2 (sRAW) (3:2)",
+      "covers": "Canon's sRAW (sRAW2), 3360 × 2240: YCbCr with its chroma shared by each pair of pixels",
+      "url": "https://raw.pixls.us/getfile.php/981/nice/Canon%20-%20EOS%205D%20Mark%20IV%20-%20sRAW2%20%28sRAW%29%20%283%3A2%29.CR2",
+      "sha256": "25d928f9e9a65525ac796bdff13e93b7b36b627568d7a17338e12dc44424078a",
+      "megabytes": 14.51,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-7D_sRAW.CR2",
+      "camera": "Canon EOS 7D",
+      "mode": "sRAW2 (sRAW) (3:2)",
+      "covers": "a small raw LibRaw converts with the formula it keeps for the 5D Mark II, 7D, 50D, 1D Mark IV and 60D",
+      "url": "https://raw.pixls.us/getfile.php/129/nice/Canon%20-%20EOS%207D%20-%20sRAW2%20%28sRAW%29%20%283%3A2%29.CR2",
+      "sha256": "3789b1ba5d880613104637c40a06619cd9f3b54b0cf62d2d95b9f9e885edcf6e",
+      "megabytes": 10.55,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
+      "file": "Canon_EOS-40D_sRAW.CR2",
+      "camera": "Canon EOS 40D",
+      "mode": "sRAW2 (sRAW) (3:2)",
+      "covers": "Canon's first sRAW, from the bodies before the 5D Mark II, whose luma LibRaw takes 512 from",
+      "url": "https://raw.pixls.us/getfile.php/2102/nice/Canon%20-%20EOS%2040D%20-%20sRAW2%20%28sRAW%29%20%283%3A2%29.CR2",
+      "sha256": "ba644e7dd2abe74eca260e67f0206ff113bf0f62e710f8130611e964d6be5bf1",
+      "megabytes": 5.54,
+      "license": "CC0-1.0",
+      "source": "raw.pixls.us"
+    },
+    {
       "file": "Nikon_Z-8.NEF",
       "camera": "Nikon Z 8",
       "mode": "8bit 8bit compressed (3:2)",

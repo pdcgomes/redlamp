@@ -64,6 +64,38 @@
       0.598
     ]
   },
+  "Canon_EOS-40D_sRAW.CR2" : {
+    "asShotMultipliers" : [
+      1.6379,
+      1,
+      1.9137
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      0,
+      0,
+      0
+    ],
+    "height" : 1296,
+    "layout" : "linear RGB",
+    "make" : "Canon",
+    "model" : "EOS 40D",
+    "orientation" : 0,
+    "sampleChecksum" : "ec4fb814cfefba5d",
+    "whiteLevel" : 16383,
+    "width" : 1944,
+    "xyzToCamera" : [
+      0.6071,
+      -0.0747,
+      -0.0856,
+      -0.7653,
+      1.5365,
+      0.2441,
+      -0.2025,
+      0.2553,
+      0.7315
+    ]
+  },
   "Canon_EOS-5D-Mark-IV.CR2" : {
     "asShotMultipliers" : [
       1.9844,
@@ -95,6 +127,102 @@
       -0.0952,
       0.2496,
       0.6348
+    ]
+  },
+  "Canon_EOS-5D-Mark-IV_mRAW.CR2" : {
+    "asShotMultipliers" : [
+      1.9805,
+      1,
+      1.4795
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      0,
+      0,
+      0
+    ],
+    "height" : 3360,
+    "layout" : "linear RGB",
+    "make" : "Canon",
+    "model" : "EOS 5D Mark IV",
+    "orientation" : 0,
+    "sampleChecksum" : "30c0f15b6097d9dc",
+    "whiteLevel" : 16383,
+    "width" : 5040,
+    "xyzToCamera" : [
+      0.6446,
+      -0.0366,
+      -0.0864,
+      -0.4436,
+      1.2204,
+      0.2513,
+      -0.0952,
+      0.2496,
+      0.6348
+    ]
+  },
+  "Canon_EOS-5D-Mark-IV_sRAW.CR2" : {
+    "asShotMultipliers" : [
+      1.9883,
+      1,
+      1.4736
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      0,
+      0,
+      0
+    ],
+    "height" : 2240,
+    "layout" : "linear RGB",
+    "make" : "Canon",
+    "model" : "EOS 5D Mark IV",
+    "orientation" : 0,
+    "sampleChecksum" : "6075eed3ee777599",
+    "whiteLevel" : 16383,
+    "width" : 3360,
+    "xyzToCamera" : [
+      0.6446,
+      -0.0366,
+      -0.0864,
+      -0.4436,
+      1.2204,
+      0.2513,
+      -0.0952,
+      0.2496,
+      0.6348
+    ]
+  },
+  "Canon_EOS-7D_sRAW.CR2" : {
+    "asShotMultipliers" : [
+      2.1152,
+      1,
+      1.4883
+    ],
+    "baselineExposure" : 0,
+    "blackLevels" : [
+      0,
+      0,
+      0
+    ],
+    "height" : 1728,
+    "layout" : "linear RGB",
+    "make" : "Canon",
+    "model" : "EOS 7D",
+    "orientation" : 0,
+    "sampleChecksum" : "59ef9f26b4ca7341",
+    "whiteLevel" : 16383,
+    "width" : 2592,
+    "xyzToCamera" : [
+      0.6844,
+      -0.0996,
+      -0.0856,
+      -0.3876,
+      1.1761,
+      0.2396,
+      -0.0593,
+      0.1772,
+      0.6198
     ]
   },
   "Canon_EOS-R5-Mark-II.CR3" : {
