@@ -37,6 +37,18 @@ struct RawDiagnosticsTests {
         }
     }
 
+    @Test(.enabled(if: !DecodeRegressionTests.cameras.isEmpty))
+    func `a small raw is described as one, and only a DNG as a linear DNG`() throws {
+        let sample = { (name: String) in
+            try #require(Self.samples.first { $0.lastPathComponent == name }, "\(name) missing; `mise run fixtures`")
+        }
+        for name in ["Canon_EOS-5D-Mark-IV_sRAW.CR2", "Nikon_D810_sRAW.NEF", "Sony_ILCE-7M4_M-lossless.ARW"] {
+            #expect(try ImageDecoder.decode(sample(name)).info.sensorDescription == "Small raw", "\(name)")
+        }
+        #expect(try ImageDecoder.decode(sample("Samsung_Galaxy-S23-Ultra.dng")).info.sensorDescription == "Linear DNG")
+        #expect(RawDecoder.linearDescription(isDNG: false, decoder: "kodak_rgb_load_raw()") == "Linear RGB")
+    }
+
     @Test(.enabled(if: !samples.isEmpty), arguments: samples.prefix(6))
     func `identifying a file agrees with decoding it`(url: URL) throws {
         let identified = try #require(ImageDecoder.identify(url))

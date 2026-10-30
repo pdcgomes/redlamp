@@ -140,7 +140,7 @@ enum RawDecoder {
             url: url,
             pixelSize: orientedSize,
             isRaw: true,
-            sensorDescription: sensorDescription(layout),
+            sensorDescription: sensorDescription(layout, raw: raw),
             make: string(rl_make(raw)),
             model: string(rl_model(raw)),
             lens: string(rl_lens(raw)),
@@ -442,12 +442,28 @@ enum RawDecoder {
         }
     }
 
-    private static func sensorDescription(_ layout: DecodedImage.Layout) -> String {
+    private static func sensorDescription(_ layout: DecodedImage.Layout, raw: UnsafeMutablePointer<libraw_data_t>)
+        -> String {
         switch layout {
-        case let .mosaic(pattern): pattern.description
-        case .linearRGB: "Linear DNG"
-        case .linearSRGBHalf: "Bitmap"
-        case .balancedCameraHalf: "Focus stack"
+        case let .mosaic(pattern): return pattern.description
+        case .linearRGB:
+            var info = libraw_decoder_info_t()
+            let decoder = libraw_get_decoder_info(raw, &info) == 0 ? info.decoder_name.map { String(cString: $0) } : nil
+            return linearDescription(isDNG: raw.pointee.idata.dng_version != 0, decoder: decoder)
+        case .linearSRGBHalf: return "Bitmap"
+        case .balancedCameraHalf: return "Focus stack"
         }
+    }
+
+    /// LibRaw's decoders for the reduced sizes cameras record as YCbCr: Canon's sRAW and mRAW, Nikon's
+    /// small raws and Sony's M and S sizes, which it converts to RGB.
+    static let smallRawDecoders: Set = ["canon_sraw_load_raw", "nikon_load_sraw", "sony_ycbcr_load_raw"]
+
+    static func linearDescription(isDNG: Bool, decoder: String?) -> String {
+        if isDNG {
+            return "Linear DNG"
+        }
+        let name = decoder?.replacingOccurrences(of: "()", with: "") ?? ""
+        return smallRawDecoders.contains(name) ? "Small raw" : "Linear RGB"
     }
 }

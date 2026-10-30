@@ -41,7 +41,7 @@ public struct ImageInfo: Codable, Sendable, Hashable {
     /// Size after orientation is applied.
     public var pixelSize: PixelSize
     public var isRaw: Bool
-    /// e.g. "Bayer RGGB", "X-Trans", "Linear DNG", "JPEG".
+    /// e.g. "Bayer RGGB", "X-Trans", "Linear DNG", "Small raw", "JPEG".
     public var sensorDescription: String
     public var make: String?
     public var model: String?

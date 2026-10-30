@@ -61,6 +61,9 @@ public extension CameraMode {
         "lossy_dng_load_raw": "lossy",
         "deflate_dng_load_raw": "deflate",
         "uncompressed_fp_dng_load_raw": "floating-point",
+        "canon_sraw_load_raw": "small raw",
+        "nikon_load_sraw": "small raw",
+        "sony_ycbcr_load_raw": "small raw",
     ]
 
     private static func scheme(_ identity: RawFileIdentity) -> String? {

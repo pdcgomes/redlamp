@@ -368,6 +368,14 @@ struct CameraBenchTests {
         #expect(mode.label == "14-bit compressed ARW, 6024 × 4024")
     }
 
+    @Test func `a small raw's mode says it's one`() {
+        let identity = RawFileIdentity(
+            make: "Canon", model: "EOS 7D", format: "CR2", decoder: "canon_sraw_load_raw", bitsPerSample: 15,
+            imageSize: PixelSize(width: 2592, height: 1728),
+        )
+        #expect(CameraMode(identity: identity).label == "15-bit small raw CR2, 2592 × 1728")
+    }
+
     @Test func `photos are chosen per mode, the conditions still needed first`() {
         func candidate(
             _ name: String,
