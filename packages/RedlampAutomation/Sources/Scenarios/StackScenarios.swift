@@ -122,7 +122,7 @@
     }
 
     enum RawScenarios {
-        static let all: [Scenario] = [damaged, balancedInCamera, dRange]
+        static let all: [Scenario] = [damaged, balancedInCamera, dRange, smallRawWhite]
 
         static let damaged = Scenario(
             "raw.damaged", "A damaged raw shows why it won't open, and the editor carries on",
@@ -306,9 +306,92 @@
             try app.openWorking()
         }
 
+        /// CAM-33: LibRaw gives every Canon sRAW and mRAW a white level of 16383, where each body's data clips
+        /// elsewhere, the EOS 7D's at 11,785. From process 20 the small raws of the bodies measured are normalised at
+        /// their own level, and open as bright as their body's full raws; an edit at 19 renders them at 16383, as
+        /// 0.3.4 did, until it's moved to the current version. Judged as the camera bench judges exposure: the
+        /// midtones of the edit's still against the camera's own JPEG.
+        static let smallRawWhite = Scenario(
+            "raw.small-raw-white",
+            "A Canon sRAW opens as bright as its camera's JPEG, at its body's white level; an edit moved to process 19 "
+                + "renders it about half a stop darker, as 0.3.4 did, until it's moved to the current version",
+            claims: [.feature("raw.highlights"), .feature("develop.calibration")],
+        ) { app in
+            let folder = app.photos.appending(path: "Small Raw")
+            let names = ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
+                .filter { SupportedFormats.isRaw(folder.appending(path: $0)) }.sorted()
+            guard !names.isEmpty else {
+                throw ScenarioSkip("The run has no Canon small raw: `mise run fixtures` fetches it")
+            }
+            try app.main { $0.open([folder]) }
+            try app.wait("the folder of Canon small raws, with its photos", timeout: 30) { model in
+                model.folder?.standardizedFileURL == folder.standardizedFileURL
+                    && Set(model.items.map(\.url.lastPathComponent)).isSuperset(of: names)
+            }
+            let current = EditRecipe.currentProcessVersion
+            for name in names {
+                let clicked = try app.exists(.filmstrip(name))
+                try app.open(name)
+                try app.settle(timeout: 120)
+                try app.wait("\(name) at process 20 or later, as a small raw") { model in
+                    model.recipe.processVersion >= 20 && model.info?.sensorDescription == "Small raw"
+                }
+                let preview = try cameraPreview(of: folder.appending(path: name), app: app)
+                let opened = try compare(app, against: preview)
+                app.covered(.feature("raw.highlights"), via: clicked ? .mouse : .model)
+                try app.expectRenders("\(name)'s edit moved to process 19") {
+                    try app.main { $0.setProcessVersion(19) }
+                }
+                let older = try compare(app, against: preview)
+                app.covered(.feature("develop.calibration"), via: .model)
+                try app.expectRenders("\(name)'s edit moved to Version \(current)") {
+                    try app.main { $0.setProcessVersion(current) }
+                }
+                let back = try compare(app, against: preview)
+                let (now, then, again) = (opened.exposure ?? .nan, older.exposure ?? .nan, back.exposure ?? .nan)
+                app.recorder.write("note", [
+                    name: String(
+                        format: "against the camera's JPEG %+.2f stops, at 19 %+.2f, at \(current) again %+.2f",
+                        now, then, again,
+                    ),
+                ])
+                try app.expect(
+                    abs(now) < Self.smallRawExposure,
+                    String(
+                        format: "\(name) isn't within %.2f stops of the camera's JPEG at \(current): %+.2f",
+                        Self.smallRawExposure, now,
+                    ),
+                )
+                try app.expect(
+                    abs(now - then - Self.smallRawStep) < 0.1,
+                    String(
+                        format: "\(name) at 19 isn't %.2f stops darker than at \(current), as 0.3.4 rendered it: "
+                            + "%+.2f stops from the camera's JPEG, against %+.2f",
+                        Self.smallRawStep, then, now,
+                    ),
+                )
+                try app.expect(
+                    abs(again - now) < 0.05,
+                    String(format: "\(name) moved back to \(current) renders %+.2f stops, not %+.2f", again, now),
+                )
+                try app.choose(.resetAll)
+            }
+            try app.main { $0.open([app.photos]) }
+            try app.wait("the photos folder again", timeout: 30) {
+                $0.folder?.standardizedFileURL == app.photos.standardizedFileURL
+            }
+            try app.openWorking()
+        }
+
         /// A colour difference from the camera's JPEG under this is the camera's colour: balanced once, the samples
         /// measure about 2, and balanced twice 7 (the D810's small raw) and 13 (the a7 IV's M).
         static let cameraColour = 5.0
+
+        /// How far from its camera's JPEG the 7D's sRAW may open at process 20, in stops: it measures +0.23, and −0.23
+        /// at 19, as the camera bench measured it there.
+        static let smallRawExposure = 0.35
+        /// How much darker an edit at process 19 renders the 7D's sRAW, in stops: log2(16383 / 11785) is 0.47.
+        static let smallRawStep = 0.47
 
         /// The camera's own JPEG in `url`, at the size the camera bench compares; read off the main thread, as the
         /// decode service asks.

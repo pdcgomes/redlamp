@@ -254,6 +254,9 @@ BALANCED_IN_CAMERA = ("Sony_ILCE-7M4_M-lossless.ARW", "Nikon_D810_sRAW.NEF")
 # Its Fujifilm raws shot at DR200, a stop darker than at DR100 (CAM-35): the GFX100 II's maker note says so, and the
 # X-E5's raw exposure bias.
 D_RANGE = ("Fujifilm_X-E5.RAF", "Fujifilm_GFX100-II.RAF")
+# Its Canon small raw of a body whose small raws' white level was measured (CAM-33): the EOS 7D's sRAW, whose data
+# clips at 11,785 where LibRaw's white level is 16383.
+SMALL_RAW = ("Canon_EOS-7D_sRAW.CR2",)
 
 
 def prepare_photos(photos: Path) -> list[str]:
@@ -293,6 +296,11 @@ def prepare_photos(photos: Path) -> list[str]:
         (photos / "D-Range").mkdir()
         for path in d_range:
             run(["cp", "-c", str(path), str(photos / "D-Range" / path.name)])
+    small_raw = [cameras / name for name in SMALL_RAW if (cameras / name).is_file()]
+    if small_raw:
+        (photos / "Small Raw").mkdir()
+        for path in small_raw:
+            run(["cp", "-c", str(path), str(photos / "Small Raw" / path.name)])
     return names
 
 
