@@ -260,9 +260,8 @@
                 try app.waitXMPSynced()
                 try app.waitInXMP(url, "\(stars) stars again") { ($0?.rating ?? 0) == stars }
 
-                // Another app writes the .xmp afresh once the Redo has settled, as Lightroom Classic does: two
-                // stars, the photo picked, and a keyword. Written by a process of its own, which change tracking
-                // sees.
+                // Another app writes the .xmp afresh a moment later, as Lightroom Classic does: two stars,
+                // the photo picked, and a keyword. Written by a process of its own, which change tracking sees.
                 let other = """
                 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0">
                  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -280,9 +279,7 @@
                 """
                 let staged = app.runDirectory.appending(path: "xmp-sync-other.xmp")
                 try Data(other.utf8).write(to: staged)
-                // Past the 2 s a finished culling change stays shown over the grid's updates (CullingOverlay.kept):
-                // within them the other app's values show as Redlamp's, until LIB-51.
-                app.pause(2.5)
+                app.pause(1.1)
                 let copy = Process()
                 copy.executableURL = URL(fileURLWithPath: "/bin/cp")
                 copy.arguments = [staged.path, RunningApp.xmpURL(of: url).path]
