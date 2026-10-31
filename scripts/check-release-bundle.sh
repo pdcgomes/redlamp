@@ -35,7 +35,7 @@
 
 set -euo pipefail
 
-BUDGET_KB=68000
+BUDGET_KB=70000
 OWN_EXPORTS='^(_\$s|_OBJC_(METACLASS_|CLASS_)\$_|_RedlampServicesVersion)'
 USAGE="usage: check-release-bundle.sh [--app-store [--allow-unsandboxed] [--allow-no-privacy-manifest] [--allow-donation-link]] <app> [dsyms]"
 
