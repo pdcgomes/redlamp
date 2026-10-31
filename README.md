@@ -816,7 +816,7 @@ Kodak, Portra, Ektar, Gold, Vision3, Tri-X, Fujifilm, Superia, Provia, Velvia, I
 
 ![Color grading](docs/images/color-grading.png)
 
-**A camera recipe on a Fujifilm X-T3 RAF.** Chrome Street, built from a Fujifilm-style recipe card, on the measured Chrome Base Look. The recipe's Amount is in the Recipes panel, and its tone, Color Chrome and grain settings land in the Basic and Effects panels like any other edit.
+**A camera recipe on a Fujifilm X-T3 RAF.** Chrome Street, built from a Fujifilm-style recipe card, on the measured Chrome Base Look. Base Looks is above Recipes in the left column, and the recipe's tone, Color Chrome and grain settings land in the Basic and Effects panels like any other edit.
 
 ![A camera recipe](docs/images/recipes.png)
 

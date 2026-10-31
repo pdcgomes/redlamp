@@ -46,10 +46,11 @@ restore() {
 }
 trap restore EXIT
 # What would show in a shot goes too: the theme, the remembered folders (the Folders panel lists
-# only the fixtures), the library's views (the filmstrip is in the order below) and the window's size.
+# only the fixtures), the library's views (the filmstrip is in the order below), the window's size,
+# and the experimental firmware model, which changes the look a camera recipe resolves to.
 for key in themeFamily themeAppearance themeTint themeTintsNativeControls panelTransparency \
     folders.roots folders.open folders.expanded folders.lastPhotos folders.subfolders lastFolder \
-    library.views library.filters "NSWindow Frame editor"; do
+    library.views library.filters "NSWindow Frame editor" app.redlamp.firmwareFilmModel; do
     defaults delete "$DOMAIN" "$key" 2>/dev/null || true
 done
 
