@@ -109,6 +109,12 @@ enum RawDecoder {
         } else {
             throw EngineError.unsupportedFile(url.lastPathComponent)
         }
+        let smallRawWhite = smallRawWhiteLevel(
+            make: string(rl_make(raw)), model: string(rl_model(raw)), decoder: decoderName(raw),
+        )
+        if let smallRawWhite {
+            whiteLevel = smallRawWhite.level
+        }
 
         var asShot = SIMD3<Double>((0 ..< 3).map { Double(rl_cam_mul(raw, Int32($0))) })
         if asShot.x <= 0 || asShot.y <= 0 || asShot.z <= 0 {
@@ -185,6 +191,10 @@ enum RawDecoder {
         }
         decoded.banding = banding
         decoded.colorMatrixRevision = colorMatrixRevision(raw)
+        if let smallRawWhite {
+            decoded.whiteLevelRevision = smallRawWhite.revision
+            decoded.earlierWhiteLevel = nominalWhite
+        }
         if case .linearRGB = layout, asShot.min() > 0 {
             decoded.balancedInCamera = raw.pointee.color.as_shot_wb_applied & Int32(LIBRAW_ASWB_APPLIED.rawValue) != 0
         }
@@ -274,6 +284,48 @@ enum RawDecoder {
         guard raw.pointee.idata.dng_version == 0, let make = string(rl_make(raw)), let model = string(rl_model(raw))
         else { return .first }
         return laterColorMatrices["\(make) \(model)"] ?? .first
+    }
+
+    /// Where the data of Canon's small raws (sRAW and mRAW CR2s, `canon_sraw_load_raw`, which LibRaw
+    /// states clip at 16383) clips, by LibRaw's make and model, with the raw revision that first
+    /// normalises at it (CAM-33). Measured on CC0 samples from raw.pixls.us, a body's small raws and
+    /// full raw of one scene at the same ISO, shutter and aperture: the ratio of the small raw's mean
+    /// green over the frame to the full raw's, black subtracted, times the full raw's white level
+    /// less its black as Redlamp decodes it, which is where the full raw clips in the small raw's
+    /// units; for a body with an sRAW and an mRAW shot so, the mean of the two. A body not listed
+    /// keeps LibRaw's.
+    static let smallRawWhiteLevels: [String: (level: Float, revision: RawRevision)] = [
+        "Canon EOS 40D": (17421, .sixth),
+        "Canon EOS 50D": (13960, .sixth),
+        "Canon EOS 5D Mark II": (16619, .sixth),
+        "Canon EOS 5D Mark III": (15622, .sixth),
+        "Canon EOS 5D Mark IV": (19147, .sixth),
+        "Canon EOS 5DS": (15313, .sixth),
+        "Canon EOS 5DS R": (14523, .sixth),
+        "Canon EOS 60D": (12801, .sixth),
+        "Canon EOS 6D": (15210, .sixth),
+        "Canon EOS 6D Mark II": (16209, .sixth),
+        "Canon EOS 70D": (12007, .sixth),
+        "Canon EOS 7D": (11785, .sixth),
+        "Canon EOS 7D Mark II": (12842, .sixth),
+        "Canon EOS-1D Mark IV": (15200, .sixth),
+        "Canon EOS-1D X Mark II": (15819, .sixth),
+    ]
+
+    /// The white level a Canon small raw's data clips at and the raw revision that first normalises
+    /// at it (`smallRawWhiteLevels`); nil for every other decode.
+    static func smallRawWhiteLevel(
+        make: String?, model: String?, decoder: String?,
+    ) -> (level: Float, revision: RawRevision)? {
+        guard decoder == "canon_sraw_load_raw", let make, let model else { return nil }
+        return smallRawWhiteLevels["\(make) \(model)"]
+    }
+
+    /// LibRaw's name for the decoder that unpacks the file, without its parentheses.
+    static func decoderName(_ raw: UnsafeMutablePointer<libraw_data_t>) -> String? {
+        var info = libraw_decoder_info_t()
+        guard libraw_get_decoder_info(raw, &info) == 0, let name = info.decoder_name else { return nil }
+        return String(cString: name).replacingOccurrences(of: "()", with: "")
     }
 
     /// LibRaw reports a large negative sentinel when a file has no DNG BaselineExposure.
@@ -445,13 +497,11 @@ enum RawDecoder {
     private static func sensorDescription(_ layout: DecodedImage.Layout, raw: UnsafeMutablePointer<libraw_data_t>)
         -> String {
         switch layout {
-        case let .mosaic(pattern): return pattern.description
+        case let .mosaic(pattern): pattern.description
         case .linearRGB:
-            var info = libraw_decoder_info_t()
-            let decoder = libraw_get_decoder_info(raw, &info) == 0 ? info.decoder_name.map { String(cString: $0) } : nil
-            return linearDescription(isDNG: raw.pointee.idata.dng_version != 0, decoder: decoder)
-        case .linearSRGBHalf: return "Bitmap"
-        case .balancedCameraHalf: return "Focus stack"
+            linearDescription(isDNG: raw.pointee.idata.dng_version != 0, decoder: decoderName(raw))
+        case .linearSRGBHalf: "Bitmap"
+        case .balancedCameraHalf: "Focus stack"
         }
     }
 

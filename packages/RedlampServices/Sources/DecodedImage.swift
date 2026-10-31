@@ -55,7 +55,7 @@ public struct DecodedImage: Sendable {
     public let samples: [UInt16]
     /// Black level per CFA position (or per channel for linear RGB).
     public let blackLevels: [Float]
-    public let whiteLevel: Float
+    public var whiteLevel: Float
     /// Camera white-balance multipliers as shot, green = 1.
     public let asShotMultipliers: SIMD3<Double>
     /// Row-major camera RGB → linear sRGB (D65), for white-balanced camera data.
@@ -87,6 +87,11 @@ public struct DecodedImage: Sendable {
     /// Earlier revisions take the photo as LibRaw opened it then: its `rgb_cam` the identity, so
     /// camera RGB is taken for linear sRGB, and no `cam_xyz`, so no colour model.
     public var colorMatrixRevision = RawRevision.first
+    /// The first raw revision that normalises the samples at `whiteLevel`: the first, but for a Canon
+    /// small raw of a body whose small raws' white level was measured (`RawDecoder.smallRawWhiteLevels`).
+    public var whiteLevelRevision = RawRevision.first
+    /// The white level revisions before `whiteLevelRevision` normalise at: LibRaw's.
+    public var earlierWhiteLevel: Float?
 
     public init(
         width: Int,

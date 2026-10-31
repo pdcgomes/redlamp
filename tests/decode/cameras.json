@@ -82,7 +82,7 @@
     "model" : "EOS 40D",
     "orientation" : 0,
     "sampleChecksum" : "ec4fb814cfefba5d",
-    "whiteLevel" : 16383,
+    "whiteLevel" : 17421,
     "width" : 1944,
     "xyzToCamera" : [
       0.6071,
@@ -147,7 +147,7 @@
     "model" : "EOS 5D Mark IV",
     "orientation" : 0,
     "sampleChecksum" : "30c0f15b6097d9dc",
-    "whiteLevel" : 16383,
+    "whiteLevel" : 19147,
     "width" : 5040,
     "xyzToCamera" : [
       0.6446,
@@ -179,7 +179,7 @@
     "model" : "EOS 5D Mark IV",
     "orientation" : 0,
     "sampleChecksum" : "6075eed3ee777599",
-    "whiteLevel" : 16383,
+    "whiteLevel" : 19147,
     "width" : 3360,
     "xyzToCamera" : [
       0.6446,
@@ -211,7 +211,7 @@
     "model" : "EOS 7D",
     "orientation" : 0,
     "sampleChecksum" : "59ef9f26b4ca7341",
-    "whiteLevel" : 16383,
+    "whiteLevel" : 11785,
     "width" : 2592,
     "xyzToCamera" : [
       0.6844,

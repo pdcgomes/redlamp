@@ -165,6 +165,8 @@ public extension DecodedImage {
         var banding: BandingCorrection?
         var balancedInCamera: Bool
         var colorMatrixRevision: RawRevision
+        var whiteLevelRevision: RawRevision
+        var earlierWhiteLevel: Float?
 
         /// What the app relies on before it touches the samples: one per pixel and channel, a
         /// colour filter pattern that indexes itself, a black level per position the kernels
@@ -199,7 +201,8 @@ public extension DecodedImage {
                 guard case .linearRGB = layout, asShotMultipliers.min() > 0 else { return false }
             }
             return blackCount.map { blackLevels.count == $0 } ?? true && blackLevels.allSatisfy(\.isFinite)
-                && whiteLevel.isFinite && (asShotMultipliers * 0).sum() == 0 && baselineExposure.isFinite
+                && whiteLevel.isFinite && earlierWhiteLevel?.isFinite ?? true
+                && (asShotMultipliers * 0).sum() == 0 && baselineExposure.isFinite
                 && Self.isMatrix(cameraToSRGB) && xyzToCamera.map(Self.isMatrix) ?? true
                 && [0, 3, 5, 6].contains(orientation) && info.pixelSize == orientedSize
                 && info.lensCorrection?.isValid ?? true && lensCorrection?.isValid ?? true
@@ -222,7 +225,8 @@ public extension DecodedImage {
             xyzToCamera: xyzToCamera, orientation: orientation, baselineExposure: baselineExposure, info: info,
             noiseProfile: noiseProfile, gainMaps: gainMaps, dngColor: dngColor, dngProfile: dngProfile,
             lensCorrection: lensCorrection, banding: banding, balancedInCamera: balancedInCamera,
-            colorMatrixRevision: colorMatrixRevision,
+            colorMatrixRevision: colorMatrixRevision, whiteLevelRevision: whiteLevelRevision,
+            earlierWhiteLevel: earlierWhiteLevel,
         ))
         var data = Data(capacity: 8 + header.count + samples.count * 2)
         withUnsafeBytes(of: UInt64(header.count).littleEndian) { data.append(contentsOf: $0) }
@@ -272,6 +276,8 @@ public extension DecodedImage {
         banding = header.banding
         balancedInCamera = header.balancedInCamera
         colorMatrixRevision = header.colorMatrixRevision
+        whiteLevelRevision = header.whiteLevelRevision
+        earlierWhiteLevel = header.earlierWhiteLevel
     }
 }
 

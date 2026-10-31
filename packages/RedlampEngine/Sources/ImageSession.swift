@@ -185,7 +185,7 @@ final class ImageSession: @unchecked Sendable {
     /// between them (`RawRevision.fifth`); the colour model and the embedded profile are the
     /// photo's; what is measured from its pixels (the airlight, the chromatic aberration) is its
     /// own, and so is `noise`, which differs from the photo's only for a raw the camera balanced
-    /// (`RawRevision.fourth`).
+    /// (`RawRevision.fourth`) or a small raw whose white level was measured (`RawRevision.sixth`).
     init(
         variantOf photo: ImageSession, decoded: DecodedImage, revision: RawRevision, noise: NoiseModel,
         pyramid: any MTLTexture, maps: ImageMaps,

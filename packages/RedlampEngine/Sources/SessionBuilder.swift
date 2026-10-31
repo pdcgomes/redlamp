@@ -63,6 +63,9 @@ struct SessionBuilder {
         if decoded.colorMatrixRevision > .first {
             changes.insert(decoded.colorMatrixRevision)
         }
+        if decoded.whiteLevelRevision > .first {
+            changes.insert(decoded.whiteLevelRevision)
+        }
         let pyramid = built.pyramid
         let maps = try Self.maps(of: pyramid, airlight: nil, device: device, queue: queue, kernels: kernels)
         let colorModel = decoded.isRaw ? decoded.xyzToCamera.flatMap(CameraColorModel.init(xyzToCameraRowMajor:)) : nil
@@ -115,9 +118,11 @@ struct SessionBuilder {
     func variant(of photo: ImageSession, at revision: RawRevision) throws -> ImageSession? {
         guard let source = photo.rawSource else { return nil }
         let decoded = Self.taken(source.decoded, at: revision)
-        // A raw the camera balanced has variants only across the fourth revision, which measures
-        // its noise differently.
-        let noise = source.decoded.balancedInCamera ? decoded.noise : source.noise
+        // A raw the camera balanced has variants only across the fourth revision, and a small raw
+        // whose white level was measured only across the revision that brings it, either of which
+        // measures its noise differently.
+        let noise = source.decoded.balancedInCamera || source.decoded.whiteLevelRevision > .first
+            ? decoded.noise : source.noise
         let built = try pyramid(
             decoded, revision: revision, balance: Self.balance(decoded), noise: noise, noiseGain: photo.noiseGain,
         )
@@ -131,6 +136,8 @@ struct SessionBuilder {
     /// balanced is taken for one it didn't, so it's balanced again and its noise is measured on
     /// its balanced samples, as Redlamp did then (#480). Before the revision that brings the
     /// camera's colour matrix, the photo is taken without it, as LibRaw opened it then (CAM-21).
+    /// Before the revision that brings a small raw's measured white level, it's taken at LibRaw's,
+    /// its noise measured at that level (CAM-33).
     static func taken(_ decoded: DecodedImage, at revision: RawRevision) -> DecodedImage {
         var taken = decoded
         if decoded.balancedInCamera, !revision.keepsCameraBalance {
@@ -139,6 +146,9 @@ struct SessionBuilder {
         if revision < decoded.colorMatrixRevision {
             taken.cameraToSRGB = [1, 0, 0, 0, 1, 0, 0, 0, 1]
             taken.xyzToCamera = nil
+        }
+        if revision < decoded.whiteLevelRevision, let earlier = decoded.earlierWhiteLevel {
+            taken.whiteLevel = earlier
         }
         return taken
     }
@@ -248,7 +258,8 @@ struct SessionBuilder {
     /// in camera RGB balanced by `balance(_:)`, exactly as a session's pyramid holds it. Its raw
     /// stages are the first revision's: a stack's merge is cached and shared by all its edits, so
     /// a later revision would change older edits whenever the cache is merged again. A linear raw
-    /// the camera balanced keeps that balance all the same, as from the fourth (#480).
+    /// the camera balanced keeps that balance all the same, as from the fourth (#480), and a Canon
+    /// small raw its measured white level, as from the sixth (CAM-33).
     func demosaic(_ decoded: DecodedImage) throws -> DemosaicedFrame {
         try Self.checkGainMaps(decoded)
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(

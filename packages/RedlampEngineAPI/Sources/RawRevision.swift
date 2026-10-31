@@ -17,15 +17,20 @@ public enum RawRevision: Int, Sendable, Hashable, Comparable, Codable {
     /// balanced once, as shot, and its noise measured before that balance (#480), as in every later
     /// revision.
     case fourth
-    /// Process 19 on: a camera LibRaw had no colour matrix for until Redlamp's fork gave it one
+    /// Process 19: a camera LibRaw had no colour matrix for until Redlamp's fork gave it one
     /// (`DecodedImage.colorMatrixRevision`, the Fujifilm X-E5's) develops with that matrix, which
-    /// also guides its X-Trans demosaic (CAM-21). Before, its photos are taken as LibRaw opened
-    /// them without one.
+    /// also guides its X-Trans demosaic (CAM-21), as in every later revision. Before, its photos are
+    /// taken as LibRaw opened them without one.
     case fifth
+    /// Process 20 on: a Canon small raw (sRAW or mRAW) of a body whose small raws' white level was
+    /// measured (`DecodedImage.whiteLevelRevision`) is normalised at that level (CAM-33). Before, it
+    /// is normalised at LibRaw's 16383, which leaves it darker or brighter than the body's full raws.
+    case sixth
 
     public init(processVersion: Int) {
         self = switch processVersion {
-        case 19...: .fifth
+        case 20...: .sixth
+        case 19: .fifth
         case 18: .fourth
         case 16...: .third
         case 15: .second

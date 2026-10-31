@@ -121,8 +121,11 @@ public struct EditRecipe: Sendable, Hashable {
     /// look's exposure (`ImageSession.baseExposure(for:)`, CAM-35). A Fujifilm X-E5 raw develops with
     /// the colour matrix Redlamp's LibRaw gives it (`RawRevision.fifth`, CAM-21), where LibRaw had none,
     /// so its camera RGB was taken for linear sRGB and its white balance didn't change.
+    /// 20: a Canon small raw (sRAW or mRAW CR2) of a body whose small raws' white level was measured
+    /// is normalised at that level (`RawRevision.sixth`, CAM-33), where LibRaw's 16383 left it up to
+    /// half a stop darker or a quarter of a stop brighter than the body's full raws.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 19
+    public static let currentProcessVersion = 20
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

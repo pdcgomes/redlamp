@@ -249,6 +249,21 @@ struct DecodeServiceTests {
         }
     }
 
+    @Test func `an archive keeps a small raw's measured white level, LibRaw's and the revision between them`() throws {
+        var measured = image(layout: .linearRGB, samples: 24, blackLevels: [0, 0, 0], whiteLevel: 11785)
+        measured.whiteLevelRevision = .sixth
+        measured.earlierWhiteLevel = 16383
+        let archived = try DecodedImage(archive: measured.archived())
+        #expect(archived.whiteLevel == 11785 && archived.earlierWhiteLevel == 16383)
+        #expect(archived.whiteLevelRevision == .sixth)
+        let plain = try DecodedImage(archive: image().archived())
+        #expect(plain.whiteLevelRevision == .first && plain.earlierWhiteLevel == nil)
+        measured.earlierWhiteLevel = .nan
+        #expect(throws: (any Error).self, "LibRaw's white level that isn't a number never crosses") {
+            try DecodedImage(archive: measured.archived())
+        }
+    }
+
     /// A call that waits for the service on the main thread would hang the app on a file the
     /// service is stuck on.
     @Test(.enabled(if: !DecodeServiceTests.isSandboxed))
