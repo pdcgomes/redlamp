@@ -26,9 +26,11 @@ export function Story() {
             application.
           </p>
           <p className="text-paper">
-            <strong className="font-semibold">Redlamp is an editor, not a catalog.</strong>{" "}
+            <strong className="font-semibold">Redlamp works on your folders.</strong>{" "}
             <span className="text-mute">
-              It opens folders of photos and keeps your edits in small sidecar files right next to them.
+              They stay the organisation: the library saves your edits, ratings, keywords and collections in small
+              sidecar files right next to the photos, and keeps an index on your Mac only for speed. Albums from
+              Apple Photos can join it too.
             </span>
           </p>
         </div>

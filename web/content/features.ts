@@ -2,12 +2,13 @@
 
 export type Shot = { src: string; alt: string; caption: string; width: number; height: number };
 
-const app = (file: string, alt: string, caption: string): Shot => ({
+/** Shots captured at `--window-size 1600x1000` are 1125 pixels high; the older ones are 991. */
+const app = (file: string, alt: string, caption: string, height = 991): Shot => ({
   src: `/synced/images/${file}`,
   alt,
   caption,
   width: 1800,
-  height: 991,
+  height,
 });
 
 const harness = (file: string, alt: string, caption: string): Shot => ({
@@ -96,7 +97,7 @@ export const features: Feature[] = [
     ],
     points: [
       "Basic, Tone Curve, Color Mixer, Color Grading, Detail and Effects",
-      "Lightroom Classic's shortcuts: 83 actions on 87 key bindings",
+      "Lightroom Classic's shortcuts: 186 actions on 135 key bindings",
       "Find an adjustment (⌘F) by name, or by the words people use",
       "Before and after in three layouts, cached so edits never re-render it",
     ],
@@ -133,15 +134,16 @@ export const features: Feature[] = [
       "Every edit is a layer: its own adjustments plus a mask built from components that add, subtract and intersect, exactly as in Lightroom. Masks are evaluated per pixel inside the same GPU kernel, so 16 of them cost well under a millisecond.",
     ],
     points: [
-      "Linear and radial gradients, drawn and adjusted on the photo",
+      "Linear and radial gradients, a brush, and luminance and colour ranges",
+      "AI masks made on your Mac: Subject, Sky, People, Objects, Depth Range and Landscape",
       "15 local adjustments, including Texture, Clarity and Dehaze",
       "A red mask overlay, and a full mask list",
-      "Brush, colour range and on-device AI masks are next",
     ],
     shot: app(
       "masking.png",
       "Masking on a Sony A7 III raw file, with the red mask overlay over the sky",
       "A linear gradient darkens and cools the sky; a feathered radial gradient warms the trees.",
+      1125,
     ),
   },
   {
@@ -184,22 +186,44 @@ export const features: Feature[] = [
   },
   {
     id: "recipes",
-    eyebrow: "Recipes",
-    title: "Presets, profiles and LUTs, finally in one place.",
+    eyebrow: "Base Looks and Recipes",
+    title: "Choose the look first, then start from a recipe.",
     body: [
-      "A Recipe is anything that gives a photo a look. One open format holds presets, profiles (a recipe's Base Look) and LUTs, and you can type in a Fujifilm-style camera recipe card exactly as it's written.",
+      "A Base Look is where a photo starts: a camera profile, one of Redlamp's looks, a film stock built from its datasheet or a LUT you imported, all in the Base Looks panel with its own search. Recipes are presets in one open format, and a recipe that sets a Base Look shows it on its row. You can type in a Fujifilm-style camera recipe card exactly as it's written.",
     ],
     points: [
-      "39 bundled recipes in eight groups, with hover to preview",
-      "Import and export .redrecipe, .cube and HaldCLUT",
-      "Camera controls: Dynamic Range, Color Chrome and white-balance shift",
-      "The Recipe Lab checks every look across a 40-image set",
+      "Every look, film stock and LUT in one searchable panel, with hover to preview",
+      "77 bundled recipes in ten folders, Mood and Borders among them",
+      "Import .redrecipe, Lightroom presets, .cube, .3dl and HaldCLUT",
+      "Show in Finder, Move to Trash, and hide the folders you don't use",
     ],
     shot: app(
       "recipes.png",
-      "A camera recipe applied to a Fujifilm X-T3 raw file",
+      "Chrome Street applied to a Fujifilm X-T3 raw file, with the Base Looks panel above Recipes in the left column and the recipe's settings in the Basic panel",
       "Chrome Street, built from a Fujifilm-style recipe card, on the measured Chrome Base Look.",
+      1125,
     ),
+  },
+  {
+    id: "borders",
+    eyebrow: "Borders",
+    title: "A border goes around the photo, not over it.",
+    body: [
+      "The canvas grows to hold a border, so nothing of the photo is hidden. Borders have a panel of their own, the last in Develop, and a Borders folder in Recipes, apart from looks and moods, so a look or a mood never takes your border away.",
+    ],
+    points: [
+      "An even margin, or a shape such as 4:5, 1:1, 9:16, A paper or your own",
+      "35 mm film with its sprocket holes and edge print, medium format, instant cards and slide mounts",
+      "The histogram, clipping warnings, masks and the crop leave the border out",
+      "Export as edited, without the border, or with a border recipe on every photo",
+    ],
+    shot: {
+      src: "/synced/images/borders.jpg",
+      alt: "Nine of the Borders recipes on a Sony A7 III raw file of trees: White 4:5, Black Square, Gallery Mat with Keyline, 35 mm Film, Medium Format, Instant Square, Instant Wide, Slide Mount and Filed Carrier",
+      caption: "Nine of the Borders recipes on a Sony A7 III ARW, each drawn around the photo.",
+      width: 1356,
+      height: 1458,
+    },
   },
   {
     id: "raw",
@@ -288,7 +312,7 @@ export const principles = [
   },
   {
     title: "Masks from day one",
-    body: "Every edit is a layer with a mask, combined by add, subtract and intersect, with on-device AI masks to come.",
+    body: "Every edit is a layer with a mask, combined by add, subtract and intersect, with AI masks made on the device.",
   },
   {
     title: "Native, neutral UI",
