@@ -837,6 +837,22 @@ public extension EditorModel {
         cullingOverlay.forget(id)
     }
 
+    /// An XMP sync took other apps' fields into `photos`, or gave them back theirs, and the lists are about to show
+    /// them as it left them (LIB-51): no culling change stands over a rating, flag or label of theirs it took, even
+    /// one still being made, whose batch shows its own value once it's made.
+    internal func forgetCulling(takenFromOtherApps photos: [XMPPhotoSync]) {
+        guard !cullingOverlay.isEmpty else { return }
+        var taken: [CullingField: Set<Int64>] = [:]
+        for photo in photos {
+            let id = library.showsIndexIDs ? photo.photo : library.photoID(of: URL(fileURLWithPath: photo.path))
+            guard let id else { continue }
+            for field in (photo.taken + photo.restored).compactMap(CullingField.init) {
+                taken[field, default: []].insert(id)
+            }
+        }
+        cullingOverlay.forget(taken)
+    }
+
     /// A list's update, or a save's report, is about to show photos as they were before a culling change the
     /// library hasn't caught up with: their rows show the change instead, before anyone is told of them.
     internal func keepCullingShown(_ diff: LibraryDiff) {
@@ -1229,6 +1245,27 @@ struct CullingOverlay {
             guard !photos.isEmpty else { return nil }
             return Change(
                 sequence: change.sequence, field: change.field, photos: photos, values: values,
+                finished: change.finished,
+            )
+        }
+        cached = nil
+    }
+
+    /// Another app's change took the place of each field's photos' values: no change of culling's to that field
+    /// stands over them.
+    mutating func forget(_ taken: [CullingField: Set<Int64>]) {
+        guard !changes.isEmpty, !taken.isEmpty else { return }
+        changes = changes.compactMap { change in
+            guard let photos = taken[change.field],
+                  change.photos.contains(where: photos.contains) else { return change }
+            var kept: (photos: [Int64], values: [CullingValues]) = ([], [])
+            for (photo, values) in zip(change.photos, change.values) where !photos.contains(photo) {
+                kept.photos.append(photo)
+                kept.values.append(values)
+            }
+            guard !kept.photos.isEmpty else { return nil }
+            return Change(
+                sequence: change.sequence, field: change.field, photos: kept.photos, values: kept.values,
                 finished: change.finished,
             )
         }

@@ -41,6 +41,7 @@ final class LibraryCore: Sendable {
         var lastSnapshot: ContinuousClock.Instant?
         var snapshotting = false
         var xmp = XMPQueue()
+        var takenFromOtherApps: (@Sendable ([XMPPhotoSync]) async -> Void)?
     }
 
     /// The photos whose XMP waits to be synced, in the order they were asked for.
@@ -251,6 +252,13 @@ final class LibraryCore: Sendable {
         set { state.withLock { $0.xmp.settings = newValue } }
     }
 
+    /// Hears of the photos each XMP sync took other apps' fields into, or gave back theirs, with those fields, and
+    /// returns before the lists are told of them.
+    var takenFromOtherApps: (@Sendable ([XMPPhotoSync]) async -> Void)? {
+        get { state.withLock { $0.takenFromOtherApps } }
+        set { state.withLock { $0.takenFromOtherApps = newValue } }
+    }
+
     /// The library changed `ids` (a batch, its Undo or Redo, or a save of its own): their `.xmp` sidecars
     /// follow when they're written.
     func changed(_ ids: [Int64]) {
@@ -320,7 +328,11 @@ final class LibraryCore: Sendable {
         }
         switch report {
         case let .success(report):
-            live.photosChanged(LibraryXMP.changedPhotos(report))
+            let changed = LibraryXMP.changed(report)
+            if !changed.isEmpty, let taken = takenFromOtherApps {
+                await taken(changed)
+            }
+            live.photosChanged(changed.compactMap(\.photo))
             for photo in report.photos where photo.problem != nil {
                 Self.log.error(
                     "\(photo.path, privacy: .private) wasn't synced with other apps: \(photo.problem ?? "", privacy: .public)",

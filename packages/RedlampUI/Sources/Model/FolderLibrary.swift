@@ -184,6 +184,9 @@ public final class FolderLibrary {
     @ObservationIgnored var onStacks: (@MainActor ([StackSuggestion]) -> Void)?
     /// Called once a folder has left the library, from Folders or as the library opened (`LibraryService.removed`).
     @ObservationIgnored var onRemoved: (@MainActor () -> Void)?
+    /// Called with the photos an XMP sync took other apps' fields into, before the lists hear of them
+    /// (`LibraryService.takenFromOtherApps`).
+    @ObservationIgnored var onTakenFromOtherApps: (@MainActor ([XMPPhotoSync]) -> Void)?
     /// Finishes a move of a root's edits and metadata a quit interrupted, once the library is open
     /// (`followUnfinishedSidecarMove`).
     @ObservationIgnored var unfinishedSidecarMove: (@MainActor (SidecarMoveJournal) -> Void)?

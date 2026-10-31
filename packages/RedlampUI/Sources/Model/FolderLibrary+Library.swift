@@ -78,6 +78,7 @@ public extension FolderLibrary {
             self?.readHighestIndexID()
         }
         service.removed = { [weak self] in self?.onRemoved?() }
+        service.takenFromOtherApps = { [weak self] photos in self?.onTakenFromOtherApps?(photos) }
         service.start(following: roots.map(\.url), removingOthers: hasSavedRoots)
     }
 

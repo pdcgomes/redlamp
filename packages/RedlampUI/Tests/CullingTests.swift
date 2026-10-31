@@ -225,6 +225,59 @@ struct CullingTests {
         #expect((0 ..< 4).map { folder.sidecar($0)?.label } == [nil, .blue, nil, nil])
     }
 
+    @Test func `another app's rating taken in just after a culling change is shown, not the change's`() async throws {
+        let folder = IndexedFolder()
+        defer { folder.cleanUp() }
+        try await folder.open(count: 3)
+        let service = try #require(folder.service)
+        let core = try #require(service.core)
+        #expect(await service.setXMPSettings(XMPSettings(writes: true)))
+        let model = try #require(folder.model)
+        let photo = folder.photos[1]
+        model.click(photo)
+        model.click(folder.photos[2], extending: true)
+        #expect(model.perform(.rating4))
+        await folder.written()
+        #expect(model.perform(.undo))
+        await folder.written()
+        #expect(model.perform(.redo))
+        await folder.written()
+        await service.xmpSynced()
+
+        // Within the 2 s the Redo stays shown over the lists (`CullingOverlay.kept`), another app writes the first
+        // photo's .xmp afresh, as Lightroom Classic does, and change tracking passes it on.
+        let other = """
+        <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0">
+         <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+          <rdf:Description rdf:about=""
+            xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+            xmlns:xmpDM="http://ns.adobe.com/xmp/1.0/DynamicMedia/"
+           xmp:Rating="1"
+           xmpDM:good="True"/>
+         </rdf:RDF>
+        </x:xmpmeta>
+
+        """
+        let xmp = photo.deletingPathExtension().appendingPathExtension("xmp")
+        try Data(other.utf8).write(to: xmp)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: 5)],
+            ofItemAtPath: xmp.path,
+        )
+        for await event in core.indexer.update([FolderChange(folder.root)]) {
+            await LibraryService.followed(.indexer(event), core: core) { _ in }
+        }
+        await service.xmpSynced()
+        #expect(folder.sidecar(1)?.rating == 1 && folder.sidecar(1)?.flag == .pick, "taken into the .redlamp")
+
+        try await folder.eventually { folder.shown(1).rating == 1 }
+        #expect(folder.shown(1).rating == 1 && folder.shown(1).flag == .pick, "the grid shows the other app's change")
+        #expect(
+            folder.shown(2).rating == 4 && folder.sidecar(2)?.rating == 4,
+            "and the Redo on the photo it didn't touch",
+        )
+    }
+
     @Test func `a batch that fails leaves the grid showing what the sidecars hold`() async throws {
         let folder = IndexedFolder()
         defer { folder.cleanUp() }
@@ -340,6 +393,21 @@ extension CullingTests {
         await model.saves.flush()
         try await fixture.eventually { SidecarStore().load(for: fixture.photos[1])?.metadata?.label == nil }
         #expect(SidecarStore().load(for: fixture.photos[1])?.metadata?.label == nil, "the sidecar holds no label")
+    }
+
+    @Test func `another app's change ends the hold on the fields it took the place of, and on nothing else`() {
+        var overlay = CullingOverlay()
+        let three = CullingValues(PhotoMetadata(rating: 3))
+        let red = CullingValues(PhotoMetadata(label: .red))
+        overlay.add(CullingOverlay.Change(sequence: 1, field: .rating, photos: [10, 11], values: [three, three]))
+        overlay.add(CullingOverlay.Change(sequence: 2, field: .label, photos: [10], values: [red]))
+        overlay.finished(1)
+        overlay.forget([.rating: [10], .flag: [11]])
+        let latest = overlay.latest()
+        #expect(latest[10]?.fields == [.label] && latest[10]?.values.label == .red, "the label culling gave it stands")
+        #expect(latest[11]?.fields == [.rating] && latest[11]?.values.rating == 3, "and another photo's rating")
+        overlay.forget([.label: [10], .rating: [11]])
+        #expect(overlay.isEmpty, "a change still being made goes too, once no photo of its is left")
     }
 
     @Test func `lists hear of a batch's photos once no change asked for after it is still to come`() {

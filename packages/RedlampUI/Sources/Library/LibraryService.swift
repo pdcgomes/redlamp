@@ -86,6 +86,9 @@ public final class LibraryService {
     /// its photos are out of every list, and of the counts made from keywords and collections, which the panels
     /// read from the index again.
     @ObservationIgnored var removed: (@MainActor () -> Void)?
+    /// Called with the photos an XMP sync took other apps' fields into, or gave back theirs (LIB-24), before the lists
+    /// hear of them: culling's changes stop standing over those fields (`EditorModel.forgetCulling`).
+    @ObservationIgnored var takenFromOtherApps: (@MainActor ([XMPPhotoSync]) -> Void)?
     @ObservationIgnored private var writingAllXMP: Task<Void, Never>?
     /// Follows Photos' changes to the albums kept in place (`followApplePhotos`).
     @ObservationIgnored private var followingPhotos: Task<Void, Never>?
@@ -245,6 +248,7 @@ extension LibraryService {
             )
         case let .success(core):
             self.core = core
+            core.takenFromOtherApps = { [weak self] photos in await self?.heardTaken(fromOtherApps: photos) }
             trimOnMemoryPressure(core.engine)
             let metadata = LibraryMetadata(index: core.index, paths: core.paths)
             self.metadata = metadata
@@ -839,6 +843,10 @@ extension LibraryService {
     }
 
     // MARK: - Other apps' metadata (LIB-24)
+
+    private func heardTaken(fromOtherApps photos: [XMPPhotoSync]) {
+        takenFromOtherApps?(photos)
+    }
 
     /// Keeps `settings` in the index, where `redlamp library xmp` reads them too, and syncs by them from
     /// now on; the photos already in the library are left as they are. Turning writing off stops writing

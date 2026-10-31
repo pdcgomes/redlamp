@@ -142,6 +142,17 @@ public enum CullingChange: Sendable, Hashable {
 /// The fields culling changes, one a change: a label and a custom label are one field.
 enum CullingField: CaseIterable, Sendable {
     case rating, flag, label, mark
+
+    /// The field other apps' `field` is in culling, when it is one: a mark is Redlamp's own, and an `.xmp`'s label is
+    /// a colour label or a custom label.
+    init?(_ field: XMPField) {
+        switch field {
+        case .rating: self = .rating
+        case .flag: self = .flag
+        case .label: self = .label
+        case .keywords, .title, .caption, .creator, .copyright, .location, .captureTime: return nil
+        }
+    }
 }
 
 /// A photo's culling fields as its badges show them.
