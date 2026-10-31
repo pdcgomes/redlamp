@@ -9,7 +9,9 @@
     /// - `--script "<key=value,…>"` applies scripted state after launch (see
     ///   `EditorModel.applyDebugCommand`), e.g. `select=3,exposure=0.5,panel=all`. `select`
     ///   also takes a file name, `mask=<kind>[:<part>]` computes an AI mask, such as
-    ///   `mask=sky` or `mask=people:faceSkin`, `mask-select=<n>` selects the nth mask, and
+    ///   `mask=sky` or `mask=people:faceSkin`, `mask-pick=<kind>` picks an AI kind as the mask
+    ///   picker does, asking first for a model it needs and, for Sky, offering the models that make
+    ///   it better, `mask-select=<n>` selects the nth mask, and
     ///   `overlay=<style>` shows masks in one of `MaskOverlayStyle`'s modes, such as
     ///   `overlay=imageOnBlack` (`overlay=off` hides it); `palette=<steps>` drives
     ///   the command palette as the harness's `--palette-steps` does, such as
@@ -54,7 +56,11 @@
     ///   `settings=<tab>` opens Settings on the tab with that label (`Shortcuts`); `import=start` imports
     ///   what the import window has chosen and waits for it to finish; `move=<folder>` runs Move to Folder… with
     ///   its panel answered; and `signal=<path>` makes an empty file there, so a capture can be taken at that
-    ///   moment. While Develop is shown, every command but
+    ///   moment. After `tool=heal`, `heal=<how>` picks what to remove with Click picks on Object, setting Drag
+    ///   as the panel's menu does and waiting for the pick, at fractions of the photo's width and height:
+    ///   `heal=click:x:y` as a click there, `heal=box:x:y:width:height` as a box dragged around it, and
+    ///   `heal=stroke:x1:y1:x2:y2…` as a stroke brushed through the points, which adds to the selected
+    ///   pick when it passes over it. While Develop is shown, every command but
     /// `wait`, `scroll`, `find`, `source` and `quit` waits for
     ///   its photo to open first; in the Library, which may have none open, no command waits.
     /// - `--whats-new-endpoint <url>` reads What's New from elsewhere for this launch: a Preview
@@ -188,6 +194,11 @@
                 try? await Task.sleep(for: .seconds(Double(value) ?? 1))
             case "mask":
                 await createMask(value, model: model)
+            case "mask-pick":
+                guard let kind = MaskKind(rawValue: value), kind.isAI else { return true }
+                await model.startAIMask(kind)
+            case "heal":
+                await pickToRemove(value, model: model)
             case "mask-select":
                 guard let index = Int(value), model.masks.indices.contains(index) else { return true }
                 model.selectedMaskID = model.masks[index].id
@@ -233,6 +244,38 @@
             guard let kind = MaskKind(rawValue: parts[0]) else { return }
             let part = parts.count > 1 ? PersonPart(rawValue: parts[1]) : nil
             await model.createAIMask(kind, part: part ?? .entirePerson)
+        }
+
+        /// `click:x:y`, `box:x:y:width:height` or `stroke:x1:y1:x2:y2…`, in fractions of the photo.
+        private static func pickToRemove(_ value: String, model: EditorModel) async {
+            let parts = value.split(separator: ":")
+            let numbers = parts.dropFirst().compactMap { Double($0) }
+            guard numbers.count == parts.count - 1 else { return }
+            model.spotPick = .object
+            switch parts.first {
+            case "click" where numbers.count == 2:
+                await model.pickRegion(at: ImagePoint(x: numbers[0], y: numbers[1]))
+            case "box" where numbers.count == 4:
+                model.objectSelection = .rectangle
+                let box = ImageRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
+                await model.pickRegion(in: box)
+            case "stroke" where numbers.count >= 4 && numbers.count.isMultiple(of: 2):
+                model.objectSelection = .brush
+                let corners = stride(from: 0, to: numbers.count, by: 2).map {
+                    ImagePoint(x: numbers[$0], y: numbers[$0 + 1])
+                }
+                // As many points between the corners as a drag's events give, so the stroke's prompts spread as
+                // a drag's do. The reach is the Brush's 16 points on a photo shown about 800 points tall.
+                let stroke = zip(corners, corners.dropFirst()).flatMap { a, b in
+                    (0 ..< 8).map { step in
+                        let t = Double(step) / 8
+                        return ImagePoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+                    }
+                } + corners.suffix(1)
+                await model.pickRegion(along: stroke, reach: 0.02)
+            default:
+                return
+            }
         }
 
         private static let paletteKeys: [String: PaletteKey] = [
