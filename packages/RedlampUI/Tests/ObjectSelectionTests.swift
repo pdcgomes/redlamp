@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import RedlampEngineAPI
+import simd
 import Testing
 @_spi(Harness) @testable import RedlampUI
 
@@ -82,6 +84,49 @@ struct ObjectSelectionTests {
         }
         #expect(ai.feather == 30 && ai.edge == -20)
         #expect(model.sliderValue(.maskAIFeather) == 30 && model.sliderValue(.maskAIEdge) == -20)
+    }
+
+    /// The hover preview covers the photo as the camera recorded it, so it is drawn into the frame
+    /// through the canvas's geometry, lens correction and all, to sit on what a click selects (#516).
+    @Test func `the hover preview is drawn where the canvas shows what it covers`() throws {
+        let (width, height) = (300, 200)
+        let spot = SIMD2(0.8, 0.75)
+        let pixels = (0 ..< width * height).map { index -> UInt8 in
+            let x = (Double(index % width) + 0.5) / Double(width)
+            let y = (Double(index / width) + 0.5) / Double(height)
+            return hypot((x - spot.x) * 1.5, y - spot.y) < 0.06 ? 255 : 0
+        }
+        let rep = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 1,
+            hasAlpha: false, isPlanar: false, colorSpaceName: .deviceWhite, bytesPerRow: width, bitsPerPixel: 8,
+        ))
+        rep.bitmapData?.update(from: pixels, count: pixels.count)
+        let png = try #require(rep.representation(using: .png, properties: [:]))
+        let plain = try #require(ImageFrame.coverage(ofMask: png, through: nil))
+        #expect(plain.width == width && plain.height == height)
+        #expect(zip(plain.pixels, pixels).allSatisfy { ($0 > 127) == ($1 > 127) })
+
+        let lens = LensCorrection(
+            source: .fujifilm, center: SIMD2(0.5, 0.5), radii: [0, 0.5, 1, 1.2],
+            distortion: [SIMD3(repeating: 1), SIMD3(repeating: 0.97), SIMD3(repeating: 0.91), SIMD3(repeating: 0.88)],
+            vignetting: [],
+        )
+        var recipe = EditRecipe()
+        recipe.crop = CropRect(left: 0.1, top: 0.05, right: 0.95, bottom: 0.9)
+        let size = PixelSize(width: 3000, height: 2000)
+        let geometry = GeometryMap(recipe: recipe, imageSize: size, lens: lens)
+        let framed = try #require(ImageFrame.coverage(ofMask: png, through: geometry))
+        let scale = SIMD2(Double(framed.width), Double(framed.height))
+        var (sum, count) = (SIMD2<Double>.zero, 0.0)
+        for (index, value) in framed.pixels.enumerated() where value > 127 {
+            sum += SIMD2(Double(index % framed.width) + 0.5, Double(index / framed.width) + 0.5)
+            count += 1
+        }
+        let shown = try #require(geometry.outputPoint(spot)) * scale
+        #expect(count > 0)
+        #expect(simd_distance(sum / max(count, 1), shown) < 1, "the spot drawn at \(sum / max(count, 1)), not \(shown)")
+        let cropped = try #require(GeometryMap(recipe: recipe, imageSize: size, lens: nil).outputPoint(spot)) * scale
+        #expect(simd_distance(cropped, shown) > 3, "the lens correction moves it")
     }
 
     @Test func `points along a stroke are spread by its length`() {

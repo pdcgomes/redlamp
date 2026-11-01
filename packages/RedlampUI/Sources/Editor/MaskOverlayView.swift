@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import RedlampEngineAPI
 import SwiftUI
 
@@ -323,11 +324,23 @@ private struct ObjectPicker: View {
     @Environment(EditorModel.self) private var model
     /// The drag under way: where it started and the points it has passed.
     @State private var drag: [CGPoint] = []
+    /// The hover preview tinted and drawn into the frame, and what it was drawn from.
+    @State private var tinted: (source: TintSource, image: NSImage)?
+
+    /// A hover preview, which covers the photo as the camera recorded it, and the geometry the
+    /// canvas frames the photo with.
+    private struct TintSource: Equatable {
+        let preview: MaskBitmap
+        let geometry: GeometryMap?
+    }
 
     var body: some View {
+        let source = model.objectPreview.map { TintSource(preview: $0, geometry: frame.geometry) }
         ZStack {
-            if let preview = model.objectPreview, let image = Self.tint(preview) {
-                Image(nsImage: image)
+            // The last preview stays until the next is drawn, so the tint doesn't flicker as the
+            // pointer moves.
+            if source != nil, let tinted, tinted.source.geometry == frame.geometry {
+                Image(nsImage: tinted.image)
                     .resizable()
                     .interpolation(.medium)
                     .frame(width: frame.rect.width, height: frame.rect.height)
@@ -381,11 +394,27 @@ private struct ObjectPicker: View {
                     }
                 }
         }
+        .task(id: source) {
+            guard let source, let png = source.preview.png else { return }
+            let geometry = source.geometry
+            let coverage = await Task.detached(priority: .userInitiated) {
+                ImageFrame.coverage(ofMask: png, through: geometry)
+            }.value
+            guard !Task.isCancelled, let coverage, let image = Self.tint(coverage) else { return }
+            tinted = (source, image)
+        }
     }
 
-    /// The preview mask as translucent accent over the photo.
-    private static func tint(_ bitmap: MaskBitmap) -> NSImage? {
-        guard let png = bitmap.png, let mask = NSBitmapImageRep(data: png)?.cgImage else { return nil }
+    /// Coverage as translucent accent over the photo.
+    private static func tint(_ coverage: (width: Int, height: Int, pixels: [UInt8])) -> NSImage? {
+        guard let provider = CGDataProvider(data: Data(coverage.pixels) as CFData),
+              let mask = CGImage(
+                  width: coverage.width, height: coverage.height, bitsPerComponent: 8, bitsPerPixel: 8,
+                  bytesPerRow: coverage.width, space: CGColorSpaceCreateDeviceGray(),
+                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue), provider: provider,
+                  decode: nil, shouldInterpolate: true, intent: .defaultIntent,
+              )
+        else { return nil }
         let size = NSSize(width: mask.width, height: mask.height)
         return NSImage(size: size, flipped: false) { rect in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
@@ -457,6 +486,44 @@ struct ImageFrame {
         let (top, bottom) = (min(max(min(a.y, b.y), 0), 1), min(max(max(a.y, b.y), 0), 1))
         guard right > left, bottom > top else { return nil }
         return ImageRect(x: left, y: top, width: right - left, height: bottom - top)
+    }
+
+    /// A mask over the photo as the camera recorded it, as a frame with `geometry` shows it (crop,
+    /// straightening, Transform, rotation and lens correction): 8-bit coverage, top row first, at
+    /// about the mask's size.
+    static func coverage(
+        ofMask png: Data, through geometry: GeometryMap?,
+    ) -> (width: Int, height: Int, pixels: [UInt8])? {
+        guard let source = CGImageSourceCreateWithData(png as CFData, nil),
+              let mask = CGImageSourceCreateImageAtIndex(source, 0, nil), mask.width > 0, mask.height > 0
+        else { return nil }
+        let (width, height) = (mask.width, mask.height)
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue,
+            ) else { return false }
+            context.draw(mask, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+        guard let geometry, !geometry.isIdentity else { return (width, height, pixels) }
+        let output = geometry.outputSize
+        let scale = Double(max(width, height)) / Double(max(output.width, output.height))
+        let columns = max(Int((Double(output.width) * scale).rounded()), 1)
+        let rows = max(Int((Double(output.height) * scale).rounded()), 1)
+        var framed = [UInt8](repeating: 0, count: columns * rows)
+        for row in 0 ..< rows {
+            for column in 0 ..< columns {
+                let shown = SIMD2((Double(column) + 0.5) / Double(columns), (Double(row) + 0.5) / Double(rows))
+                guard let point = geometry.imagePoint(shown), point.x >= 0, point.y >= 0, point.x < 1, point.y < 1
+                else { continue }
+                let (x, y) = (Int(point.x * Double(width)), Int(point.y * Double(height)))
+                framed[row * columns + column] = pixels[y * width + x]
+            }
+        }
+        return (columns, rows, framed)
     }
 
     /// How the photo's axes appear on screen at the frame's centre: the angle of its x axis
