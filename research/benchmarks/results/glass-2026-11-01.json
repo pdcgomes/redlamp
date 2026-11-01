@@ -1,0 +1,2091 @@
+{
+  "set": "glass",
+  "round": "glass-2026-11-01",
+  "date": "2026-11-01",
+  "commit": "95c0e6ee3",
+  "metric": "Against the truth at full resolution, sRGB: PSNR (dB), SSIM (scikit-image, 7×7 windows, per channel), detail PSNR (dB, the high-pass less a Gaussian at σ 2 px)",
+  "methods": {
+    "input": "The photo through glass, untouched",
+    "output/<variant>-<size>": "WindowSeat's output at the working size (short side <size>, square tiles of that side), upsampled with Lanczos in sRGB",
+    "output-corrected/<variant>-<size>": "The same output with the drift gain the subtraction uses applied first, then upsampled: what upsampling alone costs",
+    "subtract/<variant>-<size>": "The reflection layer from the same output, upsampled and subtracted in linear light (fullres.py, defaults)",
+    "<size>x2": "The working size twice <size> on the short side, in tiles of <size>",
+    "subtract-no-drift": "The same without the drift correction",
+    "subtract-affine-drift": "The same with the drift fitted as a·O + b on the lower envelope rather than a gain",
+    "subtract-no-smooth": "The same without smoothing the reflection layer",
+    "subtract-clip-exclude": "The same with clipped pixels left out of the reflection layer's upsampling",
+    "subtract-clip-replace": "The same with, in addition, the corrected model output in the photo's clipped pixels"
+  },
+  "model": {
+    "name": "WindowSeat v1.0",
+    "lora": "huawei-bayerlab/windowseat-reflection-removal-v1-0@c1f59ca02bff68535c976e5e17147b3d9323309e (Apache-2.0)",
+    "base": "Qwen/Qwen-Image-Edit-2509@d3968ef930e841f4c73640fb8afa3b306a78167e (Apache-2.0): transformer and VAE only",
+    "port": "research/prototypes/reflections/windowseat_mlx.py on mflux 0.24.0 and MLX 0.32.4: the LoRA's 723 modules fused in float32, then the transformer quantised with group size 64 (windowseat-q4: 4 bits with the modulation layers at 8; windowseat-q8: 8 bits); img_in, txt_in, norm_out.linear and proj_out kept in bfloat16; timestep 0.499; the VAE's mean latent",
+    "variants": "<name>-<size>: the photo averaged down in linear light to a short side of <size>, in square tiles of that side; <size>x2: twice that, in tiles of <size>",
+    "full_resolution": "research/prototypes/reflections/fullres.py defaults: per-channel drift gain (0.2 quantile of I_w / O_w, smoothed), R_w smoothed by 2 working pixels, bicubic upsampling, no clipped-highlight handling, amount 1",
+    "machine": "Apple M1 Ultra, 128 GB, shared with two other agents"
+  },
+  "cases": [
+    {
+      "case": "c01-kitchen-cafe",
+      "size": [
+        8160,
+        6144
+      ],
+      "methods": {
+        "input": {
+          "psnr": 19.987,
+          "ssim": 0.9427,
+          "detail_psnr": 50.935
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 19.794,
+          "ssim": 0.8679,
+          "detail_psnr": 38.924
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 26.891,
+          "ssim": 0.9757,
+          "detail_psnr": 54.284,
+          "seconds": 3.6
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 22.799,
+          "ssim": 0.9685,
+          "detail_psnr": 52.843
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 25.657,
+          "ssim": 0.9667,
+          "detail_psnr": 53.716
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 26.574,
+          "ssim": 0.9637,
+          "detail_psnr": 49.097
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 26.781,
+          "ssim": 0.9743,
+          "detail_psnr": 49.417
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 26.725,
+          "ssim": 0.9726,
+          "detail_psnr": 48.539
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 20.556,
+          "ssim": 0.8714,
+          "detail_psnr": 38.941
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 27.777,
+          "ssim": 0.9765,
+          "detail_psnr": 54.609,
+          "seconds": 4.3
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 19.15,
+          "ssim": 0.8484,
+          "detail_psnr": 38.776
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 25.631,
+          "ssim": 0.9704,
+          "detail_psnr": 53.808,
+          "seconds": 5.3
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 24.826,
+          "ssim": 0.8792,
+          "detail_psnr": 38.931
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 20.111,
+          "ssim": 0.8758,
+          "detail_psnr": 39.191
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 26.897,
+          "ssim": 0.975,
+          "detail_psnr": 54.226,
+          "seconds": 3.4
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 25.17,
+          "ssim": 0.8882,
+          "detail_psnr": 39.193
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.815,
+            0.0
+          ],
+          [
+            0.837,
+            0.0
+          ],
+          [
+            0.785,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.829,
+            0.0
+          ],
+          [
+            0.844,
+            0.0
+          ],
+          [
+            0.808,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.814,
+            0.0
+          ],
+          [
+            0.84,
+            0.0
+          ],
+          [
+            0.796,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.817,
+            0.0
+          ],
+          [
+            0.849,
+            0.0
+          ],
+          [
+            0.793,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0131
+    },
+    {
+      "case": "c02-bookstore",
+      "size": [
+        4096,
+        2731
+      ],
+      "methods": {
+        "input": {
+          "psnr": 15.637,
+          "ssim": 0.8301,
+          "detail_psnr": 34.431
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 18.021,
+          "ssim": 0.5941,
+          "detail_psnr": 24.464
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 24.422,
+          "ssim": 0.9493,
+          "detail_psnr": 38.533,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 22.215,
+          "ssim": 0.9388,
+          "detail_psnr": 37.481
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 20.912,
+          "ssim": 0.8924,
+          "detail_psnr": 37.245
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 23.532,
+          "ssim": 0.9094,
+          "detail_psnr": 33.73
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 24.297,
+          "ssim": 0.9454,
+          "detail_psnr": 38.078
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 22.53,
+          "ssim": 0.9012,
+          "detail_psnr": 29.629
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 18.494,
+          "ssim": 0.6017,
+          "detail_psnr": 24.487
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 25.077,
+          "ssim": 0.9539,
+          "detail_psnr": 38.872,
+          "seconds": 1.0
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 17.13,
+          "ssim": 0.5466,
+          "detail_psnr": 24.232
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 23.494,
+          "ssim": 0.939,
+          "detail_psnr": 38.145,
+          "seconds": 0.8
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 19.766,
+          "ssim": 0.6002,
+          "detail_psnr": 24.477
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 18.687,
+          "ssim": 0.6379,
+          "detail_psnr": 24.927
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 24.844,
+          "ssim": 0.9546,
+          "detail_psnr": 38.806,
+          "seconds": 1.0
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 20.508,
+          "ssim": 0.6434,
+          "detail_psnr": 24.947
+        },
+        "output/windowseat-q4-768x2": {
+          "psnr": 19.158,
+          "ssim": 0.6983,
+          "detail_psnr": 26.297
+        },
+        "subtract/windowseat-q4-768x2": {
+          "psnr": 24.351,
+          "ssim": 0.9511,
+          "detail_psnr": 38.511,
+          "seconds": 1.5
+        },
+        "output-corrected/windowseat-q4-768x2": {
+          "psnr": 21.228,
+          "ssim": 0.7051,
+          "detail_psnr": 26.344
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.827,
+            0.0
+          ],
+          [
+            0.917,
+            0.0
+          ],
+          [
+            0.867,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.843,
+            0.0
+          ],
+          [
+            0.918,
+            0.0
+          ],
+          [
+            0.883,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.803,
+            0.0
+          ],
+          [
+            0.906,
+            0.0
+          ],
+          [
+            0.873,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.835,
+            0.0
+          ],
+          [
+            0.919,
+            0.0
+          ],
+          [
+            0.876,
+            0.0
+          ]
+        ],
+        "windowseat-q4-768x2": [
+          [
+            0.846,
+            0.0
+          ],
+          [
+            0.91,
+            0.0
+          ],
+          [
+            0.874,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0445
+    },
+    {
+      "case": "c03-living-room",
+      "size": [
+        4096,
+        2795
+      ],
+      "methods": {
+        "input": {
+          "psnr": 25.018,
+          "ssim": 0.9793,
+          "detail_psnr": 38.465
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 16.32,
+          "ssim": 0.3388,
+          "detail_psnr": 21.743
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 28.84,
+          "ssim": 0.9851,
+          "detail_psnr": 40.186,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 26.96,
+          "ssim": 0.9839,
+          "detail_psnr": 39.752
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 27.653,
+          "ssim": 0.9835,
+          "detail_psnr": 38.813
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 25.331,
+          "ssim": 0.9281,
+          "detail_psnr": 32.688
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 28.804,
+          "ssim": 0.9847,
+          "detail_psnr": 39.793
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 20.258,
+          "ssim": 0.6288,
+          "detail_psnr": 23.082
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 16.706,
+          "ssim": 0.3445,
+          "detail_psnr": 21.745
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 29.358,
+          "ssim": 0.9854,
+          "detail_psnr": 40.418,
+          "seconds": 1.0
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 15.891,
+          "ssim": 0.2794,
+          "detail_psnr": 21.692
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 28.707,
+          "ssim": 0.9847,
+          "detail_psnr": 40.419,
+          "seconds": 0.8
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 18.794,
+          "ssim": 0.3385,
+          "detail_psnr": 21.754
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 16.62,
+          "ssim": 0.4024,
+          "detail_psnr": 21.851
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 29.035,
+          "ssim": 0.9856,
+          "detail_psnr": 39.957,
+          "seconds": 1.4
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 19.345,
+          "ssim": 0.4011,
+          "detail_psnr": 21.877
+        },
+        "output/windowseat-q4-768x2": {
+          "psnr": 17.23,
+          "ssim": 0.5183,
+          "detail_psnr": 22.233
+        },
+        "subtract/windowseat-q4-768x2": {
+          "psnr": 29.012,
+          "ssim": 0.9857,
+          "detail_psnr": 39.474,
+          "seconds": 1.5
+        },
+        "output-corrected/windowseat-q4-768x2": {
+          "psnr": 20.329,
+          "ssim": 0.5168,
+          "detail_psnr": 22.299
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.781,
+            0.0
+          ],
+          [
+            0.79,
+            0.0
+          ],
+          [
+            0.75,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.809,
+            0.0
+          ],
+          [
+            0.803,
+            0.0
+          ],
+          [
+            0.77,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.779,
+            0.0
+          ],
+          [
+            0.792,
+            0.0
+          ],
+          [
+            0.75,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.78,
+            0.0
+          ],
+          [
+            0.784,
+            0.0
+          ],
+          [
+            0.741,
+            0.0
+          ]
+        ],
+        "windowseat-q4-768x2": [
+          [
+            0.786,
+            0.0
+          ],
+          [
+            0.786,
+            0.0
+          ],
+          [
+            0.739,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0941
+    },
+    {
+      "case": "c04-sarphatistraat",
+      "size": [
+        4096,
+        3072
+      ],
+      "methods": {
+        "input": {
+          "psnr": 17.603,
+          "ssim": 0.8112,
+          "detail_psnr": 35.778
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 17.618,
+          "ssim": 0.5264,
+          "detail_psnr": 22.805
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 27.756,
+          "ssim": 0.9202,
+          "detail_psnr": 37.521,
+          "seconds": 1.1
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 26.723,
+          "ssim": 0.927,
+          "detail_psnr": 38.05
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 26.351,
+          "ssim": 0.8942,
+          "detail_psnr": 37.628
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 25.276,
+          "ssim": 0.8777,
+          "detail_psnr": 32.257
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 27.746,
+          "ssim": 0.9188,
+          "detail_psnr": 37.141
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 22.403,
+          "ssim": 0.8705,
+          "detail_psnr": 26.187
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 18.059,
+          "ssim": 0.5361,
+          "detail_psnr": 22.842
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 28.072,
+          "ssim": 0.9206,
+          "detail_psnr": 37.64,
+          "seconds": 1.1
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 16.688,
+          "ssim": 0.4725,
+          "detail_psnr": 22.632
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 27.043,
+          "ssim": 0.9035,
+          "detail_psnr": 37.454,
+          "seconds": 0.8
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 19.262,
+          "ssim": 0.5335,
+          "detail_psnr": 22.827
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 18.467,
+          "ssim": 0.5794,
+          "detail_psnr": 23.187
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 28.366,
+          "ssim": 0.9334,
+          "detail_psnr": 37.633,
+          "seconds": 1.1
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 20.185,
+          "ssim": 0.5871,
+          "detail_psnr": 23.228
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.768,
+            0.0
+          ],
+          [
+            0.787,
+            0.0
+          ],
+          [
+            0.73,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.801,
+            0.0
+          ],
+          [
+            0.804,
+            0.0
+          ],
+          [
+            0.77,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.749,
+            0.0
+          ],
+          [
+            0.774,
+            0.0
+          ],
+          [
+            0.714,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.778,
+            0.0
+          ],
+          [
+            0.796,
+            0.0
+          ],
+          [
+            0.745,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0183
+    },
+    {
+      "case": "c05-dove-lake",
+      "size": [
+        4096,
+        2731
+      ],
+      "methods": {
+        "input": {
+          "psnr": 21.624,
+          "ssim": 0.9402,
+          "detail_psnr": 43.042
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 23.368,
+          "ssim": 0.7068,
+          "detail_psnr": 31.338
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 31.612,
+          "ssim": 0.9842,
+          "detail_psnr": 48.827,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 28.996,
+          "ssim": 0.9815,
+          "detail_psnr": 47.914
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 30.17,
+          "ssim": 0.9617,
+          "detail_psnr": 46.048
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 29.12,
+          "ssim": 0.9179,
+          "detail_psnr": 39.285
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 31.037,
+          "ssim": 0.9787,
+          "detail_psnr": 47.566
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 31.589,
+          "ssim": 0.9838,
+          "detail_psnr": 48.51
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 24.07,
+          "ssim": 0.7098,
+          "detail_psnr": 31.341
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 33.419,
+          "ssim": 0.9856,
+          "detail_psnr": 49.254,
+          "seconds": 1.0
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 22.554,
+          "ssim": 0.675,
+          "detail_psnr": 31.326
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 30.068,
+          "ssim": 0.9827,
+          "detail_psnr": 48.572,
+          "seconds": 0.8
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 25.899,
+          "ssim": 0.7106,
+          "detail_psnr": 31.366
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 23.825,
+          "ssim": 0.7413,
+          "detail_psnr": 31.406
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 32.124,
+          "ssim": 0.9839,
+          "detail_psnr": 48.756,
+          "seconds": 1.0
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 26.413,
+          "ssim": 0.7454,
+          "detail_psnr": 31.47
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.821,
+            0.0
+          ],
+          [
+            0.878,
+            0.0
+          ],
+          [
+            0.878,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.851,
+            0.0
+          ],
+          [
+            0.887,
+            0.0
+          ],
+          [
+            0.893,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.801,
+            0.0
+          ],
+          [
+            0.865,
+            0.0
+          ],
+          [
+            0.858,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.836,
+            0.0
+          ],
+          [
+            0.886,
+            0.0
+          ],
+          [
+            0.887,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.1105
+    },
+    {
+      "case": "c06-unnameable-books",
+      "size": [
+        4096,
+        2731
+      ],
+      "methods": {
+        "input": {
+          "psnr": 22.003,
+          "ssim": 0.98,
+          "detail_psnr": 49.23
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 21.119,
+          "ssim": 0.7862,
+          "detail_psnr": 32.355
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 26.304,
+          "ssim": 0.9491,
+          "detail_psnr": 43.161,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 28.497,
+          "ssim": 0.9811,
+          "detail_psnr": 49.349
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 27.127,
+          "ssim": 0.9233,
+          "detail_psnr": 43.99
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 26.188,
+          "ssim": 0.9218,
+          "detail_psnr": 39.657
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 23.692,
+          "ssim": 0.9394,
+          "detail_psnr": 38.566
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 26.18,
+          "ssim": 0.9421,
+          "detail_psnr": 40.961
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 21.825,
+          "ssim": 0.7902,
+          "detail_psnr": 32.441
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 26.946,
+          "ssim": 0.9481,
+          "detail_psnr": 43.338,
+          "seconds": 1.1
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 19.75,
+          "ssim": 0.7076,
+          "detail_psnr": 31.554
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 24.69,
+          "ssim": 0.9215,
+          "detail_psnr": 41.112,
+          "seconds": 0.9
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 24.441,
+          "ssim": 0.7904,
+          "detail_psnr": 32.485
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 21.949,
+          "ssim": 0.8355,
+          "detail_psnr": 33.339
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 27.305,
+          "ssim": 0.9615,
+          "detail_psnr": 44.882,
+          "seconds": 1.0
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 25.662,
+          "ssim": 0.8402,
+          "detail_psnr": 33.566
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.702,
+            0.0
+          ],
+          [
+            0.721,
+            0.0
+          ],
+          [
+            0.662,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.718,
+            0.0
+          ],
+          [
+            0.732,
+            0.0
+          ],
+          [
+            0.696,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.67,
+            0.0
+          ],
+          [
+            0.699,
+            0.0
+          ],
+          [
+            0.647,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.718,
+            0.0
+          ],
+          [
+            0.739,
+            0.0
+          ],
+          [
+            0.684,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0377
+    },
+    {
+      "case": "c07-kitchen-cafe-tinted",
+      "size": [
+        4096,
+        3084
+      ],
+      "methods": {
+        "input": {
+          "psnr": 23.285,
+          "ssim": 0.9459,
+          "detail_psnr": 47.255
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 22.098,
+          "ssim": 0.86,
+          "detail_psnr": 34.212
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 30.567,
+          "ssim": 0.9779,
+          "detail_psnr": 50.375,
+          "seconds": 1.0
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 26.8,
+          "ssim": 0.9757,
+          "detail_psnr": 50.208
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 26.268,
+          "ssim": 0.9566,
+          "detail_psnr": 48.864
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 29.632,
+          "ssim": 0.9588,
+          "detail_psnr": 43.181
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 30.56,
+          "ssim": 0.9771,
+          "detail_psnr": 48.96
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 30.445,
+          "ssim": 0.9766,
+          "detail_psnr": 46.906
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 22.522,
+          "ssim": 0.8611,
+          "detail_psnr": 34.25
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 30.88,
+          "ssim": 0.977,
+          "detail_psnr": 50.477,
+          "seconds": 1.1
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 21.177,
+          "ssim": 0.8272,
+          "detail_psnr": 33.79
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 29.247,
+          "ssim": 0.9733,
+          "detail_psnr": 49.476,
+          "seconds": 0.9
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 26.915,
+          "ssim": 0.8666,
+          "detail_psnr": 34.243
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 22.533,
+          "ssim": 0.8806,
+          "detail_psnr": 34.82
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 31.147,
+          "ssim": 0.9802,
+          "detail_psnr": 51.175,
+          "seconds": 1.1
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 27.827,
+          "ssim": 0.8866,
+          "detail_psnr": 34.886
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.823,
+            0.0
+          ],
+          [
+            0.85,
+            0.0
+          ],
+          [
+            0.838,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.832,
+            0.0
+          ],
+          [
+            0.852,
+            0.0
+          ],
+          [
+            0.853,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.812,
+            0.0
+          ],
+          [
+            0.848,
+            0.0
+          ],
+          [
+            0.835,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.831,
+            0.0
+          ],
+          [
+            0.85,
+            0.0
+          ],
+          [
+            0.833,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0043
+    },
+    {
+      "case": "c08-bookstore-faint",
+      "size": [
+        4096,
+        2731
+      ],
+      "methods": {
+        "input": {
+          "psnr": 28.156,
+          "ssim": 0.9522,
+          "detail_psnr": 42.856
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 19.736,
+          "ssim": 0.611,
+          "detail_psnr": 24.497
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 29.529,
+          "ssim": 0.9723,
+          "detail_psnr": 40.337,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 32.324,
+          "ssim": 0.9776,
+          "detail_psnr": 43.901
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 29.469,
+          "ssim": 0.9625,
+          "detail_psnr": 40.925
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 27.964,
+          "ssim": 0.9444,
+          "detail_psnr": 35.841
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 29.655,
+          "ssim": 0.9693,
+          "detail_psnr": 39.415
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 26.569,
+          "ssim": 0.9385,
+          "detail_psnr": 31.08
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 20.06,
+          "ssim": 0.6148,
+          "detail_psnr": 24.513
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 30.014,
+          "ssim": 0.9722,
+          "detail_psnr": 40.388,
+          "seconds": 1.0
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 18.742,
+          "ssim": 0.5618,
+          "detail_psnr": 24.242
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 28.805,
+          "ssim": 0.965,
+          "detail_psnr": 40.275,
+          "seconds": 1.2
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 21.633,
+          "ssim": 0.6154,
+          "detail_psnr": 24.514
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 20.497,
+          "ssim": 0.6529,
+          "detail_psnr": 24.995
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 29.851,
+          "ssim": 0.9777,
+          "detail_psnr": 40.305,
+          "seconds": 1.1
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 22.512,
+          "ssim": 0.6578,
+          "detail_psnr": 25.018
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.753,
+            0.0
+          ],
+          [
+            0.805,
+            0.0
+          ],
+          [
+            0.754,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.772,
+            0.0
+          ],
+          [
+            0.817,
+            0.0
+          ],
+          [
+            0.787,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.74,
+            0.0
+          ],
+          [
+            0.784,
+            0.0
+          ],
+          [
+            0.743,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.755,
+            0.0
+          ],
+          [
+            0.807,
+            0.0
+          ],
+          [
+            0.773,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0271
+    },
+    {
+      "case": "c09-sarphatistraat-ghost",
+      "size": [
+        4096,
+        3072
+      ],
+      "methods": {
+        "input": {
+          "psnr": 13.276,
+          "ssim": 0.7225,
+          "detail_psnr": 32.957
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 17.251,
+          "ssim": 0.4957,
+          "detail_psnr": 22.795
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 24.468,
+          "ssim": 0.896,
+          "detail_psnr": 36.453,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 23.101,
+          "ssim": 0.8861,
+          "detail_psnr": 35.808
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 19.21,
+          "ssim": 0.7989,
+          "detail_psnr": 36.048
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 22.804,
+          "ssim": 0.8229,
+          "detail_psnr": 31.408
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 24.463,
+          "ssim": 0.8955,
+          "detail_psnr": 36.36
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 20.487,
+          "ssim": 0.8371,
+          "detail_psnr": 25.696
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 17.699,
+          "ssim": 0.5054,
+          "detail_psnr": 22.829
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 25.336,
+          "ssim": 0.9057,
+          "detail_psnr": 36.686,
+          "seconds": 1.0
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 16.359,
+          "ssim": 0.4359,
+          "detail_psnr": 22.631
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 23.407,
+          "ssim": 0.8767,
+          "detail_psnr": 36.217,
+          "seconds": 1.0
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 18.162,
+          "ssim": 0.5024,
+          "detail_psnr": 22.806
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 17.934,
+          "ssim": 0.5501,
+          "detail_psnr": 23.154
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 25.093,
+          "ssim": 0.9054,
+          "detail_psnr": 36.718,
+          "seconds": 1.1
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 19.003,
+          "ssim": 0.5575,
+          "detail_psnr": 23.18
+        },
+        "output/windowseat-q4-768x2": {
+          "psnr": 18.692,
+          "ssim": 0.6256,
+          "detail_psnr": 24.381
+        },
+        "subtract/windowseat-q4-768x2": {
+          "psnr": 24.377,
+          "ssim": 0.8896,
+          "detail_psnr": 36.797,
+          "seconds": 1.5
+        },
+        "output-corrected/windowseat-q4-768x2": {
+          "psnr": 20.039,
+          "ssim": 0.6347,
+          "detail_psnr": 24.432
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.875,
+            0.0
+          ],
+          [
+            0.916,
+            0.0
+          ],
+          [
+            0.865,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.89,
+            0.0
+          ],
+          [
+            0.923,
+            0.0
+          ],
+          [
+            0.887,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.877,
+            0.0
+          ],
+          [
+            0.918,
+            0.0
+          ],
+          [
+            0.865,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.872,
+            0.0
+          ],
+          [
+            0.91,
+            0.0
+          ],
+          [
+            0.858,
+            0.0
+          ]
+        ],
+        "windowseat-q4-768x2": [
+          [
+            0.864,
+            0.0
+          ],
+          [
+            0.91,
+            0.0
+          ],
+          [
+            0.859,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0203
+    },
+    {
+      "case": "c10-dove-lake-soft",
+      "size": [
+        4096,
+        2731
+      ],
+      "methods": {
+        "input": {
+          "psnr": 23.393,
+          "ssim": 0.9499,
+          "detail_psnr": 43.339
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 23.606,
+          "ssim": 0.7105,
+          "detail_psnr": 31.361
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 31.753,
+          "ssim": 0.9855,
+          "detail_psnr": 48.541,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 29.182,
+          "ssim": 0.9845,
+          "detail_psnr": 48.074
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 30.978,
+          "ssim": 0.9804,
+          "detail_psnr": 47.942
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 29.146,
+          "ssim": 0.9175,
+          "detail_psnr": 39.154
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 31.206,
+          "ssim": 0.9828,
+          "detail_psnr": 48.028
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 31.73,
+          "ssim": 0.985,
+          "detail_psnr": 48.236
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 24.056,
+          "ssim": 0.7121,
+          "detail_psnr": 31.368
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 32.491,
+          "ssim": 0.9857,
+          "detail_psnr": 48.853,
+          "seconds": 1.0
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 22.805,
+          "ssim": 0.6785,
+          "detail_psnr": 31.327
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 30.954,
+          "ssim": 0.9855,
+          "detail_psnr": 48.471,
+          "seconds": 0.7
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 25.925,
+          "ssim": 0.7131,
+          "detail_psnr": 31.383
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 24.044,
+          "ssim": 0.7455,
+          "detail_psnr": 31.454
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 32.209,
+          "ssim": 0.9852,
+          "detail_psnr": 48.614,
+          "seconds": 1.0
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 26.456,
+          "ssim": 0.7484,
+          "detail_psnr": 31.505
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.872,
+            0.0
+          ],
+          [
+            0.907,
+            0.0
+          ],
+          [
+            0.885,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.888,
+            0.0
+          ],
+          [
+            0.912,
+            0.0
+          ],
+          [
+            0.897,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.839,
+            0.0
+          ],
+          [
+            0.89,
+            0.0
+          ],
+          [
+            0.867,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.877,
+            0.0
+          ],
+          [
+            0.909,
+            0.0
+          ],
+          [
+            0.889,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0965
+    },
+    {
+      "case": "c11-living-room-lamp",
+      "size": [
+        4096,
+        2795
+      ],
+      "methods": {
+        "input": {
+          "psnr": 24.36,
+          "ssim": 0.9822,
+          "detail_psnr": 40.363
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 16.797,
+          "ssim": 0.3438,
+          "detail_psnr": 21.736
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 25.139,
+          "ssim": 0.9691,
+          "detail_psnr": 35.063,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 27.891,
+          "ssim": 0.9829,
+          "detail_psnr": 39.883
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 23.69,
+          "ssim": 0.9643,
+          "detail_psnr": 33.626
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 24.203,
+          "ssim": 0.9259,
+          "detail_psnr": 32.358
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 23.842,
+          "ssim": 0.9648,
+          "detail_psnr": 34.48
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 20.661,
+          "ssim": 0.6728,
+          "detail_psnr": 23.548
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 17.192,
+          "ssim": 0.3491,
+          "detail_psnr": 21.738
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 25.658,
+          "ssim": 0.9704,
+          "detail_psnr": 35.231,
+          "seconds": 1.2
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 16.35,
+          "ssim": 0.2823,
+          "detail_psnr": 21.689
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 25.378,
+          "ssim": 0.969,
+          "detail_psnr": 35.552,
+          "seconds": 1.0
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 19.023,
+          "ssim": 0.3411,
+          "detail_psnr": 21.751
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 17.146,
+          "ssim": 0.4093,
+          "detail_psnr": 21.83
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 25.113,
+          "ssim": 0.9715,
+          "detail_psnr": 34.717,
+          "seconds": 1.0
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 19.549,
+          "ssim": 0.4058,
+          "detail_psnr": 21.869
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.766,
+            0.0
+          ],
+          [
+            0.753,
+            0.0
+          ],
+          [
+            0.692,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.792,
+            0.0
+          ],
+          [
+            0.769,
+            0.0
+          ],
+          [
+            0.714,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.757,
+            0.0
+          ],
+          [
+            0.754,
+            0.0
+          ],
+          [
+            0.696,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.766,
+            0.0
+          ],
+          [
+            0.752,
+            0.0
+          ],
+          [
+            0.687,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0907
+    },
+    {
+      "case": "c12-unnameable-books-sky",
+      "size": [
+        4096,
+        2731
+      ],
+      "methods": {
+        "input": {
+          "psnr": 20.1,
+          "ssim": 0.9192,
+          "detail_psnr": 44.272
+        },
+        "output/windowseat-q4-768": {
+          "psnr": 20.25,
+          "ssim": 0.7763,
+          "detail_psnr": 32.372
+        },
+        "subtract/windowseat-q4-768": {
+          "psnr": 28.306,
+          "ssim": 0.9686,
+          "detail_psnr": 47.688,
+          "seconds": 0.9
+        },
+        "subtract-no-drift/windowseat-q4-768": {
+          "psnr": 24.792,
+          "ssim": 0.9596,
+          "detail_psnr": 46.817
+        },
+        "subtract-affine-drift/windowseat-q4-768": {
+          "psnr": 26.779,
+          "ssim": 0.9566,
+          "detail_psnr": 47.22
+        },
+        "subtract-no-smooth/windowseat-q4-768": {
+          "psnr": 26.844,
+          "ssim": 0.9129,
+          "detail_psnr": 38.878
+        },
+        "subtract-clip-exclude/windowseat-q4-768": {
+          "psnr": 28.257,
+          "ssim": 0.9647,
+          "detail_psnr": 43.81
+        },
+        "subtract-clip-replace/windowseat-q4-768": {
+          "psnr": 28.001,
+          "ssim": 0.9614,
+          "detail_psnr": 43.179
+        },
+        "output/windowseat-q8-768": {
+          "psnr": 20.884,
+          "ssim": 0.7837,
+          "detail_psnr": 32.445
+        },
+        "subtract/windowseat-q8-768": {
+          "psnr": 29.291,
+          "ssim": 0.9717,
+          "detail_psnr": 48.111,
+          "seconds": 0.9
+        },
+        "output/windowseat-q4-512": {
+          "psnr": 18.763,
+          "ssim": 0.6964,
+          "detail_psnr": 31.573
+        },
+        "subtract/windowseat-q4-512": {
+          "psnr": 27.029,
+          "ssim": 0.9607,
+          "detail_psnr": 46.566,
+          "seconds": 0.8
+        },
+        "output-corrected/windowseat-q4-768": {
+          "psnr": 24.244,
+          "ssim": 0.7894,
+          "detail_psnr": 32.457
+        },
+        "output/windowseat-q4-1024": {
+          "psnr": 21.006,
+          "ssim": 0.8287,
+          "detail_psnr": 33.413
+        },
+        "subtract/windowseat-q4-1024": {
+          "psnr": 28.72,
+          "ssim": 0.9725,
+          "detail_psnr": 48.355,
+          "seconds": 1.0
+        },
+        "output-corrected/windowseat-q4-1024": {
+          "psnr": 25.523,
+          "ssim": 0.8418,
+          "detail_psnr": 33.566
+        },
+        "output/windowseat-q4-768x2": {
+          "psnr": 21.866,
+          "ssim": 0.876,
+          "detail_psnr": 35.09
+        },
+        "subtract/windowseat-q4-768x2": {
+          "psnr": 28.461,
+          "ssim": 0.9713,
+          "detail_psnr": 48.346,
+          "seconds": 1.5
+        },
+        "output-corrected/windowseat-q4-768x2": {
+          "psnr": 26.557,
+          "ssim": 0.8885,
+          "detail_psnr": 35.374
+        }
+      },
+      "drift": {
+        "windowseat-q4-768": [
+          [
+            0.779,
+            0.0
+          ],
+          [
+            0.793,
+            0.0
+          ],
+          [
+            0.785,
+            0.0
+          ]
+        ],
+        "windowseat-q8-768": [
+          [
+            0.797,
+            0.0
+          ],
+          [
+            0.802,
+            0.0
+          ],
+          [
+            0.805,
+            0.0
+          ]
+        ],
+        "windowseat-q4-512": [
+          [
+            0.745,
+            0.0
+          ],
+          [
+            0.782,
+            0.0
+          ],
+          [
+            0.772,
+            0.0
+          ]
+        ],
+        "windowseat-q4-1024": [
+          [
+            0.793,
+            0.0
+          ],
+          [
+            0.802,
+            0.0
+          ],
+          [
+            0.795,
+            0.0
+          ]
+        ],
+        "windowseat-q4-768x2": [
+          [
+            0.821,
+            0.0
+          ],
+          [
+            0.832,
+            0.0
+          ],
+          [
+            0.81,
+            0.0
+          ]
+        ]
+      },
+      "clipped": 0.0258
+    }
+  ],
+  "summary": {
+    "input": {
+      "cases": 12,
+      "psnr": 21.203,
+      "ssim": 0.913,
+      "detail_psnr": 41.91
+    },
+    "output-corrected/windowseat-q4-1024": {
+      "cases": 12,
+      "psnr": 23.179,
+      "ssim": 0.684,
+      "detail_psnr": 28.692
+    },
+    "output-corrected/windowseat-q4-768": {
+      "cases": 12,
+      "psnr": 22.407,
+      "ssim": 0.64,
+      "detail_psnr": 28.249
+    },
+    "output-corrected/windowseat-q4-768x2": {
+      "cases": 4,
+      "psnr": 22.038,
+      "ssim": 0.686,
+      "detail_psnr": 27.112
+    },
+    "output/windowseat-q4-1024": {
+      "cases": 12,
+      "psnr": 20.235,
+      "ssim": 0.678,
+      "detail_psnr": 28.631
+    },
+    "output/windowseat-q4-512": {
+      "cases": 12,
+      "psnr": 18.78,
+      "ssim": 0.584,
+      "detail_psnr": 27.955
+    },
+    "output/windowseat-q4-768": {
+      "cases": 12,
+      "psnr": 19.665,
+      "ssim": 0.635,
+      "detail_psnr": 28.217
+    },
+    "output/windowseat-q4-768x2": {
+      "cases": 4,
+      "psnr": 19.236,
+      "ssim": 0.68,
+      "detail_psnr": 27.0
+    },
+    "output/windowseat-q8-768": {
+      "cases": 12,
+      "psnr": 20.177,
+      "ssim": 0.64,
+      "detail_psnr": 28.245
+    },
+    "subtract-affine-drift/windowseat-q4-768": {
+      "cases": 12,
+      "psnr": 26.189,
+      "ssim": 0.937,
+      "detail_psnr": 42.672
+    },
+    "subtract-clip-exclude/windowseat-q4-768": {
+      "cases": 12,
+      "psnr": 27.528,
+      "ssim": 0.958,
+      "detail_psnr": 41.801
+    },
+    "subtract-clip-replace/windowseat-q4-768": {
+      "cases": 12,
+      "psnr": 25.631,
+      "ssim": 0.889,
+      "detail_psnr": 36.296
+    },
+    "subtract-no-drift/windowseat-q4-768": {
+      "cases": 12,
+      "psnr": 26.69,
+      "ssim": 0.962,
+      "detail_psnr": 44.173
+    },
+    "subtract-no-smooth/windowseat-q4-768": {
+      "cases": 12,
+      "psnr": 26.384,
+      "ssim": 0.917,
+      "detail_psnr": 37.294
+    },
+    "subtract/windowseat-q4-1024": {
+      "cases": 12,
+      "psnr": 28.392,
+      "ssim": 0.966,
+      "detail_psnr": 43.679
+    },
+    "subtract/windowseat-q4-512": {
+      "cases": 12,
+      "psnr": 27.038,
+      "ssim": 0.953,
+      "detail_psnr": 43.006
+    },
+    "subtract/windowseat-q4-768": {
+      "cases": 12,
+      "psnr": 27.966,
+      "ssim": 0.961,
+      "detail_psnr": 43.414
+    },
+    "subtract/windowseat-q4-768x2": {
+      "cases": 4,
+      "psnr": 26.55,
+      "ssim": 0.949,
+      "detail_psnr": 40.782
+    },
+    "subtract/windowseat-q8-768": {
+      "cases": 12,
+      "psnr": 28.693,
+      "ssim": 0.963,
+      "detail_psnr": 43.656
+    }
+  },
+  "notes": "The 768x2 variant was run on four composites only (c02, c03, c09, c12); its summary means are over those four."
+}

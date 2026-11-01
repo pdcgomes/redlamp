@@ -1,0 +1,210 @@
+{
+  "id": "glass-reflection-removal-2026-11-01",
+  "title": "Reflection Removal on the glass benchmark",
+  "kind": "lightroom-check",
+  "app": "Lightroom Classic",
+  "requestedBy": {
+    "workstream": "ai-denoise-generative-remove",
+    "tracker": "RM-22",
+    "issue": 521
+  },
+  "note": "Twelve composites of CC0 photos, each a photo through glass whose truth is known, and seven CC0 photos taken through shop windows and display cases, for Lightroom's Reflection Removal at its default Amount and Best quality. One composite comes twice: c03-living-room-unedited, a copy made with `cp build/benchmarks/glass/c03-living-room.tif build/benchmarks/glass/c03-living-room-unedited.tif`, is exported without edits, to check that Lightroom's export of a TIFF changes nothing. RM-22 scores the composites' exports against their truth and puts the real photos beside Redlamp's results (research/benchmarks/glass.json); make_glass.py makes the composites into build/benchmarks/glass/, and benchmarks.py fetch --set glass downloads the photos.",
+  "assets": [
+    {
+      "source": "../../../build/benchmarks/glass/c01-kitchen-cafe.tif",
+      "id": "c01-kitchen-cafe",
+      "label": "1 · Café, 50 MP"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c02-bookstore.tif",
+      "id": "c02-bookstore",
+      "label": "2 · Bookshop, ghost"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c03-living-room.tif",
+      "id": "c03-living-room",
+      "label": "3 · Pictures, sharp towers"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c04-sarphatistraat.tif",
+      "id": "c04-sarphatistraat",
+      "label": "4 · Street from a café"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c05-dove-lake.tif",
+      "id": "c05-dove-lake",
+      "label": "5 · Mountain, bright sky"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c06-unnameable-books.tif",
+      "id": "c06-unnameable-books",
+      "label": "6 · Bookshop, lamp"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c07-kitchen-cafe-tinted.tif",
+      "id": "c07-kitchen-cafe-tinted",
+      "label": "7 · Café, green glass"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c08-bookstore-faint.tif",
+      "id": "c08-bookstore-faint",
+      "label": "8 · Bookshop, faint"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c09-sarphatistraat-ghost.tif",
+      "id": "c09-sarphatistraat-ghost",
+      "label": "9 · Street, double image"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c10-dove-lake-soft.tif",
+      "id": "c10-dove-lake-soft",
+      "label": "10 · Mountain, soft room"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c11-living-room-lamp.tif",
+      "id": "c11-living-room-lamp",
+      "label": "11 · Pictures, lamp"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c12-unnameable-books-sky.tif",
+      "id": "c12-unnameable-books-sky",
+      "label": "12 · Bookshop, bright sky"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/r01-law-hub.jpg",
+      "id": "r01-law-hub",
+      "label": "13 · Law Hub window"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/r02-sharpsburg.jpg",
+      "id": "r02-sharpsburg",
+      "label": "14 · Sharpsburg window"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/r03-film-academy.jpg",
+      "id": "r03-film-academy",
+      "label": "15 · Film academy window"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/r04-country-traditionals.jpg",
+      "id": "r04-country-traditionals",
+      "label": "16 · China shop window"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/r05-cake-case.jpg",
+      "id": "r05-cake-case",
+      "label": "17 · Cake case"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/r06-bond-street-coffee.jpg",
+      "id": "r06-bond-street-coffee",
+      "label": "18 · Pastry case"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/r07-mothers-day-window.jpg",
+      "id": "r07-mothers-day-window",
+      "label": "19 · Stickered window"
+    },
+    {
+      "source": "../../../build/benchmarks/glass/c03-living-room-unedited.tif",
+      "id": "c03-living-room-unedited",
+      "label": "20 · Pictures, unedited"
+    }
+  ],
+  "pairing": [
+    "file-name",
+    "similarity"
+  ],
+  "questions": [
+    {
+      "id": "swapped",
+      "text": "Did Lightroom show the reflection rather than the scene at the default Amount on any photo, so that you moved Amount to −100 there?",
+      "choices": [
+        "No",
+        "Yes, on one",
+        "Yes, on several"
+      ],
+      "required": true
+    },
+    {
+      "id": "quality",
+      "text": "Did Lightroom offer Best quality for every photo?",
+      "choices": [
+        "Yes",
+        "No, only Standard or Preview on some"
+      ],
+      "required": true
+    }
+  ],
+  "steps": [
+    {
+      "id": "share",
+      "title": "Share the 20 photos to Lightroom Classic",
+      "detail": "Twelve composites (TIFF), seven photos through glass (JPEG) and c03-living-room-unedited, which stays as it is.",
+      "action": {
+        "type": "share"
+      }
+    },
+    {
+      "id": "first",
+      "title": "c01-kitchen-cafe: remove its reflections",
+      "detail": "Develop, c01-kitchen-cafe. Remove › Distraction Removal; in the Reflections panel, Apply. Leave Amount at its default. Path from Adobe's Lightroom Classic help of 29 September 2026; not checked against 15's own menus."
+    },
+    {
+      "id": "quality",
+      "title": "c01-kitchen-cafe: set Quality to Best",
+      "detail": "In the same Reflections panel, Quality: Best (full resolution). Wait until the photo shows the result. Nothing else."
+    },
+    {
+      "id": "check",
+      "title": "c01-kitchen-cafe: check the result",
+      "detail": "If the photo now shows only the reflection, set Amount to −100, as Adobe's help says, and remember which photo it was."
+    },
+    {
+      "id": "copy",
+      "title": "Copy the Reflections setting",
+      "detail": "Right-click c01-kitchen-cafe › Settings › Copy Settings…, Check None, then tick only Reflections under Remove, and Copy."
+    },
+    {
+      "id": "paste",
+      "title": "Paste it onto the 18 others",
+      "detail": "Select every photo but c01-kitchen-cafe and c03-living-room-unedited. Right-click › Settings › Paste Settings. Wait until each shows its result."
+    },
+    {
+      "id": "check-all",
+      "title": "Check each of the 18",
+      "detail": "Look through them. Where one shows only the reflection, set its Amount to −100. Where Lightroom found no reflection, leave it as it is."
+    },
+    {
+      "id": "swapped",
+      "title": "Did any need −100?",
+      "detail": "Answer, and name those photos in the note.",
+      "action": {
+        "type": "answer",
+        "question": "swapped"
+      }
+    },
+    {
+      "id": "quality-answer",
+      "title": "Was Best offered on every photo?",
+      "detail": "Answer for the Quality menu.",
+      "action": {
+        "type": "answer",
+        "question": "quality"
+      }
+    },
+    {
+      "id": "export",
+      "title": "Export all 20",
+      "detail": "Select all 20. File › Export: Image Format TIFF, Compression None, Bit Depth 16 bits/component, Color Space sRGB, Resize to Fit off, Output Sharpening off, Rename To off so the original file names are kept."
+    },
+    {
+      "id": "results",
+      "title": "Share the exports back",
+      "detail": "Share the 20 TIFFs to Redlamp Bench. They pair with their photos by file name.",
+      "action": {
+        "type": "results"
+      }
+    }
+  ]
+}

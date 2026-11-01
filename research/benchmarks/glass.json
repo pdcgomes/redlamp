@@ -1,0 +1,352 @@
+{
+  "set": "glass",
+  "version": 1,
+  "cases": [
+    {
+      "id": "c01-kitchen-cafe",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c01-kitchen-cafe"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Interior of Kitchen Cafe 2025-01-29.jpg” by Andy Li and “Pavillon de Flore from the Tuileries Garden, Paris 5 November 2019.jpg” by Ali Sabbagh, Wikimedia Commons, CC0",
+      "file": "c01-kitchen-cafe.tif",
+      "truth": "c01-kitchen-cafe-truth.tif",
+      "reflection": "c01-kitchen-cafe-reflection.tif",
+      "score": "truth",
+      "notes": "A building and sky reflected softly over a café interior, at the source's full 50 MP"
+    },
+    {
+      "id": "c02-bookstore",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c02-bookstore"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Gillette College Bookstore bookshop interior at Gillette College main building in Gillette, Wyoming.jpg” by Mr. Satterly and “River landscape with rocks and trees.jpg” by Mshuang2, Wikimedia Commons, CC0",
+      "file": "c02-bookstore.tif",
+      "truth": "c02-bookstore-truth.tif",
+      "reflection": "c02-bookstore-reflection.tif",
+      "score": "truth",
+      "notes": "Trees reflected over a bookshop, with a shifted ghost from the glass's second surface"
+    },
+    {
+      "id": "c03-living-room",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c03-living-room"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Living room of a typical rural house in northeast Brazil.jpg” by Wilfredor and “HK KTD Kwun Tong Road office buildings facades January 2026 N13P 01.jpg” by MAISONWM 6628 LSINGAOR, Wikimedia Commons, CC0",
+      "file": "c03-living-room.tif",
+      "truth": "c03-living-room-truth.tif",
+      "reflection": "c03-living-room-reflection.tif",
+      "score": "truth",
+      "notes": "Office towers reflected sharply, as when the reflection is near the focus"
+    },
+    {
+      "id": "c04-sarphatistraat",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c04-sarphatistraat"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Street view of Sarphatistraat with green tram track; free photo Amsterdam, Fons Heijnsbroek 10-2021.jpg” by Fons Heijnsbroek and “Seats in Cafe & Laundrette, East Reach, Taunton 2025-07-26.jpg” by Andy Li, Wikimedia Commons, CC0",
+      "file": "c04-sarphatistraat.tif",
+      "truth": "c04-sarphatistraat-truth.tif",
+      "reflection": "c04-sarphatistraat-reflection.tif",
+      "score": "truth",
+      "notes": "A street seen from inside a café, with the room reflected in the window"
+    },
+    {
+      "id": "c05-dove-lake",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c05-dove-lake"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Dove Lake Circuit Walking Track, Cradle Mountain - Lake St Clair National Park 24.jpg” by Dhx1 and “Evening clouds over Tuntorp 2.jpg” by W.carter, Wikimedia Commons, CC0",
+      "file": "c05-dove-lake.tif",
+      "truth": "c05-dove-lake-truth.tif",
+      "reflection": "c05-dove-lake-reflection.tif",
+      "score": "truth",
+      "notes": "A bright evening sky reflected over a landscape; the brightest parts clip"
+    },
+    {
+      "id": "c06-unnameable-books",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c06-unnameable-books"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Unnameable Books, interior, looking right.JPG” by Opencooper and “Streetlight in Frankfurt am Main at night 2021-04-04 01.jpg” by Leonhard Lenz, Wikimedia Commons, CC0",
+      "file": "c06-unnameable-books.tif",
+      "truth": "c06-unnameable-books-truth.tif",
+      "reflection": "c06-unnameable-books-reflection.tif",
+      "score": "truth",
+      "notes": "A street lamp reflected over a bookshop: a small clipped highlight"
+    },
+    {
+      "id": "c07-kitchen-cafe-tinted",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c07-kitchen-cafe-tinted"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Interior of Kitchen Cafe 2025-01-29.jpg” by Andy Li and “River landscape with rocks and trees.jpg” by Mshuang2, Wikimedia Commons, CC0",
+      "file": "c07-kitchen-cafe-tinted.tif",
+      "truth": "c07-kitchen-cafe-tinted-truth.tif",
+      "reflection": "c07-kitchen-cafe-tinted-reflection.tif",
+      "score": "truth",
+      "notes": "Green-tinted glass: the tint belongs to the truth, so it should stay"
+    },
+    {
+      "id": "c08-bookstore-faint",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c08-bookstore-faint"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Gillette College Bookstore bookshop interior at Gillette College main building in Gillette, Wyoming.jpg” by Mr. Satterly and “HK KTD Kwun Tong Road office buildings facades January 2026 N13P 01.jpg” by MAISONWM 6628 LSINGAOR, Wikimedia Commons, CC0",
+      "file": "c08-bookstore-faint.tif",
+      "truth": "c08-bookstore-faint-truth.tif",
+      "reflection": "c08-bookstore-faint-reflection.tif",
+      "score": "truth",
+      "notes": "A faint reflection: the photo should be left nearly alone"
+    },
+    {
+      "id": "c09-sarphatistraat-ghost",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c09-sarphatistraat-ghost"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Street view of Sarphatistraat with green tram track; free photo Amsterdam, Fons Heijnsbroek 10-2021.jpg” by Fons Heijnsbroek and “Pavillon de Flore from the Tuileries Garden, Paris 5 November 2019.jpg” by Ali Sabbagh, Wikimedia Commons, CC0",
+      "file": "c09-sarphatistraat-ghost.tif",
+      "truth": "c09-sarphatistraat-ghost-truth.tif",
+      "reflection": "c09-sarphatistraat-ghost-reflection.tif",
+      "score": "truth",
+      "notes": "A strong double image, as thick double glazing makes"
+    },
+    {
+      "id": "c10-dove-lake-soft",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c10-dove-lake-soft"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Dove Lake Circuit Walking Track, Cradle Mountain - Lake St Clair National Park 24.jpg” by Dhx1 and “Seats in Cafe & Laundrette, East Reach, Taunton 2025-07-26.jpg” by Andy Li, Wikimedia Commons, CC0",
+      "file": "c10-dove-lake-soft.tif",
+      "truth": "c10-dove-lake-soft-truth.tif",
+      "reflection": "c10-dove-lake-soft-reflection.tif",
+      "score": "truth",
+      "notes": "A very soft, out-of-focus interior over a landscape"
+    },
+    {
+      "id": "c11-living-room-lamp",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c11-living-room-lamp"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Living room of a typical rural house in northeast Brazil.jpg” by Wilfredor and “Streetlight in Frankfurt am Main at night 2021-04-04 01.jpg” by Leonhard Lenz, Wikimedia Commons, CC0",
+      "file": "c11-living-room-lamp.tif",
+      "truth": "c11-living-room-lamp-truth.tif",
+      "reflection": "c11-living-room-lamp-reflection.tif",
+      "score": "truth",
+      "notes": "A lamp and its ghost reflected over a wall of pictures"
+    },
+    {
+      "id": "c12-unnameable-books-sky",
+      "group": "composite",
+      "source": {
+        "generator": "research/prototypes/reflections/make_glass.py",
+        "args": [
+          "--case",
+          "c12-unnameable-books-sky"
+        ]
+      },
+      "licence": "CC0-1.0",
+      "credit": "Composite of “Unnameable Books, interior, looking right.JPG” by Opencooper and “Evening clouds over Tuntorp 2.jpg” by W.carter, Wikimedia Commons, CC0",
+      "file": "c12-unnameable-books-sky.tif",
+      "truth": "c12-unnameable-books-sky-truth.tif",
+      "reflection": "c12-unnameable-books-sky-reflection.tif",
+      "score": "truth",
+      "notes": "A strong, bright reflection over a dark interior"
+    },
+    {
+      "id": "r01-law-hub",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/27/Window_reflections_of_the_Law_Hub_shop_at_campus_Roeterseiland%3B_free_photo_Amsterdam%2C_Fons_Heijnsbroek%2C_10-2021.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "8f537d727ae2156141131597421c989fbb04dd98ad58047259ce87609e26c3a3"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Window reflections of the Law Hub shop at campus Roeterseiland; free photo Amsterdam, Fons Heijnsbroek, 10-2021.jpg” by Fons Heijnsbroek, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Window_reflections_of_the_Law_Hub_shop_at_campus_Roeterseiland;_free_photo_Amsterdam,_Fons_Heijnsbroek,_10-2021.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r01-law-hub.jpg",
+      "score": "picks",
+      "notes": "Buildings and trees reflected in a dark shop window with neon lettering"
+    },
+    {
+      "id": "r02-sharpsburg",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/1f/Sharpsburg_reflected_in_the_window_of_a_building_on_Main_Street%2C_2023-07-30.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "d87a9b589d98d74f5b934b011438f88730e7e73a10172111975b7b315e80b216"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Sharpsburg reflected in the window of a building on Main Street, 2023-07-30.jpg” by Cbaile19, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Sharpsburg_reflected_in_the_window_of_a_building_on_Main_Street,_2023-07-30.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r02-sharpsburg.jpg",
+      "score": "picks",
+      "notes": "A street reflected strongly in a shop window of small panes; little of the shop shows through"
+    },
+    {
+      "id": "r03-film-academy",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/7/75/Shop_window_of_the_Academy_of_Film_%26_Movie_-_full_of_created_heads%2C_photo_in_2021%2C_by_Fons_Heijnsbroek.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "e23957275c76434f84ae7df0929d12eb274091534660df27c8dcd268eaedeb20"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Shop window of the Academy of Film & Movie - full of created heads, photo in 2021, by Fons Heijnsbroek.jpg” by Fons Heijnsbroek, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Shop_window_of_the_Academy_of_Film_%26_Movie_-_full_of_created_heads,_photo_in_2021,_by_Fons_Heijnsbroek.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r03-film-academy.jpg",
+      "score": "picks",
+      "notes": "Trees and sky reflected over a shop window display, a person standing in front"
+    },
+    {
+      "id": "r04-country-traditionals",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Shop_window_of_Country_Traditionals_in_Colliergate_York.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "816fc2fdee02bc7b8e4776a5fc59afc741d09e8a159f2241822ecb30b4b9ef53"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Shop window of Country Traditionals in Colliergate York.jpg” by Malcolmxl5, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Shop_window_of_Country_Traditionals_in_Colliergate_York.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r04-country-traditionals.jpg",
+      "score": "picks",
+      "notes": "The street reflected in a shop window of blue-and-white china"
+    },
+    {
+      "id": "r05-cake-case",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/3e/Cake_display_case_-_Brasserie1653%2C_Royal_Delft_Museum_2024-12-02.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "b4ed413ac1c5958b72c9fd187dd1b17219d1faf35ecb1183b990e6376307c4c2"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Cake display case - Brasserie1653, Royal Delft Museum 2024-12-02.jpg” by Andy Li, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Cake_display_case_-_Brasserie1653,_Royal_Delft_Museum_2024-12-02.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r05-cake-case.jpg",
+      "score": "picks",
+      "notes": "Lights and the room reflected in a curved glass cake case"
+    },
+    {
+      "id": "r06-bond-street-coffee",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/b/b5/Food_display_case_on_the_counter_of_Bond_Street_Coffee%2C_Brighton_2025-03-14.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "c731e8dfd03f9db3b5aeca15eac485d21532530792f4262cef163b64e7ff35f0"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Food display case on the counter of Bond Street Coffee, Brighton 2025-03-14.jpg” by Andy Li, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Food_display_case_on_the_counter_of_Bond_Street_Coffee,_Brighton_2025-03-14.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r06-bond-street-coffee.jpg",
+      "score": "picks",
+      "notes": "A pastry case with writing on its glass, which should stay"
+    },
+    {
+      "id": "r07-mothers-day-window",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/6/66/Mother%27s_Day_Campaign_Sign_on_Window_Glass_of_Chunghwa_Telecom%2C_Minsheng_Service_Center_20180511.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "6c6735879644ccee5a736a0597abfab00220abc5be5ffa35a3b2ca84a3310994"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Mother's Day Campaign Sign on Window Glass of Chunghwa Telecom, Minsheng Service Center 20180511.jpg” by 玄史生, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Mother%27s_Day_Campaign_Sign_on_Window_Glass_of_Chunghwa_Telecom,_Minsheng_Service_Center_20180511.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r07-mothers-day-window.jpg",
+      "score": "picks",
+      "notes": "Stickers on a shop window, which should stay, with the street reflected in it"
+    },
+    {
+      "id": "r08-laundry-hollyhocks",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/3a/Photo_of_flowering_hollyhocks_in_front_of_the_shop_window_of_a_laundry_on_the_street_Weteringschans_in_Amsterdam_downtown%2C_in_Summer_of_2009_-_photo_of_Dutch_photographer_Fons_Heijnsbroek_-_free_download.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "96faa8eac8afa11bcac85356d1ff134d8f1b6fa50ff9d88928fa5d6eb8d2511a"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Photo of flowering hollyhocks in front of the shop window of a laundry on the street Weteringschans in Amsterdam downtown, in Summer of 2009 - photo of Dutch photographer Fons Heijnsbroek - free download.jpg” by Fons Heijnsbroek, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Photo_of_flowering_hollyhocks_in_front_of_the_shop_window_of_a_laundry_on_the_street_Weteringschans_in_Amsterdam_downtown,_in_Summer_of_2009_-_photo_of_Dutch_photographer_Fons_Heijnsbroek_-_free_download.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r08-laundry-hollyhocks.jpg",
+      "score": "picks",
+      "notes": "Hollyhocks in front of a laundrette window that reflects the street"
+    },
+    {
+      "id": "r09-rockefeller-case",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Middle_bronze_age_display_in_Rockefeller_Museum%2C_Case_T_6723.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "eea9f337ccdb8e5421149da46bce69345eeb0407a9bccf3ad1d74707a466f810"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Middle bronze age display in Rockefeller Museum, Case T 6723.jpg” by יעקב, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Middle_bronze_age_display_in_Rockefeller_Museum,_Case_T_6723.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r09-rockefeller-case.jpg",
+      "score": "picks",
+      "notes": "A museum display case reflecting the gallery's windows"
+    },
+    {
+      "id": "r10-lanskroon",
+      "group": "real",
+      "source": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/9/93/Shop_window_of_Lanskroon_2024-12-04.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "sha256": "91854fef4506c7b5e8829585e38a7f7fa58392a14945543f5932480cd5cf5ae3"
+      },
+      "licence": "CC0-1.0",
+      "credit": "“Shop window of Lanskroon 2024-12-04.jpg” by Andy Li, Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Shop_window_of_Lanskroon_2024-12-04.jpg), CC0 as the file page states (read 2026-11-01)",
+      "file": "r10-lanskroon.jpg",
+      "score": "picks",
+      "notes": "A bakery's shop window display with faint reflections at the top"
+    }
+  ]
+}
