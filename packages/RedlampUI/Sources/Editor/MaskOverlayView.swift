@@ -395,7 +395,10 @@ private struct ObjectPicker: View {
                 }
         }
         .task(id: source) {
-            guard let source, let png = source.preview.png else { return }
+            guard let source, let png = source.preview.png else {
+                tinted = nil
+                return
+            }
             let geometry = source.geometry
             let coverage = await Task.detached(priority: .userInitiated) {
                 ImageFrame.coverage(ofMask: png, through: geometry)
