@@ -10,6 +10,10 @@ import Synchronization
 /// don't move when the edit changes, and kept in the edit as bitmaps.
 extension RedlampEngine {
     static let analysisLongEdge = 2048
+    /// What the analysis and matte renders develop: the default, unframed, so a mask made from
+    /// them sits at the photo points the renderer reads masks at. Framed, a photo's lens
+    /// correction would shift every mask by as much as it moves the photo (#516).
+    static let analysisRecipe = EditRecipe().unframed
     /// Sky's method. `auto` (the default) uses what's on this Mac, best first, as the bake-off
     /// (MSK-17) measured it: Segment Anything (seeded inside the classical estimate, with the sky
     /// between bare branches given back) and Depth Anything 3's sky, arbitrated (IoU 0.945);
@@ -817,9 +821,9 @@ extension RedlampEngine {
         }
     }
 
-    /// The current photo with the default develop, as AI models see it, and a hash of its pixels;
-    /// rendered once for each of the photos visited last. The render of a photo no longer open
-    /// (another photo opened, or the window closed, while it rendered) is the caller's alone.
+    /// The current photo with the default develop, unframed, as AI models see it, and a hash of its
+    /// pixels; rendered once for each of the photos visited last. The render of a photo no longer
+    /// open (another photo opened, or the window closed, while it rendered) is the caller's alone.
     func analysisImage(for session: ImageSession) async throws -> (image: CGImage, hash: String) {
         if let kept = keptAnalysis(for: session) {
             keep(AnalysisCache(session: session, image: kept.image, hash: kept.hash), in: analysisCache)
@@ -835,7 +839,9 @@ extension RedlampEngine {
             renderQueue.async { [self] in
                 continuation.resume(with: Result {
                     try renderStillNow(
-                        StillRequest(recipe: EditRecipe(), maxLongEdge: Self.analysisLongEdge, colorSpace: .sRGB),
+                        StillRequest(
+                            recipe: Self.analysisRecipe, maxLongEdge: Self.analysisLongEdge, colorSpace: .sRGB,
+                        ),
                         session: session,
                     )
                 })
@@ -865,7 +871,7 @@ extension RedlampEngine {
                 continuation.resume(with: Result {
                     try renderStillNow(
                         StillRequest(
-                            recipe: EditRecipe(),
+                            recipe: Self.analysisRecipe,
                             maxLongEdge: MaskResources.rasterLongEdge,
                             colorSpace: .sRGB,
                         ),

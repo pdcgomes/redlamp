@@ -115,10 +115,11 @@ extension EditorModel {
         peoplePicker?.separate = separate
     }
 
-    /// A square around each face (the person, when no face was found), from the photo as shot.
+    /// A square around each face (the person, when no face was found), from the photo as shot,
+    /// unframed as the analysis render they were found in is, so a lens correction doesn't move them.
     private func loadPeopleCrops(_ people: [PersonFound], visit: PhotoVisit) async {
         guard !people.isEmpty,
-              let image = try? await engine.renderStill(StillRequest(recipe: EditRecipe(), maxLongEdge: 1200))
+              let image = try? await engine.renderStill(StillRequest(recipe: EditRecipe().unframed, maxLongEdge: 1200))
         else { return }
         let (width, height) = (Double(image.width), Double(image.height))
         var crops: [Int: CGImage] = [:]

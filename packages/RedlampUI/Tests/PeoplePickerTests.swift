@@ -64,6 +64,17 @@ struct PeoplePickerTests {
         #expect(model.activeTool == .masking)
     }
 
+    /// The crops are cut from the photo as its people were found in it, unframed as the analysis
+    /// render is, so a lens correction doesn't move faces out of them (#516).
+    @Test func `each crop is cut from the photo as its people were found in it`() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (model, engine) = try await threePeople()
+        try await open(model)
+        let crops = engine.stills.filter { $0.maxLongEdge == 1200 }
+        #expect(!crops.isEmpty)
+        #expect(crops.allSatisfy { $0.recipe == EditRecipe().unframed })
+    }
+
     @Test func `Esc closes the picker before it leaves the Masking tool`() async throws {
         defer { try? FileManager.default.removeItem(at: folder) }
         let (model, _) = try await threePeople()

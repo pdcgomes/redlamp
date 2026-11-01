@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Metal
 import RedlampEngineAPI
@@ -125,6 +126,51 @@ struct LensProfileRenderTests {
             Self.pattern(SIMD2((Double(x) + 0.5) / Double(Self.width), (Double(y) + 0.5) / Double(Self.height)))
         }, off)
         #expect(zip(plain, unprofiled).allSatisfy { simd_abs($0 - $1).max() == 0 }, "turned off, nothing changes")
+    }
+
+    /// A barrel correction that pushes the corners out by about 10%, with no vignetting.
+    static let barrel = LensCorrection(
+        source: .fujifilm, center: SIMD2(0.5, 0.5), radii: [0, 0.5, 1, 1.2],
+        distortion: [SIMD3(repeating: 1), SIMD3(repeating: 0.97), SIMD3(repeating: 0.91), SIMD3(repeating: 0.88)],
+        vignetting: [],
+    )
+
+    /// AI masks are read at the photo point behind each pixel, so the renders their models see show
+    /// each subject there, whatever the photo's lens correction (#516). Corrected, they put a Subject
+    /// mask off its person, with a halo on one side.
+    @Test func `the renders AI masks are made from show each subject where masks are read`() async throws {
+        let spot = SIMD2(0.85, 0.8)
+        let scale = SIMD2(Double(Self.width), Double(Self.height))
+        let centre = spot * scale
+        let photo = try session(lens: Self.barrel) { x, y in
+            let offset = SIMD2(Double(x) + 0.5, Double(y) + 0.5) - centre
+            return SIMD3(repeating: 0.03 + 0.5 * exp(-simd_length_squared(offset) / 72))
+        }
+        let corrected = try #require(
+            GeometryMap(recipe: EditRecipe(), imageSize: photo.orientedSize, lens: Self.barrel).outputPoint(spot),
+        )
+        #expect(simd_distance(corrected * scale, centre) > 5, "the edit's correction moves the spot")
+        let engine = try RedlampEngine()
+        let analysis = try await engine.analysisImage(for: photo).image
+        let matte = try await engine.matteImage(for: photo)
+        for (name, image) in [("analysis", analysis), ("matte", matte)] {
+            #expect(image.width == Self.width && image.height == Self.height, "\(name)")
+            let found = Self.brightCentre(image)
+            #expect(simd_distance(found, centre) < 0.75, "\(name): the spot at \(found), not \(centre)")
+        }
+    }
+
+    /// The centre of what stands above an image's ground, weighted by how far it stands, in pixels.
+    static func brightCentre(_ image: CGImage) -> SIMD2<Double> {
+        let bytes = BaseLookTests.pixels(image)
+        let green = stride(from: 1, to: bytes.count, by: 4).map { Double(bytes[$0]) }
+        let ground = green.sorted()[green.count / 2] + 8
+        var (sum, total) = (SIMD2<Double>.zero, 0.0)
+        for (index, value) in green.enumerated() where value > ground {
+            sum += (value - ground) * SIMD2(Double(index % image.width) + 0.5, Double(index / image.width) + 0.5)
+            total += value - ground
+        }
+        return sum / max(total, 1)
     }
 
     /// A lens profile of an adapted lens made on the photo's own body, for its frame, as an LCP file.
