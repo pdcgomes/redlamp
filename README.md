@@ -973,6 +973,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] **Focus stacking:** stacks found in the filmstrip, alignment through focus breathing, depth-map fusion (Auto, Smooth and Detail), a retouch brush, and results that develop like a raw
 - [x] `redlamp-profiler`: look matching by black-box measurement against cameras' own JPEGs; four measured film looks ship
 - [x] Generative fill on the device, for areas too large for content-aware Remove <!-- tracker: RM-10 -->
+- [ ] **Generative Remove that holds up:** fills as sharp as the photo on large areas, clean on water and buildings, and Remove Reflections for photos taken through glass <!-- tracker: RM-20, RM-21, RM-22 -->
 - [ ] Landscape and body-part masks on a model trained on data we have rights to <!-- tracker: MSK-13 -->
 - [x] AI mask edges solved per pixel, coarse masks refined at full resolution, with Feather and Edge sliders <!-- tracker: MSK-07, MSK-18, MSK-26 -->
 - [x] Objects selected by rectangle or brush <!-- tracker: MSK-19 -->
@@ -980,7 +981,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Snow and adaptive Landscape presets <!-- tracker: MSK-22 -->
 - [x] The Masks panel redesigned: one picker for every mask, its actions on screen, masks that preview themselves, Invert for a whole mask, one mask shown alone, People and Landscape pickers, and presets on every selected photo <!-- tracker: UX-20, UX-21, UX-22, UX-23, UX-24, UX-25, UX-26 -->
 - [x] Effects for a mask's adjustments, as Lightroom's Effect menu has: Dodge, Burn, Smooth Skin, Whiten Teeth and others, and your own saved from a mask <!-- tracker: UX-27 -->
-- [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results <!-- tracker: DN-06, DN-07, DN-08 -->
+- [ ] **AI Denoise:** an on-device model working on raw data, matching or beating the best commercial denoisers, with a fast 1:1 preview and non-destructive results <!-- tracker: DN-06, DN-07, DN-08, DN-17 -->
 - [ ] Focus stacking: lens corrections before alignment, halo handling, vendors' focus-bracketing tags, and baking a stack to DNG <!-- tracker: FS-01, FS-02, FS-03 -->
 - [x] Manufacturer lens corrections embedded in Panasonic and OM System raw files: their distortion, from process 16 <!-- tracker: LNS-02 -->
 - [ ] Chromatic aberration and vignetting from the corrections Panasonic and OM System raw files carry, and Fujifilm's 1.25× crop modes <!-- tracker: LNS-18 -->

@@ -77,7 +77,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | --- | --- | --- | --- | --- | --- | --- |
 | Sharpening | Yes | Done | | | SHP-01 | Lightroom's four controls; the photo's noise and grain aren't sharpened |
 | Noise reduction | Yes | Done | | | DN-01, DN-02, DN-12 | Lightroom's six controls, scaled to each photo's measured noise. From process 16, values below black are kept until after noise reduction, so the deepest shadows at high ISO keep their colour; strong Luminance still reads the noisiest of them a little dark (DN-16). Calibrated profiles for the first ten bodies wait on calibration shots |
-| AI Denoise | Yes | Planned | | P3 | DN-06, DN-07, DN-08 | On the Mac, working on the raw data, as an edit rather than a new file, as Lightroom has done since June 2025; proposed as one network that demosaics and denoises Bayer and X-Trans ([DN-11](research/notes/DN-11-lightroom-raw-denoise.md)) |
+| AI Denoise | Yes | Planned | | P3 | DN-06, DN-07, DN-08, DN-17 | On the Mac, working on the raw data, as an edit rather than a new file, as Lightroom has done since June 2025. Open-source raw denoisers are measured first (DN-17); Redlamp's own network, one that demosaics and denoises Bayer and X-Trans, is the alternative ([DN-11](research/notes/DN-11-lightroom-raw-denoise.md)) |
 | Super Resolution | Yes | Planned | | P4 | SR-01, SR-02 | 2x and 4x, faithful to the photo rather than inventing detail |
 | Raw Details | Yes | Later | | | DEC-36 | Proposed as the noise-free mode of the AI Denoise network; a learned demosaic measured 4.5 dB better than Redlamp's on Bayer photos, mostly in fine colour detail ([DN-11](research/notes/DN-11-lightroom-raw-denoise.md)) |
 
@@ -146,9 +146,10 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Remove people and objects with a click | Yes | Done | | | RM-08, RM-13 | Their cast shadows and their reflections on water go with them |
 | Pick an object to remove with a rough stroke (Detect Objects) | Yes | Done | | | RM-19 | Or with a box dragged around it, with Click picks on Object; a stroke over a part a pick left out adds it to that pick |
 | Find and remove things named in words | No | Done | | | RM-08 | Trash, signs, cables and more, found anywhere in the photo; something as large as a car needs Generative Remove, since content-aware fill leaves a smeared patch |
+| Generative Remove on large areas and hard scenes | Yes (cloud, credits) | Planned | | P3 | RM-20, RM-21 | Fills as sharp as the photo on large areas, which are filled at a coarser resolution today, and clean on water and buildings, where content-aware fill's streaks can carry into them |
 | Generative Remove | Yes (cloud, credits) | Done | Different | | RM-10, RM-15 | Runs on the Mac, without a cloud or credits, from an opt-in 2.4 GB download; tested on Macs with 16 GB or more, and offered on smaller ones with a note that it hasn't been tested there; fills are labelled as generated |
 | Dust removal and Visualize Spots | Yes | Done | | | RM-02 | Also across a shoot: specks in the same place on the sensor are healed in every photo |
-| Reflection removal | Yes | Later | | | | |
+| Reflection removal | Yes | Planned | | P3 | RM-22 | For photos taken through glass, on the Mac; open models are surveyed first |
 | Red Eye and Pet Eye | Yes | Planned | | P3 | OTH-01 | |
 
 ## Generative and cloud AI
