@@ -47,7 +47,7 @@ A case's `source` is one of:
 `licence` is `CC0-1.0`, `synthetic`, `CC-BY-4.0` or `CC-BY-SA-4.0` in the manifests here. Each set adds its own fields:
 
 - **Denoise:** `camera`, `iso`, `cfa` (`bayer` or `xtrans`), `truth` (a synthetic case's clean mosaic) and `crops`, the regions to score and show, as `[x, y, width, height]` in raw pixels.
-- **Removal:** `spots`, what to remove, as Remove spots (`{"circle": [x, y, radius]}` in the photo's pixels, or `{"mask": "<file>"}`, a mask listed as another case file) or a pick (`{"find": "car"}`, `{"click": [x, y]}`), and `expect`, what should be left ("driveway, wall and door").
+- **Removal:** `spots`, what to remove, as Remove spots (`{"circle": [x, y, radius]}` in the photo's pixels; `{"brush": [[x, y], …], "radius": r}`, a stroke through the points; or `{"mask": "<file>"}`, a mask listed as another case file) or a pick (`{"find": "car"}`, `{"click": [x, y]}`), and `expect`, what should be left ("driveway, wall and door").
 - **Glass:** `truth` (a composite's transmitted photo) and `reflection` (its reflection layer).
 
 ## Commands

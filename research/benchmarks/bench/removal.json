@@ -1,0 +1,157 @@
+{
+  "id": "removal-generative-remove-2026-11-01",
+  "title": "Generative Remove on the removal benchmark",
+  "kind": "lightroom-check",
+  "app": "Lightroom Classic",
+  "requestedBy": {
+    "workstream": "ai-denoise-generative-remove",
+    "tracker": "INF-14",
+    "issue": 522
+  },
+  "note": "Thirteen CC0 photos for Lightroom's Generative Remove: six real ones and seven composites, each an object pasted onto a clean photo, which comes too as its -truth file to export unedited. Each step's picture outlines what to remove in red. RM-20 and RM-21 score the exports against Redlamp's fills (research/benchmarks/removal.json); the photos, the composites and the pictures are made by research/prototypes/generative/make_removal_composites.py and the prototype CLI into build/benchmarks/removal/.",
+  "assets": [
+    { "source": "../../../build/benchmarks/removal/d7500-car.nef", "id": "d7500-car", "label": "1 · Parked car" },
+    { "source": "../../../build/benchmarks/removal/r6m2-van.cr3", "id": "r6m2-van", "label": "2 · Van" },
+    { "source": "../../../build/benchmarks/removal/7d2-ducks.dng", "id": "7d2-ducks", "label": "3 · Ducks" },
+    { "source": "../../../build/benchmarks/removal/s22-ferry.dng", "id": "s22-ferry", "label": "4 · Ferry" },
+    { "source": "../../../build/benchmarks/removal/80d-trunk.cr2", "id": "80d-trunk", "label": "5 · Tree trunk" },
+    { "source": "../../../build/benchmarks/removal/g95d-leaves.rw2", "id": "g95d-leaves", "label": "6 · Leaves" },
+    { "source": "../../../build/benchmarks/removal/composite-paving.dng", "id": "composite-paving", "label": "7 · Paving" },
+    { "source": "../../../build/benchmarks/removal/composite-grass.dng", "id": "composite-grass", "label": "8 · Grass" },
+    { "source": "../../../build/benchmarks/removal/composite-wall.dng", "id": "composite-wall", "label": "9 · Brick wall" },
+    { "source": "../../../build/benchmarks/removal/composite-windows.dng", "id": "composite-windows", "label": "10 · Windows" },
+    { "source": "../../../build/benchmarks/removal/composite-facade.dng", "id": "composite-facade", "label": "11 · Stone front" },
+    { "source": "../../../build/benchmarks/removal/composite-railing.dng", "id": "composite-railing", "label": "12 · Railing" },
+    { "source": "../../../build/benchmarks/removal/composite-water.dng", "id": "composite-water", "label": "13 · Water" },
+    { "source": "../../../build/benchmarks/removal/composite-paving-truth.dng", "id": "composite-paving-truth", "label": "7 · Paving, truth" },
+    { "source": "../../../build/benchmarks/removal/composite-grass-truth.dng", "id": "composite-grass-truth", "label": "8 · Grass, truth" },
+    { "source": "../../../build/benchmarks/removal/composite-wall-truth.dng", "id": "composite-wall-truth", "label": "9 · Brick wall, truth" },
+    { "source": "../../../build/benchmarks/removal/composite-windows-truth.dng", "id": "composite-windows-truth", "label": "10 · Windows, truth" },
+    { "source": "../../../build/benchmarks/removal/composite-facade-truth.dng", "id": "composite-facade-truth", "label": "11 · Stone front, truth" },
+    { "source": "../../../build/benchmarks/removal/composite-railing-truth.dng", "id": "composite-railing-truth", "label": "12 · Railing, truth" },
+    { "source": "../../../build/benchmarks/removal/composite-water-truth.dng", "id": "composite-water-truth", "label": "13 · Water, truth" }
+  ],
+  "pictures": [
+    "../../../build/benchmarks/removal/d7500-car-marked.jpg",
+    "../../../build/benchmarks/removal/r6m2-van-marked.jpg",
+    "../../../build/benchmarks/removal/7d2-ducks-marked.jpg",
+    "../../../build/benchmarks/removal/s22-ferry-marked.jpg",
+    "../../../build/benchmarks/removal/80d-trunk-marked.jpg",
+    "../../../build/benchmarks/removal/g95d-leaves-marked.jpg",
+    "../../../build/benchmarks/removal/composite-paving-marked.jpg",
+    "../../../build/benchmarks/removal/composite-grass-marked.jpg",
+    "../../../build/benchmarks/removal/composite-wall-marked.jpg",
+    "../../../build/benchmarks/removal/composite-windows-marked.jpg",
+    "../../../build/benchmarks/removal/composite-facade-marked.jpg",
+    "../../../build/benchmarks/removal/composite-railing-marked.jpg",
+    "../../../build/benchmarks/removal/composite-water-marked.jpg"
+  ],
+  "pairing": ["file-name", "similarity"],
+  "steps": [
+    {
+      "id": "share",
+      "title": "Share the 20 photos to Lightroom Classic",
+      "detail": "Thirteen photos to remove something from, and seven -truth files, which stay as they are.",
+      "action": { "type": "share" }
+    },
+    {
+      "id": "tool",
+      "title": "Choose the Remove tool with Generative AI",
+      "detail": "Develop › Remove (Q). Mode: Remove. Tick Use Generative AI. Leave everything else as it is."
+    },
+    {
+      "id": "d7500-car",
+      "title": "Photo 1, d7500-car: brush over the car",
+      "detail": "Brush over all of the area outlined in red, the car and its shadow, in one stroke if you can. Keep the first variation Lightroom shows.",
+      "picture": "pictures/d7500-car-marked.jpg"
+    },
+    {
+      "id": "r6m2-van",
+      "title": "Photo 2, r6m2-van: brush over the van",
+      "detail": "Brush over all of the area outlined in red, the van and its shadow. Keep the first variation.",
+      "picture": "pictures/r6m2-van-marked.jpg"
+    },
+    {
+      "id": "7d2-ducks",
+      "title": "Photo 3, 7d2-ducks: brush over the four ducks",
+      "detail": "Brush over all four outlined areas, each duck with its reflection, one stroke each, keeping the first variation of each.",
+      "picture": "pictures/7d2-ducks-marked.jpg"
+    },
+    {
+      "id": "s22-ferry",
+      "title": "Photo 4, s22-ferry: brush over the ferry",
+      "detail": "Brush over all of the area outlined in red, the ferry with its mast and flag. Keep the first variation.",
+      "picture": "pictures/s22-ferry-marked.jpg"
+    },
+    {
+      "id": "80d-trunk",
+      "title": "Photo 5, 80d-trunk: brush over the trunk",
+      "detail": "Brush over the outlined part of the trunk, from the ground up to where the outline ends; the branches above stay. Keep the first variation.",
+      "picture": "pictures/80d-trunk-marked.jpg"
+    },
+    {
+      "id": "g95d-leaves",
+      "title": "Photo 6, g95d-leaves: brush over the two leaves",
+      "detail": "Brush over the two large leaves outlined in red at the bottom. Keep the first variation.",
+      "picture": "pictures/g95d-leaves-marked.jpg"
+    },
+    {
+      "id": "composite-paving",
+      "title": "Photo 7, composite-paving: brush over the object",
+      "detail": "Brush over all of the red object outlined in red. Keep the first variation.",
+      "picture": "pictures/composite-paving-marked.jpg"
+    },
+    {
+      "id": "composite-grass",
+      "title": "Photo 8, composite-grass: brush over the object",
+      "detail": "Brush over all of the red object outlined in red. Keep the first variation.",
+      "picture": "pictures/composite-grass-marked.jpg"
+    },
+    {
+      "id": "composite-wall",
+      "title": "Photo 9, composite-wall: brush over the object",
+      "detail": "Brush over all of the red object outlined in red. Keep the first variation.",
+      "picture": "pictures/composite-wall-marked.jpg"
+    },
+    {
+      "id": "composite-windows",
+      "title": "Photo 10, composite-windows: brush over the object",
+      "detail": "Brush over all of the red object outlined in red. Keep the first variation.",
+      "picture": "pictures/composite-windows-marked.jpg"
+    },
+    {
+      "id": "composite-facade",
+      "title": "Photo 11, composite-facade: brush over the object",
+      "detail": "Brush over all of the red object outlined in red. Keep the first variation.",
+      "picture": "pictures/composite-facade-marked.jpg"
+    },
+    {
+      "id": "composite-railing",
+      "title": "Photo 12, composite-railing: brush over the object",
+      "detail": "Brush over all of the red object outlined in red. Keep the first variation.",
+      "picture": "pictures/composite-railing-marked.jpg"
+    },
+    {
+      "id": "composite-water",
+      "title": "Photo 13, composite-water: brush over the object",
+      "detail": "Brush over all of the red object outlined in red. Keep the first variation.",
+      "picture": "pictures/composite-water-marked.jpg"
+    },
+    {
+      "id": "truths",
+      "title": "Leave the seven -truth files unedited",
+      "detail": "No edits at all on the files ending in -truth: they show Lightroom's own rendering of each composite without its object."
+    },
+    {
+      "id": "export",
+      "title": "Export all 20",
+      "detail": "Select all 20. File › Export: Image Format TIFF, Bit Depth 16 bits/component, Color Space sRGB, Resize to Fit off, Output Sharpening off, Rename To off so the original file names are kept."
+    },
+    {
+      "id": "results",
+      "title": "Share the exports back",
+      "detail": "Share the 20 TIFFs to Redlamp Bench. They pair with their photos by file name.",
+      "action": { "type": "results" }
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+{
+  "set": "removal",
+  "version": 1,
+  "description": "Generative and content-aware Remove (RM-20, RM-21): large objects whose fill is made on a coarser pyramid level, and hard scenes (water, building fronts, railings, tiled ground). Real photos are scored by blind picks and by measurements against their own surroundings; composites, an object pasted onto a clean part of a CC0 photo by research/prototypes/generative/make_removal_composites.py, also against the photo without the object. Every photo is CC0 from raw.pixls.us, each licence read from its repository listing (https://raw.pixls.us/json/getrepository.php?set=all) on 1 November 2026. Spots are in the photo's pixels as shown: a brush is its points and its radius, as `redlamp render --remove-brush` takes them in fractions.",
+  "cases": [
+    {
+      "id": "d7500-car",
+      "group": "large",
+      "source": {
+        "fixture": "tests/fixtures/shoots/scenes/Nikon_D7500_RAW_NIKON_D7500_12BIT_COMPRESSED.NEF",
+        "sha256": "ad53ee232836ba707d3d6820b5f9c015f129599aef7737adcec4a07b803b8891"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Nikon D7500, 12-bit lossy compressed",
+      "score": "picks",
+      "spots": [{ "find": "car" }],
+      "expect": "The driveway's paving in rows, the brick wall, the basement windows and the white railing by the steps carried on behind where the car was",
+      "notes": "The parked car RM-10 to RM-13 were measured on: a third of the frame across, with its shadow, filled on pyramid level 2"
+    },
+    {
+      "id": "r6m2-van",
+      "group": "large",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/6402/nice/Canon%20-%20EOS%20R6%20Mark%20II%20-%203:2.cr3",
+        "sha256": "1a93f96556aabbc4a7260750ab0a191ec7926bb978fe8428bf3465121da730d6"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Canon EOS R6 Mark II",
+      "file": "Canon_EOS-R6-Mark-II.cr3",
+      "score": "picks",
+      "spots": [{ "click": [1204, 2253] }],
+      "expect": "The wet road, the hedge, the low wall and the lawn behind the van",
+      "notes": "A dark van at the left edge, picked with a click on its side (Segment Anything) with its shadow, filled on level 2"
+    },
+    {
+      "id": "7d2-ducks",
+      "group": "hard",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/7023/nice/Canon%20-%20EOS%207D%20Mark%20II%20-%2016bit%20(3:2).dng",
+        "sha256": "090e01f9a7a860b2f2f0ead770b8a9ba3b17ea98dc1997835c6bda2fc0a2ae54"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Canon EOS 7D Mark II",
+      "file": "Canon_EOS-7D-Mark-II.dng",
+      "score": "picks",
+      "spots": [{ "find": "bird" }],
+      "expect": "Rippled water with the bank's soft vertical reflections, and no duck, duck's reflection or streak where the four were",
+      "notes": "The look-development duck sample RM-11 and RM-12 were measured on: water, four ducks and their reflections"
+    },
+    {
+      "id": "s22-ferry",
+      "group": "hard",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/6625/nice/Samsung%20-%20Galaxy%20S22%20Ultra%20-%204:3.dng",
+        "sha256": "13ddd4b117299d16d47b6404ad1981258a00b6bce60382524a51cab15a41334d"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Samsung Galaxy S22 Ultra",
+      "file": "Samsung_Galaxy-S22-Ultra.dng",
+      "score": "picks",
+      "spots": [{ "brush": [[2517, 1286], [2918, 1286], [2718, 1094], [2718, 930]], "radius": 233 }],
+      "expect": "Open water, the far shore's line and the hill behind it carried across where the ferry was",
+      "notes": "Water and a horizon: the shoreline and the hill's outline run through the hole"
+    },
+    {
+      "id": "80d-trunk",
+      "group": "hard",
+      "source": {
+        "fixture": "tests/fixtures/shoots/scenes/Canon_EOS-80D_IMG_0096.CR2",
+        "sha256": "f9c5404b57248c21e9b269721aa0d721c3b1281c94ebdee3c50bf32db42613a8"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Canon EOS 80D, sRAW2",
+      "score": "picks",
+      "spots": [{ "brush": [[1530, 1980], [1545, 1240]], "radius": 280 }],
+      "expect": "The brick building's courses, its windows and the parked cars carried on behind the trunk",
+      "notes": "A building front with windows behind a tree trunk; the branches above stay"
+    },
+    {
+      "id": "g95d-leaves",
+      "group": "hard",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/6334/nice/Panasonic%20-%20DC-G95D%20-%204:3.RW2",
+        "sha256": "773fb77c1e71b03f44d351adfaa565c1aed5697aa9f103b2f0f19a2f0eb2c855"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Panasonic DC-G95D",
+      "file": "Panasonic_DC-G95D.RW2",
+      "score": "picks",
+      "spots": [{ "brush": [[1950, 3299], [2600, 3318], [3224, 3279]], "radius": 293 }],
+      "expect": "Wet paving bricks laid in rows, their joints running straight through in perspective",
+      "notes": "Tiled ground: the two large leaf inlays at the bottom removed"
+    },
+    {
+      "id": "composite-paving",
+      "group": "large",
+      "source": { "generator": "research/prototypes/generative/make_removal_composites.py", "args": ["--case", "composite-paving"] },
+      "licence": "CC0-1.0",
+      "credit": "Made from raw.pixls.us's Nikon D7500 sample",
+      "file": "composite-paving.dng",
+      "truth": "composite-paving-truth.dng",
+      "score": "truth",
+      "spots": [{ "mask": "composite-paving-mask.png" }],
+      "expect": "The paving bricks in their rows, as in the truth",
+      "notes": "A large object (29% of the frame) on paving"
+    },
+    {
+      "id": "composite-grass",
+      "group": "large",
+      "source": { "generator": "research/prototypes/generative/make_removal_composites.py", "args": ["--case", "composite-grass"] },
+      "licence": "CC0-1.0",
+      "credit": "Made from raw.pixls.us's Sony UMC-R10C and Nikon D7500 samples",
+      "file": "composite-grass.dng",
+      "truth": "composite-grass-truth.dng",
+      "score": "truth",
+      "spots": [{ "mask": "composite-grass-mask.png" }],
+      "expect": "Rough grass and earth, as in the truth",
+      "notes": "A large object (27% of the frame) on grass"
+    },
+    {
+      "id": "composite-wall",
+      "group": "large",
+      "source": { "generator": "research/prototypes/generative/make_removal_composites.py", "args": ["--case", "composite-wall"] },
+      "licence": "CC0-1.0",
+      "credit": "Made from raw.pixls.us's Nikon D7500 sample",
+      "file": "composite-wall.dng",
+      "truth": "composite-wall-truth.dng",
+      "score": "truth",
+      "spots": [{ "mask": "composite-wall-mask.png" }],
+      "expect": "The brick courses and the window the object covered, as in the truth",
+      "notes": "A large object (22% of the frame) over a brick house front and one of its windows"
+    },
+    {
+      "id": "composite-windows",
+      "group": "hard",
+      "source": { "generator": "research/prototypes/generative/make_removal_composites.py", "args": ["--case", "composite-windows"] },
+      "licence": "CC0-1.0",
+      "credit": "Made from raw.pixls.us's Sony UMC-R10C and Nikon D7500 samples",
+      "file": "composite-windows.dng",
+      "truth": "composite-windows-truth.dng",
+      "score": "truth",
+      "spots": [{ "mask": "composite-windows-mask.png" }],
+      "expect": "The building's window frames, panels and cladding lines, as in the truth",
+      "notes": "A modern building front: windows, orange panels, corrugated cladding"
+    },
+    {
+      "id": "composite-facade",
+      "group": "hard",
+      "source": { "generator": "research/prototypes/generative/make_removal_composites.py", "args": ["--case", "composite-facade"] },
+      "licence": "CC0-1.0",
+      "credit": "Made from raw.pixls.us's Fujifilm X100VI and Nikon D7500 samples",
+      "file": "composite-facade.dng",
+      "truth": "composite-facade-truth.dng",
+      "score": "truth",
+      "spots": [{ "mask": "composite-facade-mask.png" }],
+      "expect": "The arched window's edge and the courses of stone, as in the truth",
+      "notes": "A stone church front: an arched window, courses of stone"
+    },
+    {
+      "id": "composite-railing",
+      "group": "hard",
+      "source": { "generator": "research/prototypes/generative/make_removal_composites.py", "args": ["--case", "composite-railing"] },
+      "licence": "CC0-1.0",
+      "credit": "Made from raw.pixls.us's Fujifilm X100VI and Nikon D7500 samples",
+      "file": "composite-railing.dng",
+      "truth": "composite-railing-truth.dng",
+      "score": "truth",
+      "spots": [{ "mask": "composite-railing-mask.png" }],
+      "expect": "The railing's bars carried straight through, the steps and the wall behind, as in the truth",
+      "notes": "A metal railing beside steps"
+    },
+    {
+      "id": "composite-water",
+      "group": "hard",
+      "source": { "generator": "research/prototypes/generative/make_removal_composites.py", "args": ["--case", "composite-water"] },
+      "licence": "CC0-1.0",
+      "credit": "Made from raw.pixls.us's Samsung Galaxy S22 Ultra and Nikon D7500 samples",
+      "file": "composite-water.dng",
+      "truth": "composite-water-truth.dng",
+      "score": "truth",
+      "spots": [{ "mask": "composite-water-mask.png" }],
+      "expect": "Open water and the shoreline carried straight across, as in the truth",
+      "notes": "Water below a shoreline, the object across the shore's line"
+    }
+  ]
+}
