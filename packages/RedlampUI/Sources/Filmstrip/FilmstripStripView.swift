@@ -182,7 +182,7 @@ final class FilmstripStripView: NSView, NSCollectionViewDataSource, NSCollection
             let (selection, photos) = (model.activeAddress, model.photoSelection)
             let inSight = isInShownModule(model)
             defer { wasInSight = inSight }
-            if inSight, !wasInSight {
+            if inSight, !wasInSight || isStale {
                 cameIntoSight()
             } else if inSight {
                 follow(selection, marking: photos)
@@ -578,7 +578,9 @@ extension FilmstripStripView {
     // MARK: - Changes
 
     private func apply(_ diff: LibraryDiff) {
-        guard isInShownModule(model) else {
+        // Shown again, the strip holds the photos it showed before until it reloads as it comes into sight, which its
+        // tracker does a turn later: a batch update of those photos for a change that comes first raises.
+        guard isInShownModule(model), !isStale else {
             isStale = isStale || !diff.isEmpty
             return
         }

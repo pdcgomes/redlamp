@@ -485,6 +485,27 @@ struct FilmstripTests {
         #expect(strip.collectionView.numberOfItems(inSection: 0) == 6)
         #expect(cell(strip, 3)?.item?.name == "IMG_00002a.ARW")
     }
+
+    @Test func `a photo that comes as the strip's module is shown again waits for its reload, rather than raising`(
+    ) async throws {
+        defer { cleanUp() }
+        let (model, strip, window) = try await showStrip(count: 5)
+        defer { window.contentView = nil }
+        // Develop's strip, in sight only while Develop is shown, as the window has it.
+        let develop = ModuleContainerView(frame: strip.frame)
+        window.contentView = develop
+        develop.addSubview(strip)
+        model.module = .library
+        model.library.insert(LibraryItem(url: folder.appending(path: "IMG_00001a.ARW")))
+        // Shown again, the strip comes into sight when its tracker looks, a turn later; the photo comes first.
+        model.module = .develop
+        model.library.insert(LibraryItem(url: folder.appending(path: "IMG_00002a.ARW")))
+        try await eventually { strip.collectionView.numberOfItems(inSection: 0) == 7 }
+        strip.collectionView.layoutSubtreeIfNeeded()
+        #expect(strip.collectionView.numberOfItems(inSection: 0) == 7)
+        #expect(cell(strip, 2)?.item?.name == "IMG_00001a.ARW")
+        #expect(cell(strip, 4)?.item?.name == "IMG_00002a.ARW")
+    }
 }
 
 /// A strip's photos without a library: plain cells, counted as they're made.
