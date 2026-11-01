@@ -68,7 +68,9 @@ def validate(data, set_name, private):
         if kinds and kinds[0] in ("url", "generator") and "file" not in case:
             problems.append(f"{where}: no file")
         if not private and case.get("licence") not in PUBLIC_LICENCES:
-            problems.append(f"{where}: licence {case.get('licence')!r}; only CC0-1.0 or synthetic here")
+            problems.append(f"{where}: licence {case.get('licence')!r}; only {', '.join(sorted(PUBLIC_LICENCES))} here")
+        if case.get("licence", "").startswith("CC-BY") and not case.get("credit"):
+            problems.append(f"{where}: a CC BY licence needs its credit")
         if case.get("score") not in SCORES:
             problems.append(f"{where}: score {case.get('score')!r}, expected one of {', '.join(sorted(SCORES))}")
         if case.get("id") in ids:
