@@ -420,6 +420,21 @@ public extension EditRecipe {
         .transformRotate, .transformAspect, .transformScale, .transformOffsetX, .transformOffsetY,
     ]
 
+    /// This edit over the whole EXIF-oriented photo, so a render's pixels sit at the photo points
+    /// behind them, where masks are placed: no orientation, crop, angle, Transform or distortion.
+    /// The profile's vignetting, a matter of tone, stays.
+    var unframed: EditRecipe {
+        var unframed = self
+        let defaults = EditRecipe()
+        unframed.orientation = .identity
+        unframed.crop = .full
+        for parameter in Self.geometryParameters where parameter != .lensProfile {
+            unframed[parameter] = defaults[parameter]
+        }
+        unframed[.lensProfileDistortion] = 0
+        return unframed
+    }
+
     /// This edit with `other`'s crop, angle, Transform, orientation and border, as `other` renders
     /// them: a Before view framed like the After.
     func withGeometry(of other: EditRecipe) -> EditRecipe {

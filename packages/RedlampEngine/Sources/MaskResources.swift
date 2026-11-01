@@ -675,26 +675,13 @@ final class MaskResources {
         for parameter in unreadByGuide {
             global[parameter] = defaults[parameter]
         }
-        return recipe.processVersion >= 14 ? unframed(global) : global
-    }
-
-    /// `recipe` over the whole EXIF-oriented photo, so a render's pixels sit at the photo points
-    /// behind them: no orientation, crop, angle, Transform or distortion. The profile's
-    /// vignetting, a matter of tone, stays.
-    static func unframed(_ recipe: EditRecipe) -> EditRecipe {
-        var unframed = recipe
-        let defaults = EditRecipe()
-        unframed.orientation = .identity
-        unframed.crop = .full
-        for parameter in EditRecipe.geometryParameters where parameter != .lensProfile {
-            unframed[parameter] = defaults[parameter]
-        }
-        unframed[.lensProfileDistortion] = 0
-        return unframed
+        return recipe.processVersion >= 14 ? global.unframed : global
     }
 
     /// OKLab of the default develop (as-shot white balance, no edits), which never changes with
-    /// the edit: what Auto Mask and AI masks see.
+    /// the edit: what Auto Mask sees. Unlike the analysis render AI masks are made from, it keeps
+    /// the photo's lens correction, though strokes read it at the photo points behind them; an
+    /// unframed guide would change how existing brushes render, so it needs a process version.
     func analysisGuide(
         commands: any MTLCommandBuffer,
         render: (EditRecipe, any MTLTexture) throws -> Void,

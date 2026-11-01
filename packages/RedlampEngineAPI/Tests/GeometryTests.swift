@@ -322,6 +322,31 @@ struct GeometryTests {
         #expect(corner.min() > -1e-6 && corner.min() < 0.01, "the corner reaches the photo's: \(corner)")
     }
 
+    /// A barrel correction that pushes the corners out by about 10% and lifts them by two thirds of
+    /// a stop.
+    private static let barrel = LensCorrection(
+        source: .fujifilm, center: SIMD2(0.5, 0.5), radii: [0, 0.5, 1, 1.2],
+        distortion: [SIMD3(repeating: 1), SIMD3(repeating: 0.97), SIMD3(repeating: 0.91), SIMD3(repeating: 0.88)],
+        vignetting: [1, 1.1, 1.4, 1.6],
+    )
+
+    /// What AI masks are made from (#516): the default edit unframed shows every photo point where
+    /// masks read it, whichever way the lens bends, and keeps the profile's vignetting.
+    @Test func `the default edit unframed shows each photo point where the camera recorded it`() throws {
+        for lens in [Self.pincushion, Self.barrel] {
+            let framed = GeometryMap(recipe: EditRecipe(), imageSize: size, lens: lens)
+            let unframed = GeometryMap(recipe: EditRecipe().unframed, imageSize: size, lens: lens)
+            #expect(unframed.outputSize == size && unframed.toImage == matrix_identity_double3x3)
+            #expect(unframed.lensDistortion == 0)
+            #expect(unframed.lensProfile?.vignetting == framed.lensProfile?.vignetting, "\(lens.source)")
+            for point in [SIMD2(0.05, 0.1), SIMD2(0.85, 0.8), SIMD2(0.7, 0.15)] {
+                expectNear(unframed.imagePoint(point), point, "\(lens.source)")
+                let corrected = try #require(framed.imagePoint(point))
+                #expect(simd_distance(corrected, point) > 1e-3, "the edit corrects \(lens.source) at \(point)")
+            }
+        }
+    }
+
     @Test func `crop and orientation are kept in the sidecar only when set`() throws {
         var recipe = EditRecipe()
         let plain = try JSONEncoder().encode(recipe)

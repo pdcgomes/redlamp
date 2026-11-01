@@ -98,7 +98,7 @@ extension RedlampEngine {
             descriptor.storageMode = .private
             guard let texture = device.makeTexture(descriptor: descriptor) else { throw EngineError.gpuUnavailable }
             try encodeDevelop(
-                MaskResources.unframed(recipe), session: session, into: texture, size: size,
+                recipe.unframed, session: session, into: texture, size: size,
                 encoding: .pointColorInput, showClipping: false, commands: commands, cacheDetail: false,
                 detail: false, retouchMaps: .refreshLater,
             )
