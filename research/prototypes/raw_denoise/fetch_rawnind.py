@@ -18,7 +18,11 @@ SCENES = {
               "TEST_TitusToys": [25600, 51200], "bark_beetled_log": [25600, 51200],
               # Held out of the RawNIND checkpoints' training (their test_reserve is the TEST_ scenes).
               "TEST_MuseeL-vases-A7C": [12800, 64000], "TEST_Vaxt-i-trad": [12800, 51200],
-              "TEST_7D-2": [6400, 12800]},
+              "TEST_7D-2": [6400, 12800],
+              # DN-17: more scenes in neither AutoShade's training (its val split is RawNIND's
+              # test_reserve and unknown_sensor scenes) nor Buades 2026's (TitusToys and boardgames_top).
+              "TEST_MuseeL-bluebirds-A7C": [16000, 64000], "TEST_Pen-pile": [1600, 3200],
+              "UNK_TEST_LucieB_board": [6400, 25600], "UNK_LucieB_bedroom_tapestry": [6400, 25600]},
     "X-Trans": {"books": [1600, 6400], "MuseeL-text": [5000, 6400], "parking-keyboard": [3200, 6400],
                 "fruits": [3200, 6400], "colorscreen": [3200, 6400], "tree1": [3200, 6400]},
 }

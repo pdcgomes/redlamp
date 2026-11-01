@@ -132,7 +132,7 @@ def job(name, path, cfa_tile, a, b, wb, renders, out_dir):
     }
 
 
-def prepare():
+def prepare(prototype=True):
     subset = read_json(RAWNIND / "subset.json")
     jobs, meta = [], {}
     for entry in subset:
@@ -159,6 +159,10 @@ def prepare():
             jobs.append(job(f"{name}-{iso}", out / "noisy.f32", cfa_tile, a, b, wb, RENDERS, out))
             pattern = np.tile(cfa_tile, (SIZE // tile, SIZE // tile))
             assert np.array_equal(pattern, colc)
+            meta[name]["isos"][str(iso)] = {"shift": [dy, dx], "gains": gains, "a": a, "b": b, "file": file}
+            print(name, iso, "shift", (dy, dx), "a", np.round(a, 6), "b", np.format_float_scientific(np.mean(b), 2))
+            if not prototype:
+                continue
             # The prototype with one profile for every colour (the mean), as run_redlamp uses.
             a1, b1 = float(np.mean(a)), float(np.mean(b))
             denoised = cfa_nlm(matched, cfa_tile, a1, b1, h=H)
@@ -172,8 +176,6 @@ def prepare():
                 save_f32(path, mosaic)
                 jobs.append(job(f"{name}-{iso}-{variant}", path, cfa_tile, [v * residual for v in a],
                                 [v * residual for v in b], wb, renders, out))
-            meta[name]["isos"][str(iso)] = {"shift": [dy, dx], "gains": gains, "a": a, "b": b, "file": file}
-            print(name, iso, "shift", (dy, dx), "a", np.round(a, 6), "b", np.format_float_scientific(np.mean(b), 2))
     folder = REAL / "harness"
     write_json(folder / "jobs.json", jobs)
     write_json(REAL / "meta.json", meta)
@@ -228,9 +230,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("step", choices=["prepare", "run", "score"])
     parser.add_argument("--worktree")
+    parser.add_argument("--no-prototype", action="store_true", help="Redlamp's settings only (DN-17)")
     args = parser.parse_args()
     if args.step == "prepare":
-        prepare()
+        prepare(prototype=not args.no_prototype)
     elif args.step == "run":
         raise SystemExit(run(REAL / "harness", os.path.abspath(args.worktree)))
     else:

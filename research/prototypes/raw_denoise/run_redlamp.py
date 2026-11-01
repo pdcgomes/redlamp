@@ -52,7 +52,7 @@ def job(name, mosaic_path, cfa_name, a, b, renders, out_dir, demosaic="menon"):
     }
 
 
-def prepare(only=None):
+def prepare(only=None, prototype=True):
     manifest = read_json(TESTSET / "manifest.json")
     jobs, timings = [], {}
     for scene in manifest["scenes"]:
@@ -69,6 +69,8 @@ def prepare(only=None):
                 out = base / level
                 jobs.append(job(f"{scene}-{cfa_name}-{level}", path, cfa_name, a, b,
                                 {f"rl-{k}": v for k, v in RL_RENDERS.items()}, out))
+                if not prototype:
+                    continue
                 if cfa_name == "bayer":
                     jobs.append(job(f"{scene}-{cfa_name}-{level}-malvar", path, cfa_name, a, b,
                                     {"rl-malvar-none": {}, "rl-malvar-l50": RL_RENDERS["l50"]}, out, "malvar"))
@@ -112,6 +114,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--worktree", required=True)
     parser.add_argument("--only", nargs="*")
+    parser.add_argument("--no-prototype", action="store_true", help="Redlamp's settings only (DN-17)")
     args = parser.parse_args()
-    folder = prepare(args.only)
+    folder = prepare(args.only, prototype=not args.no_prototype)
     raise SystemExit(run(folder, os.path.abspath(args.worktree)))

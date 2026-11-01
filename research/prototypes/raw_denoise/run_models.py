@@ -13,14 +13,21 @@ Each model's own conventions (build/dn11-research/open-models.md, from each repo
   mosaics, as a learned "Raw Details" reference.
 - Sanchez-Beeckman & Buades 2026, and PMRID (Wang et al. 2020): raw to raw, then Redlamp's demosaic
   through the harness (this script writes their mosaics and the harness jobs).
+- AutoShade's raw denoiser v2 (DN-17; models/autoshade_raw.py): raw to raw on Bayer, given the noise
+  model as Buades is, as its sidecar runs it (`autoshade`, with its noise field) and without the field
+  (`autoshade-nofield`); then Redlamp's demosaic through the harness.
 
 Outputs are balanced camera RGB, SIZE x SIZE float32, beside Redlamp's renders, so score.py and
 real_pairs.py score them. Run with build/rawdn-venv (torch, onnxruntime, demosaicnet):
 
     PYTHONPATH=../../../build/oss/nonlocal-matchfilter/src:models/stubs:models \
-      ../../../build/rawdn-venv/bin/python run_models.py synthetic|real
+      ../../../build/rawdn-venv/bin/python run_models.py synthetic|real [--models autoshade buades ...]
+
+Without --models it runs DN-17's candidates (autoshade, autoshade-nofield, buades, pmrid); DN-11's
+set was nind, gharbi, buades and pmrid.
 """
 
+import argparse
 import collections
 import json
 import os
@@ -275,6 +282,113 @@ class PMRID:
         return out[pad - oy:pad - oy + raw.shape[0], pad - ox:pad - ox + raw.shape[1]]
 
 
+class AutoShade:
+    """AutoShade v2 on the mosaic, told the noise model; `field` False leaves out its noise field."""
+
+    def __init__(self, field=True, model=None):
+        import torch as th
+        import autoshade_raw
+        self.lib = autoshade_raw
+        self.device = "mps" if th.backends.mps.is_available() else "cpu"
+        self.model = model or autoshade_raw.load_model(MODELS / "autoshade", self.device)
+        self.field = field
+
+    def __call__(self, raw, tile, a, b):
+        return self.lib.denoise(raw, tile, self.model, self.device, a, b, field=self.field)
+
+
+def cfa_pad(x, period, k):
+    """Pads by k whole CFA periods on every side, mirroring whole periods, so every photosite keeps its colour."""
+    def along(x, axis):
+        n = x.shape[axis]
+        assert n % period == 0, f"{n} isn't a multiple of the CFA period {period}"
+        block = lambda i: np.take(x, range(i, i + period), axis=axis)
+        before = [block(i * period) for i in range(k)][::-1]
+        after = [block(n - (i + 1) * period) for i in range(k)]
+        return np.concatenate(before + [x] + after, axis=axis)
+    return along(along(x, 0), 1)
+
+
+class Starfish:
+    """Starfish's joint demosaic and denoise networks (monkeypangit/starfish b43b610, Apache-2.0 or MIT; trained
+    on DIV2K through a simulated sensor), Bayer and X-Trans. Input as its training builds it: the white-balanced
+    mosaic, clipped at white before balancing, and its noise sigma per photosite, from the given noise model."""
+
+    def __init__(self):
+        import importlib
+        import torch as th
+        folder = MODELS / "starfish"
+        # Starfish's modules include a `common` of their own: lent the name while they import.
+        names = ("common", "wgsl", "train_bayer", "train_xtrans")
+        saved = {n: sys.modules.pop(n) for n in names if n in sys.modules}
+        sys.path.insert(0, str(folder))
+        try:
+            train_bayer = importlib.import_module("train_bayer")
+            train_xtrans = importlib.import_module("train_xtrans")
+        finally:
+            sys.path.remove(str(folder))
+            for n in names:
+                sys.modules.pop(n, None)
+            sys.modules.update(saved)
+        self.th = th
+        self.device = "mps" if th.backends.mps.is_available() else "cpu"
+        self.nets = {}
+        for period, module, file in ((2, train_bayer, "bayer.pt"), (6, train_xtrans, "xtrans.pt")):
+            net = module.build()
+            net.load_state_dict(th.load(folder / file, map_location="cpu", weights_only=True)["model"])
+            self.nets[period] = (net.eval().to(self.device), module.CFA.numpy())
+
+    def __call__(self, raw, tile, gains, a, b, half=False):
+        p = tile.shape[0]
+        net, cfa = self.nets[p]
+        oy, ox = next((oy, ox) for oy in range(p) for ox in range(p)
+                      if np.array_equal(np.roll(tile, (-oy, -ox), (0, 1)), cfa))
+        pad = 36  # about the networks' receptive field, a multiple of both periods
+        m = cfa_pad(np.minimum(raw, 1.0), p, pad // p)[oy:, ox:]
+        h, w = (m.shape[0] // p) * p, (m.shape[1] // p) * p
+        m = m[:h, :w]
+        index = np.tile(cfa, (h // p, w // p))
+        g = np.array(gains, np.float32)[index]
+        sigma = np.sqrt(np.maximum(np.array(a, np.float32)[index] * np.maximum(m, 0) + np.array(b, np.float32)[index], 0)) * g
+        th = self.th
+        x = th.from_numpy(np.ascontiguousarray(m * g, np.float32))[None, None].to(self.device)
+        s = th.from_numpy(np.ascontiguousarray(sigma, np.float32))[None, None].to(self.device)
+        with th.no_grad():
+            if half:
+                with th.autocast(device_type=self.device, dtype=th.float16):
+                    y = net(x, s)
+            else:
+                y = net(x, s)
+        out = y[0].float().cpu().numpy()
+        return out[:, pad - oy:pad - oy + raw.shape[0], pad - ox:pad - ox + raw.shape[1]].transpose(1, 2, 0).astype(np.float32)
+
+
+def load_models(names):
+    """The selected models by label; the two AutoShade variants share one network."""
+    out = {}
+    for name in names:
+        if name == "nind":
+            out[name] = RawNIND()
+        elif name == "gharbi":
+            out[name] = Gharbi()
+        elif name == "buades":
+            out[name] = Buades()
+        elif name == "pmrid":
+            out[name] = PMRID()
+        elif name in ("autoshade", "autoshade-nofield"):
+            shared = next((m.model for m in out.values() if isinstance(m, AutoShade)), None)
+            out[name] = AutoShade(field=name == "autoshade", model=shared)
+        elif name == "starfish":
+            out[name] = Starfish()
+        else:
+            raise SystemExit(f"unknown model {name}")
+    return out
+
+
+RAW_TO_RAW = ("buades", "pmrid", "autoshade", "autoshade-nofield")
+DN17_MODELS = ["autoshade", "autoshade-nofield", "buades", "pmrid", "starfish"]
+
+
 # ----------------------------------------------------------------- harness jobs for raw-to-raw outputs
 
 
@@ -303,62 +417,92 @@ def raw_to_raw(jobs, name, model, noisy, tile, a, b, gains, out_dir, reference_m
 # ----------------------------------------------------------------- test sets
 
 
-def synthetic():
+def finish(folder, jobs):
+    """The harness jobs for this run's raw-to-raw outputs (a run of joint models alone leaves the last run's),
+    and the median time per model, merged with earlier runs'."""
+    if jobs:
+        write_json(folder / "models-harness" / "jobs.json", jobs)
+    path = folder / "model-timings.json"
+    timings = read_json(path) if path.exists() else {}
+    timings.update({k: float(np.median(v)) for k, v in TIMES.items()})
+    write_json(path, timings)
+
+
+def synthetic(names):
     manifest = read_json(TESTSET / "manifest.json")
-    nind, gharbi, buades, pmrid = RawNIND(), Gharbi(), Buades(), PMRID()
+    models = load_models(names)
     jobs = []
     for scene in manifest["scenes"]:
         renders = OUT / "renders" / scene
         for cfa_name, tile in CFAS.items():
             clean = np.fromfile(TESTSET / scene / f"{cfa_name}-clean.f32", "<f4").reshape(SIZE, SIZE)
-            # A learned demosaic on the noise-free mosaic.
-            fn = gharbi.bayer_rgb if cfa_name == "bayer" else gharbi.xtrans_rgb
-            save_f32(renders / cfa_name / "clean-demosaicnet.f32", timed(f"demosaicnet-{cfa_name}", fn, clean, tile, AS_SHOT))
+            if "gharbi" in models:
+                # A learned demosaic on the noise-free mosaic.
+                gharbi = models["gharbi"]
+                fn = gharbi.bayer_rgb if cfa_name == "bayer" else gharbi.xtrans_rgb
+                save_f32(renders / cfa_name / "clean-demosaicnet.f32", timed(f"demosaicnet-{cfa_name}", fn, clean, tile, AS_SHOT))
+            if "starfish" in models:
+                save_f32(renders / cfa_name / "clean-starfish.f32", models["starfish"](clean, tile, AS_SHOT, [0] * 3, [0] * 3))
             for level, (a, b) in NOISE_LEVELS.items():
                 out = renders / cfa_name / level
                 noisy = np.fromfile(TESTSET / scene / f"{cfa_name}-{level}.f32", "<f4").reshape(SIZE, SIZE)
                 av, bv = [a] * 3, [b] * 3
+                if "starfish" in models:
+                    save_f32(out / "model-starfish.f32", timed(f"starfish-{cfa_name}", models["starfish"], noisy, tile, AS_SHOT, av, bv))
                 if cfa_name == "bayer":
-                    save_f32(out / "model-nind.f32", timed("nind-bayer", nind.joint, noisy, tile, AS_SHOT))
-                    sigma = gamma_sigma(noisy, tile, AS_SHOT, av, bv)
-                    save_f32(out / "model-gharbi.f32", timed("gharbi-noise", gharbi.bayer_rgb, noisy, tile, AS_SHOT, sigma))
-                    raw_to_raw(jobs, f"{scene}-{cfa_name}-{level}", buades, noisy, tile, av, bv, AS_SHOT, out, clean, "model-buades")
-                    raw_to_raw(jobs, f"{scene}-{cfa_name}-{level}", pmrid, noisy, tile, av, bv, AS_SHOT, out, clean, "model-pmrid")
-                else:
+                    if "nind" in models:
+                        save_f32(out / "model-nind.f32", timed("nind-bayer", models["nind"].joint, noisy, tile, AS_SHOT))
+                    if "gharbi" in models:
+                        sigma = gamma_sigma(noisy, tile, AS_SHOT, av, bv)
+                        save_f32(out / "model-gharbi.f32", timed("gharbi-noise", models["gharbi"].bayer_rgb, noisy, tile, AS_SHOT, sigma))
+                    for name in RAW_TO_RAW:
+                        if name in models:
+                            raw_to_raw(jobs, f"{scene}-{cfa_name}-{level}", models[name], noisy, tile, av, bv, AS_SHOT, out, clean,
+                                       f"model-{name}")
+                elif "nind" in models:
                     demosaiced = np.fromfile(out / "rl-none.f32", "<f4").reshape(SIZE, SIZE, 3)
-                    save_f32(out / "model-nind-linear.f32", timed("nind-linear", nind.linear, demosaiced))
+                    save_f32(out / "model-nind-linear.f32", timed("nind-linear", models["nind"].linear, demosaiced))
             print(scene, cfa_name, flush=True)
-    write_json(OUT / "models-harness" / "jobs.json", jobs)
-    write_json(OUT / "model-timings.json", {k: float(np.median(v)) for k, v in TIMES.items()})
+    finish(OUT, jobs)
 
 
-def real():
+def real(names):
     REAL = OUT / "real"  # real_pairs.REAL, without importing rawpy here
     meta = read_json(REAL / "meta.json")
-    nind, gharbi, buades = RawNIND(), Gharbi(), Buades()
+    models = load_models(names)
+    harness = read_json(REAL / "harness" / "jobs.json")
     jobs = []
     for name, m in meta.items():
         base = REAL / name
         gt = np.fromfile(base / "gt.f32", "<f4").reshape(SIZE, SIZE)
         colc = np.load(base / "colors.npy")
         tile = colc[:m["tile"], :m["tile"]]
-        harness = read_json(REAL / "harness" / "jobs.json")
         gains = next(j["asShot"] for j in harness if j["name"] == f"{name}-gt")
         for iso, info in m["isos"].items():
             out = base / f"iso{iso}"
             noisy = np.fromfile(out / "noisy.f32", "<f4").reshape(SIZE, SIZE)
             a, b = info["a"], info["b"]
+            if "starfish" in models:
+                save_f32(out / "model-starfish.f32", timed(f"starfish-{m['tile']}", models["starfish"], noisy, tile, gains, a, b))
             if m["tile"] == 2:
-                save_f32(out / "model-nind.f32", timed("nind-bayer", nind.joint, noisy, tile, gains))
-                sigma = gamma_sigma(noisy, tile, gains, a, b)
-                save_f32(out / "model-gharbi.f32", timed("gharbi-noise", gharbi.bayer_rgb, noisy, tile, gains, sigma))
-                raw_to_raw(jobs, f"{name}-{iso}", buades, noisy, tile, a, b, gains, out, gt, "model-buades")
-            else:
+                if "nind" in models:
+                    save_f32(out / "model-nind.f32", timed("nind-bayer", models["nind"].joint, noisy, tile, gains))
+                if "gharbi" in models:
+                    sigma = gamma_sigma(noisy, tile, gains, a, b)
+                    save_f32(out / "model-gharbi.f32", timed("gharbi-noise", models["gharbi"].bayer_rgb, noisy, tile, gains, sigma))
+                for label in RAW_TO_RAW:
+                    if label in models:
+                        raw_to_raw(jobs, f"{name}-{iso}", models[label], noisy, tile, a, b, gains, out, gt, f"model-{label}")
+            elif "nind" in models:
                 demosaiced = np.fromfile(out / "rl-none.f32", "<f4").reshape(SIZE, SIZE, 3)
-                save_f32(out / "model-nind-linear.f32", timed("nind-linear", nind.linear, demosaiced))
+                save_f32(out / "model-nind-linear.f32", timed("nind-linear", models["nind"].linear, demosaiced))
             print(name, iso, flush=True)
-    write_json(REAL / "models-harness" / "jobs.json", jobs)
+    finish(REAL, jobs)
 
 
 if __name__ == "__main__":
-    {"synthetic": synthetic, "real": real}[sys.argv[1]]()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("set", choices=["synthetic", "real"])
+    parser.add_argument("--models", nargs="*", default=DN17_MODELS)
+    args = parser.parse_args()
+    {"synthetic": synthetic, "real": real}[args.set](args.models)

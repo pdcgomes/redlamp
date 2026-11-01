@@ -124,16 +124,20 @@ REGIONS = {
 }
 
 
-def photo_crops() -> dict:
+PHOTO_SOURCES = [
+    ("sony", "_DSC0009.ARW", 2),
+    ("nikon", "DSC_0750.NEF", 2),
+    ("canon", "Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3", 2),
+    ("fuji", "AFXT2720.RAF", 3),
+]
+
+
+def photo_crops(names=None) -> dict:
     """Binned crops of CC0 base-ISO raws, chosen as the most detailed SIZE x SIZE windows."""
-    sources = [
-        ("sony", "_DSC0009.ARW", 2),
-        ("nikon", "DSC_0750.NEF", 2),
-        ("canon", "Canon_EOS_R6_RAW_ISO_100_nocrop_nodual.CR3", 2),
-        ("fuji", "AFXT2720.RAF", 3),
-    ]
     scenes = {}
-    for name, file, b in sources:
+    for name, file, b in PHOTO_SOURCES:
+        if names is not None and name not in names:
+            continue
         raw = rawpy.imread(str(ROOT / "tests/fixtures/raw" / file))
         data = raw.raw_image_visible.astype(np.float32)
         colors = raw.raw_colors_visible.copy()

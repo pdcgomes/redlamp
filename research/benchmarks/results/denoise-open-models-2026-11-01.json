@@ -1,0 +1,8183 @@
+{
+ "set": "denoise",
+ "round": "denoise-open-models-2026-11-01",
+ "date": "2026-11-01",
+ "measuredBy": "DN-17 (#518), research/prototypes/raw_denoise (run_models.py, run_rawrefinery.py, score.py, real_pairs.py, dn17_report.py)",
+ "machine": "Mac Studio, M1 Ultra, 128 GB; load averages of 36 to 75 from other sessions throughout, so no time here is a performance figure",
+ "cases": "Synthetic cases are research/benchmarks/denoise.json's synthetic-<scene>-<cfa>-<level> (and <level> clean for noise-free mosaics); RawNIND cases are rawnind-<scene>-iso<N>, scored on the 768 px window that case's crops give",
+ "scores": {
+  "cpsnr": "colour PSNR (dB) in a square-root encoding, 16 px borders left out; RawNIND: against the clean frame through Redlamp's demosaic",
+  "cpsnr_binned": "RawNIND: colour PSNR binned to full colour (2 x 2 Bayer, 3 x 3 X-Trans) against the clean frame binned the same way",
+  "texture": "share of the truth's 3 x 3 high-pass luma detail kept (1 = all)",
+  "ssim": "luma SSIM",
+  "edge_mtf50": "slanted-edge MTF50, cycles per pixel (the truth's is 0.347)",
+  "edge_mtf_nyquist": "MTF at 0.5 cycles per pixel",
+  "star_mtf50": "Siemens star: where its modulation falls to half",
+  "false_colour": "mean chroma error where the truth is neutral (zone plate 0.25 to 0.5 cycles per pixel; the star)",
+  "flat_luma_noise": "luma noise in the text scene's grey patch",
+  "flat_chroma_noise": "chroma noise there",
+  "shadow_bias": "the dark patch's colour cast against the truth",
+  "shadow_level": "the dark patch's luma error",
+  "text_cpsnr": "colour PSNR over the text panel alone",
+  "text_texture": "share of the text panel's fine detail kept",
+  "text_spurious": "fine detail in the result that the truth doesn't have (residual noise, artefacts, anything invented), relative to the truth's"
+ },
+ "methods": {
+  "rl-c25": "Redlamp main 30810115e, process 20, Detail panel Color 25 (the default), noise model given",
+  "rl-l50": "Redlamp main 30810115e, process 20, Luminance 50 and Color 25",
+  "clean-none": "Redlamp's demosaic of the noise-free mosaic (Menon with the dual blend; Markesteijn on X-Trans)",
+  "model-autoshade": "AutoShade raw denoiser v2 (autoshade-raw-denoise-v2.pth, sha256 ffafa40a53f52092149db2fcf03636117ad6855e1068142d4f6b03b634e9f9c4) as its sidecar runs it (commit 8f25a8a), told the noise model; then Redlamp's demosaic, no noise reduction",
+  "model-autoshade-nofield": "the same without AutoShade's noise field",
+  "model-buades": "Sanchez-Beeckman & Buades 2026, rawnoise_25_15_9nbr.ckpt (release v1.0.0, sha256 b31bc8e21022389b0b209a9d1e6649485ed4dacc552b7ea04612df5f7515fcf2), told the noise model; then Redlamp's demosaic",
+  "model-pmrid": "PMRID torch_pretrained.ckp (MegEngine/PMRID), k-sigma from the noise model; then Redlamp's demosaic",
+  "model-rr-jdd": "RawForge DemoRestormerDiT_to_demo_cont_cont_768_RawNIND.pt (release JDD_v1.0.0, signature verified), 768 px tiles, float32",
+  "model-rr-treenet": "RawRefinery ShadowWeightedL1.pt (release v1.2.1-alpha), for reference",
+  "model-rr-xtrans-treenet": "RawForge xtrans_fixed_exposure_no_conditioning_400.pt (release xtrans_v1.0.0) after LibRaw's Markesteijn",
+  "model-rr-xtrans-restormer": "RawForge restormer.pt (release xtrans_v1.0.0) after LibRaw's Markesteijn",
+  "model-starfish": "Starfish bayer.pt or xtrans.pt (monkeypangit/starfish b43b610), told the noise model",
+  "clean-starfish": "Starfish on the noise-free mosaic",
+  "rr-libraw-3pass": "LibRaw's Markesteijn, no noise reduction (X-Trans reference)"
+ },
+ "results": [
+  {
+   "case": "synthetic-edge-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 69.69715,
+    "psnr_luma": 71.53011,
+    "ssim": 0.99999,
+    "texture": 1.00576,
+    "edge_mtf50": 0.35293,
+    "edge_mtf_nyquist": 0.24822
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 73.11469,
+    "psnr_luma": 76.16393,
+    "ssim": 1.0,
+    "texture": 0.99454,
+    "edge_mtf50": 0.34462,
+    "edge_mtf_nyquist": 0.22671
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 57.79461,
+    "psnr_luma": 59.19779,
+    "ssim": 0.99977,
+    "texture": 0.8651,
+    "edge_mtf50": 0.30398,
+    "edge_mtf_nyquist": 0.15257
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 57.69939,
+    "psnr_luma": 59.14665,
+    "ssim": 0.99976,
+    "texture": 0.86455,
+    "edge_mtf50": 0.30368,
+    "edge_mtf_nyquist": 0.15267
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 57.56762,
+    "psnr_luma": 58.97832,
+    "ssim": 0.99982,
+    "texture": 0.86897,
+    "edge_mtf50": 0.3019,
+    "edge_mtf_nyquist": 0.14809
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 54.13937,
+    "psnr_luma": 56.24392,
+    "ssim": 0.99953,
+    "texture": 0.8415,
+    "edge_mtf50": 0.29632,
+    "edge_mtf_nyquist": 0.11466
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 43.74271,
+    "psnr_luma": 44.26102,
+    "ssim": 0.99915,
+    "texture": 1.02012,
+    "edge_mtf50": 0.34585,
+    "edge_mtf_nyquist": 0.14121
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 43.90533,
+    "psnr_luma": 44.35455,
+    "ssim": 0.97636,
+    "texture": 0.76439,
+    "edge_mtf50": 0.27828,
+    "edge_mtf_nyquist": 0.05801
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 50.87386,
+    "psnr_luma": 52.16839,
+    "ssim": 0.99801,
+    "texture": 0.94908,
+    "edge_mtf50": 0.3283,
+    "edge_mtf_nyquist": 0.21696
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 33.48082,
+    "psnr_luma": 33.94311,
+    "ssim": 0.70923,
+    "texture": 1.02131,
+    "edge_mtf50": 0.37396,
+    "edge_mtf_nyquist": 0.29297
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 41.79268,
+    "psnr_luma": 45.5457,
+    "ssim": 0.98669,
+    "texture": 1.01494,
+    "edge_mtf50": 0.36203,
+    "edge_mtf_nyquist": 0.26968
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 60.93331,
+    "psnr_luma": 62.71004,
+    "ssim": 0.99988,
+    "texture": 0.93307,
+    "edge_mtf50": 0.32959,
+    "edge_mtf_nyquist": 0.19407
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 60.84491,
+    "psnr_luma": 62.69549,
+    "ssim": 0.99988,
+    "texture": 0.93263,
+    "edge_mtf50": 0.32934,
+    "edge_mtf_nyquist": 0.1943
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 60.14115,
+    "psnr_luma": 61.72916,
+    "ssim": 0.99988,
+    "texture": 0.89715,
+    "edge_mtf50": 0.31633,
+    "edge_mtf_nyquist": 0.15857
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 57.07611,
+    "psnr_luma": 59.18722,
+    "ssim": 0.99973,
+    "texture": 0.88748,
+    "edge_mtf50": 0.31057,
+    "edge_mtf_nyquist": 0.14201
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 47.25416,
+    "psnr_luma": 48.1477,
+    "ssim": 0.99954,
+    "texture": 1.03131,
+    "edge_mtf50": 0.3495,
+    "edge_mtf_nyquist": 0.15561
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 47.98494,
+    "psnr_luma": 48.66588,
+    "ssim": 0.99266,
+    "texture": 0.81777,
+    "edge_mtf50": 0.29194,
+    "edge_mtf_nyquist": 0.07477
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 56.26829,
+    "psnr_luma": 57.49226,
+    "ssim": 0.99944,
+    "texture": 0.95851,
+    "edge_mtf50": 0.34099,
+    "edge_mtf_nyquist": 0.2295
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 39.91888,
+    "psnr_luma": 40.3552,
+    "ssim": 0.91222,
+    "texture": 1.00395,
+    "edge_mtf50": 0.35628,
+    "edge_mtf_nyquist": 0.2663
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 48.32624,
+    "psnr_luma": 52.00646,
+    "ssim": 0.99695,
+    "texture": 1.00236,
+    "edge_mtf50": 0.35585,
+    "edge_mtf_nyquist": 0.25556
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 53.81722,
+    "psnr_luma": 55.12291,
+    "ssim": 0.99951,
+    "texture": 0.74257,
+    "edge_mtf50": 0.28107,
+    "edge_mtf_nyquist": 0.07314
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 53.63773,
+    "psnr_luma": 55.03683,
+    "ssim": 0.99943,
+    "texture": 0.74283,
+    "edge_mtf50": 0.28108,
+    "edge_mtf_nyquist": 0.07377
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 54.40174,
+    "psnr_luma": 55.6245,
+    "ssim": 0.99972,
+    "texture": 0.79972,
+    "edge_mtf50": 0.28441,
+    "edge_mtf_nyquist": 0.12642
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 44.13677,
+    "psnr_luma": 45.8651,
+    "ssim": 0.99806,
+    "texture": 0.7098,
+    "edge_mtf50": 0.26619,
+    "edge_mtf_nyquist": 0.04247
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 38.67855,
+    "psnr_luma": 39.15107,
+    "ssim": 0.99705,
+    "texture": 1.02929,
+    "edge_mtf50": 0.34404,
+    "edge_mtf_nyquist": 0.13338
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 39.41796,
+    "psnr_luma": 39.80652,
+    "ssim": 0.93338,
+    "texture": 0.62244,
+    "edge_mtf50": 0.2464,
+    "edge_mtf_nyquist": 0.02932
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 44.40877,
+    "psnr_luma": 45.79407,
+    "ssim": 0.99012,
+    "texture": 0.89265,
+    "edge_mtf50": 0.31219,
+    "edge_mtf_nyquist": 0.19164
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 26.40881,
+    "psnr_luma": 26.97741,
+    "ssim": 0.35128,
+    "texture": 0.95873,
+    "edge_mtf50": 0.31635,
+    "edge_mtf_nyquist": 0.31301
+   }
+  },
+  {
+   "case": "synthetic-edge-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.50683,
+    "psnr_luma": 38.63285,
+    "ssim": 0.9401,
+    "texture": 0.92331,
+    "edge_mtf50": 0.31484,
+    "edge_mtf_nyquist": 0.21801
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 68.03883,
+    "psnr_luma": 70.4194,
+    "ssim": 0.99999,
+    "texture": 0.99382,
+    "edge_mtf50": 0.34545,
+    "edge_mtf_nyquist": 0.22856
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 70.29244,
+    "psnr_luma": 72.71128,
+    "ssim": 0.99998,
+    "texture": 1.00589,
+    "edge_mtf50": 0.35013,
+    "edge_mtf_nyquist": 0.23344
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.99556,
+    "psnr_luma": 20.44233,
+    "ssim": 0.46595,
+    "texture": 1.05691,
+    "edge_mtf50": 0.32521,
+    "edge_mtf_nyquist": 0.08728
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 46.01753,
+    "psnr_luma": 46.79697,
+    "ssim": 0.99931,
+    "texture": 0.93218,
+    "edge_mtf50": 0.30953,
+    "edge_mtf_nyquist": 0.15131
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 47.99288,
+    "psnr_luma": 50.23268,
+    "ssim": 0.99789,
+    "texture": 0.82349,
+    "edge_mtf50": 0.29149,
+    "edge_mtf_nyquist": 0.01932
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 51.4251,
+    "psnr_luma": 52.46161,
+    "ssim": 0.99766,
+    "texture": 0.89612,
+    "edge_mtf50": 0.31285,
+    "edge_mtf_nyquist": 0.20658
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.88051,
+    "psnr_luma": 32.52705,
+    "ssim": 0.63469,
+    "texture": 0.99991,
+    "edge_mtf50": 0.35279,
+    "edge_mtf_nyquist": 0.21454
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 39.6918,
+    "psnr_luma": 45.15238,
+    "ssim": 0.98471,
+    "texture": 0.99624,
+    "edge_mtf50": 0.34704,
+    "edge_mtf_nyquist": 0.23651
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 27.67394,
+    "psnr_luma": 29.50369,
+    "ssim": 0.46711,
+    "texture": 1.05842,
+    "edge_mtf50": 0.37234,
+    "edge_mtf_nyquist": 0.22461
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 19.02999,
+    "psnr_luma": 20.44151,
+    "ssim": 0.46297,
+    "texture": 1.06423,
+    "edge_mtf50": 0.32675,
+    "edge_mtf_nyquist": 0.08584
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 48.80319,
+    "psnr_luma": 49.21302,
+    "ssim": 0.99961,
+    "texture": 0.93559,
+    "edge_mtf50": 0.31796,
+    "edge_mtf_nyquist": 0.17167
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 49.67834,
+    "psnr_luma": 51.93023,
+    "ssim": 0.99876,
+    "texture": 0.88747,
+    "edge_mtf50": 0.30536,
+    "edge_mtf_nyquist": 0.03255
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 56.42776,
+    "psnr_luma": 57.2816,
+    "ssim": 0.99927,
+    "texture": 0.98053,
+    "edge_mtf50": 0.3429,
+    "edge_mtf_nyquist": 0.24534
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 38.3533,
+    "psnr_luma": 38.95524,
+    "ssim": 0.88142,
+    "texture": 1.00477,
+    "edge_mtf50": 0.35847,
+    "edge_mtf_nyquist": 0.24597
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 46.22863,
+    "psnr_luma": 51.50098,
+    "ssim": 0.99647,
+    "texture": 1.0041,
+    "edge_mtf50": 0.35523,
+    "edge_mtf_nyquist": 0.24416
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 34.24371,
+    "psnr_luma": 36.00344,
+    "ssim": 0.78926,
+    "texture": 1.04609,
+    "edge_mtf50": 0.37241,
+    "edge_mtf_nyquist": 0.26534
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.94296,
+    "psnr_luma": 20.47998,
+    "ssim": 0.47143,
+    "texture": 1.04522,
+    "edge_mtf50": 0.31372,
+    "edge_mtf_nyquist": 0.07365
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 41.82386,
+    "psnr_luma": 42.17709,
+    "ssim": 0.99827,
+    "texture": 0.9247,
+    "edge_mtf50": 0.29983,
+    "edge_mtf_nyquist": 0.14454
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 44.63575,
+    "psnr_luma": 47.02901,
+    "ssim": 0.99425,
+    "texture": 0.7262,
+    "edge_mtf50": 0.26865,
+    "edge_mtf_nyquist": 0.01442
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 45.34145,
+    "psnr_luma": 46.51189,
+    "ssim": 0.99024,
+    "texture": 0.76645,
+    "edge_mtf50": 0.25786,
+    "edge_mtf_nyquist": 0.13939
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.73943,
+    "psnr_luma": 25.49132,
+    "ssim": 0.27669,
+    "texture": 0.99498,
+    "edge_mtf50": 0.32216,
+    "edge_mtf_nyquist": 0.19529
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 32.17232,
+    "psnr_luma": 37.72534,
+    "ssim": 0.92724,
+    "texture": 0.97617,
+    "edge_mtf50": 0.32204,
+    "edge_mtf_nyquist": 0.18875
+   }
+  },
+  {
+   "case": "synthetic-edge-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 21.53718,
+    "psnr_luma": 23.3702,
+    "ssim": 0.18233,
+    "texture": 1.08139,
+    "edge_mtf50": 0.33215,
+    "edge_mtf_nyquist": 0.22837
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 41.28625,
+    "psnr_luma": 43.16628,
+    "ssim": 0.99661,
+    "texture": 1.02676,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.0067
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 53.37188,
+    "psnr_luma": 55.74845,
+    "ssim": 0.99973,
+    "texture": 0.99503,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.00234
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 38.03271,
+    "psnr_luma": 39.62708,
+    "ssim": 0.99179,
+    "texture": 0.90867,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01226
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 38.03271,
+    "psnr_luma": 39.62708,
+    "ssim": 0.99179,
+    "texture": 0.90867,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01226
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 36.92769,
+    "psnr_luma": 38.14412,
+    "ssim": 0.98954,
+    "texture": 0.85428,
+    "star_mtf50": 0.27284,
+    "false_colour": 0.01273
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 34.50159,
+    "psnr_luma": 36.06736,
+    "ssim": 0.98052,
+    "texture": 0.82584,
+    "star_mtf50": 0.27284,
+    "false_colour": 0.01917
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 30.5708,
+    "psnr_luma": 32.57452,
+    "ssim": 0.95929,
+    "texture": 1.08932,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.02794
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 33.35897,
+    "psnr_luma": 34.44394,
+    "ssim": 0.96477,
+    "texture": 0.89159,
+    "star_mtf50": 0.28648,
+    "false_colour": 0.01636
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 37.6673,
+    "psnr_luma": 38.18533,
+    "ssim": 0.98532,
+    "texture": 0.92994,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.00774
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.47453,
+    "psnr_luma": 32.38263,
+    "ssim": 0.89572,
+    "texture": 1.01813,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.02139
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 33.97161,
+    "psnr_luma": 35.66315,
+    "ssim": 0.98141,
+    "texture": 1.01101,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.02033
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 39.59214,
+    "psnr_luma": 41.64417,
+    "ssim": 0.99456,
+    "texture": 0.97321,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01082
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 39.59214,
+    "psnr_luma": 41.64417,
+    "ssim": 0.99456,
+    "texture": 0.97321,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01082
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 38.95129,
+    "psnr_luma": 40.68962,
+    "ssim": 0.99377,
+    "texture": 0.92058,
+    "star_mtf50": 0.30156,
+    "false_colour": 0.0113
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 37.73839,
+    "psnr_luma": 39.3678,
+    "ssim": 0.9898,
+    "texture": 0.91786,
+    "star_mtf50": 0.28648,
+    "false_colour": 0.01322
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 30.79857,
+    "psnr_luma": 33.1974,
+    "ssim": 0.965,
+    "texture": 1.13154,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.02916
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 34.16419,
+    "psnr_luma": 35.78833,
+    "ssim": 0.97539,
+    "texture": 0.97382,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01648
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 41.93484,
+    "psnr_luma": 42.52904,
+    "ssim": 0.99402,
+    "texture": 0.97378,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.00509
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 36.5281,
+    "psnr_luma": 37.76371,
+    "ssim": 0.96749,
+    "texture": 1.02782,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01327
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.86613,
+    "psnr_luma": 39.61581,
+    "ssim": 0.99217,
+    "texture": 1.02566,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.0129
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 35.46791,
+    "psnr_luma": 36.49702,
+    "ssim": 0.98449,
+    "texture": 0.80986,
+    "star_mtf50": 0.28648,
+    "false_colour": 0.01408
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 35.46791,
+    "psnr_luma": 36.49702,
+    "ssim": 0.98449,
+    "texture": 0.80986,
+    "star_mtf50": 0.28648,
+    "false_colour": 0.01408
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 34.69005,
+    "psnr_luma": 35.61406,
+    "ssim": 0.98241,
+    "texture": 0.78596,
+    "star_mtf50": 0.26044,
+    "false_colour": 0.01525
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 30.57975,
+    "psnr_luma": 32.03784,
+    "ssim": 0.95541,
+    "texture": 0.66406,
+    "star_mtf50": 0.23873,
+    "false_colour": 0.03072
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 29.71317,
+    "psnr_luma": 31.08533,
+    "ssim": 0.94994,
+    "texture": 0.99913,
+    "star_mtf50": 0.28648,
+    "false_colour": 0.02643
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 31.32036,
+    "psnr_luma": 31.93184,
+    "ssim": 0.94343,
+    "texture": 0.75868,
+    "star_mtf50": 0.27284,
+    "false_colour": 0.01757
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 33.13407,
+    "psnr_luma": 33.58115,
+    "ssim": 0.96164,
+    "texture": 0.85985,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01195
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 25.32882,
+    "psnr_luma": 26.096,
+    "ssim": 0.74254,
+    "texture": 0.94193,
+    "star_mtf50": 0.27284,
+    "false_colour": 0.03917
+   }
+  },
+  {
+   "case": "synthetic-star-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 29.70183,
+    "psnr_luma": 31.877,
+    "ssim": 0.95375,
+    "texture": 0.85987,
+    "star_mtf50": 0.26044,
+    "false_colour": 0.03562
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 49.96774,
+    "psnr_luma": 52.75248,
+    "ssim": 0.99964,
+    "texture": 0.99512,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.00219
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 51.66754,
+    "psnr_luma": 53.96961,
+    "ssim": 0.99954,
+    "texture": 1.00215,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.00284
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.37618,
+    "psnr_luma": 19.82047,
+    "ssim": 0.63,
+    "texture": 1.00899,
+    "star_mtf50": 0.30156,
+    "false_colour": 0.14988
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 31.76043,
+    "psnr_luma": 33.77066,
+    "ssim": 0.97518,
+    "texture": 1.09111,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.0298
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 30.29778,
+    "psnr_luma": 32.54396,
+    "ssim": 0.95942,
+    "texture": 1.0478,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.03378
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 35.79088,
+    "psnr_luma": 36.04432,
+    "ssim": 0.97749,
+    "texture": 0.897,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.00678
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.01604,
+    "psnr_luma": 32.11507,
+    "ssim": 0.87266,
+    "texture": 0.99441,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.02441
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.30342,
+    "psnr_luma": 36.89482,
+    "ssim": 0.9834,
+    "texture": 0.99123,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.02293
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 24.95409,
+    "psnr_luma": 27.26546,
+    "ssim": 0.78861,
+    "texture": 1.2968,
+    "star_mtf50": 0.3581,
+    "false_colour": 0.06556
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.25176,
+    "psnr_luma": 19.64067,
+    "ssim": 0.61499,
+    "texture": 1.00879,
+    "star_mtf50": 0.30156,
+    "false_colour": 0.14853
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 31.96709,
+    "psnr_luma": 34.33113,
+    "ssim": 0.9748,
+    "texture": 1.15099,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.02824
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 30.17134,
+    "psnr_luma": 32.68748,
+    "ssim": 0.96633,
+    "texture": 1.17213,
+    "star_mtf50": 0.3581,
+    "false_colour": 0.03316
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 40.11335,
+    "psnr_luma": 40.44501,
+    "ssim": 0.98935,
+    "texture": 0.97053,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.00473
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 37.08333,
+    "psnr_luma": 38.30865,
+    "ssim": 0.95938,
+    "texture": 0.99485,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01278
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 39.49416,
+    "psnr_luma": 41.82673,
+    "ssim": 0.99428,
+    "texture": 0.99455,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.01225
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 27.48912,
+    "psnr_luma": 30.24666,
+    "ssim": 0.90314,
+    "texture": 1.31712,
+    "star_mtf50": 0.3581,
+    "false_colour": 0.04578
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.63042,
+    "psnr_luma": 20.23961,
+    "ssim": 0.66736,
+    "texture": 1.00166,
+    "star_mtf50": 0.27284,
+    "false_colour": 0.15499
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 30.3339,
+    "psnr_luma": 31.46125,
+    "ssim": 0.97298,
+    "texture": 0.96786,
+    "star_mtf50": 0.27284,
+    "false_colour": 0.02918
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 29.73819,
+    "psnr_luma": 31.30884,
+    "ssim": 0.94301,
+    "texture": 0.86585,
+    "star_mtf50": 0.28648,
+    "false_colour": 0.03321
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 31.69049,
+    "psnr_luma": 31.94634,
+    "ssim": 0.95027,
+    "texture": 0.76883,
+    "star_mtf50": 0.30156,
+    "false_colour": 0.01064
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.23736,
+    "psnr_luma": 25.27145,
+    "ssim": 0.71261,
+    "texture": 0.99444,
+    "star_mtf50": 0.31831,
+    "false_colour": 0.04986
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 28.85956,
+    "psnr_luma": 32.2974,
+    "ssim": 0.95305,
+    "texture": 0.93764,
+    "star_mtf50": 0.28648,
+    "false_colour": 0.04479
+   }
+  },
+  {
+   "case": "synthetic-star-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 20.7099,
+    "psnr_luma": 22.70632,
+    "ssim": 0.64269,
+    "texture": 1.24503,
+    "star_mtf50": 0.3581,
+    "false_colour": 0.10537
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 36.39769,
+    "psnr_luma": 37.30228,
+    "ssim": 0.94298,
+    "texture": 0.97792,
+    "false_colour": 0.00716,
+    "false_colour_mid": 0.01166
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 45.8849,
+    "psnr_luma": 47.86124,
+    "ssim": 0.99304,
+    "texture": 0.99375,
+    "false_colour": 0.00473,
+    "false_colour_mid": 0.00389
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 33.66991,
+    "psnr_luma": 34.32516,
+    "ssim": 0.90932,
+    "texture": 0.87427,
+    "false_colour": 0.01267,
+    "false_colour_mid": 0.01967
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 30.58907,
+    "psnr_luma": 30.7914,
+    "ssim": 0.79892,
+    "texture": 0.6697,
+    "false_colour": 0.01008,
+    "false_colour_mid": 0.01881
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 30.30891,
+    "psnr_luma": 30.66715,
+    "ssim": 0.81755,
+    "texture": 0.65485,
+    "false_colour": 0.01541,
+    "false_colour_mid": 0.02112
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 27.16816,
+    "psnr_luma": 27.31251,
+    "ssim": 0.60127,
+    "texture": 0.3243,
+    "false_colour": 0.00994,
+    "false_colour_mid": 0.02627
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 24.58679,
+    "psnr_luma": 24.97908,
+    "ssim": 0.49216,
+    "texture": 0.33928,
+    "false_colour": 0.00926,
+    "false_colour_mid": 0.07562
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 28.19413,
+    "psnr_luma": 28.4442,
+    "ssim": 0.65815,
+    "texture": 0.44966,
+    "false_colour": 0.01334,
+    "false_colour_mid": 0.02373
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 31.32141,
+    "psnr_luma": 31.41883,
+    "ssim": 0.79816,
+    "texture": 0.76057,
+    "false_colour": 0.0062,
+    "false_colour_mid": 0.0106
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 29.25583,
+    "psnr_luma": 29.79996,
+    "ssim": 0.82744,
+    "texture": 0.8917,
+    "false_colour": 0.02291,
+    "false_colour_mid": 0.02424
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 30.33628,
+    "psnr_luma": 31.02189,
+    "ssim": 0.82367,
+    "texture": 0.81079,
+    "false_colour": 0.02122,
+    "false_colour_mid": 0.02402
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 35.66995,
+    "psnr_luma": 36.78229,
+    "ssim": 0.94499,
+    "texture": 0.96258,
+    "false_colour": 0.01188,
+    "false_colour_mid": 0.01728
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 33.87009,
+    "psnr_luma": 34.30776,
+    "ssim": 0.89693,
+    "texture": 0.84511,
+    "false_colour": 0.00989,
+    "false_colour_mid": 0.01744
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 33.8581,
+    "psnr_luma": 34.46679,
+    "ssim": 0.90978,
+    "texture": 0.83565,
+    "false_colour": 0.0128,
+    "false_colour_mid": 0.01757
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 28.61276,
+    "psnr_luma": 28.75355,
+    "ssim": 0.68451,
+    "texture": 0.45103,
+    "false_colour": 0.01101,
+    "false_colour_mid": 0.01759
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 25.02777,
+    "psnr_luma": 25.51987,
+    "ssim": 0.52958,
+    "texture": 0.41896,
+    "false_colour": 0.01336,
+    "false_colour_mid": 0.07608
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 28.88193,
+    "psnr_luma": 29.2945,
+    "ssim": 0.69863,
+    "texture": 0.51449,
+    "false_colour": 0.01666,
+    "false_colour_mid": 0.01943
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 35.27303,
+    "psnr_luma": 35.42067,
+    "ssim": 0.9018,
+    "texture": 0.9129,
+    "false_colour": 0.00566,
+    "false_colour_mid": 0.00771
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 33.95922,
+    "psnr_luma": 34.74881,
+    "ssim": 0.92686,
+    "texture": 0.98738,
+    "false_colour": 0.01397,
+    "false_colour_mid": 0.01747
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.39029,
+    "psnr_luma": 35.28508,
+    "ssim": 0.92592,
+    "texture": 0.97802,
+    "false_colour": 0.01392,
+    "false_colour_mid": 0.01743
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 30.62675,
+    "psnr_luma": 30.9713,
+    "ssim": 0.82295,
+    "texture": 0.70789,
+    "false_colour": 0.01363,
+    "false_colour_mid": 0.02242
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 28.61718,
+    "psnr_luma": 28.78759,
+    "ssim": 0.7185,
+    "texture": 0.51768,
+    "false_colour": 0.01114,
+    "false_colour_mid": 0.02132
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 27.34011,
+    "psnr_luma": 27.57468,
+    "ssim": 0.67347,
+    "texture": 0.42219,
+    "false_colour": 0.01731,
+    "false_colour_mid": 0.02725
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 25.69731,
+    "psnr_luma": 25.80964,
+    "ssim": 0.49598,
+    "texture": 0.18704,
+    "false_colour": 0.00571,
+    "false_colour_mid": 0.03025
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 23.78851,
+    "psnr_luma": 24.04239,
+    "ssim": 0.43356,
+    "texture": 0.22177,
+    "false_colour": 0.0036,
+    "false_colour_mid": 0.07068
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 26.71092,
+    "psnr_luma": 26.83017,
+    "ssim": 0.56748,
+    "texture": 0.31589,
+    "false_colour": 0.00792,
+    "false_colour_mid": 0.02982
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 27.97833,
+    "psnr_luma": 28.06248,
+    "ssim": 0.66539,
+    "texture": 0.54364,
+    "false_colour": 0.00774,
+    "false_colour_mid": 0.01408
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.81019,
+    "psnr_luma": 25.3231,
+    "ssim": 0.64898,
+    "texture": 0.69019,
+    "false_colour": 0.03417,
+    "false_colour_mid": 0.04271
+   }
+  },
+  {
+   "case": "synthetic-zone-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 25.10179,
+    "psnr_luma": 25.56433,
+    "ssim": 0.52184,
+    "texture": 0.23038,
+    "false_colour": 0.02614,
+    "false_colour_mid": 0.0364
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 38.36284,
+    "psnr_luma": 41.18209,
+    "ssim": 0.98027,
+    "texture": 0.95139,
+    "false_colour": 0.01167,
+    "false_colour_mid": 0.00348
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 42.76958,
+    "psnr_luma": 46.18863,
+    "ssim": 0.99355,
+    "texture": 0.98461,
+    "false_colour": 0.00676,
+    "false_colour_mid": 0.00503
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.16298,
+    "psnr_luma": 21.88292,
+    "ssim": 0.43578,
+    "texture": 0.24984,
+    "false_colour": 0.1348,
+    "false_colour_mid": 0.17187
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 26.46062,
+    "psnr_luma": 26.68284,
+    "ssim": 0.55039,
+    "texture": 0.30321,
+    "false_colour": 0.01153,
+    "false_colour_mid": 0.04731
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 27.06689,
+    "psnr_luma": 27.9352,
+    "ssim": 0.65984,
+    "texture": 0.5475,
+    "false_colour": 0.02526,
+    "false_colour_mid": 0.06886
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 30.40608,
+    "psnr_luma": 30.46412,
+    "ssim": 0.77616,
+    "texture": 0.74499,
+    "false_colour": 0.00528,
+    "false_colour_mid": 0.00812
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 30.26916,
+    "psnr_luma": 31.45979,
+    "ssim": 0.87896,
+    "texture": 0.94064,
+    "false_colour": 0.02935,
+    "false_colour_mid": 0.02808
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 31.38206,
+    "psnr_luma": 32.92554,
+    "ssim": 0.8667,
+    "texture": 0.85414,
+    "false_colour": 0.02812,
+    "false_colour_mid": 0.02779
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 23.67722,
+    "psnr_luma": 26.14056,
+    "ssim": 0.79796,
+    "texture": 1.27643,
+    "false_colour": 0.08285,
+    "false_colour_mid": 0.09067
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.16253,
+    "psnr_luma": 21.89324,
+    "ssim": 0.44655,
+    "texture": 0.26967,
+    "false_colour": 0.13463,
+    "false_colour_mid": 0.17265
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 27.0243,
+    "psnr_luma": 27.31504,
+    "ssim": 0.58504,
+    "texture": 0.36775,
+    "false_colour": 0.01397,
+    "false_colour_mid": 0.04872
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 27.41648,
+    "psnr_luma": 28.34655,
+    "ssim": 0.6782,
+    "texture": 0.59053,
+    "false_colour": 0.02626,
+    "false_colour_mid": 0.066
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 34.82799,
+    "psnr_luma": 35.04575,
+    "ssim": 0.90637,
+    "texture": 0.90226,
+    "false_colour": 0.00577,
+    "false_colour_mid": 0.00665
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 34.70078,
+    "psnr_luma": 36.37618,
+    "ssim": 0.95253,
+    "texture": 0.94993,
+    "false_colour": 0.01983,
+    "false_colour_mid": 0.01585
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 35.20509,
+    "psnr_luma": 37.13029,
+    "ssim": 0.95282,
+    "texture": 0.93824,
+    "false_colour": 0.01973,
+    "false_colour_mid": 0.0158
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 25.66933,
+    "psnr_luma": 28.47098,
+    "ssim": 0.88896,
+    "texture": 1.28711,
+    "false_colour": 0.06998,
+    "false_colour_mid": 0.07612
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.18109,
+    "psnr_luma": 21.84938,
+    "ssim": 0.40254,
+    "texture": 0.19566,
+    "false_colour": 0.13382,
+    "false_colour_mid": 0.16749
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 25.34481,
+    "psnr_luma": 25.46383,
+    "ssim": 0.47645,
+    "texture": 0.17518,
+    "false_colour": 0.0086,
+    "false_colour_mid": 0.03666
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 26.2056,
+    "psnr_luma": 26.83277,
+    "ssim": 0.5982,
+    "texture": 0.43048,
+    "false_colour": 0.02144,
+    "false_colour_mid": 0.06975
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 27.14017,
+    "psnr_luma": 27.18362,
+    "ssim": 0.65473,
+    "texture": 0.57888,
+    "false_colour": 0.00643,
+    "false_colour_mid": 0.01116
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.74001,
+    "psnr_luma": 25.69498,
+    "ssim": 0.70361,
+    "texture": 0.89073,
+    "false_colour": 0.04654,
+    "false_colour_mid": 0.05437
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 26.32519,
+    "psnr_luma": 27.58054,
+    "ssim": 0.64963,
+    "texture": 0.45181,
+    "false_colour": 0.03926,
+    "false_colour_mid": 0.05003
+   }
+  },
+  {
+   "case": "synthetic-zone-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 19.97217,
+    "psnr_luma": 22.10506,
+    "ssim": 0.60735,
+    "texture": 1.21109,
+    "false_colour": 0.11738,
+    "false_colour_mid": 0.12681
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 39.27641,
+    "psnr_luma": 42.44106,
+    "ssim": 0.99116,
+    "texture": 0.98949
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 43.03778,
+    "psnr_luma": 46.64965,
+    "ssim": 0.99559,
+    "texture": 0.94385
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 34.64314,
+    "psnr_luma": 37.23511,
+    "ssim": 0.9657,
+    "texture": 0.77189
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 34.55587,
+    "psnr_luma": 37.11523,
+    "ssim": 0.96495,
+    "texture": 0.74073
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 34.77228,
+    "psnr_luma": 37.35872,
+    "ssim": 0.96643,
+    "texture": 0.75046
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 34.25782,
+    "psnr_luma": 36.74607,
+    "ssim": 0.9607,
+    "texture": 0.72522
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 33.32485,
+    "psnr_luma": 36.30274,
+    "ssim": 0.95768,
+    "texture": 0.79256
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 34.28709,
+    "psnr_luma": 36.69578,
+    "ssim": 0.95686,
+    "texture": 0.74541
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 35.08973,
+    "psnr_luma": 37.36601,
+    "ssim": 0.96382,
+    "texture": 0.71264
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.73157,
+    "psnr_luma": 32.90219,
+    "ssim": 0.84781,
+    "texture": 0.93526
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.23238,
+    "psnr_luma": 36.50013,
+    "ssim": 0.96057,
+    "texture": 0.85986
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 37.24458,
+    "psnr_luma": 40.35141,
+    "ssim": 0.98367,
+    "texture": 0.9053
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 37.24458,
+    "psnr_luma": 40.35141,
+    "ssim": 0.98367,
+    "texture": 0.9053
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 37.09496,
+    "psnr_luma": 40.15262,
+    "ssim": 0.98239,
+    "texture": 0.86771
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 36.79705,
+    "psnr_luma": 39.84027,
+    "ssim": 0.98097,
+    "texture": 0.85847
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 35.1177,
+    "psnr_luma": 38.77518,
+    "ssim": 0.97632,
+    "texture": 0.87397
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 37.05624,
+    "psnr_luma": 39.86752,
+    "ssim": 0.97986,
+    "texture": 0.86685
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 38.43926,
+    "psnr_luma": 41.10246,
+    "ssim": 0.98351,
+    "texture": 0.82889
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 35.88981,
+    "psnr_luma": 37.68601,
+    "ssim": 0.94832,
+    "texture": 0.99029
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.13012,
+    "psnr_luma": 39.69482,
+    "ssim": 0.98238,
+    "texture": 0.98267
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 31.17307,
+    "psnr_luma": 33.10208,
+    "ssim": 0.91504,
+    "texture": 0.54279
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 31.12717,
+    "psnr_luma": 33.03421,
+    "ssim": 0.91418,
+    "texture": 0.52084
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 31.66577,
+    "psnr_luma": 33.59225,
+    "ssim": 0.92511,
+    "texture": 0.55738
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 30.88222,
+    "psnr_luma": 32.80839,
+    "ssim": 0.91089,
+    "texture": 0.49013
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 30.36208,
+    "psnr_luma": 32.59213,
+    "ssim": 0.90723,
+    "texture": 0.66203
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 30.70088,
+    "psnr_luma": 32.6018,
+    "ssim": 0.89379,
+    "texture": 0.58063
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 31.52816,
+    "psnr_luma": 33.33558,
+    "ssim": 0.9164,
+    "texture": 0.56217
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 26.2654,
+    "psnr_luma": 27.13203,
+    "ssim": 0.62866,
+    "texture": 0.83522
+   }
+  },
+  {
+   "case": "synthetic-leaves-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 29.9524,
+    "psnr_luma": 31.99359,
+    "ssim": 0.88866,
+    "texture": 0.50165
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 39.72168,
+    "psnr_luma": 43.2669,
+    "ssim": 0.99272,
+    "texture": 0.9595
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 39.5485,
+    "psnr_luma": 42.76505,
+    "ssim": 0.98915,
+    "texture": 0.95827
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.68464,
+    "psnr_luma": 20.5077,
+    "ssim": 0.40089,
+    "texture": 0.79956
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 32.37712,
+    "psnr_luma": 34.98751,
+    "ssim": 0.95578,
+    "texture": 0.90608
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 32.28754,
+    "psnr_luma": 35.17459,
+    "ssim": 0.95291,
+    "texture": 0.80549
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 34.24576,
+    "psnr_luma": 36.31159,
+    "ssim": 0.95464,
+    "texture": 0.68915
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 30.90557,
+    "psnr_luma": 32.16241,
+    "ssim": 0.81653,
+    "texture": 0.93114
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.11868,
+    "psnr_luma": 37.1365,
+    "ssim": 0.96641,
+    "texture": 0.87234
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 26.33755,
+    "psnr_luma": 28.46506,
+    "ssim": 0.70691,
+    "texture": 1.20886
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.54188,
+    "psnr_luma": 20.3088,
+    "ssim": 0.38946,
+    "texture": 0.82177
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 33.27753,
+    "psnr_luma": 36.21365,
+    "ssim": 0.96863,
+    "texture": 1.06086
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 33.56351,
+    "psnr_luma": 36.71038,
+    "ssim": 0.9709,
+    "texture": 0.96727
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.92606,
+    "psnr_luma": 39.42028,
+    "ssim": 0.97604,
+    "texture": 0.83232
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 35.5062,
+    "psnr_luma": 37.37108,
+    "ssim": 0.93739,
+    "texture": 0.94567
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.15857,
+    "psnr_luma": 40.18345,
+    "ssim": 0.98415,
+    "texture": 0.94277
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 29.88948,
+    "psnr_luma": 32.41335,
+    "ssim": 0.87511,
+    "texture": 1.22579
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 19.00867,
+    "psnr_luma": 20.97052,
+    "ssim": 0.42542,
+    "texture": 0.72718
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 30.30193,
+    "psnr_luma": 32.28729,
+    "ssim": 0.91614,
+    "texture": 0.64199
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 29.90956,
+    "psnr_luma": 32.20033,
+    "ssim": 0.89807,
+    "texture": 0.60229
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 31.10643,
+    "psnr_luma": 32.76996,
+    "ssim": 0.90507,
+    "texture": 0.55225
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.90007,
+    "psnr_luma": 25.88289,
+    "ssim": 0.57606,
+    "texture": 0.9282
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 29.5675,
+    "psnr_luma": 32.7402,
+    "ssim": 0.90525,
+    "texture": 0.61402
+   }
+  },
+  {
+   "case": "synthetic-leaves-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 21.03508,
+    "psnr_luma": 22.9684,
+    "ssim": 0.45873,
+    "texture": 1.17781
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 34.35849,
+    "psnr_luma": 39.25547,
+    "ssim": 0.97866,
+    "texture": 0.93109,
+    "flat_luma_noise": 2e-05,
+    "flat_chroma_noise": 3e-05,
+    "flat_luma_coarseness": 0.13122,
+    "flat_chroma_coarseness": 0.06561,
+    "shadow_bias": 4e-05,
+    "shadow_level": -1e-05,
+    "text_cpsnr": 31.85973,
+    "text_texture": 0.92132,
+    "text_spurious": 0.43101
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 29.92704,
+    "psnr_luma": 33.44887,
+    "ssim": 0.895,
+    "texture": 0.88899,
+    "flat_luma_noise": 4e-05,
+    "flat_chroma_noise": 3e-05,
+    "flat_luma_coarseness": 0.11534,
+    "flat_chroma_coarseness": 0.14355,
+    "shadow_bias": 8e-05,
+    "shadow_level": 2e-05,
+    "text_cpsnr": 30.20154,
+    "text_texture": 0.88722,
+    "text_spurious": 0.56468
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 32.76865,
+    "psnr_luma": 36.64141,
+    "ssim": 0.86943,
+    "texture": 0.88243,
+    "flat_luma_noise": 0.00036,
+    "flat_chroma_noise": 0.00044,
+    "flat_luma_coarseness": 2.57497,
+    "flat_chroma_coarseness": 3.414,
+    "shadow_bias": 0.00075,
+    "shadow_level": 0.00021,
+    "text_cpsnr": 30.51011,
+    "text_texture": 0.87221,
+    "text_spurious": 0.5753
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 32.85305,
+    "psnr_luma": 36.81046,
+    "ssim": 0.89762,
+    "texture": 0.88171,
+    "flat_luma_noise": 0.00032,
+    "flat_chroma_noise": 0.00045,
+    "flat_luma_coarseness": 2.78283,
+    "flat_chroma_coarseness": 3.57939,
+    "shadow_bias": 0.0007,
+    "shadow_level": 0.00011,
+    "text_cpsnr": 30.58029,
+    "text_texture": 0.87158,
+    "text_spurious": 0.56996
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 29.93628,
+    "psnr_luma": 34.81709,
+    "ssim": 0.89347,
+    "texture": 0.83196,
+    "flat_luma_noise": 0.00043,
+    "flat_chroma_noise": 0.00047,
+    "flat_luma_coarseness": 3.82288,
+    "flat_chroma_coarseness": 3.80697,
+    "shadow_bias": 0.0007,
+    "shadow_level": 3e-05,
+    "text_cpsnr": 28.91414,
+    "text_texture": 0.82265,
+    "text_spurious": 0.32324
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 31.66205,
+    "psnr_luma": 36.32811,
+    "ssim": 0.9417,
+    "texture": 0.78941,
+    "flat_luma_noise": 0.0006,
+    "flat_chroma_noise": 0.00092,
+    "flat_luma_coarseness": 3.3458,
+    "flat_chroma_coarseness": 3.67543,
+    "shadow_bias": 0.00202,
+    "shadow_level": -0.00122,
+    "text_cpsnr": 29.91698,
+    "text_texture": 0.78048,
+    "text_spurious": 0.48096
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 30.35103,
+    "psnr_luma": 35.31222,
+    "ssim": 0.75977,
+    "texture": 0.89542,
+    "flat_luma_noise": 0.00133,
+    "flat_chroma_noise": 0.00108,
+    "flat_luma_coarseness": 3.40413,
+    "flat_chroma_coarseness": 3.52575,
+    "shadow_bias": 0.00436,
+    "shadow_level": 0.00186,
+    "text_cpsnr": 28.20235,
+    "text_texture": 0.90058,
+    "text_spurious": 0.41692
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 29.46531,
+    "psnr_luma": 32.13564,
+    "ssim": 0.61063,
+    "texture": 0.75848,
+    "flat_luma_noise": 0.00499,
+    "flat_chroma_noise": 0.00214,
+    "flat_luma_coarseness": 2.52191,
+    "flat_chroma_coarseness": 2.65419,
+    "shadow_bias": 0.00578,
+    "shadow_level": -0.00134,
+    "text_cpsnr": 27.01263,
+    "text_texture": 0.76194,
+    "text_spurious": 0.42828
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 29.53748,
+    "psnr_luma": 33.44685,
+    "ssim": 0.78679,
+    "texture": 0.85431,
+    "flat_luma_noise": 0.00204,
+    "flat_chroma_noise": 0.00204,
+    "flat_luma_coarseness": 3.5633,
+    "flat_chroma_coarseness": 3.83206,
+    "shadow_bias": 0.00042,
+    "shadow_level": -0.00017,
+    "text_cpsnr": 29.38985,
+    "text_texture": 0.85518,
+    "text_spurious": 0.3662
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 28.63537,
+    "psnr_luma": 30.14271,
+    "ssim": 0.46858,
+    "texture": 0.92646,
+    "flat_luma_noise": 0.01947,
+    "flat_chroma_noise": 0.01057,
+    "flat_luma_coarseness": 1.54284,
+    "flat_chroma_coarseness": 2.48223,
+    "shadow_bias": 0.00203,
+    "shadow_level": -0.00355,
+    "text_cpsnr": 27.39577,
+    "text_texture": 0.91756,
+    "text_spurious": 1.41052
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 31.51813,
+    "psnr_luma": 35.34235,
+    "ssim": 0.76334,
+    "texture": 0.92329,
+    "flat_luma_noise": 0.00477,
+    "flat_chroma_noise": 0.00943,
+    "flat_luma_coarseness": 3.45599,
+    "flat_chroma_coarseness": 2.61791,
+    "shadow_bias": 0.00107,
+    "shadow_level": -0.00228,
+    "text_cpsnr": 29.84181,
+    "text_texture": 0.91492,
+    "text_spurious": 0.49578
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 33.10212,
+    "psnr_luma": 36.98856,
+    "ssim": 0.94076,
+    "texture": 0.90191,
+    "flat_luma_noise": 0.00026,
+    "flat_chroma_noise": 0.00032,
+    "flat_luma_coarseness": 2.64868,
+    "flat_chroma_coarseness": 3.36929,
+    "shadow_bias": 0.00034,
+    "shadow_level": 3e-05,
+    "text_cpsnr": 30.95282,
+    "text_texture": 0.89084,
+    "text_spurious": 0.58818
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 33.12341,
+    "psnr_luma": 37.033,
+    "ssim": 0.95005,
+    "texture": 0.9015,
+    "flat_luma_noise": 0.00026,
+    "flat_chroma_noise": 0.00044,
+    "flat_luma_coarseness": 2.75419,
+    "flat_chroma_coarseness": 3.64223,
+    "shadow_bias": 0.00032,
+    "shadow_level": 2e-05,
+    "text_cpsnr": 30.9653,
+    "text_texture": 0.89041,
+    "text_spurious": 0.58799
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 30.58525,
+    "psnr_luma": 35.44519,
+    "ssim": 0.94285,
+    "texture": 0.86573,
+    "flat_luma_noise": 0.00031,
+    "flat_chroma_noise": 0.00033,
+    "flat_luma_coarseness": 3.56371,
+    "flat_chroma_coarseness": 3.57703,
+    "shadow_bias": 0.00025,
+    "shadow_level": 6e-05,
+    "text_cpsnr": 29.60881,
+    "text_texture": 0.85701,
+    "text_spurious": 0.37149
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 32.56418,
+    "psnr_luma": 36.94784,
+    "ssim": 0.95681,
+    "texture": 0.84158,
+    "flat_luma_noise": 0.00051,
+    "flat_chroma_noise": 0.00092,
+    "flat_luma_coarseness": 3.60476,
+    "flat_chroma_coarseness": 3.67482,
+    "shadow_bias": 0.00017,
+    "shadow_level": -6e-05,
+    "text_cpsnr": 30.59708,
+    "text_texture": 0.8337,
+    "text_spurious": 0.51689
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 30.99027,
+    "psnr_luma": 35.88477,
+    "ssim": 0.81973,
+    "texture": 0.90078,
+    "flat_luma_noise": 0.00102,
+    "flat_chroma_noise": 0.00078,
+    "flat_luma_coarseness": 3.42697,
+    "flat_chroma_coarseness": 3.54097,
+    "shadow_bias": 0.00328,
+    "shadow_level": 0.00168,
+    "text_cpsnr": 28.83194,
+    "text_texture": 0.90788,
+    "text_spurious": 0.45485
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 31.2295,
+    "psnr_luma": 35.04181,
+    "ssim": 0.68767,
+    "texture": 0.79007,
+    "flat_luma_noise": 0.00195,
+    "flat_chroma_noise": 0.00086,
+    "flat_luma_coarseness": 2.69158,
+    "flat_chroma_coarseness": 2.9079,
+    "shadow_bias": 0.00261,
+    "shadow_level": 0.00016,
+    "text_cpsnr": 28.8091,
+    "text_texture": 0.78779,
+    "text_spurious": 0.42209
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 29.86503,
+    "psnr_luma": 33.61176,
+    "ssim": 0.87316,
+    "texture": 0.87769,
+    "flat_luma_noise": 0.00097,
+    "flat_chroma_noise": 0.00091,
+    "flat_luma_coarseness": 3.54069,
+    "flat_chroma_coarseness": 3.7881,
+    "shadow_bias": 9e-05,
+    "shadow_level": 6e-05,
+    "text_cpsnr": 30.00701,
+    "text_texture": 0.87621,
+    "text_spurious": 0.46425
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.964,
+    "psnr_luma": 34.72123,
+    "ssim": 0.69358,
+    "texture": 0.93121,
+    "flat_luma_noise": 0.00942,
+    "flat_chroma_noise": 0.00495,
+    "flat_luma_coarseness": 1.52374,
+    "flat_chroma_coarseness": 2.45713,
+    "shadow_bias": 0.00029,
+    "shadow_level": -0.00047,
+    "text_cpsnr": 30.19165,
+    "text_texture": 0.92119,
+    "text_spurious": 0.71131
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 33.10055,
+    "psnr_luma": 37.24044,
+    "ssim": 0.86193,
+    "texture": 0.93094,
+    "flat_luma_noise": 0.00226,
+    "flat_chroma_noise": 0.0044,
+    "flat_luma_coarseness": 3.44237,
+    "flat_chroma_coarseness": 2.60107,
+    "shadow_bias": 0.00023,
+    "shadow_level": -0.00042,
+    "text_cpsnr": 31.12604,
+    "text_texture": 0.92082,
+    "text_spurious": 0.49944
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 31.91211,
+    "psnr_luma": 36.2015,
+    "ssim": 0.82648,
+    "texture": 0.81115,
+    "flat_luma_noise": 0.00078,
+    "flat_chroma_noise": 0.00066,
+    "flat_luma_coarseness": 3.46082,
+    "flat_chroma_coarseness": 3.50205,
+    "shadow_bias": 0.00144,
+    "shadow_level": 0.00031,
+    "text_cpsnr": 29.45943,
+    "text_texture": 0.79665,
+    "text_spurious": 0.35977
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 31.97951,
+    "psnr_luma": 36.34917,
+    "ssim": 0.84054,
+    "texture": 0.81056,
+    "flat_luma_noise": 0.00075,
+    "flat_chroma_noise": 0.00077,
+    "flat_luma_coarseness": 3.36554,
+    "flat_chroma_coarseness": 3.60767,
+    "shadow_bias": 0.00143,
+    "shadow_level": 0.00023,
+    "text_cpsnr": 29.52941,
+    "text_texture": 0.79609,
+    "text_spurious": 0.35654
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 29.14629,
+    "psnr_luma": 34.06533,
+    "ssim": 0.91069,
+    "texture": 0.73207,
+    "flat_luma_noise": 0.00079,
+    "flat_chroma_noise": 0.00068,
+    "flat_luma_coarseness": 3.92371,
+    "flat_chroma_coarseness": 3.89307,
+    "shadow_bias": 0.00156,
+    "shadow_level": -0.00019,
+    "text_cpsnr": 27.85414,
+    "text_texture": 0.71798,
+    "text_spurious": 0.27992
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 28.50464,
+    "psnr_luma": 32.05347,
+    "ssim": 0.88821,
+    "texture": 0.64057,
+    "flat_luma_noise": 0.00111,
+    "flat_chroma_noise": 0.00153,
+    "flat_luma_coarseness": 3.76504,
+    "flat_chroma_coarseness": 3.87336,
+    "shadow_bias": 0.04551,
+    "shadow_level": -0.03943,
+    "text_cpsnr": 27.87355,
+    "text_texture": 0.63552,
+    "text_spurious": 0.40918
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 29.21997,
+    "psnr_luma": 34.40697,
+    "ssim": 0.72769,
+    "texture": 0.85884,
+    "flat_luma_noise": 0.00196,
+    "flat_chroma_noise": 0.00157,
+    "flat_luma_coarseness": 3.58723,
+    "flat_chroma_coarseness": 3.34044,
+    "shadow_bias": 0.00545,
+    "shadow_level": 0.00117,
+    "text_cpsnr": 27.12495,
+    "text_texture": 0.86151,
+    "text_spurious": 0.40615
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 27.69436,
+    "psnr_luma": 30.24374,
+    "ssim": 0.59376,
+    "texture": 0.63101,
+    "flat_luma_noise": 0.0081,
+    "flat_chroma_noise": 0.00348,
+    "flat_luma_coarseness": 2.76548,
+    "flat_chroma_coarseness": 2.73103,
+    "shadow_bias": 0.01545,
+    "shadow_level": -0.00264,
+    "text_cpsnr": 25.24703,
+    "text_texture": 0.64016,
+    "text_spurious": 0.43864
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 28.43897,
+    "psnr_luma": 32.37393,
+    "ssim": 0.7099,
+    "texture": 0.78441,
+    "flat_luma_noise": 0.00468,
+    "flat_chroma_noise": 0.00405,
+    "flat_luma_coarseness": 3.51729,
+    "flat_chroma_coarseness": 3.82012,
+    "shadow_bias": 0.00293,
+    "shadow_level": -0.00168,
+    "text_cpsnr": 27.74118,
+    "text_texture": 0.78363,
+    "text_spurious": 0.402
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.38444,
+    "psnr_luma": 25.29847,
+    "ssim": 0.25684,
+    "texture": 0.88305,
+    "flat_luma_noise": 0.04072,
+    "flat_chroma_noise": 0.02282,
+    "flat_luma_coarseness": 1.54529,
+    "flat_chroma_coarseness": 2.43335,
+    "shadow_bias": 0.0039,
+    "shadow_level": -0.01233,
+    "text_cpsnr": 23.69418,
+    "text_texture": 0.87729,
+    "text_spurious": 3.42467
+   }
+  },
+  {
+   "case": "synthetic-text-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 28.66945,
+    "psnr_luma": 32.23113,
+    "ssim": 0.67838,
+    "texture": 0.86658,
+    "flat_luma_noise": 0.01004,
+    "flat_chroma_noise": 0.02002,
+    "flat_luma_coarseness": 3.46031,
+    "flat_chroma_coarseness": 2.57789,
+    "shadow_bias": 0.00179,
+    "shadow_level": -0.00874,
+    "text_cpsnr": 27.42139,
+    "text_texture": 0.86578,
+    "text_spurious": 0.46832
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 37.21174,
+    "psnr_luma": 41.46195,
+    "ssim": 0.98394,
+    "texture": 0.888,
+    "flat_luma_noise": 0.0,
+    "flat_chroma_noise": 0.0,
+    "flat_luma_coarseness": 0.0,
+    "flat_chroma_coarseness": 0.0,
+    "shadow_bias": 4e-05,
+    "shadow_level": -1e-05,
+    "text_cpsnr": 34.23502,
+    "text_texture": 0.88376,
+    "text_spurious": 0.24603
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 30.04457,
+    "psnr_luma": 35.43169,
+    "ssim": 0.90569,
+    "texture": 0.84784,
+    "flat_luma_noise": 6e-05,
+    "flat_chroma_noise": 6e-05,
+    "flat_luma_coarseness": 0.81088,
+    "flat_chroma_coarseness": 0.78257,
+    "shadow_bias": 0.00015,
+    "shadow_level": 4e-05,
+    "text_cpsnr": 29.33037,
+    "text_texture": 0.84345,
+    "text_spurious": 0.42941
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.12319,
+    "psnr_luma": 21.69861,
+    "ssim": 0.20918,
+    "texture": 0.82285,
+    "flat_luma_noise": 0.04184,
+    "flat_chroma_noise": 0.04396,
+    "flat_luma_coarseness": 1.00492,
+    "flat_chroma_coarseness": 0.97682,
+    "shadow_bias": 0.06213,
+    "shadow_level": -0.04916,
+    "text_cpsnr": 20.00513,
+    "text_texture": 0.79285,
+    "text_spurious": 10.95216
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 30.43584,
+    "psnr_luma": 32.57809,
+    "ssim": 0.64718,
+    "texture": 0.81704,
+    "flat_luma_noise": 0.00076,
+    "flat_chroma_noise": 0.0011,
+    "flat_luma_coarseness": 3.23257,
+    "flat_chroma_coarseness": 3.47609,
+    "shadow_bias": 0.00535,
+    "shadow_level": -0.00098,
+    "text_cpsnr": 27.75114,
+    "text_texture": 0.81468,
+    "text_spurious": 0.18389
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 28.31395,
+    "psnr_luma": 31.8683,
+    "ssim": 0.62159,
+    "texture": 0.69094,
+    "flat_luma_noise": 0.00135,
+    "flat_chroma_noise": 0.00145,
+    "flat_luma_coarseness": 3.02108,
+    "flat_chroma_coarseness": 3.02173,
+    "shadow_bias": 0.00385,
+    "shadow_level": 0.00356,
+    "text_cpsnr": 26.03335,
+    "text_texture": 0.686,
+    "text_spurious": 0.21356
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 29.54122,
+    "psnr_luma": 34.69767,
+    "ssim": 0.83417,
+    "texture": 0.80942,
+    "flat_luma_noise": 0.00162,
+    "flat_chroma_noise": 0.00156,
+    "flat_luma_coarseness": 2.73491,
+    "flat_chroma_coarseness": 3.65512,
+    "shadow_bias": 0.00056,
+    "shadow_level": 0.00014,
+    "text_cpsnr": 28.63665,
+    "text_texture": 0.8057,
+    "text_spurious": 0.39835
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 28.13999,
+    "psnr_luma": 29.30312,
+    "ssim": 0.41509,
+    "texture": 0.85122,
+    "flat_luma_noise": 0.02278,
+    "flat_chroma_noise": 0.01416,
+    "flat_luma_coarseness": 1.42056,
+    "flat_chroma_coarseness": 1.96214,
+    "shadow_bias": 0.00308,
+    "shadow_level": -0.00462,
+    "text_cpsnr": 27.04674,
+    "text_texture": 0.85068,
+    "text_spurious": 1.70105
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 32.13617,
+    "psnr_luma": 36.00706,
+    "ssim": 0.77472,
+    "texture": 0.85333,
+    "flat_luma_noise": 0.00496,
+    "flat_chroma_noise": 0.01276,
+    "flat_luma_coarseness": 3.39077,
+    "flat_chroma_coarseness": 2.02931,
+    "shadow_bias": 0.00088,
+    "shadow_level": -0.00286,
+    "text_cpsnr": 30.62693,
+    "text_texture": 0.85444,
+    "text_spurious": 0.30465
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 25.55763,
+    "psnr_luma": 27.24145,
+    "ssim": 0.3259,
+    "texture": 0.98165,
+    "flat_luma_noise": 0.03214,
+    "flat_chroma_noise": 0.03438,
+    "flat_luma_coarseness": 1.19595,
+    "flat_chroma_coarseness": 1.99752,
+    "shadow_bias": 0.0026,
+    "shadow_level": -0.00456,
+    "text_cpsnr": 24.76182,
+    "text_texture": 0.98346,
+    "text_spurious": 1.97634
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.09266,
+    "psnr_luma": 21.62361,
+    "ssim": 0.20725,
+    "texture": 0.82791,
+    "flat_luma_noise": 0.04224,
+    "flat_chroma_noise": 0.04377,
+    "flat_luma_coarseness": 0.99673,
+    "flat_chroma_coarseness": 0.96081,
+    "shadow_bias": 0.05971,
+    "shadow_level": -0.04731,
+    "text_cpsnr": 19.92095,
+    "text_texture": 0.79751,
+    "text_spurious": 11.31709
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 32.88857,
+    "psnr_luma": 36.48722,
+    "ssim": 0.70214,
+    "texture": 0.8349,
+    "flat_luma_noise": 0.00121,
+    "flat_chroma_noise": 0.00054,
+    "flat_luma_coarseness": 3.8622,
+    "flat_chroma_coarseness": 3.0387,
+    "shadow_bias": 0.00155,
+    "shadow_level": -0.00078,
+    "text_cpsnr": 30.07906,
+    "text_texture": 0.83478,
+    "text_spurious": 0.16681
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 29.69781,
+    "psnr_luma": 34.51867,
+    "ssim": 0.76332,
+    "texture": 0.72016,
+    "flat_luma_noise": 0.00091,
+    "flat_chroma_noise": 0.00092,
+    "flat_luma_coarseness": 3.19773,
+    "flat_chroma_coarseness": 3.14712,
+    "shadow_bias": 0.00356,
+    "shadow_level": 0.00373,
+    "text_cpsnr": 27.39208,
+    "text_texture": 0.71186,
+    "text_spurious": 0.20112
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 29.86104,
+    "psnr_luma": 35.26547,
+    "ssim": 0.89007,
+    "texture": 0.83218,
+    "flat_luma_noise": 0.00083,
+    "flat_chroma_noise": 0.00077,
+    "flat_luma_coarseness": 2.74503,
+    "flat_chroma_coarseness": 3.61308,
+    "shadow_bias": 0.00018,
+    "shadow_level": 3e-05,
+    "text_cpsnr": 29.08047,
+    "text_texture": 0.82738,
+    "text_spurious": 0.39794
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 32.64671,
+    "psnr_luma": 34.60516,
+    "ssim": 0.65412,
+    "texture": 0.87436,
+    "flat_luma_noise": 0.01114,
+    "flat_chroma_noise": 0.00687,
+    "flat_luma_coarseness": 1.40546,
+    "flat_chroma_coarseness": 1.98409,
+    "shadow_bias": 0.00055,
+    "shadow_level": -0.00078,
+    "text_cpsnr": 31.04807,
+    "text_texture": 0.87329,
+    "text_spurious": 0.60221
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.63296,
+    "psnr_luma": 38.34735,
+    "ssim": 0.8718,
+    "texture": 0.87426,
+    "flat_luma_noise": 0.0024,
+    "flat_chroma_noise": 0.00622,
+    "flat_luma_coarseness": 3.39342,
+    "flat_chroma_coarseness": 2.05693,
+    "shadow_bias": 0.00044,
+    "shadow_level": -0.0007,
+    "text_cpsnr": 32.78901,
+    "text_texture": 0.87353,
+    "text_spurious": 0.28646
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 30.0703,
+    "psnr_luma": 32.25989,
+    "ssim": 0.54224,
+    "texture": 1.00297,
+    "flat_luma_noise": 0.01562,
+    "flat_chroma_noise": 0.01658,
+    "flat_luma_coarseness": 1.18505,
+    "flat_chroma_coarseness": 2.0182,
+    "shadow_bias": 0.00262,
+    "shadow_level": -0.00172,
+    "text_cpsnr": 28.79118,
+    "text_texture": 1.00548,
+    "text_spurious": 0.88792
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.30121,
+    "psnr_luma": 21.9832,
+    "ssim": 0.23417,
+    "texture": 0.80164,
+    "flat_luma_noise": 0.0346,
+    "flat_chroma_noise": 0.04156,
+    "flat_luma_coarseness": 1.07492,
+    "flat_chroma_coarseness": 1.03738,
+    "shadow_bias": 0.06673,
+    "shadow_level": -0.05433,
+    "text_cpsnr": 20.19666,
+    "text_texture": 0.76939,
+    "text_spurious": 9.97289
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 28.12689,
+    "psnr_luma": 29.87906,
+    "ssim": 0.63044,
+    "texture": 0.76679,
+    "flat_luma_noise": 0.00126,
+    "flat_chroma_noise": 0.00155,
+    "flat_luma_coarseness": 3.29639,
+    "flat_chroma_coarseness": 3.17147,
+    "shadow_bias": 0.00979,
+    "shadow_level": -0.00437,
+    "text_cpsnr": 26.04005,
+    "text_texture": 0.76205,
+    "text_spurious": 0.19929
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 26.00547,
+    "psnr_luma": 28.65253,
+    "ssim": 0.5772,
+    "texture": 0.61098,
+    "flat_luma_noise": 0.00261,
+    "flat_chroma_noise": 0.00286,
+    "flat_luma_coarseness": 2.98586,
+    "flat_chroma_coarseness": 3.04253,
+    "shadow_bias": 0.01452,
+    "shadow_level": 0.0078,
+    "text_cpsnr": 24.06488,
+    "text_texture": 0.60596,
+    "text_spurious": 0.231
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 28.68715,
+    "psnr_luma": 33.01855,
+    "ssim": 0.71295,
+    "texture": 0.75509,
+    "flat_luma_noise": 0.00346,
+    "flat_chroma_noise": 0.00328,
+    "flat_luma_coarseness": 2.87964,
+    "flat_chroma_coarseness": 3.70968,
+    "shadow_bias": 0.00262,
+    "shadow_level": -0.0013,
+    "text_cpsnr": 27.5824,
+    "text_texture": 0.75324,
+    "text_spurious": 0.47173
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 23.37031,
+    "psnr_luma": 24.18244,
+    "ssim": 0.21131,
+    "texture": 0.83868,
+    "flat_luma_noise": 0.04811,
+    "flat_chroma_noise": 0.03187,
+    "flat_luma_coarseness": 1.42218,
+    "flat_chroma_coarseness": 1.96294,
+    "shadow_bias": 0.0055,
+    "shadow_level": -0.01572,
+    "text_cpsnr": 22.86115,
+    "text_texture": 0.83804,
+    "text_spurious": 4.77182
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 28.41799,
+    "psnr_luma": 32.30055,
+    "ssim": 0.67507,
+    "texture": 0.82553,
+    "flat_luma_noise": 0.01053,
+    "flat_chroma_noise": 0.02815,
+    "flat_luma_coarseness": 3.3927,
+    "flat_chroma_coarseness": 2.04508,
+    "shadow_bias": 0.00694,
+    "shadow_level": -0.01253,
+    "text_cpsnr": 27.47294,
+    "text_texture": 0.82668,
+    "text_spurious": 0.45141
+   }
+  },
+  {
+   "case": "synthetic-text-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 20.85437,
+    "psnr_luma": 22.38775,
+    "ssim": 0.16778,
+    "texture": 0.95136,
+    "flat_luma_noise": 0.06848,
+    "flat_chroma_noise": 0.0757,
+    "flat_luma_coarseness": 1.19357,
+    "flat_chroma_coarseness": 1.97004,
+    "shadow_bias": 0.02118,
+    "shadow_level": 0.00104,
+    "text_cpsnr": 20.52886,
+    "text_texture": 0.95148,
+    "text_spurious": 5.01469
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 26.91123,
+    "psnr_luma": 30.61771,
+    "ssim": 0.92515,
+    "texture": 0.87243
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 27.57499,
+    "psnr_luma": 31.32391,
+    "ssim": 0.93576,
+    "texture": 0.93517
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 26.29311,
+    "psnr_luma": 29.24963,
+    "ssim": 0.86476,
+    "texture": 0.6882
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 26.36174,
+    "psnr_luma": 29.04239,
+    "ssim": 0.83436,
+    "texture": 0.53902
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 26.50778,
+    "psnr_luma": 29.49078,
+    "ssim": 0.86708,
+    "texture": 0.63045
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 26.48634,
+    "psnr_luma": 29.48643,
+    "ssim": 0.86122,
+    "texture": 0.54386
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 26.4866,
+    "psnr_luma": 29.9321,
+    "ssim": 0.88441,
+    "texture": 0.61891
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 26.64723,
+    "psnr_luma": 29.5224,
+    "ssim": 0.87245,
+    "texture": 0.53486
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 26.98346,
+    "psnr_luma": 30.19521,
+    "ssim": 0.89019,
+    "texture": 0.74793
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 25.70645,
+    "psnr_luma": 28.42474,
+    "ssim": 0.85024,
+    "texture": 0.8199
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 25.71719,
+    "psnr_luma": 28.41368,
+    "ssim": 0.81087,
+    "texture": 0.7048
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 26.72068,
+    "psnr_luma": 30.17695,
+    "ssim": 0.9091,
+    "texture": 0.82406
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 26.91496,
+    "psnr_luma": 30.21827,
+    "ssim": 0.89249,
+    "texture": 0.69284
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 26.86872,
+    "psnr_luma": 30.38171,
+    "ssim": 0.91139,
+    "texture": 0.78589
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 26.98785,
+    "psnr_luma": 30.44459,
+    "ssim": 0.90537,
+    "texture": 0.66285
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 26.9007,
+    "psnr_luma": 30.92181,
+    "ssim": 0.91676,
+    "texture": 0.66526
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 27.08354,
+    "psnr_luma": 30.43065,
+    "ssim": 0.90854,
+    "texture": 0.60138
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 27.46102,
+    "psnr_luma": 31.1249,
+    "ssim": 0.92755,
+    "texture": 0.87268
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 26.54385,
+    "psnr_luma": 29.87243,
+    "ssim": 0.90377,
+    "texture": 0.87772
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 26.55249,
+    "psnr_luma": 29.88788,
+    "ssim": 0.90197,
+    "texture": 0.86637
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 25.37563,
+    "psnr_luma": 27.53074,
+    "ssim": 0.76742,
+    "texture": 0.47225
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 25.32058,
+    "psnr_luma": 27.31921,
+    "ssim": 0.74027,
+    "texture": 0.37337
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 25.6095,
+    "psnr_luma": 27.79527,
+    "ssim": 0.7792,
+    "texture": 0.4109
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 25.36078,
+    "psnr_luma": 27.66415,
+    "ssim": 0.76906,
+    "texture": 0.35202
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 25.46676,
+    "psnr_luma": 27.93895,
+    "ssim": 0.8034,
+    "texture": 0.52226
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 25.5171,
+    "psnr_luma": 27.58127,
+    "ssim": 0.78498,
+    "texture": 0.39834
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 25.81214,
+    "psnr_luma": 28.16422,
+    "ssim": 0.79391,
+    "texture": 0.54178
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 23.49556,
+    "psnr_luma": 25.29677,
+    "ssim": 0.70567,
+    "texture": 0.73078
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 24.07357,
+    "psnr_luma": 26.0691,
+    "ssim": 0.63249,
+    "texture": 0.3917
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 27.28596,
+    "psnr_luma": 31.61459,
+    "ssim": 0.93797,
+    "texture": 0.76951
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 27.62449,
+    "psnr_luma": 31.57105,
+    "ssim": 0.93924,
+    "texture": 0.95051
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 16.75504,
+    "psnr_luma": 18.32233,
+    "ssim": 0.3903,
+    "texture": 0.6451
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 26.18866,
+    "psnr_luma": 29.01146,
+    "ssim": 0.86897,
+    "texture": 0.57402
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 26.26654,
+    "psnr_luma": 29.4489,
+    "ssim": 0.87003,
+    "texture": 0.52653
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 26.99473,
+    "psnr_luma": 30.28624,
+    "ssim": 0.88837,
+    "texture": 0.72936
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 25.91089,
+    "psnr_luma": 29.00551,
+    "ssim": 0.86078,
+    "texture": 0.76927
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 26.1057,
+    "psnr_luma": 29.35392,
+    "ssim": 0.84597,
+    "texture": 0.65114
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 22.61326,
+    "psnr_luma": 25.64958,
+    "ssim": 0.78011,
+    "texture": 1.04494
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 16.66283,
+    "psnr_luma": 18.19347,
+    "ssim": 0.3849,
+    "texture": 0.65728
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 26.68662,
+    "psnr_luma": 30.14826,
+    "ssim": 0.90961,
+    "texture": 0.67168
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 26.65683,
+    "psnr_luma": 30.28278,
+    "ssim": 0.89964,
+    "texture": 0.5708
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 27.50117,
+    "psnr_luma": 31.32936,
+    "ssim": 0.92909,
+    "texture": 0.86933
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 26.93163,
+    "psnr_luma": 30.84132,
+    "ssim": 0.91789,
+    "texture": 0.76847
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 26.94998,
+    "psnr_luma": 30.88056,
+    "ssim": 0.91754,
+    "texture": 0.75657
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 23.87756,
+    "psnr_luma": 27.37168,
+    "ssim": 0.86153,
+    "texture": 1.04811
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 16.98242,
+    "psnr_luma": 18.63883,
+    "ssim": 0.40119,
+    "texture": 0.59923
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 25.07156,
+    "psnr_luma": 26.99373,
+    "ssim": 0.76688,
+    "texture": 0.37795
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 25.3222,
+    "psnr_luma": 27.67875,
+    "ssim": 0.79325,
+    "texture": 0.42313
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 25.77493,
+    "psnr_luma": 28.10178,
+    "ssim": 0.80629,
+    "texture": 0.59281
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 22.9278,
+    "psnr_luma": 24.81611,
+    "ssim": 0.69079,
+    "texture": 0.76945
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 24.20777,
+    "psnr_luma": 26.73106,
+    "ssim": 0.6811,
+    "texture": 0.39822
+   }
+  },
+  {
+   "case": "synthetic-photo-sony-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 19.61792,
+    "psnr_luma": 22.03569,
+    "ssim": 0.59186,
+    "texture": 1.02579
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 44.78405,
+    "psnr_luma": 47.82898,
+    "ssim": 0.98897,
+    "texture": 0.73199
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 45.66741,
+    "psnr_luma": 49.63836,
+    "ssim": 0.993,
+    "texture": 0.96224
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 39.0847,
+    "psnr_luma": 40.31049,
+    "ssim": 0.9387,
+    "texture": 0.30549
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 39.06671,
+    "psnr_luma": 40.28135,
+    "ssim": 0.93812,
+    "texture": 0.29483
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 39.43039,
+    "psnr_luma": 40.57482,
+    "ssim": 0.94167,
+    "texture": 0.29532
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 39.02295,
+    "psnr_luma": 40.53702,
+    "ssim": 0.94192,
+    "texture": 0.28
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 39.44526,
+    "psnr_luma": 40.85904,
+    "ssim": 0.94825,
+    "texture": 0.38434
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 38.23672,
+    "psnr_luma": 39.21759,
+    "ssim": 0.92745,
+    "texture": 0.41219
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 38.60021,
+    "psnr_luma": 39.88815,
+    "ssim": 0.93114,
+    "texture": 0.30762
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 32.92533,
+    "psnr_luma": 33.7357,
+    "ssim": 0.7581,
+    "texture": 0.74126
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 35.91198,
+    "psnr_luma": 37.45176,
+    "ssim": 0.87612,
+    "texture": 0.02475
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 41.55222,
+    "psnr_luma": 43.33434,
+    "ssim": 0.96871,
+    "texture": 0.54716
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 41.546,
+    "psnr_luma": 43.32436,
+    "ssim": 0.96858,
+    "texture": 0.54073
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 41.86119,
+    "psnr_luma": 43.58743,
+    "ssim": 0.97019,
+    "texture": 0.51229
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 41.21064,
+    "psnr_luma": 43.55413,
+    "ssim": 0.96997,
+    "texture": 0.48543
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 41.55037,
+    "psnr_luma": 43.93939,
+    "ssim": 0.97394,
+    "texture": 0.63212
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 41.23613,
+    "psnr_luma": 42.73651,
+    "ssim": 0.96661,
+    "texture": 0.59622
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 41.3571,
+    "psnr_luma": 43.51999,
+    "ssim": 0.97032,
+    "texture": 0.61934
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 38.06828,
+    "psnr_luma": 39.411,
+    "ssim": 0.92031,
+    "texture": 0.78413
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 38.75893,
+    "psnr_luma": 40.26847,
+    "ssim": 0.93016,
+    "texture": 0.25502
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 36.82354,
+    "psnr_luma": 37.76239,
+    "ssim": 0.89388,
+    "texture": 0.1224
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 36.81955,
+    "psnr_luma": 37.75279,
+    "ssim": 0.89349,
+    "texture": 0.11891
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 37.1217,
+    "psnr_luma": 37.9917,
+    "ssim": 0.89851,
+    "texture": 0.12547
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 35.46325,
+    "psnr_luma": 36.62536,
+    "ssim": 0.89199,
+    "texture": 0.11494
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 36.94107,
+    "psnr_luma": 37.89425,
+    "ssim": 0.89821,
+    "texture": 0.15371
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 35.02327,
+    "psnr_luma": 35.86797,
+    "ssim": 0.85391,
+    "texture": 0.23413
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.01414,
+    "psnr_luma": 37.04708,
+    "ssim": 0.87746,
+    "texture": 0.11832
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 26.4838,
+    "psnr_luma": 27.13377,
+    "ssim": 0.42945,
+    "texture": 0.74678
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 32.3775,
+    "psnr_luma": 35.02843,
+    "ssim": 0.82545,
+    "texture": -0.01458
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 46.60936,
+    "psnr_luma": 51.41898,
+    "ssim": 0.99534,
+    "texture": 0.94121
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 45.05881,
+    "psnr_luma": 49.33472,
+    "ssim": 0.99252,
+    "texture": 0.97941
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.04738,
+    "psnr_luma": 21.92791,
+    "ssim": 0.33765,
+    "texture": 0.4573
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 38.1845,
+    "psnr_luma": 39.17333,
+    "ssim": 0.94661,
+    "texture": 0.3667
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 38.40446,
+    "psnr_luma": 39.68869,
+    "ssim": 0.93591,
+    "texture": 0.4013
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 38.82274,
+    "psnr_luma": 40.1461,
+    "ssim": 0.9363,
+    "texture": 0.33086
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.52618,
+    "psnr_luma": 32.40444,
+    "ssim": 0.70224,
+    "texture": 0.87517
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 35.574,
+    "psnr_luma": 37.83979,
+    "ssim": 0.88757,
+    "texture": 0.06516
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 27.64198,
+    "psnr_luma": 29.52594,
+    "ssim": 0.5629,
+    "texture": 1.143
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 19.89427,
+    "psnr_luma": 21.71349,
+    "ssim": 0.30267,
+    "texture": 0.50734
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 40.24859,
+    "psnr_luma": 41.48605,
+    "ssim": 0.97277,
+    "texture": 0.64988
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 41.01651,
+    "psnr_luma": 43.14679,
+    "ssim": 0.97023,
+    "texture": 0.5904
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 41.36596,
+    "psnr_luma": 43.56189,
+    "ssim": 0.97059,
+    "texture": 0.57475
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 37.20195,
+    "psnr_luma": 38.52782,
+    "ssim": 0.90354,
+    "texture": 0.90333
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 39.18147,
+    "psnr_luma": 41.31129,
+    "ssim": 0.94622,
+    "texture": 0.36112
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 33.43572,
+    "psnr_luma": 35.48954,
+    "ssim": 0.82993,
+    "texture": 1.15231
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.43159,
+    "psnr_luma": 22.5276,
+    "ssim": 0.43566,
+    "texture": 0.28322
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 35.18982,
+    "psnr_luma": 35.81332,
+    "ssim": 0.88393,
+    "texture": 0.08402
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 35.97471,
+    "psnr_luma": 37.17162,
+    "ssim": 0.88791,
+    "texture": 0.1802
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.18208,
+    "psnr_luma": 37.14618,
+    "ssim": 0.88007,
+    "texture": 0.1469
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.88742,
+    "psnr_luma": 25.68055,
+    "ssim": 0.35676,
+    "texture": 0.86325
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 30.96251,
+    "psnr_luma": 34.75957,
+    "ssim": 0.8212,
+    "texture": -0.01223
+   }
+  },
+  {
+   "case": "synthetic-photo-nikon-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 21.40934,
+    "psnr_luma": 23.28965,
+    "ssim": 0.24646,
+    "texture": 1.13834
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 41.98479,
+    "psnr_luma": 44.97932,
+    "ssim": 0.9891,
+    "texture": 0.83285
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 43.42617,
+    "psnr_luma": 47.43917,
+    "ssim": 0.99363,
+    "texture": 0.93703
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 36.24788,
+    "psnr_luma": 37.46449,
+    "ssim": 0.93407,
+    "texture": 0.52012
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 36.23523,
+    "psnr_luma": 37.44252,
+    "ssim": 0.93357,
+    "texture": 0.51069
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 36.84499,
+    "psnr_luma": 38.05335,
+    "ssim": 0.94238,
+    "texture": 0.52562
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 36.19987,
+    "psnr_luma": 37.8962,
+    "ssim": 0.94101,
+    "texture": 0.52425
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 36.53483,
+    "psnr_luma": 37.9891,
+    "ssim": 0.94589,
+    "texture": 0.6657
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 36.29372,
+    "psnr_luma": 37.37218,
+    "ssim": 0.93802,
+    "texture": 0.67089
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.48045,
+    "psnr_luma": 37.92005,
+    "ssim": 0.93969,
+    "texture": 0.57961
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 32.28041,
+    "psnr_luma": 33.26355,
+    "ssim": 0.82996,
+    "texture": 0.78679
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.13631,
+    "psnr_luma": 35.59288,
+    "ssim": 0.89495,
+    "texture": 0.35677
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 38.98465,
+    "psnr_luma": 40.86652,
+    "ssim": 0.96871,
+    "texture": 0.69871
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 38.9699,
+    "psnr_luma": 40.84595,
+    "ssim": 0.96839,
+    "texture": 0.6877
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 39.40043,
+    "psnr_luma": 41.3794,
+    "ssim": 0.97218,
+    "texture": 0.69187
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 38.78101,
+    "psnr_luma": 41.15777,
+    "ssim": 0.97128,
+    "texture": 0.70205
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 38.6432,
+    "psnr_luma": 41.06525,
+    "ssim": 0.97336,
+    "texture": 0.84681
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 38.90638,
+    "psnr_luma": 40.64721,
+    "ssim": 0.97123,
+    "texture": 0.80715
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 39.3094,
+    "psnr_luma": 41.61929,
+    "ssim": 0.97325,
+    "texture": 0.73166
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 36.82516,
+    "psnr_luma": 38.38178,
+    "ssim": 0.94307,
+    "texture": 0.85806
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.37222,
+    "psnr_luma": 39.13669,
+    "ssim": 0.95082,
+    "texture": 0.67279
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 33.26349,
+    "psnr_luma": 34.08373,
+    "ssim": 0.87158,
+    "texture": 0.33088
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 33.26175,
+    "psnr_luma": 34.07211,
+    "ssim": 0.87112,
+    "texture": 0.32343
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 33.93921,
+    "psnr_luma": 34.68214,
+    "ssim": 0.88751,
+    "texture": 0.34328
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 31.98516,
+    "psnr_luma": 33.05028,
+    "ssim": 0.87277,
+    "texture": 0.34481
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 33.64826,
+    "psnr_luma": 34.46774,
+    "ssim": 0.88995,
+    "texture": 0.46998
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 32.98241,
+    "psnr_luma": 33.66118,
+    "ssim": 0.86765,
+    "texture": 0.51224
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 33.34611,
+    "psnr_luma": 34.24594,
+    "ssim": 0.87489,
+    "texture": 0.40332
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 26.36035,
+    "psnr_luma": 27.08758,
+    "ssim": 0.57332,
+    "texture": 0.75798
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 30.48695,
+    "psnr_luma": 32.3273,
+    "ssim": 0.81379,
+    "texture": 0.15489
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 43.26113,
+    "psnr_luma": 47.73112,
+    "ssim": 0.99417,
+    "texture": 0.90455
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 42.82826,
+    "psnr_luma": 47.00657,
+    "ssim": 0.9932,
+    "texture": 0.95892
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.47725,
+    "psnr_luma": 19.86391,
+    "ssim": 0.33252,
+    "texture": 0.71841
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 35.39715,
+    "psnr_luma": 36.48443,
+    "ssim": 0.94547,
+    "texture": 0.61147
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 35.97359,
+    "psnr_luma": 37.59721,
+    "ssim": 0.94196,
+    "texture": 0.63901
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.50552,
+    "psnr_luma": 37.98265,
+    "ssim": 0.94186,
+    "texture": 0.54741
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.13515,
+    "psnr_luma": 32.19179,
+    "ssim": 0.79446,
+    "texture": 0.9002
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.20985,
+    "psnr_luma": 36.39247,
+    "ssim": 0.91307,
+    "texture": 0.44293
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 27.2189,
+    "psnr_luma": 29.19492,
+    "ssim": 0.68743,
+    "texture": 1.14451
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.21629,
+    "psnr_luma": 19.51174,
+    "ssim": 0.30287,
+    "texture": 0.75524
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 37.6749,
+    "psnr_luma": 39.67901,
+    "ssim": 0.97052,
+    "texture": 0.87185
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 37.98569,
+    "psnr_luma": 40.57626,
+    "ssim": 0.97165,
+    "texture": 0.78044
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 39.14412,
+    "psnr_luma": 41.45118,
+    "ssim": 0.97283,
+    "texture": 0.69566
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 36.52372,
+    "psnr_luma": 38.20862,
+    "ssim": 0.93668,
+    "texture": 0.90291
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.77343,
+    "psnr_luma": 40.09561,
+    "ssim": 0.96129,
+    "texture": 0.71989
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 32.35565,
+    "psnr_luma": 34.64557,
+    "ssim": 0.88309,
+    "texture": 1.14346
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.78342,
+    "psnr_luma": 20.31697,
+    "ssim": 0.38283,
+    "texture": 0.63116
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 32.43681,
+    "psnr_luma": 33.06603,
+    "ssim": 0.8858,
+    "texture": 0.37843
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 33.20498,
+    "psnr_luma": 34.11262,
+    "ssim": 0.88319,
+    "texture": 0.48519
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 33.46021,
+    "psnr_luma": 34.36227,
+    "ssim": 0.87939,
+    "texture": 0.41494
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.83316,
+    "psnr_luma": 25.66486,
+    "ssim": 0.51137,
+    "texture": 0.9063
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 29.81067,
+    "psnr_luma": 32.66032,
+    "ssim": 0.82858,
+    "texture": 0.22279
+   }
+  },
+  {
+   "case": "synthetic-photo-canon-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 21.50213,
+    "psnr_luma": 23.3811,
+    "ssim": 0.40207,
+    "texture": 1.14563
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 40.7319,
+    "psnr_luma": 45.42376,
+    "ssim": 0.99283,
+    "texture": 0.95646
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 41.91105,
+    "psnr_luma": 46.75113,
+    "ssim": 0.99351,
+    "texture": 0.92615
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 38.29083,
+    "psnr_luma": 41.61673,
+    "ssim": 0.98276,
+    "texture": 0.85858
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 38.29501,
+    "psnr_luma": 41.63559,
+    "ssim": 0.98273,
+    "texture": 0.85946
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 38.62719,
+    "psnr_luma": 42.28804,
+    "ssim": 0.98457,
+    "texture": 0.84482
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 36.57267,
+    "psnr_luma": 41.00819,
+    "ssim": 0.98101,
+    "texture": 0.86729
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 35.9995,
+    "psnr_luma": 39.84225,
+    "ssim": 0.98017,
+    "texture": 0.96617
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 36.1335,
+    "psnr_luma": 38.74159,
+    "ssim": 0.95869,
+    "texture": 0.8582
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 38.2222,
+    "psnr_luma": 41.82,
+    "ssim": 0.98103,
+    "texture": 0.84259
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 32.23502,
+    "psnr_luma": 33.46239,
+    "ssim": 0.78951,
+    "texture": 0.95015
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 36.11864,
+    "psnr_luma": 39.72666,
+    "ssim": 0.97378,
+    "texture": 0.88005
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 39.60871,
+    "psnr_luma": 43.58548,
+    "ssim": 0.98739,
+    "texture": 0.9039
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 39.61043,
+    "psnr_luma": 43.59435,
+    "ssim": 0.98756,
+    "texture": 0.90198
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 39.66849,
+    "psnr_luma": 43.78675,
+    "ssim": 0.98818,
+    "texture": 0.88489
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 38.23162,
+    "psnr_luma": 42.67789,
+    "ssim": 0.98607,
+    "texture": 0.90323
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 37.03112,
+    "psnr_luma": 41.28743,
+    "ssim": 0.98437,
+    "texture": 0.99346
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 37.69672,
+    "psnr_luma": 40.79619,
+    "ssim": 0.9752,
+    "texture": 0.90032
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 40.23779,
+    "psnr_luma": 44.22957,
+    "ssim": 0.98752,
+    "texture": 0.85727
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 36.72101,
+    "psnr_luma": 38.73905,
+    "ssim": 0.93046,
+    "texture": 0.95917
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 38.62691,
+    "psnr_luma": 42.25009,
+    "ssim": 0.98462,
+    "texture": 0.92294
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 35.99276,
+    "psnr_luma": 38.62711,
+    "ssim": 0.9743,
+    "texture": 0.79586
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 35.99364,
+    "psnr_luma": 38.64325,
+    "ssim": 0.97426,
+    "texture": 0.79646
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 36.86095,
+    "psnr_luma": 39.85109,
+    "ssim": 0.97829,
+    "texture": 0.79942
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 33.81092,
+    "psnr_luma": 37.96909,
+    "ssim": 0.97113,
+    "texture": 0.80401
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 33.71519,
+    "psnr_luma": 36.7314,
+    "ssim": 0.96967,
+    "texture": 0.94826
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 33.3633,
+    "psnr_luma": 35.31017,
+    "ssim": 0.9312,
+    "texture": 0.80493
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 35.07294,
+    "psnr_luma": 38.16996,
+    "ssim": 0.96508,
+    "texture": 0.82522
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 26.32652,
+    "psnr_luma": 27.28092,
+    "ssim": 0.51767,
+    "texture": 0.93212
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-bayer-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 31.87366,
+    "psnr_luma": 35.77618,
+    "ssim": 0.93409,
+    "texture": 0.76854
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-clean",
+   "method": "clean-none",
+   "scores": {
+    "cpsnr": 42.66338,
+    "psnr_luma": 47.21571,
+    "ssim": 0.99374,
+    "texture": 0.94573
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-clean",
+   "method": "clean-starfish",
+   "scores": {
+    "cpsnr": 40.6179,
+    "psnr_luma": 44.65324,
+    "ssim": 0.99195,
+    "texture": 0.95093
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.78601,
+    "psnr_luma": 20.59346,
+    "ssim": 0.4143,
+    "texture": 1.02722
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso12800",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 37.71216,
+    "psnr_luma": 41.06351,
+    "ssim": 0.98248,
+    "texture": 0.88894
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso12800",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 34.98569,
+    "psnr_luma": 38.6692,
+    "ssim": 0.97397,
+    "texture": 0.96326
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 37.69992,
+    "psnr_luma": 40.96478,
+    "ssim": 0.97922,
+    "texture": 0.82628
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.20062,
+    "psnr_luma": 32.42184,
+    "ssim": 0.7344,
+    "texture": 0.94683
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 35.6901,
+    "psnr_luma": 40.02512,
+    "ssim": 0.97331,
+    "texture": 0.87593
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso12800",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 26.99858,
+    "psnr_luma": 29.19017,
+    "ssim": 0.59315,
+    "texture": 1.04979
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.79429,
+    "psnr_luma": 20.59278,
+    "ssim": 0.405,
+    "texture": 1.02938
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 39.16837,
+    "psnr_luma": 42.91787,
+    "ssim": 0.98792,
+    "texture": 0.8836
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 36.75249,
+    "psnr_luma": 40.53152,
+    "ssim": 0.9824,
+    "texture": 0.98977
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 39.31318,
+    "psnr_luma": 42.84638,
+    "ssim": 0.9853,
+    "texture": 0.87128
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 36.46225,
+    "psnr_luma": 38.21136,
+    "ssim": 0.9101,
+    "texture": 0.94354
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 39.16961,
+    "psnr_luma": 43.13933,
+    "ssim": 0.98553,
+    "texture": 0.9011
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 32.38819,
+    "psnr_luma": 34.8446,
+    "ssim": 0.83534,
+    "texture": 1.03747
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.76492,
+    "psnr_luma": 20.55659,
+    "ssim": 0.42813,
+    "texture": 1.01227
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso51200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 34.41325,
+    "psnr_luma": 36.5021,
+    "ssim": 0.96121,
+    "texture": 0.89749
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso51200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 32.55887,
+    "psnr_luma": 36.11801,
+    "ssim": 0.95825,
+    "texture": 0.90875
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 35.05681,
+    "psnr_luma": 37.98568,
+    "ssim": 0.96442,
+    "texture": 0.78293
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.84492,
+    "psnr_luma": 25.88505,
+    "ssim": 0.44762,
+    "texture": 0.96552
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 30.58775,
+    "psnr_luma": 35.4556,
+    "ssim": 0.92618,
+    "texture": 0.81549
+   }
+  },
+  {
+   "case": "synthetic-photo-fuji-xtrans-iso51200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 21.40585,
+    "psnr_luma": 23.44085,
+    "ssim": 0.33994,
+    "texture": 1.08546
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 36.54646,
+    "cpsnr_binned": 35.27493,
+    "ssim": 0.96536,
+    "texture": 0.46856
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 36.55431,
+    "cpsnr_binned": 35.28341,
+    "ssim": 0.9654,
+    "texture": 0.46862
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 36.66484,
+    "cpsnr_binned": 35.08278,
+    "ssim": 0.97063,
+    "texture": 0.45804
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 36.18891,
+    "cpsnr_binned": 34.51097,
+    "ssim": 0.96829,
+    "texture": 0.44164
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 37.09306,
+    "cpsnr_binned": 35.28533,
+    "ssim": 0.97306,
+    "texture": 0.48962
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 36.94158,
+    "cpsnr_binned": 35.9519,
+    "ssim": 0.97104,
+    "texture": 0.53048
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.43177,
+    "cpsnr_binned": 35.01382,
+    "ssim": 0.96788,
+    "texture": 0.43589
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 33.38974,
+    "cpsnr_binned": 33.95402,
+    "ssim": 0.89323,
+    "texture": 0.57428
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 35.68082,
+    "cpsnr_binned": 34.54792,
+    "ssim": 0.96241,
+    "texture": 0.39002
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 31.57259,
+    "cpsnr_binned": 31.67197,
+    "ssim": 0.90771,
+    "texture": 0.25701
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 31.57358,
+    "cpsnr_binned": 31.65633,
+    "ssim": 0.90762,
+    "texture": 0.25432
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 31.36371,
+    "cpsnr_binned": 31.17448,
+    "ssim": 0.91421,
+    "texture": 0.25893
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 31.24046,
+    "cpsnr_binned": 30.98333,
+    "ssim": 0.91168,
+    "texture": 0.27539
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 31.98828,
+    "cpsnr_binned": 31.867,
+    "ssim": 0.92132,
+    "texture": 0.32703
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 32.01352,
+    "cpsnr_binned": 32.22932,
+    "ssim": 0.9202,
+    "texture": 0.37581
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 30.89369,
+    "cpsnr_binned": 30.81053,
+    "ssim": 0.89939,
+    "texture": 0.33504
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 27.32738,
+    "cpsnr_binned": 29.34618,
+    "ssim": 0.68002,
+    "texture": 0.36243
+   }
+  },
+  {
+   "case": "rawnind-bayer-Kortlek-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 30.59785,
+    "cpsnr_binned": 30.66789,
+    "ssim": 0.89663,
+    "texture": 0.25433
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 40.77991,
+    "cpsnr_binned": 38.09206,
+    "ssim": 0.97167,
+    "texture": 0.5857
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 40.76527,
+    "cpsnr_binned": 38.08386,
+    "ssim": 0.97143,
+    "texture": 0.5827
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 40.91364,
+    "cpsnr_binned": 38.03492,
+    "ssim": 0.97256,
+    "texture": 0.58217
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 40.19157,
+    "cpsnr_binned": 37.8396,
+    "ssim": 0.97012,
+    "texture": 0.57168
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 38.54021,
+    "cpsnr_binned": 36.80653,
+    "ssim": 0.97105,
+    "texture": 0.68591
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 40.69052,
+    "cpsnr_binned": 39.33958,
+    "ssim": 0.97195,
+    "texture": 0.72536
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 40.31573,
+    "cpsnr_binned": 37.98566,
+    "ssim": 0.96958,
+    "texture": 0.60538
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 34.36765,
+    "cpsnr_binned": 35.73818,
+    "ssim": 0.8194,
+    "texture": 0.81163
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 38.35681,
+    "cpsnr_binned": 37.05203,
+    "ssim": 0.95415,
+    "texture": 0.55089
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 38.11494,
+    "cpsnr_binned": 36.70301,
+    "ssim": 0.95636,
+    "texture": 0.45629
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 37.98492,
+    "cpsnr_binned": 36.63097,
+    "ssim": 0.95624,
+    "texture": 0.46118
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 38.12372,
+    "cpsnr_binned": 36.51749,
+    "ssim": 0.95808,
+    "texture": 0.46517
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 37.02255,
+    "cpsnr_binned": 35.97483,
+    "ssim": 0.94672,
+    "texture": 0.43726
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 36.93505,
+    "cpsnr_binned": 35.83855,
+    "ssim": 0.95575,
+    "texture": 0.54631
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 39.09166,
+    "cpsnr_binned": 38.16755,
+    "ssim": 0.95809,
+    "texture": 0.59812
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.89209,
+    "cpsnr_binned": 35.94337,
+    "ssim": 0.94168,
+    "texture": 0.48158
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 27.5105,
+    "cpsnr_binned": 30.7214,
+    "ssim": 0.50644,
+    "texture": 0.70291
+   }
+  },
+  {
+   "case": "rawnind-bayer-Spydercheckr-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 33.66133,
+    "cpsnr_binned": 33.70112,
+    "ssim": 0.90984,
+    "texture": 0.3779
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 36.06204,
+    "cpsnr_binned": 36.25125,
+    "ssim": 0.88741,
+    "texture": 0.0745
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 36.02719,
+    "cpsnr_binned": 36.19441,
+    "ssim": 0.88658,
+    "texture": 0.072
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 36.53958,
+    "cpsnr_binned": 36.51577,
+    "ssim": 0.89974,
+    "texture": 0.08632
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 33.60983,
+    "cpsnr_binned": 33.70083,
+    "ssim": 0.89021,
+    "texture": 0.09952
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 36.45084,
+    "cpsnr_binned": 36.45564,
+    "ssim": 0.89961,
+    "texture": 0.1172
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 35.80752,
+    "cpsnr_binned": 35.89697,
+    "ssim": 0.8922,
+    "texture": 0.26513
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 35.6382,
+    "cpsnr_binned": 35.84817,
+    "ssim": 0.88406,
+    "texture": 0.1056
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 28.55288,
+    "cpsnr_binned": 31.68707,
+    "ssim": 0.58876,
+    "texture": 0.37362
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso25600",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 32.99505,
+    "cpsnr_binned": 33.82753,
+    "ssim": 0.85944,
+    "texture": 0.02856
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 34.68011,
+    "cpsnr_binned": 34.84423,
+    "ssim": 0.8552,
+    "texture": 0.04038
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 34.59101,
+    "cpsnr_binned": 34.74672,
+    "ssim": 0.85345,
+    "texture": 0.03794
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 35.01112,
+    "cpsnr_binned": 34.9997,
+    "ssim": 0.86861,
+    "texture": 0.05635
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 27.54113,
+    "cpsnr_binned": 27.60207,
+    "ssim": 0.82125,
+    "texture": 0.09596
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 35.14008,
+    "cpsnr_binned": 35.15255,
+    "ssim": 0.8705,
+    "texture": 0.06866
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 34.97858,
+    "cpsnr_binned": 34.98086,
+    "ssim": 0.87051,
+    "texture": 0.11848
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 33.94172,
+    "cpsnr_binned": 34.15267,
+    "ssim": 0.84427,
+    "texture": 0.07143
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 25.48392,
+    "cpsnr_binned": 28.86537,
+    "ssim": 0.41165,
+    "texture": 0.32445
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_TitusToys-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 30.60432,
+    "cpsnr_binned": 31.64924,
+    "ssim": 0.82109,
+    "texture": 0.02027
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 33.3951,
+    "cpsnr_binned": 33.45806,
+    "ssim": 0.85784,
+    "texture": 0.2696
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 33.38758,
+    "cpsnr_binned": 33.44847,
+    "ssim": 0.85714,
+    "texture": 0.26425
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 33.96012,
+    "cpsnr_binned": 33.60132,
+    "ssim": 0.87416,
+    "texture": 0.24116
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 33.50205,
+    "cpsnr_binned": 33.50116,
+    "ssim": 0.87697,
+    "texture": 0.25028
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 33.298,
+    "cpsnr_binned": 33.19617,
+    "ssim": 0.88329,
+    "texture": 0.36123
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 33.52005,
+    "cpsnr_binned": 33.20947,
+    "ssim": 0.88617,
+    "texture": 0.39313
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 33.23125,
+    "cpsnr_binned": 33.27857,
+    "ssim": 0.86794,
+    "texture": 0.29218
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 29.48543,
+    "cpsnr_binned": 31.57415,
+    "ssim": 0.74194,
+    "texture": 0.65471
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso25600",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 31.11356,
+    "cpsnr_binned": 31.42535,
+    "ssim": 0.75737,
+    "texture": 0.06221
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 32.08664,
+    "cpsnr_binned": 32.41386,
+    "ssim": 0.81121,
+    "texture": 0.19552
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 32.06658,
+    "cpsnr_binned": 32.35566,
+    "ssim": 0.80758,
+    "texture": 0.17524
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 32.73003,
+    "cpsnr_binned": 32.6322,
+    "ssim": 0.834,
+    "texture": 0.17755
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 32.28561,
+    "cpsnr_binned": 32.44639,
+    "ssim": 0.83557,
+    "texture": 0.17889
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 32.02348,
+    "cpsnr_binned": 32.18247,
+    "ssim": 0.83851,
+    "texture": 0.26877
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 32.30581,
+    "cpsnr_binned": 32.33802,
+    "ssim": 0.84542,
+    "texture": 0.27174
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 31.89455,
+    "cpsnr_binned": 32.14684,
+    "ssim": 0.81468,
+    "texture": 0.21451
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 26.72118,
+    "cpsnr_binned": 29.37542,
+    "ssim": 0.60208,
+    "texture": 0.65914
+   }
+  },
+  {
+   "case": "rawnind-bayer-bark_beetled_log-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 29.83955,
+    "cpsnr_binned": 30.30314,
+    "ssim": 0.71133,
+    "texture": 0.02285
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 36.94293,
+    "cpsnr_binned": 34.63707,
+    "ssim": 0.97026,
+    "texture": 0.5524
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 36.97327,
+    "cpsnr_binned": 34.66902,
+    "ssim": 0.97015,
+    "texture": 0.55754
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 37.22299,
+    "cpsnr_binned": 34.96248,
+    "ssim": 0.97249,
+    "texture": 0.54861
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 34.88508,
+    "cpsnr_binned": 33.76549,
+    "ssim": 0.95032,
+    "texture": 0.50175
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 36.42295,
+    "cpsnr_binned": 34.60686,
+    "ssim": 0.9707,
+    "texture": 0.61061
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 35.03847,
+    "cpsnr_binned": 33.86551,
+    "ssim": 0.96608,
+    "texture": 0.69295
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.09361,
+    "cpsnr_binned": 34.72271,
+    "ssim": 0.96645,
+    "texture": 0.54979
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.18745,
+    "cpsnr_binned": 32.73396,
+    "ssim": 0.78894,
+    "texture": 0.63137
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.57018,
+    "cpsnr_binned": 33.72887,
+    "ssim": 0.95174,
+    "texture": 0.51314
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 33.50486,
+    "cpsnr_binned": 32.32185,
+    "ssim": 0.93581,
+    "texture": 0.38666
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 33.6501,
+    "cpsnr_binned": 32.49135,
+    "ssim": 0.93611,
+    "texture": 0.38699
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 33.86339,
+    "cpsnr_binned": 32.59764,
+    "ssim": 0.94377,
+    "texture": 0.39981
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 27.13624,
+    "cpsnr_binned": 26.9701,
+    "ssim": 0.77806,
+    "texture": 0.40314
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 32.92495,
+    "cpsnr_binned": 32.02781,
+    "ssim": 0.92843,
+    "texture": 0.46846
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 32.21848,
+    "cpsnr_binned": 31.71105,
+    "ssim": 0.93418,
+    "texture": 0.60832
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 32.06992,
+    "cpsnr_binned": 31.61219,
+    "ssim": 0.91205,
+    "texture": 0.40897
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.96607,
+    "cpsnr_binned": 27.59473,
+    "ssim": 0.51062,
+    "texture": 0.48868
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-vases-A7C-iso64000",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 28.79892,
+    "cpsnr_binned": 29.05089,
+    "ssim": 0.85015,
+    "texture": 0.32733
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 35.673,
+    "cpsnr_binned": 35.11684,
+    "ssim": 0.9392,
+    "texture": 0.32208
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 35.66527,
+    "cpsnr_binned": 35.11365,
+    "ssim": 0.93928,
+    "texture": 0.32459
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 36.01328,
+    "cpsnr_binned": 35.30524,
+    "ssim": 0.94461,
+    "texture": 0.32884
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 35.72717,
+    "cpsnr_binned": 35.03471,
+    "ssim": 0.94209,
+    "texture": 0.33304
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 35.58112,
+    "cpsnr_binned": 34.99717,
+    "ssim": 0.94652,
+    "texture": 0.4118
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 35.85315,
+    "cpsnr_binned": 35.58901,
+    "ssim": 0.94558,
+    "texture": 0.45796
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 35.8257,
+    "cpsnr_binned": 35.33538,
+    "ssim": 0.94267,
+    "texture": 0.42073
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 33.13557,
+    "cpsnr_binned": 34.26217,
+    "ssim": 0.85594,
+    "texture": 0.48504
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.91532,
+    "cpsnr_binned": 34.65589,
+    "ssim": 0.92154,
+    "texture": 0.24132
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 32.85732,
+    "cpsnr_binned": 32.94576,
+    "ssim": 0.8792,
+    "texture": 0.13302
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 32.84855,
+    "cpsnr_binned": 32.97271,
+    "ssim": 0.88016,
+    "texture": 0.14421
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 33.31771,
+    "cpsnr_binned": 33.26775,
+    "ssim": 0.8927,
+    "texture": 0.15253
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 32.79072,
+    "cpsnr_binned": 32.69631,
+    "ssim": 0.88844,
+    "texture": 0.16154
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 33.01141,
+    "cpsnr_binned": 33.00143,
+    "ssim": 0.89295,
+    "texture": 0.20965
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 33.3194,
+    "cpsnr_binned": 33.51197,
+    "ssim": 0.89685,
+    "texture": 0.22898
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 32.69125,
+    "cpsnr_binned": 32.87612,
+    "ssim": 0.87656,
+    "texture": 0.22086
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 27.0739,
+    "cpsnr_binned": 29.95709,
+    "ssim": 0.57749,
+    "texture": 0.30098
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Vaxt-i-trad-iso51200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 31.55835,
+    "cpsnr_binned": 31.85627,
+    "ssim": 0.85497,
+    "texture": 0.08826
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 41.32038,
+    "cpsnr_binned": 37.00083,
+    "ssim": 0.98673,
+    "texture": 0.64626
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 41.2739,
+    "cpsnr_binned": 36.98926,
+    "ssim": 0.98635,
+    "texture": 0.65294
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 40.82155,
+    "cpsnr_binned": 36.30859,
+    "ssim": 0.9873,
+    "texture": 0.64923
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 39.54494,
+    "cpsnr_binned": 36.09259,
+    "ssim": 0.98412,
+    "texture": 0.64708
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 38.99268,
+    "cpsnr_binned": 35.41288,
+    "ssim": 0.98391,
+    "texture": 0.78268
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 38.33691,
+    "cpsnr_binned": 36.13953,
+    "ssim": 0.98123,
+    "texture": 0.82768
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 39.40851,
+    "cpsnr_binned": 36.18612,
+    "ssim": 0.98037,
+    "texture": 0.63035
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 32.47978,
+    "cpsnr_binned": 33.89723,
+    "ssim": 0.78661,
+    "texture": 0.72309
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso6400",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.1671,
+    "cpsnr_binned": 35.59799,
+    "ssim": 0.96912,
+    "texture": 0.65099
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 39.56742,
+    "cpsnr_binned": 36.3268,
+    "ssim": 0.98337,
+    "texture": 0.63574
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 39.62885,
+    "cpsnr_binned": 36.36506,
+    "ssim": 0.98239,
+    "texture": 0.64388
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 39.39012,
+    "cpsnr_binned": 35.70579,
+    "ssim": 0.98488,
+    "texture": 0.62859
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 36.57349,
+    "cpsnr_binned": 34.48983,
+    "ssim": 0.97531,
+    "texture": 0.60526
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 38.43945,
+    "cpsnr_binned": 35.14657,
+    "ssim": 0.98169,
+    "texture": 0.75067
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 37.17423,
+    "cpsnr_binned": 35.37506,
+    "ssim": 0.9786,
+    "texture": 0.8351
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 37.26933,
+    "cpsnr_binned": 35.14064,
+    "ssim": 0.97055,
+    "texture": 0.61702
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 29.02597,
+    "cpsnr_binned": 31.4607,
+    "ssim": 0.6484,
+    "texture": 0.70745
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_7D-2-iso12800",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 33.95415,
+    "cpsnr_binned": 33.6065,
+    "ssim": 0.9472,
+    "texture": 0.5819
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 33.04124,
+    "cpsnr_binned": 33.17134,
+    "ssim": 0.91209,
+    "texture": 0.40396
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 33.01538,
+    "cpsnr_binned": 33.14467,
+    "ssim": 0.91327,
+    "texture": 0.42904
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 33.17116,
+    "cpsnr_binned": 33.17851,
+    "ssim": 0.91422,
+    "texture": 0.4151
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 29.53803,
+    "cpsnr_binned": 29.63913,
+    "ssim": 0.74483,
+    "texture": 0.29251
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 31.83448,
+    "cpsnr_binned": 32.65508,
+    "ssim": 0.91273,
+    "texture": 0.55009
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 31.59541,
+    "cpsnr_binned": 32.91652,
+    "ssim": 0.91478,
+    "texture": 0.58535
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 32.88855,
+    "cpsnr_binned": 33.34791,
+    "ssim": 0.91274,
+    "texture": 0.48008
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 28.95732,
+    "cpsnr_binned": 31.13568,
+    "ssim": 0.69938,
+    "texture": 0.61709
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso16000",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 31.02259,
+    "cpsnr_binned": 31.82266,
+    "ssim": 0.85201,
+    "texture": 0.31844
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 30.47656,
+    "cpsnr_binned": 30.87547,
+    "ssim": 0.84982,
+    "texture": 0.17662
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 30.5877,
+    "cpsnr_binned": 30.97569,
+    "ssim": 0.85535,
+    "texture": 0.19844
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 30.81325,
+    "cpsnr_binned": 31.0332,
+    "ssim": 0.85847,
+    "texture": 0.1911
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 25.65815,
+    "cpsnr_binned": 25.80418,
+    "ssim": 0.57087,
+    "texture": 0.1483
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 29.55762,
+    "cpsnr_binned": 30.22665,
+    "ssim": 0.81805,
+    "texture": 0.32328
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 30.27172,
+    "cpsnr_binned": 30.91174,
+    "ssim": 0.8675,
+    "texture": 0.30784
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 30.09734,
+    "cpsnr_binned": 30.54331,
+    "ssim": 0.83699,
+    "texture": 0.24311
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.67407,
+    "cpsnr_binned": 27.11551,
+    "ssim": 0.48333,
+    "texture": 0.38695
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_MuseeL-bluebirds-A7C-iso64000",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 27.31259,
+    "cpsnr_binned": 28.11096,
+    "ssim": 0.70885,
+    "texture": 0.11077
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 38.8859,
+    "cpsnr_binned": 38.96555,
+    "ssim": 0.94521,
+    "texture": 0.27796
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 38.88662,
+    "cpsnr_binned": 38.97549,
+    "ssim": 0.94537,
+    "texture": 0.28022
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 38.81219,
+    "cpsnr_binned": 38.59439,
+    "ssim": 0.95368,
+    "texture": 0.16704
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 38.7359,
+    "cpsnr_binned": 38.60793,
+    "ssim": 0.95355,
+    "texture": 0.15297
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 39.58836,
+    "cpsnr_binned": 39.44168,
+    "ssim": 0.95561,
+    "texture": 0.1895
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 38.03594,
+    "cpsnr_binned": 37.99265,
+    "ssim": 0.95091,
+    "texture": 0.2494
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 38.66311,
+    "cpsnr_binned": 38.59077,
+    "ssim": 0.94953,
+    "texture": 0.16014
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 35.01453,
+    "cpsnr_binned": 36.93374,
+    "ssim": 0.85014,
+    "texture": 0.45084
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso1600",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.58525,
+    "cpsnr_binned": 37.69389,
+    "ssim": 0.93259,
+    "texture": 0.07238
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 38.81526,
+    "cpsnr_binned": 39.11526,
+    "ssim": 0.93337,
+    "texture": 0.31319
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 38.79649,
+    "cpsnr_binned": 39.11433,
+    "ssim": 0.93352,
+    "texture": 0.3167
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 39.68344,
+    "cpsnr_binned": 39.47479,
+    "ssim": 0.9448,
+    "texture": 0.15419
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 39.24392,
+    "cpsnr_binned": 39.14159,
+    "ssim": 0.94232,
+    "texture": 0.11448
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 39.29933,
+    "cpsnr_binned": 39.19014,
+    "ssim": 0.94618,
+    "texture": 0.14891
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 38.88424,
+    "cpsnr_binned": 39.00247,
+    "ssim": 0.94107,
+    "texture": 0.19877
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 38.97749,
+    "cpsnr_binned": 38.92468,
+    "ssim": 0.93577,
+    "texture": 0.11393
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 33.14725,
+    "cpsnr_binned": 35.7948,
+    "ssim": 0.75832,
+    "texture": 0.5241
+   }
+  },
+  {
+   "case": "rawnind-bayer-TEST_Pen-pile-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.54141,
+    "cpsnr_binned": 37.84642,
+    "ssim": 0.92478,
+    "texture": 0.04324
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 35.56997,
+    "cpsnr_binned": 34.97103,
+    "ssim": 0.92631,
+    "texture": 0.45021
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 35.5797,
+    "cpsnr_binned": 34.98543,
+    "ssim": 0.92641,
+    "texture": 0.4487
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 36.20658,
+    "cpsnr_binned": 35.52329,
+    "ssim": 0.93556,
+    "texture": 0.44771
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 35.00581,
+    "cpsnr_binned": 34.6964,
+    "ssim": 0.92042,
+    "texture": 0.37669
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 35.21822,
+    "cpsnr_binned": 34.61307,
+    "ssim": 0.9415,
+    "texture": 0.54224
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 32.67824,
+    "cpsnr_binned": 33.62075,
+    "ssim": 0.92864,
+    "texture": 0.83788
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 34.74204,
+    "cpsnr_binned": 34.84588,
+    "ssim": 0.93196,
+    "texture": 0.53404
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.75557,
+    "cpsnr_binned": 33.76321,
+    "ssim": 0.83752,
+    "texture": 0.64687
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso6400",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 33.21109,
+    "cpsnr_binned": 33.34689,
+    "ssim": 0.86958,
+    "texture": 0.26678
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 32.08859,
+    "cpsnr_binned": 32.20504,
+    "ssim": 0.83714,
+    "texture": 0.19915
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 32.03361,
+    "cpsnr_binned": 32.13712,
+    "ssim": 0.83693,
+    "texture": 0.20797
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 32.66672,
+    "cpsnr_binned": 32.60249,
+    "ssim": 0.85521,
+    "texture": 0.21399
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 30.53577,
+    "cpsnr_binned": 30.69115,
+    "ssim": 0.81983,
+    "texture": 0.15713
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 32.62452,
+    "cpsnr_binned": 32.55995,
+    "ssim": 0.86913,
+    "texture": 0.30619
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 31.26549,
+    "cpsnr_binned": 31.89543,
+    "ssim": 0.87027,
+    "texture": 0.49532
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 31.40159,
+    "cpsnr_binned": 31.69595,
+    "ssim": 0.8333,
+    "texture": 0.27591
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 25.31545,
+    "cpsnr_binned": 28.56374,
+    "ssim": 0.56273,
+    "texture": 0.56443
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_TEST_LucieB_board-iso25600",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 28.74191,
+    "cpsnr_binned": 29.26525,
+    "ssim": 0.73126,
+    "texture": 0.07809
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 38.71857,
+    "cpsnr_binned": 37.28769,
+    "ssim": 0.95671,
+    "texture": 0.43989
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 38.7183,
+    "cpsnr_binned": 37.2872,
+    "ssim": 0.95671,
+    "texture": 0.44
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 39.09904,
+    "cpsnr_binned": 37.34454,
+    "ssim": 0.96055,
+    "texture": 0.40083
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 37.02584,
+    "cpsnr_binned": 36.06579,
+    "ssim": 0.94993,
+    "texture": 0.29373
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 37.71218,
+    "cpsnr_binned": 36.56778,
+    "ssim": 0.96282,
+    "texture": 0.44403
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 35.55843,
+    "cpsnr_binned": 36.20872,
+    "ssim": 0.94886,
+    "texture": 1.00103
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.66766,
+    "cpsnr_binned": 36.28117,
+    "ssim": 0.95141,
+    "texture": 0.36552
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.45012,
+    "cpsnr_binned": 33.92259,
+    "ssim": 0.79328,
+    "texture": 0.51414
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso6400",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 35.08697,
+    "cpsnr_binned": 34.89918,
+    "ssim": 0.9199,
+    "texture": 0.23524
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "model-autoshade-nofield",
+   "scores": {
+    "cpsnr": 33.85492,
+    "cpsnr_binned": 33.5907,
+    "ssim": 0.87583,
+    "texture": 0.15934
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "model-autoshade",
+   "scores": {
+    "cpsnr": 33.7135,
+    "cpsnr_binned": 33.45605,
+    "ssim": 0.87302,
+    "texture": 0.15229
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "model-buades",
+   "scores": {
+    "cpsnr": 34.13025,
+    "cpsnr_binned": 33.62576,
+    "ssim": 0.88406,
+    "texture": 0.16007
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "model-pmrid",
+   "scores": {
+    "cpsnr": 30.36695,
+    "cpsnr_binned": 30.28748,
+    "ssim": 0.84673,
+    "texture": 0.13429
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 34.33829,
+    "cpsnr_binned": 33.9371,
+    "ssim": 0.89505,
+    "texture": 0.24167
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "model-rr-treenet",
+   "scores": {
+    "cpsnr": 33.61372,
+    "cpsnr_binned": 33.97865,
+    "ssim": 0.90179,
+    "texture": 0.64838
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 32.26112,
+    "cpsnr_binned": 32.23397,
+    "ssim": 0.85797,
+    "texture": 0.16942
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 24.74541,
+    "cpsnr_binned": 28.04135,
+    "ssim": 0.46927,
+    "texture": 0.39567
+   }
+  },
+  {
+   "case": "rawnind-bayer-UNK_LucieB_bedroom_tapestry-iso25600",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 28.82453,
+    "cpsnr_binned": 29.42399,
+    "ssim": 0.77951,
+    "texture": 0.0758
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso1600",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.96435,
+    "cpsnr_binned": 25.20439,
+    "ssim": 0.48529,
+    "texture": 0.87734
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso1600",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 36.43984,
+    "cpsnr_binned": 33.96844,
+    "ssim": 0.9851,
+    "texture": 0.95406
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso1600",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 36.42002,
+    "cpsnr_binned": 34.07125,
+    "ssim": 0.98534,
+    "texture": 0.9217
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso1600",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 38.19407,
+    "cpsnr_binned": 34.77059,
+    "ssim": 0.9856,
+    "texture": 0.87176
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso1600",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 37.65168,
+    "cpsnr_binned": 34.68529,
+    "ssim": 0.96605,
+    "texture": 0.91994
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso1600",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 38.44387,
+    "cpsnr_binned": 34.73311,
+    "ssim": 0.98652,
+    "texture": 0.91401
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso1600",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 33.02291,
+    "cpsnr_binned": 33.50119,
+    "ssim": 0.94553,
+    "texture": 1.07005
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso6400",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 20.91978,
+    "cpsnr_binned": 25.28324,
+    "ssim": 0.47817,
+    "texture": 0.84257
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso6400",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 38.1343,
+    "cpsnr_binned": 34.65032,
+    "ssim": 0.98859,
+    "texture": 0.90626
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso6400",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 37.58901,
+    "cpsnr_binned": 34.71275,
+    "ssim": 0.98569,
+    "texture": 0.8159
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso6400",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 38.34849,
+    "cpsnr_binned": 35.19376,
+    "ssim": 0.98391,
+    "texture": 0.77685
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso6400",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 35.04858,
+    "cpsnr_binned": 34.6806,
+    "ssim": 0.90287,
+    "texture": 0.88175
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso6400",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 37.70805,
+    "cpsnr_binned": 34.95361,
+    "ssim": 0.98451,
+    "texture": 0.87155
+   }
+  },
+  {
+   "case": "rawnind-xtrans-books-iso6400",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 30.93094,
+    "cpsnr_binned": 33.24179,
+    "ssim": 0.85241,
+    "texture": 1.02335
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso5000",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.76534,
+    "cpsnr_binned": 21.28005,
+    "ssim": 0.18552,
+    "texture": 0.53049
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso5000",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 39.39787,
+    "cpsnr_binned": 39.21625,
+    "ssim": 0.96293,
+    "texture": 0.71031
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso5000",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 38.38592,
+    "cpsnr_binned": 38.772,
+    "ssim": 0.95996,
+    "texture": 0.69214
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso5000",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 40.36946,
+    "cpsnr_binned": 40.59495,
+    "ssim": 0.96106,
+    "texture": 0.55228
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso5000",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 35.62495,
+    "cpsnr_binned": 38.94281,
+    "ssim": 0.85602,
+    "texture": 0.79313
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso5000",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 39.00372,
+    "cpsnr_binned": 39.69857,
+    "ssim": 0.9546,
+    "texture": 0.60994
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso5000",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 30.97702,
+    "cpsnr_binned": 36.0894,
+    "ssim": 0.75436,
+    "texture": 1.0902
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso6400",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.79346,
+    "cpsnr_binned": 21.23261,
+    "ssim": 0.18769,
+    "texture": 0.50942
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso6400",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 39.17351,
+    "cpsnr_binned": 39.16293,
+    "ssim": 0.96106,
+    "texture": 0.66063
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso6400",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 38.17532,
+    "cpsnr_binned": 38.7148,
+    "ssim": 0.95775,
+    "texture": 0.64815
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso6400",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 39.97524,
+    "cpsnr_binned": 40.46049,
+    "ssim": 0.95843,
+    "texture": 0.51394
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso6400",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 34.4989,
+    "cpsnr_binned": 38.38631,
+    "ssim": 0.82341,
+    "texture": 0.76282
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso6400",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 38.23326,
+    "cpsnr_binned": 39.31491,
+    "ssim": 0.95118,
+    "texture": 0.57126
+   }
+  },
+  {
+   "case": "rawnind-xtrans-MuseeL-text-iso6400",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 30.06072,
+    "cpsnr_binned": 35.55698,
+    "ssim": 0.71112,
+    "texture": 1.04622
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.29831,
+    "cpsnr_binned": 22.89049,
+    "ssim": 0.25371,
+    "texture": 0.50736
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 35.92551,
+    "cpsnr_binned": 36.64801,
+    "ssim": 0.93869,
+    "texture": 0.66071
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 36.26551,
+    "cpsnr_binned": 37.13324,
+    "ssim": 0.93775,
+    "texture": 0.58481
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 36.64452,
+    "cpsnr_binned": 37.79453,
+    "ssim": 0.93659,
+    "texture": 0.55945
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 35.55509,
+    "cpsnr_binned": 37.41958,
+    "ssim": 0.91307,
+    "texture": 0.78345
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 35.87547,
+    "cpsnr_binned": 37.44557,
+    "ssim": 0.90663,
+    "texture": 0.40377
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 32.71331,
+    "cpsnr_binned": 35.77102,
+    "ssim": 0.86838,
+    "texture": 1.01959
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso6400",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.53277,
+    "cpsnr_binned": 22.75932,
+    "ssim": 0.28506,
+    "texture": 0.48747
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso6400",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 34.47844,
+    "cpsnr_binned": 35.4996,
+    "ssim": 0.90517,
+    "texture": 0.39838
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso6400",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 35.14443,
+    "cpsnr_binned": 36.72522,
+    "ssim": 0.90136,
+    "texture": 0.44516
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso6400",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 35.53723,
+    "cpsnr_binned": 37.38399,
+    "ssim": 0.89919,
+    "texture": 0.39199
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso6400",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 31.70096,
+    "cpsnr_binned": 35.81633,
+    "ssim": 0.78751,
+    "texture": 0.77856
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso6400",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 33.89823,
+    "cpsnr_binned": 36.25591,
+    "ssim": 0.84592,
+    "texture": 0.23338
+   }
+  },
+  {
+   "case": "rawnind-xtrans-parking-keyboard-iso6400",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 28.2806,
+    "cpsnr_binned": 33.38297,
+    "ssim": 0.69855,
+    "texture": 1.02437
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.99022,
+    "cpsnr_binned": 24.28219,
+    "ssim": 0.2253,
+    "texture": 0.21805
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 41.33647,
+    "cpsnr_binned": 41.96085,
+    "ssim": 0.96988,
+    "texture": 0.28733
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 41.66096,
+    "cpsnr_binned": 42.52656,
+    "ssim": 0.96906,
+    "texture": 0.3002
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 41.94332,
+    "cpsnr_binned": 43.04192,
+    "ssim": 0.96865,
+    "texture": 0.27906
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 38.50959,
+    "cpsnr_binned": 42.10118,
+    "ssim": 0.92259,
+    "texture": 0.51069
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 40.7091,
+    "cpsnr_binned": 42.2842,
+    "ssim": 0.96075,
+    "texture": 0.22007
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 35.32006,
+    "cpsnr_binned": 40.03044,
+    "ssim": 0.87538,
+    "texture": 0.64582
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso6400",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.91738,
+    "cpsnr_binned": 24.33668,
+    "ssim": 0.22299,
+    "texture": 0.20275
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso6400",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 39.91593,
+    "cpsnr_binned": 40.86894,
+    "ssim": 0.95854,
+    "texture": 0.21623
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso6400",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 40.04151,
+    "cpsnr_binned": 41.22263,
+    "ssim": 0.95697,
+    "texture": 0.24098
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso6400",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 40.26338,
+    "cpsnr_binned": 41.53455,
+    "ssim": 0.95722,
+    "texture": 0.21664
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso6400",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 35.73854,
+    "cpsnr_binned": 40.06075,
+    "ssim": 0.86202,
+    "texture": 0.45117
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso6400",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 38.92933,
+    "cpsnr_binned": 40.66157,
+    "ssim": 0.94849,
+    "texture": 0.1587
+   }
+  },
+  {
+   "case": "rawnind-xtrans-fruits-iso6400",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 32.42663,
+    "cpsnr_binned": 37.70778,
+    "ssim": 0.78454,
+    "texture": 0.56851
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso3200",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.27618,
+    "cpsnr_binned": 21.25133,
+    "ssim": 0.1581,
+    "texture": 0.24081
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso3200",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 39.93379,
+    "cpsnr_binned": 41.48136,
+    "ssim": 0.96204,
+    "texture": 0.4859
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso3200",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 39.76812,
+    "cpsnr_binned": 41.09025,
+    "ssim": 0.96145,
+    "texture": 0.45593
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso3200",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 40.07125,
+    "cpsnr_binned": 41.90324,
+    "ssim": 0.959,
+    "texture": 0.44191
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso3200",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 36.82221,
+    "cpsnr_binned": 40.67464,
+    "ssim": 0.89313,
+    "texture": 0.71902
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso3200",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 38.75352,
+    "cpsnr_binned": 41.19901,
+    "ssim": 0.94426,
+    "texture": 0.33818
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso3200",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 33.24487,
+    "cpsnr_binned": 38.18993,
+    "ssim": 0.82955,
+    "texture": 0.97338
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso6400",
+   "method": "model-rr-jdd",
+   "scores": {
+    "cpsnr": 18.62467,
+    "cpsnr_binned": 20.86879,
+    "ssim": 0.20867,
+    "texture": 0.26403
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso6400",
+   "method": "model-rr-xtrans-restormer",
+   "scores": {
+    "cpsnr": 38.2073,
+    "cpsnr_binned": 40.00223,
+    "ssim": 0.94363,
+    "texture": 0.28799
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso6400",
+   "method": "model-rr-xtrans-treenet",
+   "scores": {
+    "cpsnr": 37.67623,
+    "cpsnr_binned": 39.74635,
+    "ssim": 0.92981,
+    "texture": 0.28979
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso6400",
+   "method": "model-starfish",
+   "scores": {
+    "cpsnr": 37.99854,
+    "cpsnr_binned": 40.28164,
+    "ssim": 0.93031,
+    "texture": 0.26559
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso6400",
+   "method": "rl-c25",
+   "scores": {
+    "cpsnr": 30.76306,
+    "cpsnr_binned": 36.60369,
+    "ssim": 0.67687,
+    "texture": 0.8314
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso6400",
+   "method": "rl-l50",
+   "scores": {
+    "cpsnr": 34.95243,
+    "cpsnr_binned": 38.1168,
+    "ssim": 0.8871,
+    "texture": 0.08363
+   }
+  },
+  {
+   "case": "rawnind-xtrans-colorscreen-iso6400",
+   "method": "rr-libraw-3pass",
+   "scores": {
+    "cpsnr": 27.03507,
+    "cpsnr_binned": 33.46103,
+    "ssim": 0.55032,
+    "texture": 1.11009
+   }
+  }
+ ]
+}

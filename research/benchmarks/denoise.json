@@ -1,0 +1,3736 @@
+{
+  "set": "denoise",
+  "version": 1,
+  "about": "AI Denoise's benchmark (INF-14, DN-17): DN-11's synthetic scenes with exact truth, the RawNIND pairs DN-17 scored, and CC0 raws from raw.pixls.us at ISO 3200 or higher. Synthetic cases are made by make_benchmark.py; trainedOn says which models trained on a RawNIND scene.",
+  "cases": [
+    {
+      "id": "synthetic-edge-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "edge",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-edge-bayer-iso3200.dng",
+      "truth": "synthetic-edge-bayer-clean.dng",
+      "truthRGB": "synthetic-edge-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          160,
+          736,
+          448
+        ]
+      ],
+      "notes": "DN-11's a slanted edge at 5 degrees, dark to light, through a lens blur and the pixel aperture (edge MTF50); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-edge-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "edge",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-edge-bayer-iso12800.dng",
+      "truth": "synthetic-edge-bayer-clean.dng",
+      "truthRGB": "synthetic-edge-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          160,
+          736,
+          448
+        ]
+      ],
+      "notes": "DN-11's a slanted edge at 5 degrees, dark to light, through a lens blur and the pixel aperture (edge MTF50); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-edge-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "edge",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-edge-bayer-iso51200.dng",
+      "truth": "synthetic-edge-bayer-clean.dng",
+      "truthRGB": "synthetic-edge-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          160,
+          736,
+          448
+        ]
+      ],
+      "notes": "DN-11's a slanted edge at 5 degrees, dark to light, through a lens blur and the pixel aperture (edge MTF50); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-edge-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "edge",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-edge-xtrans-iso3200.dng",
+      "truth": "synthetic-edge-xtrans-clean.dng",
+      "truthRGB": "synthetic-edge-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          160,
+          736,
+          448
+        ]
+      ],
+      "notes": "DN-11's a slanted edge at 5 degrees, dark to light, through a lens blur and the pixel aperture (edge MTF50); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-edge-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "edge",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-edge-xtrans-iso12800.dng",
+      "truth": "synthetic-edge-xtrans-clean.dng",
+      "truthRGB": "synthetic-edge-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          160,
+          736,
+          448
+        ]
+      ],
+      "notes": "DN-11's a slanted edge at 5 degrees, dark to light, through a lens blur and the pixel aperture (edge MTF50); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-edge-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "edge",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-edge-xtrans-iso51200.dng",
+      "truth": "synthetic-edge-xtrans-clean.dng",
+      "truthRGB": "synthetic-edge-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          160,
+          736,
+          448
+        ]
+      ],
+      "notes": "DN-11's a slanted edge at 5 degrees, dark to light, through a lens blur and the pixel aperture (edge MTF50); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-star-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "star",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-star-bayer-iso3200.dng",
+      "truth": "synthetic-star-bayer-clean.dng",
+      "truthRGB": "synthetic-star-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 72-cycle Siemens star (resolution, false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-star-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "star",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-star-bayer-iso12800.dng",
+      "truth": "synthetic-star-bayer-clean.dng",
+      "truthRGB": "synthetic-star-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 72-cycle Siemens star (resolution, false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-star-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "star",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-star-bayer-iso51200.dng",
+      "truth": "synthetic-star-bayer-clean.dng",
+      "truthRGB": "synthetic-star-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 72-cycle Siemens star (resolution, false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-star-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "star",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-star-xtrans-iso3200.dng",
+      "truth": "synthetic-star-xtrans-clean.dng",
+      "truthRGB": "synthetic-star-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 72-cycle Siemens star (resolution, false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-star-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "star",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-star-xtrans-iso12800.dng",
+      "truth": "synthetic-star-xtrans-clean.dng",
+      "truthRGB": "synthetic-star-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 72-cycle Siemens star (resolution, false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-star-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "star",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-star-xtrans-iso51200.dng",
+      "truth": "synthetic-star-xtrans-clean.dng",
+      "truthRGB": "synthetic-star-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 72-cycle Siemens star (resolution, false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-zone-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "zone",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-zone-bayer-iso3200.dng",
+      "truth": "synthetic-zone-bayer-clean.dng",
+      "truthRGB": "synthetic-zone-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a zone plate reaching 0.5 cycles per pixel (false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-zone-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "zone",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-zone-bayer-iso12800.dng",
+      "truth": "synthetic-zone-bayer-clean.dng",
+      "truthRGB": "synthetic-zone-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a zone plate reaching 0.5 cycles per pixel (false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-zone-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "zone",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-zone-bayer-iso51200.dng",
+      "truth": "synthetic-zone-bayer-clean.dng",
+      "truthRGB": "synthetic-zone-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a zone plate reaching 0.5 cycles per pixel (false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-zone-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "zone",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-zone-xtrans-iso3200.dng",
+      "truth": "synthetic-zone-xtrans-clean.dng",
+      "truthRGB": "synthetic-zone-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a zone plate reaching 0.5 cycles per pixel (false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-zone-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "zone",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-zone-xtrans-iso12800.dng",
+      "truth": "synthetic-zone-xtrans-clean.dng",
+      "truthRGB": "synthetic-zone-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a zone plate reaching 0.5 cycles per pixel (false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-zone-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "zone",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-zone-xtrans-iso51200.dng",
+      "truth": "synthetic-zone-xtrans-clean.dng",
+      "truthRGB": "synthetic-zone-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a zone plate reaching 0.5 cycles per pixel (false colour); exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-leaves-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "leaves",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-leaves-bayer-iso3200.dng",
+      "truth": "synthetic-leaves-bayer-clean.dng",
+      "truthRGB": "synthetic-leaves-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's dead leaves, texture at every scale; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-leaves-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "leaves",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-leaves-bayer-iso12800.dng",
+      "truth": "synthetic-leaves-bayer-clean.dng",
+      "truthRGB": "synthetic-leaves-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's dead leaves, texture at every scale; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-leaves-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "leaves",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-leaves-bayer-iso51200.dng",
+      "truth": "synthetic-leaves-bayer-clean.dng",
+      "truthRGB": "synthetic-leaves-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's dead leaves, texture at every scale; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-leaves-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "leaves",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-leaves-xtrans-iso3200.dng",
+      "truth": "synthetic-leaves-xtrans-clean.dng",
+      "truthRGB": "synthetic-leaves-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's dead leaves, texture at every scale; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-leaves-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "leaves",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-leaves-xtrans-iso12800.dng",
+      "truth": "synthetic-leaves-xtrans-clean.dng",
+      "truthRGB": "synthetic-leaves-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's dead leaves, texture at every scale; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-leaves-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "leaves",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-leaves-xtrans-iso51200.dng",
+      "truth": "synthetic-leaves-xtrans-clean.dng",
+      "truthRGB": "synthetic-leaves-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's dead leaves, texture at every scale; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-text-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "text",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-text-bayer-iso3200.dng",
+      "truth": "synthetic-text-bayer-clean.dng",
+      "truthRGB": "synthetic-text-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          8,
+          8,
+          368,
+          752
+        ],
+        [
+          420,
+          40,
+          310,
+          310
+        ],
+        [
+          420,
+          420,
+          310,
+          130
+        ]
+      ],
+      "notes": "DN-11's text from 7 to 16 px in neutral and coloured pairs (the fine-text panel), a flat grey patch and a dark patch; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-text-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "text",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-text-bayer-iso12800.dng",
+      "truth": "synthetic-text-bayer-clean.dng",
+      "truthRGB": "synthetic-text-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          8,
+          8,
+          368,
+          752
+        ],
+        [
+          420,
+          40,
+          310,
+          310
+        ],
+        [
+          420,
+          420,
+          310,
+          130
+        ]
+      ],
+      "notes": "DN-11's text from 7 to 16 px in neutral and coloured pairs (the fine-text panel), a flat grey patch and a dark patch; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-text-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "text",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-text-bayer-iso51200.dng",
+      "truth": "synthetic-text-bayer-clean.dng",
+      "truthRGB": "synthetic-text-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          8,
+          8,
+          368,
+          752
+        ],
+        [
+          420,
+          40,
+          310,
+          310
+        ],
+        [
+          420,
+          420,
+          310,
+          130
+        ]
+      ],
+      "notes": "DN-11's text from 7 to 16 px in neutral and coloured pairs (the fine-text panel), a flat grey patch and a dark patch; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-text-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "text",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-text-xtrans-iso3200.dng",
+      "truth": "synthetic-text-xtrans-clean.dng",
+      "truthRGB": "synthetic-text-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          8,
+          8,
+          368,
+          752
+        ],
+        [
+          420,
+          40,
+          310,
+          310
+        ],
+        [
+          420,
+          420,
+          310,
+          130
+        ]
+      ],
+      "notes": "DN-11's text from 7 to 16 px in neutral and coloured pairs (the fine-text panel), a flat grey patch and a dark patch; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-text-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "text",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-text-xtrans-iso12800.dng",
+      "truth": "synthetic-text-xtrans-clean.dng",
+      "truthRGB": "synthetic-text-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          8,
+          8,
+          368,
+          752
+        ],
+        [
+          420,
+          40,
+          310,
+          310
+        ],
+        [
+          420,
+          420,
+          310,
+          130
+        ]
+      ],
+      "notes": "DN-11's text from 7 to 16 px in neutral and coloured pairs (the fine-text panel), a flat grey patch and a dark patch; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-text-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "text",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-text-xtrans-iso51200.dng",
+      "truth": "synthetic-text-xtrans-clean.dng",
+      "truthRGB": "synthetic-text-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          8,
+          8,
+          368,
+          752
+        ],
+        [
+          420,
+          40,
+          310,
+          310
+        ],
+        [
+          420,
+          420,
+          310,
+          130
+        ]
+      ],
+      "notes": "DN-11's text from 7 to 16 px in neutral and coloured pairs (the fine-text panel), a flat grey patch and a dark patch; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-sony-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-sony",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-sony-bayer-iso3200.dng",
+      "truth": "synthetic-photo-sony-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-sony-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Sony A7 III fixture (_DSC0009.ARW, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-sony-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-sony",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-sony-bayer-iso12800.dng",
+      "truth": "synthetic-photo-sony-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-sony-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Sony A7 III fixture (_DSC0009.ARW, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-sony-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-sony",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-sony-bayer-iso51200.dng",
+      "truth": "synthetic-photo-sony-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-sony-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Sony A7 III fixture (_DSC0009.ARW, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-sony-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-sony",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-sony-xtrans-iso3200.dng",
+      "truth": "synthetic-photo-sony-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-sony-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Sony A7 III fixture (_DSC0009.ARW, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-sony-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-sony",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-sony-xtrans-iso12800.dng",
+      "truth": "synthetic-photo-sony-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-sony-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Sony A7 III fixture (_DSC0009.ARW, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-sony-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-sony",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-sony-xtrans-iso51200.dng",
+      "truth": "synthetic-photo-sony-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-sony-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Sony A7 III fixture (_DSC0009.ARW, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-nikon-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-nikon",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-nikon-bayer-iso3200.dng",
+      "truth": "synthetic-photo-nikon-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-nikon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Nikon Z 6 fixture (DSC_0750.NEF, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-nikon-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-nikon",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-nikon-bayer-iso12800.dng",
+      "truth": "synthetic-photo-nikon-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-nikon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Nikon Z 6 fixture (DSC_0750.NEF, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-nikon-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-nikon",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-nikon-bayer-iso51200.dng",
+      "truth": "synthetic-photo-nikon-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-nikon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Nikon Z 6 fixture (DSC_0750.NEF, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-nikon-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-nikon",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-nikon-xtrans-iso3200.dng",
+      "truth": "synthetic-photo-nikon-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-nikon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Nikon Z 6 fixture (DSC_0750.NEF, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-nikon-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-nikon",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-nikon-xtrans-iso12800.dng",
+      "truth": "synthetic-photo-nikon-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-nikon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Nikon Z 6 fixture (DSC_0750.NEF, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-nikon-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-nikon",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-nikon-xtrans-iso51200.dng",
+      "truth": "synthetic-photo-nikon-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-nikon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Nikon Z 6 fixture (DSC_0750.NEF, raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-canon-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-canon",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-canon-bayer-iso3200.dng",
+      "truth": "synthetic-photo-canon-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-canon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Canon EOS R6 fixture (raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-canon-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-canon",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-canon-bayer-iso12800.dng",
+      "truth": "synthetic-photo-canon-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-canon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Canon EOS R6 fixture (raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-canon-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-canon",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-canon-bayer-iso51200.dng",
+      "truth": "synthetic-photo-canon-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-canon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Canon EOS R6 fixture (raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-canon-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-canon",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-canon-xtrans-iso3200.dng",
+      "truth": "synthetic-photo-canon-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-canon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Canon EOS R6 fixture (raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-canon-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-canon",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-canon-xtrans-iso12800.dng",
+      "truth": "synthetic-photo-canon-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-canon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Canon EOS R6 fixture (raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-canon-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-canon",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-canon-xtrans-iso51200.dng",
+      "truth": "synthetic-photo-canon-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-canon-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Canon EOS R6 fixture (raw.pixls.us), binned 2 x 2 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-fuji-bayer-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-fuji",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-fuji-bayer-iso3200.dng",
+      "truth": "synthetic-photo-fuji-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-fuji-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 3200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Fujifilm X-T3 fixture (AFXT2720.RAF, raw.pixls.us), binned 3 x 3 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-fuji-bayer-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-fuji",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-fuji-bayer-iso12800.dng",
+      "truth": "synthetic-photo-fuji-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-fuji-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 12800,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Fujifilm X-T3 fixture (AFXT2720.RAF, raw.pixls.us), binned 3 x 3 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-fuji-bayer-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-fuji",
+          "--cfa",
+          "bayer",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-fuji-bayer-iso51200.dng",
+      "truth": "synthetic-photo-fuji-bayer-clean.dng",
+      "truthRGB": "synthetic-photo-fuji-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic Bayer",
+      "iso": 51200,
+      "cfa": "bayer",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Fujifilm X-T3 fixture (AFXT2720.RAF, raw.pixls.us), binned 3 x 3 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-fuji-xtrans-iso3200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-fuji",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso3200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-fuji-xtrans-iso3200.dng",
+      "truth": "synthetic-photo-fuji-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-fuji-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00064,
+        "b": 1e-06
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Fujifilm X-T3 fixture (AFXT2720.RAF, raw.pixls.us), binned 3 x 3 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-fuji-xtrans-iso12800",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-fuji",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso12800"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-fuji-xtrans-iso12800.dng",
+      "truth": "synthetic-photo-fuji-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-fuji-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 12800,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.00256,
+        "b": 1.6e-05
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Fujifilm X-T3 fixture (AFXT2720.RAF, raw.pixls.us), binned 3 x 3 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "synthetic-photo-fuji-xtrans-iso51200",
+      "group": "synthetic",
+      "source": {
+        "generator": "research/prototypes/raw_denoise/make_benchmark.py",
+        "args": [
+          "--scene",
+          "photo-fuji",
+          "--cfa",
+          "xtrans",
+          "--level",
+          "iso51200"
+        ]
+      },
+      "licence": "synthetic",
+      "file": "synthetic-photo-fuji-xtrans-iso51200.dng",
+      "truth": "synthetic-photo-fuji-xtrans-clean.dng",
+      "truthRGB": "synthetic-photo-fuji-truth.tif",
+      "score": "truth",
+      "camera": "Synthetic X-Trans",
+      "iso": 51200,
+      "cfa": "xtrans",
+      "noise": {
+        "a": 0.0102,
+        "b": 0.00015
+      },
+      "crops": [
+        [
+          16,
+          16,
+          736,
+          736
+        ]
+      ],
+      "notes": "DN-11's a 768 px crop of the CC0 Fujifilm X-T3 fixture (AFXT2720.RAF, raw.pixls.us), binned 3 x 3 to full colour; exact Poisson-Gaussian noise (variance a x + b in normalised raw units)"
+    },
+    {
+      "id": "rawnind-Kortlek-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29004",
+        "sha256": "998aefbcd7ce652df5045ef30572c1378403797bb8a482946a8ac1dde01caebb"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Kortlek: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_Kortlek_GT_ISO100_sha1=b5a564cd9291224caf363b6b03054365d59d316b.cr2",
+      "score": "pair",
+      "camera": "Canon EOS 6D",
+      "iso": 100,
+      "cfa": "bayer",
+      "crops": [
+        [
+          384,
+          1920,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-Kortlek-iso12800",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/28835",
+        "sha256": "a70218615c1cd880cd12a72c0d078f70e48a1dd55327d867efcef619e9f1be07"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Kortlek: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_Kortlek_ISO12800_sha1=2a6fd2d10b0d90b0b511078611be0b71ed47556c.cr2",
+      "score": "pair",
+      "clean": "rawnind-Kortlek-gt",
+      "camera": "Canon EOS 6D",
+      "iso": 12800,
+      "cfa": "bayer",
+      "crops": [
+        [
+          388,
+          1920,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": true,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-Kortlek-iso51200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/28387",
+        "sha256": "bd2262a4ea50c1b933560b1b51074b5ea2fc9d316317a95494f8748d7db90b8c"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Kortlek: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_Kortlek_ISO51200_sha1=8fed453fdfb162673bb9ed41f9c5f03095331e3b.cr2",
+      "score": "pair",
+      "clean": "rawnind-Kortlek-gt",
+      "camera": "Canon EOS 6D",
+      "iso": 51200,
+      "cfa": "bayer",
+      "crops": [
+        [
+          390,
+          1920,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": true,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-Spydercheckr-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30240",
+        "sha256": "0c5d43abfb7a84cd4365e830cfe312838d218301614a2236061d789c55ed9fbe"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Spydercheckr: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_Spydercheckr_GT_ISO100_sha1=a07e59263242abfc13f8244da8bb390b02ecb209.cr2",
+      "score": "pair",
+      "camera": "Canon EOS 6D",
+      "iso": 100,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2688,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-Spydercheckr-iso12800",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29742",
+        "sha256": "9b539b786d6987914e431ce593821cf47975fc7c99c9678939c729bfb466c443"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Spydercheckr: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_Spydercheckr_ISO12800_sha1=543930b3bc237ea90c20d45e0c6939499040bc15.cr2",
+      "score": "pair",
+      "clean": "rawnind-Spydercheckr-gt",
+      "camera": "Canon EOS 6D",
+      "iso": 12800,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2688,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": true,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-Spydercheckr-iso51200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29414",
+        "sha256": "efeb979dba64ad8aa84dbc73db843c88d34fa42683a148466ace552bdb6c7bbb"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Spydercheckr: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_Spydercheckr_ISO51200_sha1=25e084412136e65e04587053dd0d5a75b51f16e9.cr2",
+      "score": "pair",
+      "clean": "rawnind-Spydercheckr-gt",
+      "camera": "Canon EOS 6D",
+      "iso": 51200,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2688,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": true,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_TitusToys-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/31179",
+        "sha256": "2f9c3c630b2ce802477bb35fd7f26cb98b027b3c75afa92cb6ca4e0105ca1fda"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene TitusToys, not listed in permissions.txt",
+      "file": "Bayer_TEST_TitusToys_GT_ISO50_sha1=85c54ed5174f0ca97385984e6301a1fab08cbdbe.arw",
+      "score": "pair",
+      "camera": "Sony ILCE-7C",
+      "iso": 50,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3648,
+          768,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-TEST_TitusToys-iso25600",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30000",
+        "sha256": "36ad813159e1b8ec6d4d65325adc838eb3294d543af4845e52082d4be84803a0"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene TitusToys, not listed in permissions.txt",
+      "file": "Bayer_TEST_TitusToys_ISO25600_sha1=d7a77e6f2d966ca6cd3106df3511646456fa3490.arw",
+      "score": "pair",
+      "clean": "rawnind-TEST_TitusToys-gt",
+      "camera": "Sony ILCE-7C",
+      "iso": 25600,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3648,
+          768,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": true,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_TitusToys-iso51200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/31181",
+        "sha256": "af622f605de2d6d63a17709b0f1bcddbf7885fba9de6a0d915898be0f4344bd8"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene TitusToys, not listed in permissions.txt",
+      "file": "Bayer_TEST_TitusToys_ISO51200_sha1=f53dcfac22bc336c274c4dc4f3c8248db64f1adc.arw",
+      "score": "pair",
+      "clean": "rawnind-TEST_TitusToys-gt",
+      "camera": "Sony ILCE-7C",
+      "iso": 51200,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3648,
+          768,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": true,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-bark_beetled_log-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/28951",
+        "sha256": "ae2949b0e2ab70c6ab1b834d435847d6c73ed4687a7029f3b191262553c604f2"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene bark_beetled_log, not listed in permissions.txt",
+      "file": "Bayer_bark_beetled_log_GT_ISO50_sha1=3b6aad6a46b58bc4cde3e38601abcadb803dcc0d.arw",
+      "score": "pair",
+      "camera": "Sony ILCE-7C",
+      "iso": 50,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3648,
+          384,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-bark_beetled_log-iso25600",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29206",
+        "sha256": "8e8f12e968b33f5f096adca381c1980c95a38d46c56d0b0196a635d7c32e05cc"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene bark_beetled_log, not listed in permissions.txt",
+      "file": "Bayer_bark_beetled_log_ISO25600_sha1=78d86b2515fd0b274f85ba4e92193577c025904e.arw",
+      "score": "pair",
+      "clean": "rawnind-bark_beetled_log-gt",
+      "camera": "Sony ILCE-7C",
+      "iso": 25600,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3648,
+          384,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": true,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-bark_beetled_log-iso51200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/28650",
+        "sha256": "760349ec77fc59200f109dc08c6c457024e375b87f1e9616f6944b068c24a3bc"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene bark_beetled_log, not listed in permissions.txt",
+      "file": "Bayer_bark_beetled_log_ISO51200_sha1=2db471abb1ef9e326ae870284a96a5cac6141236.arw",
+      "score": "pair",
+      "clean": "rawnind-bark_beetled_log-gt",
+      "camera": "Sony ILCE-7C",
+      "iso": 51200,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3648,
+          384,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": true,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_MuseeL-vases-A7C-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29724",
+        "sha256": "da4ffd72dc9674699b3546d59b11e3267292b6ddedce493ea000128c48f38d63"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-vases-A7C, not listed in permissions.txt",
+      "file": "Bayer_TEST_MuseeL-vases-A7C_GT_ISO50_sha1=128aac6285487ec36b828f31db6d634b094f7ae3.arw",
+      "score": "pair",
+      "camera": "Sony ILCE-7C",
+      "iso": 50,
+      "cfa": "bayer",
+      "crops": [
+        [
+          1536,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-TEST_MuseeL-vases-A7C-iso12800",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30034",
+        "sha256": "8f0bfbdef3d52a9a0857f538275f3f3fba88ee43389a59350e165df319bf708e"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-vases-A7C, not listed in permissions.txt",
+      "file": "Bayer_TEST_MuseeL-vases-A7C_ISO12800_sha1=7d67a13a47ade45e608a1630354a378a0d899e63.arw",
+      "score": "pair",
+      "clean": "rawnind-TEST_MuseeL-vases-A7C-gt",
+      "camera": "Sony ILCE-7C",
+      "iso": 12800,
+      "cfa": "bayer",
+      "crops": [
+        [
+          1536,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_MuseeL-vases-A7C-iso64000",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29767",
+        "sha256": "974e0baf32ffbbf34dceaec73101d21f257590700d0b255cc1e26797f6e3c302"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-vases-A7C, not listed in permissions.txt",
+      "file": "Bayer_TEST_MuseeL-vases-A7C_ISO64000_sha1=736eda054de38c5f51f4e4825cf4554fc5f0a24d.arw",
+      "score": "pair",
+      "clean": "rawnind-TEST_MuseeL-vases-A7C-gt",
+      "camera": "Sony ILCE-7C",
+      "iso": 64000,
+      "cfa": "bayer",
+      "crops": [
+        [
+          1536,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_Vaxt-i-trad-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30145",
+        "sha256": "5231c19eb6eb0fdf3a9f4f69d0862c17152c9b7754a52d1e6e0d64164c9ec016"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Vaxt-i-trad: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_TEST_Vaxt-i-trad_GT_ISO100_sha1=ca77ec885c0198357c413895c343b965c1ebcafb.cr2",
+      "score": "pair",
+      "camera": "Canon EOS 6D",
+      "iso": 100,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3840,
+          2496,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-TEST_Vaxt-i-trad-iso12800",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30851",
+        "sha256": "a86a8b26c474a58a94c0e93fd6beec6d6f9589f2adb88d8d0b07e58311dd14a5"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Vaxt-i-trad: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_TEST_Vaxt-i-trad_ISO12800_sha1=d61bb9bdc1aaea030d66b5ed34e76c66255d340c.cr2",
+      "score": "pair",
+      "clean": "rawnind-TEST_Vaxt-i-trad-gt",
+      "camera": "Canon EOS 6D",
+      "iso": 12800,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3840,
+          2494,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_Vaxt-i-trad-iso51200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29456",
+        "sha256": "ef55f2c946d0a77a219035f0ec8712a8a94118880ebfe2dde5619e98ff87ac42"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Vaxt-i-trad: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_TEST_Vaxt-i-trad_ISO51200_sha1=8f05f5f4e6e8e39719b8c4daf5aeacbca79240ec.cr2",
+      "score": "pair",
+      "clean": "rawnind-TEST_Vaxt-i-trad-gt",
+      "camera": "Canon EOS 6D",
+      "iso": 51200,
+      "cfa": "bayer",
+      "crops": [
+        [
+          3840,
+          2494,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_7D-2-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30549",
+        "sha256": "b2e03f2efb0084265d1017336439a7fa2e6c3eb52c6975df558f02e13907e34c"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene 7D-2: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_TEST_7D-2_GT_ISO100_sha1=45803fc993c395c515b165a1f5d7417f4af4fe1e.cr2",
+      "score": "pair",
+      "camera": "Canon EOS 7D",
+      "iso": 100,
+      "cfa": "bayer",
+      "crops": [
+        [
+          4032,
+          384,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-TEST_7D-2-iso6400",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30043",
+        "sha256": "ef9a4730cf1be92f11c5ee0193e2c87b7e4a48e839f5068befc0269395cd0cab"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene 7D-2: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_TEST_7D-2_ISO6400_sha1=4bd470a54a5ca3485bcb3fe72b346eb61b5a7424.cr2",
+      "score": "pair",
+      "clean": "rawnind-TEST_7D-2-gt",
+      "camera": "Canon EOS 7D",
+      "iso": 6400,
+      "cfa": "bayer",
+      "crops": [
+        [
+          4032,
+          384,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_7D-2-iso12800",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29717",
+        "sha256": "bc3240e731944063f6f2a7c7cb8b6b1e9111aa826e93429b28ba0c0e6cd8bbe6"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene 7D-2: CC0, by Peter Wemmert in the dataset's permissions.txt",
+      "file": "Bayer_TEST_7D-2_ISO12800_sha1=f378ff0b6b1eea30b0184671a4a223dd93b4f271.cr2",
+      "score": "pair",
+      "clean": "rawnind-TEST_7D-2-gt",
+      "camera": "Canon EOS 7D",
+      "iso": 12800,
+      "cfa": "bayer",
+      "crops": [
+        [
+          4032,
+          384,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_MuseeL-bluebirds-A7C-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30090",
+        "sha256": "ef22ce16ce27cead1b3d1492f5abf165bc2c8c2bc030827588d1d425a5dd248f"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-bluebirds-A7C, not listed in permissions.txt",
+      "file": "Bayer_TEST_MuseeL-bluebirds-A7C_GT_ISO50_sha1=3156b462861d9e67f6e0305d8d55ad695a4d937c.arw",
+      "score": "pair",
+      "camera": "Sony ILCE-7C",
+      "iso": 50,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2496,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-TEST_MuseeL-bluebirds-A7C-iso16000",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29716",
+        "sha256": "0553913d76e05a5cc228ff92138f5ca70df91a0bfe2a063a708ceac7717f1449"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-bluebirds-A7C, not listed in permissions.txt",
+      "file": "Bayer_TEST_MuseeL-bluebirds-A7C_ISO16000_sha1=e4031d1853423a4f294807864845d60da22eecdd.arw",
+      "score": "pair",
+      "clean": "rawnind-TEST_MuseeL-bluebirds-A7C-gt",
+      "camera": "Sony ILCE-7C",
+      "iso": 16000,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2496,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_MuseeL-bluebirds-A7C-iso64000",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29574",
+        "sha256": "6ca8427a826c5ba0b8cc4e425ffa3f277dc20c4661d0825297747532df6e712f"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-bluebirds-A7C, not listed in permissions.txt",
+      "file": "Bayer_TEST_MuseeL-bluebirds-A7C_ISO64000_sha1=00b3c2f6a7c75ff501a25b8b1fc704c5eb7aa2d6.arw",
+      "score": "pair",
+      "clean": "rawnind-TEST_MuseeL-bluebirds-A7C-gt",
+      "camera": "Sony ILCE-7C",
+      "iso": 64000,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2496,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_Pen-pile-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29815",
+        "sha256": "74e4f58df3681bb7d916aec937352b5b582c2bd638de906e49cc542b0a4f6884"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Pen-pile: CC0, by Matti Blume in the dataset's permissions.txt",
+      "file": "Bayer_TEST_Pen-pile_GT_ISO100_sha1=dead5469f750d32cd50f8673f1ae3608bdb9a99d.dng",
+      "score": "pair",
+      "camera": "Panasonic DMC-GH1",
+      "iso": 100,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2688,
+          576,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-TEST_Pen-pile-iso1600",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30561",
+        "sha256": "23d0567a81bdef9df9532d5b0123f2495b99cda5e3f557966910d7aed144ac7c"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Pen-pile: CC0, by Matti Blume in the dataset's permissions.txt",
+      "file": "Bayer_TEST_Pen-pile_ISO1600_sha1=1a26389f4df2b7ab54656f7ea9f80347d6dfda91.dng",
+      "score": "pair",
+      "clean": "rawnind-TEST_Pen-pile-gt",
+      "camera": "Panasonic DMC-GH1",
+      "iso": 1600,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2690,
+          576,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-TEST_Pen-pile-iso3200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30458",
+        "sha256": "255a78fb59cc0c61152ebc1336910ac606244af555cdfb789826675fd8693027"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene Pen-pile: CC0, by Matti Blume in the dataset's permissions.txt",
+      "file": "Bayer_TEST_Pen-pile_ISO3200_sha1=a3221270fde0f61f690b4b4619d74ec32dce6e31.dng",
+      "score": "pair",
+      "clean": "rawnind-TEST_Pen-pile-gt",
+      "camera": "Panasonic DMC-GH1",
+      "iso": 3200,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2690,
+          576,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-UNK_TEST_LucieB_board-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30098",
+        "sha256": "9d8c0eb0068f1e56d0cf23dfb15d18aa3ffee94a7992aabe0cc00afad35f4ca6"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene LucieB_board, not listed in permissions.txt",
+      "file": "Bayer_UNK_TEST_LucieB_board_GT_ISO100_sha1=3300aa5ce5517dfbe1b2fc7c7e1a0a0cf40b8972.cr2",
+      "score": "pair",
+      "camera": "Canon EOS M100",
+      "iso": 100,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2880,
+          1920,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-UNK_TEST_LucieB_board-iso6400",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29921",
+        "sha256": "949d8473863db8165602ecf1253f70a9025363baedccdd3994740364baff37f5"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene LucieB_board, not listed in permissions.txt",
+      "file": "Bayer_UNK_TEST_LucieB_board_ISO6400_sha1=469fa354eab99934d85b309e4dc7d0c669a35e68.cr2",
+      "score": "pair",
+      "clean": "rawnind-UNK_TEST_LucieB_board-gt",
+      "camera": "Canon EOS M100",
+      "iso": 6400,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2880,
+          1920,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-UNK_TEST_LucieB_board-iso25600",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30943",
+        "sha256": "4ed847ebbb0620365640a3c25bc74ad1295c00c7dd83e3adc31aca3335fe5742"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene LucieB_board, not listed in permissions.txt",
+      "file": "Bayer_UNK_TEST_LucieB_board_ISO25600_sha1=34714a832479e2a80bdd6153c8252a342e657743.cr2",
+      "score": "pair",
+      "clean": "rawnind-UNK_TEST_LucieB_board-gt",
+      "camera": "Canon EOS M100",
+      "iso": 25600,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2880,
+          1920,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-UNK_LucieB_bedroom_tapestry-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29858",
+        "sha256": "50a46997e16102e7b37538240ece7cf53fa90855326c5fd115dab76691d7330f"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene LucieB_bedroom_tapestry, not listed in permissions.txt",
+      "file": "Bayer_UNK_LucieB_bedroom_tapestry_GT_ISO100_sha1=a51b4e2088e393fc7476b3bb72a69b272ad291bc.cr2",
+      "score": "pair",
+      "camera": "Canon EOS M100",
+      "iso": 100,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2304,
+          576,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-UNK_LucieB_bedroom_tapestry-iso6400",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30184",
+        "sha256": "c008e4a4b7d03498f024db80d54d48da6a5fca768546a366aab816789af1c262"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene LucieB_bedroom_tapestry, not listed in permissions.txt",
+      "file": "Bayer_UNK_LucieB_bedroom_tapestry_ISO6400_sha1=d3ee615aa5f627e5a5d48ca567093696929f8404.cr2",
+      "score": "pair",
+      "clean": "rawnind-UNK_LucieB_bedroom_tapestry-gt",
+      "camera": "Canon EOS M100",
+      "iso": 6400,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2304,
+          576,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-UNK_LucieB_bedroom_tapestry-iso25600",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/31191",
+        "sha256": "bb252bd593d2d4e93301c8350df4ec75d2cc12df834dbddf49e8070503f388f3"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene LucieB_bedroom_tapestry, not listed in permissions.txt",
+      "file": "Bayer_UNK_LucieB_bedroom_tapestry_ISO25600_sha1=a084425b4b514f407d181864e4b5f7ecd6cf219c.cr2",
+      "score": "pair",
+      "clean": "rawnind-UNK_LucieB_bedroom_tapestry-gt",
+      "camera": "Canon EOS M100",
+      "iso": 25600,
+      "cfa": "bayer",
+      "crops": [
+        [
+          2304,
+          576,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-books-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29512",
+        "sha256": "28749dee51abdadad309eb4140709ee1e1794d47f25493ce943b9cf172e947b6"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene books: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_books_GT_ISO200_sha1=b2add962f3fd1cd828a1cd5e3c29f7226aebb6df.raf",
+      "score": "pair",
+      "camera": "Fujifilm X-T1",
+      "iso": 200,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          2304,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-books-iso1600",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30226",
+        "sha256": "34c3226d7601a407e09e2246ee8a606b032d4f8962061150c6ff33e31cd6c536"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene books: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_books_ISO1600_sha1=161ded1bd6606deb475bc6c29636316146ce437a.raf",
+      "score": "pair",
+      "clean": "rawnind-books-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 1600,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          2304,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-books-iso6400",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/31090",
+        "sha256": "a63678059fe77a2a63b3b5dabff93a899d64c57ec635b016318a6b826905c613"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene books: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_books_ISO6400_sha1=66eec9f00751c1850ad2b5e971d3f6734e433b6a.raf",
+      "score": "pair",
+      "clean": "rawnind-books-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 6400,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          2304,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-MuseeL-text-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30212",
+        "sha256": "fb5932921f61e3adf4cec1c87d4e063f70465e4203906e0fe221f3a6733e106f"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-text: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_MuseeL-text_GT_ISO200_sha1=aa1318aabb3a47520db38f19d8f388c01b038ac8.raf",
+      "score": "pair",
+      "camera": "Fujifilm X-T1",
+      "iso": 200,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          2112,
+          576,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-MuseeL-text-iso5000",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/31129",
+        "sha256": "d893b8e5d74643a6f1f8e5457c3a53554bb928282259d3434b80fc40dcb705dd"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-text: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_MuseeL-text_ISO5000_sha1=962b9b1c59416261fd321f35058997d3bb09cee4.raf",
+      "score": "pair",
+      "clean": "rawnind-MuseeL-text-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 5000,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          2112,
+          576,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-MuseeL-text-iso6400",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29603",
+        "sha256": "e3e10cb8ff7b7bdc7f7c470b88d877583a20a38acebd207430ae1ad571647bf7"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene MuseeL-text: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_MuseeL-text_ISO6400_sha1=ce323e4b3e79f56af15be7685271d8d2cf83177e.raf",
+      "score": "pair",
+      "clean": "rawnind-MuseeL-text-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 6400,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          2112,
+          576,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-parking-keyboard-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29768",
+        "sha256": "567fab70a8dbdb56d7d3a80eaec71b9d449b1210e77780731af08b75fbbdf4fa"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene parking-keyboard: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_parking-keyboard_GT_ISO200_sha1=836fda7cd5b9acec6515b9a3fa12357f6708c0ad.raf",
+      "score": "pair",
+      "camera": "Fujifilm X-T1",
+      "iso": 200,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          768,
+          1728,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-parking-keyboard-iso3200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29747",
+        "sha256": "e9dfb1e5d281a3b46c24bdc75a60240d54d87694f56f0e51c23fd408a3a36627"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene parking-keyboard: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_parking-keyboard_ISO3200_sha1=e10e9399e6753f2ce8238d4c8afbe0187e50a057.raf",
+      "score": "pair",
+      "clean": "rawnind-parking-keyboard-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          768,
+          1728,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-parking-keyboard-iso6400",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29839",
+        "sha256": "95a33b4f677f374574bdd4a5fe9a0053c7bede93a381959482d0517d841c4f6d"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene parking-keyboard: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_parking-keyboard_ISO6400_sha1=55dcc778a8c34ec33a8feb2f351598a7090dd29f.raf",
+      "score": "pair",
+      "clean": "rawnind-parking-keyboard-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 6400,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          768,
+          1728,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-fruits-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29619",
+        "sha256": "f2105f31af442bafec33bf7698abd51ca98cc5c8f592c9941003dd148f917fcc"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene fruits: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_fruits_GT_ISO200_sha1=926620ccc8426033728d48d2110c0d190c17eba6.raf",
+      "score": "pair",
+      "camera": "Fujifilm X-T1",
+      "iso": 200,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          960,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-fruits-iso3200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29483",
+        "sha256": "a380b2613e04b70c64c1e3d0ba770a1527377240de57ee13491f2983ead02143"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene fruits: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_fruits_ISO3200_sha1=5a517f311e49885e08d1d91c90114048c802cfd2.raf",
+      "score": "pair",
+      "clean": "rawnind-fruits-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          960,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-fruits-iso6400",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29730",
+        "sha256": "9a8f0b9614ab1db04cc3ae2d462909bd66fb9bc168d1edb21eff1a8a0ccabf34"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene fruits: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_fruits_ISO6400_sha1=0faba8265d259842d76e1be370dbe45a647b04b0.raf",
+      "score": "pair",
+      "clean": "rawnind-fruits-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 6400,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          960,
+          1536,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-colorscreen-gt",
+      "group": "rawnind",
+      "role": "clean",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30608",
+        "sha256": "a8a0431a03878ee76494e2ca2cb8abacb3e93e65aeaa476be919268bd8a47a34"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene colorscreen: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_colorscreen_GT_ISO200_sha1=51985487410db3598294f7198435e7015652de23.raf",
+      "score": "pair",
+      "camera": "Fujifilm X-T1",
+      "iso": 200,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          1152,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "notes": "The clean tripod frame the noisy ones are scored against"
+    },
+    {
+      "id": "rawnind-colorscreen-iso3200",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/29648",
+        "sha256": "56fb0ca1b5369633dcb32d1b00b445b038aec88199ee4f31b6d619b6c452f2e7"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene colorscreen: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_colorscreen_ISO3200_sha1=661fd5feef2bccedc28971abbd19696d854d5569.raf",
+      "score": "pair",
+      "clean": "rawnind-colorscreen-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 3200,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          1152,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rawnind-colorscreen-iso6400",
+      "group": "rawnind",
+      "source": {
+        "url": "https://dataverse.uclouvain.be/api/access/datafile/30622",
+        "sha256": "771e7361e8ab916eb2c91e3ebdee5a70a89d58f102ce27a283c6db12983ebd49"
+      },
+      "licence": "CC-BY-SA-4.0",
+      "credit": "RawNIND (Brummer & De Vleeschouwer, UCLouvain Dataverse, doi:10.14428/DVN/DEQCIM), CC BY-SA 4.0; scene colorscreen: CC0, by Benoit Brummer in the dataset's permissions.txt",
+      "file": "X-Trans_colorscreen_ISO6400_sha1=10228157c3e9e49069ca6a12d6e0b1bc0d148bfc.raf",
+      "score": "pair",
+      "clean": "rawnind-colorscreen-gt",
+      "camera": "Fujifilm X-T1",
+      "iso": 6400,
+      "cfa": "xtrans",
+      "crops": [
+        [
+          1152,
+          1344,
+          768,
+          768
+        ]
+      ],
+      "trainedOn": {
+        "autoshade": false,
+        "buades": false,
+        "rawforge": true,
+        "pmrid": false,
+        "starfish": false
+      },
+      "notes": "Scored against the clean frame after matching exposure per colour (real_pairs.py)"
+    },
+    {
+      "id": "rpu-panasonic-dc-s1rm2-iso3200",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/7723/nice/Panasonic%20-%20DC-S1RM2%20-%203:2.RW2",
+        "sha256": "0175ac937261744fe13b5d234eb4ede83695562d100d2c7b4bb2e7fc3bd69e67"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Panasonic DC-S1RM2 (3:2), CC0",
+      "file": "rpu-panasonic-dc-s1rm2-iso3200.rw2",
+      "score": "picks",
+      "camera": "Panasonic DC-S1RM2",
+      "iso": 3200,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 3200 as Redlamp reads it from the file (8152x5432 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-panasonic-dc-s5-iso6400",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/6340/nice/Panasonic%20-%20DC-S5%20-%203:2.RW2",
+        "sha256": "2f66bd27c6c677bc6def28dfd955a8d520b04654a2d08087d49f3b2823e97ed2"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Panasonic DC-S5 (3:2), CC0",
+      "file": "rpu-panasonic-dc-s5-iso6400.rw2",
+      "score": "picks",
+      "camera": "Panasonic DC-S5",
+      "iso": 6400,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 6400 as Redlamp reads it from the file (6024x4016 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-panasonic-dmc-gx7mk2-iso3200",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/2772/nice/Panasonic%20-%20DMC-GX7MK2%20-%2016:9.RW2",
+        "sha256": "27c55b389d4bc92286bc1af787b666606a6227f496e4f1df72f41b45f1f0c61f"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Panasonic DMC-GX7MK2 (16:9), CC0",
+      "file": "rpu-panasonic-dmc-gx7mk2-iso3200.rw2",
+      "score": "picks",
+      "camera": "Panasonic DMC-GX7MK2",
+      "iso": 3200,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 3200 as Redlamp reads it from the file (4608x3464 Bayer BGGR); no clean frame"
+    },
+    {
+      "id": "rpu-panasonic-dc-g9-iso3200",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/2348/nice/Panasonic%20-%20DC-G9%20-%204:3.RW2",
+        "sha256": "16282357ce0143ff7d36737f82074662db7aa0790ecd309196f406baf0f586a7"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Panasonic DC-G9 (4:3), CC0",
+      "file": "rpu-panasonic-dc-g9-iso3200.rw2",
+      "score": "picks",
+      "camera": "Panasonic DC-G9",
+      "iso": 3200,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 3200 as Redlamp reads it from the file (5220x3912 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-canon-eos-7d-mark-ii-iso4000",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/7023/nice/Canon%20-%20EOS%207D%20Mark%20II%20-%2016bit%20(3:2).dng",
+        "sha256": "090e01f9a7a860b2f2f0ead770b8a9ba3b17ea98dc1997835c6bda2fc0a2ae54"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Canon EOS 7D Mark II (16bit (3:2)), CC0",
+      "file": "rpu-canon-eos-7d-mark-ii-iso4000.dng",
+      "score": "picks",
+      "camera": "Canon EOS 7D Mark II",
+      "iso": 4000,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 4000 as Redlamp reads it from the file (5496x3670 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-canon-eos-kiss-x9-iso6400",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/2062/nice/Canon%20-%20EOS%20Kiss%20X9%20-%20RAW%20(3:2).CR2",
+        "sha256": "f50cea4641c97c1154a214a686226ba900002f00f4f844af858ef80b9ec8dea6"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Canon EOS Kiss X9 (RAW (3:2)), CC0",
+      "file": "rpu-canon-eos-kiss-x9-iso6400.cr2",
+      "score": "picks",
+      "camera": "Canon EOS Kiss X9",
+      "iso": 6400,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 6400 as Redlamp reads it from the file (6024x4020 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-canon-eos-77d-iso3200",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/1332/nice/Canon%20-%20EOS%2077D%20-%20RAW%20(3:2).CR2",
+        "sha256": "811df582d97918987312fa0fceae3ad19a20532a64ebda9782764ac7e629c265"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Canon EOS 77D (RAW (3:2)), CC0",
+      "file": "rpu-canon-eos-77d-iso3200.cr2",
+      "score": "picks",
+      "camera": "Canon EOS 77D",
+      "iso": 3200,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 3200 as Redlamp reads it from the file (6024x4020 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-canon-eos-m3-iso5000",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/1002/nice/Canon%20-%20EOS%20M3%20-%20RAW%20(3:2).CR2",
+        "sha256": "6f12a02a21f64b284328ee6d3b2d1bab4439720cad2e881adf3da72592128b11"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Canon EOS M3 (RAW (3:2)), CC0",
+      "file": "rpu-canon-eos-m3-iso5000.cr2",
+      "score": "picks",
+      "camera": "Canon EOS M3",
+      "iso": 5000,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 5000 as Redlamp reads it from the file (6024x4022 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-sony-ilme-fx3-iso20000",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/6874/nice/Sony%20-%20ILME-FX3%20-%2014bit%20(3:2).ARW",
+        "sha256": "394ceb1a356be8b17f18dc013bfd22895ba6ec7195f578b9be1c2fd0d5ea4773"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Sony ILME-FX3 (14bit (3:2)), CC0",
+      "file": "rpu-sony-ilme-fx3-iso20000.arw",
+      "score": "picks",
+      "camera": "Sony ILME-FX3",
+      "iso": 20000,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 20000 as Redlamp reads it from the file (4256x2848 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-sony-ilce-7c-iso12800",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/4145/nice/Sony%20-%20ILCE-7C%20-%2014bit%2014bit%20uncompressed%20(3:2).ARW",
+        "sha256": "386ce0122687b802e8e57151d36643b830f87e59eed15b65c690d1032eb3b763"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Sony ILCE-7C (14bit 14bit uncompressed (3:2)), CC0",
+      "file": "rpu-sony-ilce-7c-iso12800.arw",
+      "score": "picks",
+      "camera": "Sony ILCE-7C",
+      "iso": 12800,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 12800 as Redlamp reads it from the file (6024x4024 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-sony-dsc-rx1r-iso6400",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/4050/nice/Sony%20-%20DSC-RX1R%20-%2014bit%2014bit%20compressed%20(3:2).ARW",
+        "sha256": "1778498069d68feec90d824bfacbe7bc1cc69f1e74d1b187b96c40b22457e95f"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Sony DSC-RX1R (14bit 14bit compressed (3:2)), CC0",
+      "file": "rpu-sony-dsc-rx1r-iso6400.arw",
+      "score": "picks",
+      "camera": "Sony DSC-RX1R",
+      "iso": 6400,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 6400 as Redlamp reads it from the file (6018x4024 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-nikon-d7000-iso12800",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/2578/nice/Nikon%20-%20D7000%20-%2014bit%2014bit%20compressed%20(Lossy%20(type%202))%20(3:2).nef",
+        "sha256": "6d5aab3dbab2d77deab82ea5dfc72608e60a97315d869d6a55dac596e8691616"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Nikon D7000 (14bit 14bit compressed (Lossy (type 2)) (3:2)), CC0",
+      "file": "rpu-nikon-d7000-iso12800.nef",
+      "score": "picks",
+      "camera": "Nikon D7000",
+      "iso": 12800,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 12800 as Redlamp reads it from the file (4948x3280 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-nikon-d5600-iso12800",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/2260/nice/Nikon%20-%20D5600%20-%2014bit%2014bit%20compressed%20(Lossy%20(type%202))%20(3:2).NEF",
+        "sha256": "4d9b49e6eb8a9e055b10be67f580a9c42538132e3a6e808d2fd08826c644827e"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Nikon D5600 (14bit 14bit compressed (Lossy (type 2)) (3:2)), CC0",
+      "file": "rpu-nikon-d5600-iso12800.nef",
+      "score": "picks",
+      "camera": "Nikon D5600",
+      "iso": 12800,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 12800 as Redlamp reads it from the file (6016x4016 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-nikon-d5500-iso6400",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/2127/nice/Nikon%20-%20D5500%20-%2014bit%2014bit%20compressed%20(Lossy%20(type%202))%20(3:2).NEF",
+        "sha256": "5538d77857efda5fb450d43f4a96a4786790a3721c536f1c4d81c0acaf5cf48a"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Nikon D5500 (14bit 14bit compressed (Lossy (type 2)) (3:2)), CC0",
+      "file": "rpu-nikon-d5500-iso6400.nef",
+      "score": "picks",
+      "camera": "Nikon D5500",
+      "iso": 6400,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 6400 as Redlamp reads it from the file (6016x4016 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-nikon-1-j5-iso6400",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/1883/nice/Nikon%20-%201%20J5%20-%2012bit%2012bit%20compressed%20(Lossy%20(type%202))%20(3:2).nef",
+        "sha256": "92b7e0a7637e5e498011372786a988aea3b431b0427ee10f9021469ecd6408e3"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Nikon 1 J5 (12bit 12bit compressed (Lossy (type 2)) (3:2)), CC0",
+      "file": "rpu-nikon-1-j5-iso6400.nef",
+      "score": "picks",
+      "camera": "Nikon 1 J5",
+      "iso": 6400,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 6400 as Redlamp reads it from the file (5584x3724 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-nikon-d3400-iso3200",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/1876/nice/Nikon%20-%20D3400%20-%2012bit%2012bit%20compressed%20(Lossy%20(type%202))%20(3:2).NEF",
+        "sha256": "69d1f76c3a206f846a3e3957663f0f3285ac4d1c74494443314019a7e889ca62"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Nikon D3400 (12bit 12bit compressed (Lossy (type 2)) (3:2)), CC0",
+      "file": "rpu-nikon-d3400-iso3200.nef",
+      "score": "picks",
+      "camera": "Nikon D3400",
+      "iso": 3200,
+      "cfa": "bayer",
+      "crops": [],
+      "notes": "ISO 3200 as Redlamp reads it from the file (6016x4016 Bayer RGGB); no clean frame"
+    },
+    {
+      "id": "rpu-fujifilm-x-t10-iso4000",
+      "group": "real",
+      "source": {
+        "url": "https://raw.pixls.us/getfile.php/1192/nice/Fujifilm%20-%20X-T10%20-%2014bit%2014bit%20uncompressed%20(3:2).RAF",
+        "sha256": "4c09401975cc6f95b1284693aac39fef85498f70b55e35bf458a133c6e61885d"
+      },
+      "licence": "CC0-1.0",
+      "credit": "raw.pixls.us, Fujifilm X-T10 (14bit 14bit uncompressed (3:2)), CC0",
+      "file": "rpu-fujifilm-x-t10-iso4000.raf",
+      "score": "picks",
+      "camera": "Fujifilm X-T10",
+      "iso": 4000,
+      "cfa": "xtrans",
+      "crops": [],
+      "notes": "ISO 4000 as Redlamp reads it from the file (4934x3296 X-Trans); no clean frame"
+    }
+  ]
+}

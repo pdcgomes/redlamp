@@ -12,8 +12,10 @@ encoding (roughly perceptual, as NoiseBenchmarkTests does) with 16 px borders le
 - flat noise: luma and chroma noise in the text scene's grey patch, and their coarseness
   (the noise's 4 x 4 box average times 4 over its own size: 1 for white noise, more for blotches)
 - shadow bias: the dark patch's mean colour against the truth's, as a chroma distance
+- the text panel (DN-17): colour PSNR over the text alone, the share of its fine detail kept, and the
+  fine detail the result has that the truth doesn't (spurious), relative to the truth's
 
-Writes scores.json and summary.md in build/proto-out/raw-denoise.
+Writes scores.json in build/proto-out/raw-denoise; analyze.py and dn17_report.py make the tables.
 """
 
 import json
@@ -122,6 +124,21 @@ def flat_noise(img, truth, box):
     }
 
 
+def text_panel(img, truth, box):
+    """The fine-text panel (DN-17): fidelity over the text alone, how much of the truth's fine luma detail
+    survives, and how much fine detail the result holds that the truth doesn't (residual noise, artefacts and
+    anything invented), both relative to the truth's own fine detail."""
+    x0, y0, x1, y1 = box
+    a, b = enc(img)[y0:y1, x0:x1], enc(truth)[y0:y1, x0:x1]
+    hp = lambda x: x - uniform_filter(x, 3)
+    ha, hb = hp(luma(a)), hp(luma(b))
+    energy = max(np.sum(hb * hb), 1e-12)
+    kept = float(np.sum(ha * hb) / energy)
+    return {"text_cpsnr": float(10 * np.log10(1 / max(np.mean((a - b) ** 2), 1e-12))),
+            "text_texture": kept,
+            "text_spurious": float(np.sum((ha - kept * hb) ** 2) / energy)}
+
+
 def shadow_bias(img, truth, box):
     x0, y0, x1, y1 = box
     m = enc(img)[y0:y1, x0:x1].reshape(-1, 3).mean(0)
@@ -143,6 +160,7 @@ def score_one(scene, img, truth, regions):
     if scene == "text":
         s.update(flat_noise(img, truth, regions["text"]["flat"]))
         s.update(shadow_bias(img, truth, regions["text"]["dark"]))
+        s.update(text_panel(img, truth, regions["text"]["text"]))
     return s
 
 

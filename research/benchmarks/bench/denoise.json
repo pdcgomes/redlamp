@@ -1,0 +1,74 @@
+{
+  "id": "dn17-lightroom-denoise-2026-11-01",
+  "title": "Lightroom's Denoise on the denoise benchmark",
+  "kind": "lightroom-check",
+  "app": "Lightroom",
+  "requestedBy": {
+    "workstream": "ai-denoise-generative-remove",
+    "tracker": "DN-17",
+    "issue": 518
+  },
+  "note": "Fourteen photos get Denoise at its default Amount; six noise-free references (names ending in -clean) get nothing, so Lightroom's Denoise can be scored against Lightroom's own render of the truth (INF-14, DN-17). Thirteen are synthetic DNGs from research/benchmarks/denoise.json, seven are CC0 raws from raw.pixls.us at ISO 3200 to 20000. Exports made on the Mac can also be filed with `redlamp task add <folder> <files…>`.",
+  "assets": [
+    {"source": "../../../build/benchmarks/denoise/synthetic-text-bayer-iso12800.dng", "id": "synthetic-text-bayer-iso12800", "label": "Text chart, Bayer, ISO 12800-like · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-text-bayer-iso51200.dng", "id": "synthetic-text-bayer-iso51200", "label": "Text chart, Bayer, ISO 51200-like · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-text-bayer-clean.dng", "id": "synthetic-text-bayer-clean", "label": "Text chart, Bayer, clean · no Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-photo-sony-bayer-iso51200.dng", "id": "synthetic-photo-sony-bayer-iso51200", "label": "Branches (CC0 Sony crop), Bayer, ISO 51200-like · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-photo-sony-bayer-clean.dng", "id": "synthetic-photo-sony-bayer-clean", "label": "Branches (CC0 Sony crop), Bayer, clean · no Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-leaves-bayer-iso51200.dng", "id": "synthetic-leaves-bayer-iso51200", "label": "Dead leaves, Bayer, ISO 51200-like · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-leaves-bayer-clean.dng", "id": "synthetic-leaves-bayer-clean", "label": "Dead leaves, Bayer, clean · no Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-edge-bayer-iso51200.dng", "id": "synthetic-edge-bayer-iso51200", "label": "Slanted edge, Bayer, ISO 51200-like · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-edge-bayer-clean.dng", "id": "synthetic-edge-bayer-clean", "label": "Slanted edge, Bayer, clean · no Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-text-xtrans-iso51200.dng", "id": "synthetic-text-xtrans-iso51200", "label": "Text chart, X-Trans, ISO 51200-like · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-text-xtrans-clean.dng", "id": "synthetic-text-xtrans-clean", "label": "Text chart, X-Trans, clean · no Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-photo-fuji-xtrans-iso12800.dng", "id": "synthetic-photo-fuji-xtrans-iso12800", "label": "Lettering (CC0 Fujifilm crop), X-Trans, ISO 12800-like · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/synthetic-photo-fuji-xtrans-clean.dng", "id": "synthetic-photo-fuji-xtrans-clean", "label": "Lettering (CC0 Fujifilm crop), X-Trans, clean · no Denoise"},
+    {"source": "../../../build/benchmarks/denoise/rpu-fujifilm-x-t10-iso4000.raf", "id": "rpu-fujifilm-x-t10-iso4000", "label": "Fujifilm X-T10, ISO 4000 (X-Trans) · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/rpu-sony-ilme-fx3-iso20000.arw", "id": "rpu-sony-ilme-fx3-iso20000", "label": "Sony FX3, ISO 20000 · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/rpu-sony-ilce-7c-iso12800.arw", "id": "rpu-sony-ilce-7c-iso12800", "label": "Sony A7C, ISO 12800 · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/rpu-nikon-d5600-iso12800.nef", "id": "rpu-nikon-d5600-iso12800", "label": "Nikon D5600, ISO 12800 · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/rpu-nikon-d7000-iso12800.nef", "id": "rpu-nikon-d7000-iso12800", "label": "Nikon D7000, ISO 12800 · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/rpu-canon-eos-kiss-x9-iso6400.cr2", "id": "rpu-canon-eos-kiss-x9-iso6400", "label": "Canon EOS Kiss X9, ISO 6400 · Denoise"},
+    {"source": "../../../build/benchmarks/denoise/rpu-panasonic-dc-s5-iso6400.rw2", "id": "rpu-panasonic-dc-s5-iso6400", "label": "Panasonic S5, ISO 6400 · Denoise"}
+  ],
+  "pairing": ["file-name", "similarity"],
+  "steps": [
+    {
+      "id": "share",
+      "title": "Share the 20 photos to Lightroom",
+      "detail": "Thirteen are synthetic test DNGs and seven are real high-ISO raws. They sync to Lightroom on your Mac.",
+      "action": {"type": "share"}
+    },
+    {
+      "id": "open",
+      "title": "Open them in Lightroom on your Mac",
+      "detail": "Denoise isn't in Lightroom for iPhone. Use Lightroom on your Mac (or an iPad), where the photos arrive by sync."
+    },
+    {
+      "id": "clean",
+      "title": "Leave the six -clean photos as they are",
+      "detail": "Photos whose names end in -clean are the noise-free references. Don't turn on Denoise or change anything on them."
+    },
+    {
+      "id": "select",
+      "title": "Select the other 14 photos",
+      "detail": "Every photo whose name doesn't end in -clean: seven synthetic DNGs and the seven raws."
+    },
+    {
+      "id": "denoise",
+      "title": "Denoise them at the default Amount",
+      "detail": "In the Detail panel, turn on Denoise and leave Amount at its default (50). Change nothing else. Apply it to all 14 selected photos and wait until each shows its result."
+    },
+    {
+      "id": "export",
+      "title": "Export all 20",
+      "detail": "TIF, 16 bits per component, ProPhoto RGB if Lightroom offers it (otherwise sRGB). Full size, no output sharpening, and keep the original file names."
+    },
+    {
+      "id": "results",
+      "title": "Share the exports back",
+      "detail": "Share the 20 TIFs to Redlamp Bench. They pair with their photos by file name.",
+      "action": {"type": "results"}
+    }
+  ]
+}

@@ -3,3 +3,4 @@ scipy
 pillow
 rawpy
 scikit-image
+tifffile
