@@ -227,7 +227,8 @@ enum MaskKindGroup: String, CaseIterable, Identifiable {
                     }
                 }
             }
-            if model.pendingModel != nil || model.offeredModels != nil {
+            // Inline, the picker sits under the panel's messages, which ask already.
+            if !inline, model.pendingModel != nil || model.offeredModels != nil {
                 ModelDownloadNotice(onProceed: dismiss)
             }
         }

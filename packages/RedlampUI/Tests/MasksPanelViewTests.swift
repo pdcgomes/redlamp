@@ -177,6 +177,22 @@ struct MasksPanelViewTests {
         #expect(panel.arrangedViews.elementsEqual(settings, by: ===), "and gives it back")
     }
 
+    @Test func `an offer of models shows once over a photo's first mask picker`() async throws {
+        let (model, cleanup) = try await openEditor()
+        defer { cleanup() }
+        let panel = MasksPanelView(model: model)
+        let window = window(panel, height: 900)
+        defer { window.orderOut(nil) }
+        model.offeredModels = (MaskEditingTests.skyModels, .sky)
+        try await settle(window)
+        func views(in view: NSView) -> [NSView] {
+            [view] + view.subviews.flatMap(views)
+        }
+        let downloads = views(in: panel).filter { $0.accessibilityIdentifier() == "masks.download" }
+        #expect(model.maskOutlines.isEmpty && panel.arrangedViews.count == 3, "the header, the messages and the picker")
+        #expect(downloads.count == 1, "the messages offer the models, and the picker under them doesn't again")
+    }
+
     @Test func `the Masks panel's column is re-measured when a mask comes back`() async throws {
         let (model, cleanup) = try await openEditor()
         defer { cleanup() }
