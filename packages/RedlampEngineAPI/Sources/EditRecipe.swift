@@ -124,8 +124,12 @@ public struct EditRecipe: Sendable, Hashable {
     /// 20: a Canon small raw (sRAW or mRAW CR2) of a body whose small raws' white level was measured
     /// is normalised at that level (`RawRevision.sixth`, CAM-33), where LibRaw's 16383 left it up to
     /// half a stop darker or a quarter of a stop brighter than the body's full raws.
+    /// 21: saturation boosts (Saturation, Vibrance, the Color Mixer, Point Color, masks, a look's) have
+    /// room up to the output's primaries but not its white (`maxChroma` in Develop.metal), so a bright
+    /// colour already past white at its saturation takes them as it does a stop darker (#517), where
+    /// they left it as it was and the final gamut map rendered it pale.
     /// A new version records its references for the process-stability gate (`ProcessStabilityTests`).
-    public static let currentProcessVersion = 20
+    public static let currentProcessVersion = 21
     public static let linearPointCurve = [CurvePoint(x: 0, y: 0), CurvePoint(x: 1, y: 1)]
 
     /// Sidecars written before process versions existed are version 1.

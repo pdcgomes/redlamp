@@ -30,7 +30,8 @@ struct DevelopParams {
     float4 tone2;             // x white point, y black point, z the Tone Curve's tables (0 none, 1 for every
                               // channel, 3 red's, green's and blue's), w clipping overlay
     float4 color;             // x vibrance, y saturation gain, z warmth, w monochrome
-    float4 look;              // x green boost, y skin softening, z mixer on, w unused
+    float4 look;              // x green boost, y skin softening, z mixer on, w 1 = saturation boosts may pass the
+                              // output's white (process 21)
     float4 gradeShadows;      // xy OKLab ab offset, z luminance
     float4 gradeMidtones;
     float4 gradeHighlights;

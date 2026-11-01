@@ -190,7 +190,7 @@ enum DevelopParameters {
             Float(look.greenBoost),
             Float(look.skinSoftening),
             mixer.contains { $0 != 0 } ? 1 : 0,
-            0,
+            recipe.processVersion >= 21 ? 1 : 0,
         )
 
         func grade(_ range: GradingRange, strength: Double) -> SIMD4<Float> {

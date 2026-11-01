@@ -277,16 +277,20 @@ static inline float3 gamutMap(float3 rec2020, constant DevelopParams &p) {
     return clippedLo + (clippedHi - clippedLo) * (rgb - lo) / (hi - lo);
 }
 
-// The most chroma an OKLab lightness and hue can have inside the output gamut (bisection).
+// The most chroma an OKLab lightness and hue can have inside the output gamut (bisection). From
+// process 21 (look.w) the output's white doesn't bound it, only its primaries do: a colour brighter
+// than the output can show at its saturation still has room, and gamutMap brings what passes white
+// back down at its hue, keeping its darkest channel.
 static inline float maxChroma(float lightness, float hueRadians, constant DevelopParams &p) {
     float2 direction = float2(cos(hueRadians), sin(hueRadians));
+    bool pastWhite = p.look.w > 0.5f;
     float inside = 0.0f;
     float outside = 0.5f;
     for (int i = 0; i < 10; i++) {
         float c = 0.5f * (inside + outside);
         float3 rgb = mul3(p.displayToOutput0, p.displayToOutput1, p.displayToOutput2,
                           okLabToRec2020(float3(lightness, c * direction)));
-        bool fits = all(rgb >= -1e-4f) && all(rgb <= 1.0001f);
+        bool fits = all(rgb >= -1e-4f) && (pastWhite || all(rgb <= 1.0001f));
         inside = fits ? c : inside;
         outside = fits ? outside : c;
     }
