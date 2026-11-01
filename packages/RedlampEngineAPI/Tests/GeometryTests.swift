@@ -336,7 +336,8 @@ struct GeometryTests {
         for lens in [Self.pincushion, Self.barrel] {
             let framed = GeometryMap(recipe: EditRecipe(), imageSize: size, lens: lens)
             let unframed = GeometryMap(recipe: EditRecipe().unframed, imageSize: size, lens: lens)
-            #expect(unframed.outputSize == size && unframed.toImage == matrix_identity_double3x3)
+            #expect(unframed.outputSize == size)
+            #expect(simd_almost_equal_elements(unframed.toImage, matrix_identity_double3x3, 1e-12))
             #expect(unframed.lensDistortion == 0)
             #expect(unframed.lensProfile?.vignetting == framed.lensProfile?.vignetting, "\(lens.source)")
             for point in [SIMD2(0.05, 0.1), SIMD2(0.85, 0.8), SIMD2(0.7, 0.15)] {

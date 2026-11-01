@@ -6,8 +6,8 @@ import RedlampEngineAPI
 import RedlampMasking
 import Synchronization
 
-/// AI masks: computed on the analysis render (the photo with no edit, sRGB, 2048 px), so they
-/// don't move when the edit changes, and kept in the edit as bitmaps.
+/// AI masks: computed on the analysis render (the default develop, unframed, sRGB, 2048 px), so
+/// they don't move when the edit changes, and kept in the edit as bitmaps.
 extension RedlampEngine {
     static let analysisLongEdge = 2048
     /// What the analysis and matte renders develop: the default, unframed, so a mask made from

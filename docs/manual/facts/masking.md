@@ -707,8 +707,9 @@ Ticking it ticks everyone; unticking it unticks everyone. Identifier `masks.peop
 **The crops** (`crop(_:)`, `:88-128`): a grid of square tiles, each 64 pt wide, adaptive up to 84 pt,
 8 pt apart (`:11`, `:71-75`). Each shows:
 - a **square crop of the photo around the person's face**, or around the person when no face was
-  found, taken from the photo **as shot** (no edit) at up to 1200 px; a face's square is 1.8× the
-  face's longer side — `packages/RedlampUI/Sources/Model/EditorModel+PeoplePicker.swift:112-131`.
+  found, taken from the photo **as shot** (no edit, and no lens distortion correction, as People
+  found the person in it) at up to 1200 px; a face's square is 1.8× the face's longer side —
+  `packages/RedlampUI/Sources/Model/EditorModel+PeoplePicker.swift:118-138`.
   Until the crop is ready, a `person.crop.square` glyph (`:98-101`).
 - a **tick box** at the top left: `checkmark.square.fill` in the accent colour when ticked, an empty
   `square` in white when not (`:108-112`); and the crop's border is the accent colour, 2 pt, when
@@ -1129,9 +1130,10 @@ Full detail in §4. In summary:
 
 - Make it, step by step:
   1. Pick **Objects** in the picker. A hover preview begins: moving the pointer tints what a click
-     would select, in the accent colour at 45% —
-     `packages/RedlampUI/Sources/Editor/MaskOverlayView.swift:316-400` region; the preview waits 40 ms
-     after the pointer settles (`packages/RedlampUI/Sources/Model/EditorModel+Objects.swift:46`).
+     would select, in the accent colour at 45%, drawn through the frame's crop, Transform and lens
+     correction — `packages/RedlampUI/Sources/Editor/MaskOverlayView.swift:320-430` region; the
+     preview waits 40 ms after the pointer settles
+     (`packages/RedlampUI/Sources/Model/EditorModel+Objects.swift:46`).
   2. **Click** the object, or **drag** — what a drag does is set by **Drag** in the strip under the
      header (§2.3).
   3. **Click or brush again to add**, **Option-click or Option-brush to take away**.

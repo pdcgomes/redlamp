@@ -31,8 +31,9 @@ public struct ProvidedMask: Sendable {
 }
 
 /// Subject, Background, People and face parts from Apple Vision, which ships its models with
-/// the OS: nothing to download. Vision sees the analysis render (the photo with no edit, sRGB,
-/// about 2048 px), so masks don't move when the edit changes.
+/// the OS: nothing to download. Vision sees the analysis render (the default develop with no
+/// crop, Transform or lens distortion, sRGB, about 2048 px), so masks don't move when the edit
+/// changes and sit where the renderer reads them.
 ///
 /// Vision's masks are low resolution (the subject's label map is 512²), so they are refined
 /// against the photo with a guided filter and stored at `storedLongEdge`.
