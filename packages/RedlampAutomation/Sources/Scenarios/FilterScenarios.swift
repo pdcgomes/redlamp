@@ -171,7 +171,7 @@
         static let all: [Scenario] = [text, columns, sources, empty, suggestion, moments, momentsPerformance, damaged]
             + LensScenarios.all + FilterBarScenarios.all
 
-        private static let raws: Set<String> = ["arw", "raf", "cr3", "nef", "dng", "orf", "pef", "rw2", "3fr"]
+        private static let raws: Set<String> = ["arw", "raf", "cr2", "cr3", "nef", "dng", "orf", "pef", "rw2", "3fr"]
 
         static func isRaw(_ name: String) -> Bool {
             raws.contains((name as NSString).pathExtension.lowercased())
