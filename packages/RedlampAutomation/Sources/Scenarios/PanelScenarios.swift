@@ -199,7 +199,7 @@
             }) ?? ""
         }
 
-        /// Clicks the text field `identifier` and types `text` into it, then Return.
+        /// Clicks the text field `identifier` and types `text` over what it holds, then Return.
         func typeInField(_ identifier: String, _ text: String, returning: Bool = true) throws {
             @MainActor func editing() -> Bool {
                 (Views.editorWindow?.firstResponder as? NSTextView)?.delegate.map { delegate in
@@ -212,6 +212,8 @@
                 try clickControl(identifier)
                 try wait("\(identifier) to take the keyboard") { _ in editing() }
             }
+            // The Keywording entry keeps what a scenario that failed left typed in it, for the scenarios after it.
+            try main { _ in (Views.editorWindow?.firstResponder as? NSTextView)?.selectAll(nil) }
             try typeQuery(text)
             if returning {
                 try pressInWindow(KeyCombo(.character("\r")))
