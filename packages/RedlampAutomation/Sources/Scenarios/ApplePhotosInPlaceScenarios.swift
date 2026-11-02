@@ -72,6 +72,12 @@
                 model.libraryPanels.selection.hasEverywhere(keyword) == true
             }
             app.covered(.feature("library.keywords"), via: .key)
+            // The entry keeps the keyboard for another keyword, and would type the \ below: a click in the grid takes
+            // it, as the Library panel's rows don't.
+            try app.click(.identifier("grid.\(names[1])"))
+            try app.wait("the grid to take the keyboard") { _ in
+                Views.editorWindow?.firstResponder.map { "\(Swift.type(of: $0))" } == "LibraryGridContentView"
+            }
 
             // source:photos in All Photographs finds the album's photos, and source:folders leaves them out.
             try app.clickSourceRow("sources.all-photographs")
