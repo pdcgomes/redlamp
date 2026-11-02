@@ -954,6 +954,7 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Looks in one place: each film stock listed once, with its film's icon, and a short Base Look menu <!-- tracker: UX-45 -->
 - [x] A Base Looks panel before Recipes: every look, film stock and LUT in one searchable panel, Recipes as presets, and your own recipes and imported looks shown in Finder or moved to the Trash, with built-in folders hidden <!-- tracker: UX-54, UX-55 -->
 - [x] The pixel under the pointer under the histogram: its RGB percentages or L\*a\*b\* values <!-- tracker: UX-32 -->
+- [ ] The camera's settings, such as the lens, exposure and ISO, listed in Develop's right panel and the Library's Photo panel <!-- tracker: UX-58 -->
 - [x] Panel on/off switches, as Lightroom's, and a value on every control that has one, to type (with arithmetic) or scrub <!-- tracker: UX-30, UX-01, UX-28, UX-29 -->
 - [x] Sensor clipping, which marks the photosites the camera clipped, and a colour-assessment view <!-- tracker: UX-05 -->
 - [x] A welcome at first launch, What's New after each update, and Report a Bug or Send Feedback from the app with no GitHub account needed, with crash and hang reports offered on the next launch <!-- tracker: UX-09, UX-10, UX-11, UX-14 -->
@@ -999,6 +1000,8 @@ Each item names the [tracker](docs/research/research-tracker.md) rows behind it 
 - [x] Batch export <!-- tracker: EDT-16 -->
 - [x] JPEG XL export, lossy or lossless <!-- tracker: EDT-30 -->
 - [x] The edit embedded in exported files <!-- tracker: EDT-14 -->
+- [ ] Watermarks at export: your logo or text, such as each photo's capture date, placed, sized and faded, horizontal or vertical <!-- tracker: EDT-25 -->
+- [ ] Share…: the photos you select, exported with a preset and handed to the apps macOS's Share menu offers, such as Mail, Messages and AirDrop <!-- tracker: EDT-36 -->
 - [ ] **AI-assisted focus stacking:** learned fusion and halo suppression, occlusion and motion handling, and good stacks from fewer or handheld frames <!-- tracker: FS-14 -->
 - [ ] **AI Super Resolution** (2x and 4x) that stays faithful and doesn't invent detail <!-- tracker: SR-01, SR-02 -->
 - [ ] **A library for a million photos:** an index on your Mac of every photo under your folders, kept current as the disks change, with thumbnails and previews that let you browse slow, network and disconnected drives; edits and metadata stay beside each photo, or in Redlamp on this Mac for folders it can't write to, moved between the two from a folder's menu, and several Macs can share the same folders <!-- tracker: LIB-05, LIB-07, LIB-08, LIB-09, LIB-10, LIB-11, LIB-37 -->

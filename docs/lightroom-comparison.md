@@ -244,9 +244,10 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Adobe RGB, ProPhoto and custom ICC output | Yes | Planned | | P3 | EDT-26 | |
 | JPEG XL output | Yes | Done | | | EDT-30 | Lossy or lossless |
 | DNG and PSD output | Yes | Planned | | P4 | EDT-27 | |
-| Watermarks | Yes | Planned | | P4 | EDT-25 | |
+| Watermarks | Yes | Planned | | P4 | EDT-25 | Your logo or text, such as each photo's capture date, placed, sized and faded, horizontal or vertical |
 | Output sharpening | Yes | Planned | | P4 | EDT-28 | |
 | Edit in Photoshop or another app | Yes | Planned | | P4 | EDT-29 | |
+| Sharing to other apps | Yes | Planned | | P4 | EDT-36 | Share… hands the exported photos to macOS's share sheet: Mail, Messages, AirDrop and the apps that add themselves to it |
 | Content Credentials | Yes | Planned | | P3 | RM-03 | |
 | The edit embedded in exported files | Yes | Done | | | EDT-14 | |
 | Command-line rendering and export | No | Done | | | | The `redlamp` tool; `redlamp export` exports several photos, named by templates |
@@ -264,6 +265,7 @@ A high-level list of the features photographers know from Lightroom, and where R
 | Judging photos while culling | No | In progress | | P4 | LIB-38 | Sensor clipping and a raw histogram in the loupe and Compare, since a raw's embedded JPEG hides clipping, with focus peaking, the camera's focus point and a loupe that follows the pointer |
 | Rating, flagging and labelling many photos at once | Yes | In progress | | P4 | LIB-15 | With Undo and Redo, custom labels and marks; by key, by mouse, from menus or the command palette, with Auto Advance; custom labels in colours of their own |
 | Keywords | Yes | In progress | | P4 | LIB-21 | Keywording and the Keyword List panels on the selection, with completion, counts and keyword sets on ⌥1 to ⌥9, the keyword painter, keywords dragged onto photos; full paths in each photo's sidecar, synonyms and export flags, Lightroom Classic's keyword file both ways, and exports following each keyword's flags |
+| The camera's settings in a panel (EXIF) | Yes | Planned | | P2 | UX-58 | In Develop's right panel and the Library's Photo panel, as Lightroom Classic's Metadata panel lists them in its EXIF view; today only a line under the histogram |
 | Metadata editing and presets | Yes | Done | | | LIB-22 | The Metadata panel: IPTC fields on many photos at once, presets that replace, append or prefix, code replacements, and Edit Capture Time with the camera's time zone, each with Undo, carried into exports |
 | Collections and smart collections | Yes | Done | | | LIB-23 | In the left panel with All Photographs, Previous Import, Marked and Rejected, the panels, Group By and the filter bar working on each as on a folder; photos dragged onto a collection; a target collection; smart collections from a rule editor that is the query's text; saved in each photo's sidecar by path, so moving photos never breaks them, and kept current, with stacks |
 | Metadata shared with other apps (XMP) | Yes | In progress | | P4 | LIB-24 | Other apps' XMP is read, a corrected capture time included; standard `.xmp` sidecars are written only when you turn it on (Settings › Library, as Lightroom's Automatically write changes into XMP), after each change and its Undo, and originals are never changed |
