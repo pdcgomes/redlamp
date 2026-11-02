@@ -1,4 +1,5 @@
 import Foundation
+import RedlampDocument
 import RedlampEngineAPI
 import Testing
 @testable import RedlampUI
@@ -21,6 +22,16 @@ struct CropToolTests {
         // The overlay choices are the app's, kept in user defaults: each test starts from Lightroom's.
         model.cropOverlayChoices = CropOverlayChoices()
         return model
+    }
+
+    /// Opens `name`, beside the photo open, as the filmstrip does.
+    private func open(_ name: String, in model: EditorModel) async throws {
+        let url = try #require(model.info?.url).deletingLastPathComponent().appending(path: name)
+        model.select(url)
+        for _ in 0 ..< 200 where model.info?.url != url {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(model.info?.url == url)
     }
 
     private func expectNear(_ a: Double, _ b: Double, _ note: String = "") {
@@ -86,6 +97,57 @@ struct CropToolTests {
         #expect(model.customCropAspects.isEmpty)
         #expect(model.cropAspect == .free, "the menu shows Custom")
         #expect(model.recipe.crop == crop)
+    }
+
+    @Test func `each photo opens with the Aspect menu on the aspect its own crop has`() async throws {
+        // The report's photos (#490): 7028 × 4688, a hair narrower than 2 × 3.
+        let model = try await openModel(PixelSize(width: 7028, height: 4688))
+        let first = try #require(model.info?.url)
+        let folder = first.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let fourByFive = 4688 * 1.25 / 7028
+        for (name, crop) in [
+            // The report's: 67% of the photo, in its own proportions.
+            ("IMG_0003.ARW", CropRect(
+                left: 0.19380425001330936, top: 0.1586846262437478,
+                right: 0.8614470970812182, bottom: 0.8263274733116567,
+            )),
+            ("IMG_0004.ARW", CropRect(left: (1 - fourByFive) / 2, top: 0, right: (1 + fourByFive) / 2, bottom: 1)),
+            // 3514 × 3282 pixels, which no aspect in the menu has.
+            ("IMG_0005.ARW", CropRect(left: 0.1, top: 0.1, right: 0.6, bottom: 0.8)),
+        ] {
+            var recipe = EditRecipe()
+            recipe.crop = crop
+            try SidecarStore().saveOrRemove(Sidecar(recipe: recipe), for: folder.appending(path: name))
+        }
+        model.setCropAspect(.square)
+        let square = model.recipe.crop
+
+        try await open("IMG_0002.ARW", in: model)
+        #expect(model.cropAspect == .original, "a photo never cropped, not the last photo's 1 × 1")
+        try await open("IMG_0003.ARW", in: model)
+        #expect(model.cropAspect == .original, "cropped in its own proportions")
+        try await open("IMG_0004.ARW", in: model)
+        #expect(model.cropAspect == .fourByFive)
+        try await open("IMG_0005.ARW", in: model)
+        #expect(model.cropAspect == .free, "the menu shows Custom")
+
+        for _ in 0 ..< 200 where SidecarStore().load(for: first)?.recipe.crop != square {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try await open("IMG_0001.ARW", in: model)
+        #expect(model.cropAspect == .square, "the first photo, cropped square")
+    }
+
+    @Test func `the aspect chosen stays in the Aspect menu for the next photo whose crop has it too`() async throws {
+        let model = try await openModel()
+        let folder = try #require(model.info?.url).deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        // The 600 × 400 frame is 2 × 3 already, so the crop stays whole.
+        model.setCropAspect(.twoByThree)
+        #expect(model.recipe.crop.isFull)
+        try await open("IMG_0002.ARW", in: model)
+        #expect(model.cropAspect == .twoByThree, "not Original, which its crop has as well")
     }
 
     @Test func `turning keeps the crop inside the photo, shows the fine grid meanwhile, and is one step`() async throws {

@@ -1598,9 +1598,11 @@ public final class EditorModel {
         activateOpenEdit()
     }
 
-    /// What the edit just opened starts with: its crop, and none of what was found or made on the one before.
+    /// What the edit just opened starts with: its crop and the aspect it has, and none of what was found or made on
+    /// the one before.
     private func startEditing(_ loaded: EditRecipe) {
         cropIntent = loaded.crop
+        cropAspect = menuAspect(of: loaded.crop)
         uprightGuides = []
         foundThings = []
         cancelGenerativeFill()

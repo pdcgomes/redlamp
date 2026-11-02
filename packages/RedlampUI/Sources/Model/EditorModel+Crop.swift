@@ -158,6 +158,19 @@ public extension EditorModel {
         return crop.width * Double(frame.width) / max(crop.height * Double(frame.height), 1e-9)
     }
 
+    /// The aspect the Aspect menu shows for `crop`: of those in the menu the crop has, either way
+    /// round and to within a pixel, the one chosen, or else the first; Custom when it has none.
+    func menuAspect(of crop: CropRect) -> CropAspect {
+        let frame = cropFrameSize
+        let width = crop.width * Double(frame.width), height = crop.height * Double(frame.height)
+        let original = info?.pixelSize ?? frame
+        let fitting = (CropAspect.builtIn + customCropAspects.map(CropAspect.custom)).filter { aspect in
+            guard let ratio = aspect.ratio(original: original) else { return false }
+            return abs(width - height * ratio) <= 1 || abs(height - width * ratio) <= 1
+        }
+        return fitting.contains(cropAspect) ? cropAspect : fitting.first ?? .free
+    }
+
     /// Sets the crop while drawing it (bracket a drag with `beginEdit` and `endEdit`).
     func setCrop(_ crop: CropRect) {
         var next = recipe
