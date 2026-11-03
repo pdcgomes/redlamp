@@ -430,7 +430,8 @@
 
     enum ExportScenarios {
         static let all: [Scenario] = [
-            formats, sizes, metadata, previous, shortWindow, chooseFolder, clickAfterMenu, jpegXL, batch, border,
+            formats, sizes, metadata, previous, shortWindow, chooseFolder, clickAfterMenu, jpegXL, batch, fromLibrary,
+            border,
         ]
 
         /// EDT-35 (#473): a Borders recipe on every photo exported, its long edge the file's; None
@@ -529,6 +530,77 @@
             let summary = try app.main { $0.batchExport.summary }
             try app.expect(summary == "Exported \(count) photos", "The filmstrip says \(summary ?? "nothing")")
             app.covered([.feature("export.batch"), .feature("export.dialog")], via: .mouse)
+        }
+
+        /// #526: photos chosen in the Library's grid aren't open, since the Library lets go of the photo Develop had
+        /// open once another is chosen, and the toolbar's Export and Export… still take them.
+        static let fromLibrary = Scenario(
+            "export.from-library",
+            "Photos clicked and ⌘-clicked in the Library's grid, neither open, export from the toolbar's Export and "
+                + "Export…",
+            claims: [.feature("export.batch"), .feature("export.dialog")],
+        ) { app in
+            try app.showGrid()
+            let open = try app.main { $0.info?.url.lastPathComponent }
+            let names = try app.gridNames().filter { $0 != open }
+            let chosen = [names[0], names[2]]
+            try app.clickView("grid.\(chosen[0])")
+            try app.clickView("grid.\(chosen[1])", modifiers: .command)
+            try app.wait("\(chosen.joined(separator: " and ")) chosen, neither open") { model in
+                model.selectedPhotos.map(\.lastPathComponent) == chosen && model.info == nil
+            }
+            try app.wait("the toolbar's Export to be available") { _ in
+                Views.editorWindow?.toolbar?.items.first { $0.itemIdentifier.rawValue == "export" }?.isEnabled == true
+            }
+            let settings = try app.host.map { host in try app.main { _ in host.exports.initialSettings } }
+                ?? ExportSettings()
+            let folder = settings.destinationFolder ?? app.photos
+            let before = Set((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
+
+            try app.choose(Menus.title(of: .export))
+            try app.waitForSheet("the Export dialog for the 2 photos")
+            app.pause(0.5)
+            try app.clickInSheet("export.naming")
+            try app.selectSheetField()
+            try app.typeInAttachedSheet("{name} from the Library")
+            app.pause(0.5)
+            try app.expect(
+                try app.pressInSheet(KeyCombo(.character("\r"))),
+                "The Export dialog's Export button didn't take Return",
+            )
+            try app.waitForNoSheet("the Export dialog")
+            let expected = Set(chosen.map { name in
+                "\((name as NSString).deletingPathExtension) from the Library.\(settings.format.fileExtension)"
+            })
+            @Sendable func written() -> Set<String> {
+                Set((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).subtracting(before)
+                    .filter { !$0.hasPrefix(".") && !$0.hasSuffix(".redlamp") }
+            }
+            try app.wait("the 2 exports", timeout: 120) { model in
+                model.batchExport.progress == nil && written().count >= chosen.count
+            }
+            let wrote = written()
+            @Sendable func removeExports() {
+                for file in wrote {
+                    try? FileManager.default.removeItem(at: folder.appending(path: file))
+                }
+            }
+            defer { removeExports() }
+            try app.expect(wrote == expected, "The export wrote \(wrote.sorted()), not \(expected.sorted())")
+            try app.expect(try app.main { $0.info == nil }, "Exporting opened a photo in Develop")
+            // Listed before they're removed, so the grid follows their removal rather than listing them after it.
+            try app.wait("the exports in the grid", timeout: 20) { model in
+                wrote.allSatisfy { name in model.items.contains { $0.url.lastPathComponent == name } }
+            }
+            removeExports()
+            try app.wait("the exports to leave the grid", timeout: 20) { model in
+                !model.items.contains { wrote.contains($0.url.lastPathComponent) }
+            }
+            app.covered([.feature("export.batch"), .feature("export.dialog")], via: .mouse)
+            try app.press(.developModule)
+            try app.wait("Develop") { $0.module == .develop }
+            try app.main { model in model.select(model.items[0].url) }
+            try app.settle()
         }
 
         /// The scenarios that choose from the Export dialog's menus find each by the pop-up button showing it, which
