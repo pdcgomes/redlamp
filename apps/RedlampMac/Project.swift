@@ -119,9 +119,6 @@ let project = Project(
             entitlements: .file(path: "Redlamp.entitlements"),
             dependencies: appDependencies + [
                 Module.automation.dependency,
-                // The CLI in Contents/Helpers loads its frameworks from the app's, so the app
-                // embeds every framework it links, even those the app itself doesn't call.
-                Module.bench.dependency,
                 .external(name: "Sparkle"),
             ],
             // Signed with the same team as the frameworks: with the hardened runtime,

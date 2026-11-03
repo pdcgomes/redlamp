@@ -11,6 +11,8 @@ redlamp recipe app-import <folder|export> --name "Redlamp name" [--app prequel|l
     [--kit <kit folder>] [--install]
 ```
 
+Both commands are in development builds of the CLI (`rl app build redlamp`), not in the one the app ships with.
+
 There are two kits. The **one-image kit** is the everyday one: one pick, one apply and one export per filter. The **full kit** (three charts and eight photos) is the high-fidelity option, for a filter worth the eleven exports: a 25-point lattice, larger patches, and full-size photos for the spatial effects. `app-import` reads either; the barcode says which, and a folder holding both uses the full charts.
 
 ## Why not a HaldCLUT

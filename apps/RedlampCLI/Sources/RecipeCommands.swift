@@ -52,10 +52,6 @@ enum RecipeCommands {
                                                panels (build/icons/look-icons.png); --readme also writes
                                                docs/images/film/icon-<id>.png; --styles draws the styles
                                                proposed for looks that aren't film stocks
-      app-kit [--compact] [-o <folder>]        write the phone capture kit for app filters (--compact:
-                                               one image per filter instead of 3 charts and 8 photos)
-      app-import <folder|export> --name <name> [--app prequel|lightroom] [--filter <name>] [--kit <folder>]
-                 [--install]                   measure a phone app's filter from exports of the kit
       firmware-pack --out <folder> --config <kept config> [--model <folder>] [--team <Team ID>]
                                                seal the firmware model for release builds (TON-50):
                                                tables.bin and key.bin into --out, to host; the secret is
@@ -63,11 +59,20 @@ enum RecipeCommands {
                                                --team defaults to REDLAMP_TEAM_ID
       firmware-pack --check --config <kept config> [--team <Team ID>]
                                                open the hosted files with the kept config's secret, as a
-                                               release would
+                                               release would\(developmentUsage)
 
     <recipe> is a .redrecipe path, an id (redlamp/essentials/punchy), a bundled slug
     (essentials/punchy) or a name. <list> is `all`, `group:<Group>` or comma-separated recipes.
     """
+
+    /// The commands only development and profiling builds have.
+    private static var developmentUsage: String {
+        #if DEBUG || REDLAMP_PROFILING
+            "\n" + AppLookCommands.usage
+        #else
+            ""
+        #endif
+    }
 
     static let valued: Set<String> = [
         "--output", "--query", "--recipe", "--size", "--amount", "--recipes", "--images", "--tile", "--level",
@@ -94,13 +99,11 @@ enum RecipeCommands {
         if let folder = FirmwareFilmModel.environmentFolder {
             library.firmwareModel = try FirmwareFilmModel.shared(at: folder)
         }
-        let context = try Context(
-            arguments: Arguments(
-                rest, valued: valued.union(FilmCommand.valued).union(AppLookCommands.valued)
-                    .union(FirmwarePackCommand.valued),
-            ),
-            library: library,
-        )
+        var options = valued.union(FilmCommand.valued).union(FirmwarePackCommand.valued)
+        #if DEBUG || REDLAMP_PROFILING
+            options.formUnion(AppLookCommands.valued)
+        #endif
+        let context = try Context(arguments: Arguments(rest, valued: options), library: library)
         switch command {
         case "list": list(context)
         case "show": try show(context)
@@ -121,8 +124,10 @@ enum RecipeCommands {
         case "profile": try await ProfileCommand.run(context)
         case "film": try await FilmCommand.run(context)
         case "icons": try await IconSheet.run(context)
-        case "app-kit": try await AppLookCommands.kit(context)
-        case "app-import": try await AppLookCommands.importLook(context)
+        #if DEBUG || REDLAMP_PROFILING
+            case "app-kit": try await AppLookCommands.kit(context)
+            case "app-import": try await AppLookCommands.importLook(context)
+        #endif
         case "firmware-pack": try await FirmwarePackCommand.run(context)
         default: throw CLIError(description: usage)
         }

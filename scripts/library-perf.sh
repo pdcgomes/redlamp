@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Checks the library's budgets (LIB-04): builds the redlamp CLI in Release, makes a synthetic
-# library with `redlamp library fixture` if there isn't one, then runs `redlamp library bench` on
-# it once for each volume profile, printing each report, and fails when a budget isn't met
+# Checks the library's budgets (LIB-04): builds the redlamp CLI in Release with REDLAMP_PROFILING,
+# which keeps the development commands a release leaves out, makes a synthetic library with
+# `redlamp library fixture` if there isn't one, then runs `redlamp library bench` on it once for
+# each volume profile, printing each report, and fails when a budget isn't met
 # (docs/plans/2026-10-05-library-design.md, The stress harness).
 #
 # usage: scripts/library-perf.sh
@@ -28,7 +29,8 @@ REDLAMP="$DERIVED_DATA/Build/Products/Release/redlamp"
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
     xcodebuild build \
         -workspace "$ROOT/Redlamp.xcworkspace" -scheme redlamp -configuration Release \
-        -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DERIVED_DATA" -quiet
+        -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DERIVED_DATA" \
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) REDLAMP_PROFILING' -quiet
 fi
 
 LIBRARY="$FIXTURE"

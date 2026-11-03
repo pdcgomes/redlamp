@@ -1,15 +1,12 @@
 import Foundation
 import RedlampLibrary
-import Synchronization
 
-/// `redlamp library`: synthetic libraries for the stress harness (LIB-03) and the benchmarks that
-/// run on them (LIB-04), as docs/plans/2026-10-05-library-design.md describes.
+/// `redlamp library`: a library's index, its photos' files and metadata, and importing, as
+/// docs/plans/2026-10-05-library-design.md describes; development builds add the synthetic
+/// libraries and their benchmarks (`LibraryCommand+Bench.swift`).
 enum LibraryCommand {
     static let usage = """
-    usage: redlamp library fixture <folder> --photos <n> [--seed <s>] [--raw-sources <folder>] [--duplicates <share>]
-           redlamp library bench <fixture> [--profile <profile>] [--scenario <name>…] [--photos <n>] [--index <folder>]
-                                 [--json <path>]
-           redlamp library index <folder>… --index <path> [--profile <profile>]
+    usage: redlamp library index <folder>… --index <path> [--profile <profile>]
            redlamp library search <query> --index <path> [--collection <name or path>]
                                   [--sort captured|name|rating|edited|modified|size] [--descending]
                                   [--tighter <n> | --looser <n>] [--json] [--limit <n>]
@@ -76,24 +73,10 @@ enum LibraryCommand {
            redlamp library photos --albums | --census | --apply --destination <folder> | --undo
                                   [--album <title or id>]… [--include-hidden] [--index <path>]
                                   [--simulated <manifest>] [--json]
-      fixture  makes a synthetic library in <folder>: a fifth of the photos APFS clones of the raws in
-               --raw-sources (tests/fixtures/raw) with their capture dates rewritten, the rest small JPEGs
-               and HEICs with varied EXIF, GPS and IPTC; sidecars on 15% and other apps' .xmp on 5%; folders
-               of every shape; and manifest.json, with what each query must return. Running it again
-               finishes an interrupted fixture. --duplicates makes that share of the photos byte-for-byte copies
-               of earlier ones, with sidecars of their own (none by default).
-      bench    measures the fixture through a simulated volume (ssd, spinning, nas, wifi or vpn; ssd by
-               default) and prints one line per measurement, ending PASS or FAIL where there's a budget;
-               exits 1 when a budget fails. --json writes the report. --photos sets how many thumbnails the
-               store scenario writes to the Mac's own disk (100,000 by default). --index keeps warm-launch's
-               index of the fixture in <folder>, built there the first time, and launches a copy of it after
-               that; search and facets search the index there, or without --index the one kept under
-               $TMPDIR/redlamp-bench-query, and never index the fixture themselves: with no index of it they
-               say so. Scenarios: \(scenarioNames).
       index    adds the folders to the library index at <path> (made if there's none) and indexes them: every
                folder listed, and each photo that's new or changed since it was indexed read once. Prints its
                progress and a summary; exits 1 when a photo couldn't be read or a volume stopped answering.
-               --profile reads through a simulated volume, as bench does.
+               --profile reads through a simulated volume: ssd, spinning, nas, wifi or vpn.
       search   runs <query>, in the library's query language (rating>=3 label:red,blue -flag:reject
                camera:"X-T5" date:2024-06..2024-08 sunset), over the index at <path> and prints the photos'
                paths in order (when they were taken, unless --sort says otherwise), then how many photos it
@@ -202,37 +185,35 @@ enum LibraryCommand {
                source; --keywords adds keywords. A journal lets an import
                a forced quit cut short finish on the next run; --dry-run shows the plan.
       photos   lists Apple Photos' albums, reports what importing them would bring, imports them with --apply
-               and takes the last import back with --undo; redlamp library photos --help says more.
+               and takes the last import back with --undo; redlamp library photos --help says more.\(developmentUsage)
     """
+
+    /// The commands only development and profiling builds have.
+    private static var developmentUsage: String {
+        #if DEBUG || REDLAMP_PROFILING
+            "\n\n" + benchUsage
+        #else
+            ""
+        #endif
+    }
 }
 
 extension LibraryCommand {
-    private static var scenarioNames: String {
-        BenchScenarios.all.map(\.name).joined(separator: ", ")
-    }
-
     static func run(_ arguments: [String]) async throws {
-        BenchScenarios.registerIndexing()
-        BenchScenarios.registerQueries()
-        BenchScenarios.registerStore()
-        BenchScenarios.registerLists()
-        BenchScenarios.registerNaming()
-        BenchScenarios.registerDuplicates()
-        BenchScenarios.registerXMP()
-        BenchScenarios.registerFiles()
-        BenchScenarios.registerKeywords()
-        BenchScenarios.registerMetadata()
-        BenchScenarios.registerCollections()
-        BenchScenarios.registerStacks()
-        BenchScenarios.registerGroups()
-        BenchScenarios.registerImport(rawFolder: Repository.root.appending(path: "tests/fixtures/raw"))
+        #if DEBUG || REDLAMP_PROFILING
+            registerScenarios()
+        #endif
         guard let command = arguments.first, !arguments.contains("--help") else {
             print(usage)
             return
         }
         let rest = Array(arguments.dropFirst())
         switch command {
-        case "fixture", "bench", "index", "search", "stats", "sidecars", "names", "duplicates", "health", "xmp":
+        #if DEBUG || REDLAMP_PROFILING
+            case "fixture": try fixture(rest)
+            case "bench": try await bench(rest)
+        #endif
+        case "index", "search", "stats", "sidecars", "names", "duplicates", "health", "xmp":
             try await runReading(command, rest)
         case "rename", "move", "copy", "trash", "undo", "journal", "trashed", "put-back":
             try await runFiles(command, rest)
@@ -244,11 +225,9 @@ extension LibraryCommand {
         }
     }
 
-    /// Fixtures, benchmarks, indexing and what the index holds.
+    /// Indexing and what the index holds.
     private static func runReading(_ command: String, _ arguments: [String]) async throws {
         switch command {
-        case "fixture": try fixture(arguments)
-        case "bench": try await bench(arguments)
         case "index": try await index(arguments)
         case "search": try await search(arguments)
         case "stats": try await stats(arguments)
@@ -289,116 +268,5 @@ extension LibraryCommand {
         case "import": try await importing(arguments)
         default: throw CLIError(description: "unknown library command \(command)\n\n\(usage)")
         }
-    }
-
-    private static func fixture(_ arguments: [String]) throws {
-        let options = try Arguments(arguments, valued: ["--photos", "--seed", "--raw-sources", "--duplicates"])
-        guard options.positional.count == 1, let photos = try options.int("--photos"), photos > 0 else {
-            throw CLIError(description: "fixture needs a folder and --photos\n\n\(usage)")
-        }
-        let seed = try options.value("--seed").map { text -> UInt64 in
-            guard let seed = UInt64(text) else { throw CLIError(description: "--seed needs a whole number") }
-            return seed
-        } ?? 1
-        let folder = URL(fileURLWithPath: options.positional[0], isDirectory: true)
-        let rawFolder = options.value("--raw-sources").map { URL(fileURLWithPath: $0, isDirectory: true) }
-            ?? Repository.root.appending(path: "tests/fixtures/raw")
-        var isDirectory: ObjCBool = false
-        let sources = FileManager.default.fileExists(atPath: rawFolder.path, isDirectory: &isDirectory)
-            && isDirectory.boolValue ? try RawSource.sources(in: rawFolder) : []
-        if sources.isEmpty {
-            FileHandle.standardError.write(Data("no raws in \(rawFolder.path): the fixture has none\n".utf8))
-        }
-
-        let duplicates = try options.double("--duplicates") ?? 0
-        let fixture = LibraryFixture(
-            spec: LibraryFixture.Spec(photos: photos, seed: seed, duplicateShare: duplicates), rawSources: sources,
-        )
-        let reported = Mutex(0)
-        let clock = ContinuousClock()
-        let started = clock.now
-        let summary = try fixture.write(to: folder) { done in
-            let report = reported.withLock { reported in
-                guard done >= reported + 10000 || done == photos else { return false }
-                reported = done
-                return true
-            }
-            if report {
-                FileHandle.standardError.write(Data("  \(grouped(done)) of \(grouped(photos))\n".utf8))
-            }
-        }
-        let elapsed = clock.now - started
-        let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
-        let totals = summary.manifest.totals
-        let written = summary.skipped > 0
-            ? "\(grouped(summary.written)) photos written, \(grouped(summary.skipped)) already there"
-            : "\(grouped(summary.written)) photos written"
-        print("""
-        \(written) in \(String(format: "%.1f", seconds)) s (\(grouped(Int(Double(summary.written) / max(
-            seconds,
-            1e-9,
-        )))) a second) to \(folder.path)
-          \(grouped(totals.raws)) raws (clones of \(sources
-            .count) sources), \(grouped(totals.jpegs)) JPEGs, \(grouped(totals.heics)) HEICs, in \(grouped(totals
-                .folders)) folders
-          \(grouped(totals.sidecars)) .redlamp sidecars (\(grouped(totals.edited)) edited), \(grouped(totals
-                  .xmpSidecars)) other apps' .xmp
-          \(grouped(totals.withLocation)) with a location, \(grouped(totals
-                  .withKeywords)) with keywords, \(grouped(totals.withCaption)) with a caption
-          \(summary.manifest.queries.count) queries counted in \(FixtureManifest.fileName)
-        """)
-    }
-
-    private static func bench(_ arguments: [String]) async throws {
-        let options = try Arguments(arguments, valued: ["--profile", "--scenario", "--photos", "--index", "--json"])
-        guard options.positional.count == 1 else { throw CLIError(description: "bench needs a fixture\n\n\(usage)") }
-        if let photos = try options.int("--photos") {
-            guard photos > 0 else { throw CLIError(description: "--photos needs a number above 0") }
-            BenchScenarios.registerStore(photos: photos)
-        }
-        if let index = options.value("--index") {
-            let folder = URL(fileURLWithPath: index, isDirectory: true)
-            BenchScenarios.register(IndexLaunchScenario(indexFolder: folder))
-            BenchScenarios.register(SearchScenario(indexFolder: folder))
-            BenchScenarios.register(FacetScenario(indexFolder: folder))
-        }
-        let fixture = URL(fileURLWithPath: options.positional[0], isDirectory: true)
-        let manifest: FixtureManifest
-        do {
-            manifest = try FixtureManifest.load(from: fixture)
-        } catch {
-            throw CLIError(
-                description: "no fixture at \(fixture.path) (make one with redlamp library fixture): \(error)",
-            )
-        }
-        let name = options.value("--profile") ?? VolumeProfile.ssd.name
-        guard let profile = VolumeProfile.named(name) else {
-            throw CLIError(
-                description: "unknown profile \(name): \(VolumeProfile.presets.map(\.name).joined(separator: ", "))",
-            )
-        }
-        let scenarios = try options.values("--scenario").map { name in
-            guard let scenario = BenchScenarios.named(name) else {
-                throw CLIError(description: "unknown scenario \(name): \(scenarioNames)")
-            }
-            return scenario
-        }
-
-        let context = BenchContext(fixture: fixture, manifest: manifest, profile: profile)
-        let report = try await BenchReport.run(scenarios.isEmpty ? BenchScenarios.all : scenarios, in: context)
-        print(report.text)
-        if let json = options.value("--json") {
-            try report.json().write(to: URL(fileURLWithPath: json), options: .atomic)
-        }
-        if report.exitStatus != 0 {
-            throw ExitCode(report.exitStatus)
-        }
-    }
-
-    private static func grouped(_ value: Int) -> String {
-        let digits = Array(String(value.magnitude))
-        return String(digits.enumerated().flatMap { index, digit in
-            index > 0 && (digits.count - index) % 3 == 0 ? [",", digit] : [digit]
-        })
     }
 }

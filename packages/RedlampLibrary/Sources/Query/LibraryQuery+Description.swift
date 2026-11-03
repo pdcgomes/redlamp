@@ -246,3 +246,9 @@ extension QueryDate {
         }
     }
 }
+
+/// `value` in decimal, zero-padded to `width` digits.
+func digits(_ value: Int, _ width: Int = 2) -> String {
+    let text = String(value)
+    return text.count < width ? String(repeating: "0", count: width - text.count) + text : text
+}

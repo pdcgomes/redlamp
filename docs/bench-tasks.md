@@ -74,6 +74,8 @@ A bench folder as one file: a zip of the folder, made by the system's archiver (
 
 ## Commands
 
+These, and `redlamp recipe app-kit` and `app-import`, are in development builds of the CLI (`rl app build redlamp`, a Debug build) and profiling ones (`REDLAMP_PROFILING`), not in the release's, which ships in the app.
+
 | Command | What it does |
 | --- | --- |
 | `redlamp task new --title … --app … [--step "Title \| detail"]… <assets…>` | A task in the outbox. Without `--no-auto-steps` it starts with a step sharing the assets and ends with one waiting for the results. `--workstream`, `--tracker`, `--issue`, `--note`, `--question "id \| text \| a, b"`, `--manual` |
