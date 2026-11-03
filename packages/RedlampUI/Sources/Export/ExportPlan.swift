@@ -20,7 +20,7 @@ struct ExportPhoto: Sendable {
 final class ExportPlan {
     /// How many photos there are.
     let count: Int
-    /// The folder the folder chooser starts in: the open photo's.
+    /// The folder the folder chooser starts in: the active photo's.
     let folder: URL
     @ObservationIgnored let files: any FileInspecting
     /// Where `{counter:…}` carries on from.

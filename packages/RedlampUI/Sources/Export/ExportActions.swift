@@ -5,8 +5,9 @@ import RedlampLibrary
 import RedlampRecipes
 import SwiftUI
 
-/// The Export dialog and Export with Previous, on the photos selected in the filmstrip or the grid (EDT-16): one
-/// photo is rendered by the editor's engine, as it always was; several go to the batch exporter (`BatchExport`).
+/// The Export dialog and Export with Previous, on the photos selected in the filmstrip or the grid (EDT-16): the open
+/// photo alone is rendered by the editor's engine, as it always was; several, or a photo that isn't open, as in the
+/// Library once another is chosen, go to the batch exporter (`BatchExport`).
 @MainActor
 public enum ExportActions {
     /// What an export of one photo needs before it can run.
@@ -55,13 +56,14 @@ public enum ExportActions {
     /// Shows the Export dialog for the photos selected as an app-modal sheet on the editor window: until it
     /// closes, no other window gets events and every editor action is unavailable. Returns when it closes.
     public static func present(model: EditorModel, store: ExportPresetStore) {
-        guard let info = model.info, !model.isModalDialogOpen,
+        let info = model.info
+        guard model.canExport, let active = info?.url ?? model.selection, !model.isModalDialogOpen,
               let window = EditorWindowController.frontWindow, window.attachedSheet == nil
         else { return }
         let photos = model.selectionForAction()
         let presets = namingPresets(model)
         let plan = ExportPlan(
-            count: photos.count, folder: info.url.deletingLastPathComponent(), files: model.engine.files,
+            count: photos.count, folder: active.deletingLastPathComponent(), files: model.engine.files,
             counters: presets?.counters ?? NamingCounters(), read: reader(for: photos, model: model),
         )
         let height = window.sheetHeight(fitting: ExportSheet.size.height)
@@ -80,8 +82,8 @@ public enum ExportActions {
         }
         sheetWindow.contentViewController = NSHostingController(rootView: ExportSheet(
             plan: plan,
-            photoSize: info.pixelSize,
-            recipe: model.unobservedRecipe,
+            photoSize: info?.pixelSize,
+            recipe: info == nil ? nil : model.unobservedRecipe,
             borders: model.recipes.library.all.filter(\.isBorderOnly).map { recipe in
                 ExportBorder(recipeID: recipe.id, name: recipe.name, values: recipe.settings.values)
             },
@@ -112,7 +114,7 @@ public enum ExportActions {
     }
 
     private static func exportWithPrevious(model: EditorModel, store: ExportPresetStore, window: NSWindow?) async {
-        guard model.info != nil, let settings = store.previous else { return present(model: model, store: store) }
+        guard model.canExport, let settings = store.previous else { return present(model: model, store: store) }
         let presets = namingPresets(model)
         let read = reader(for: model.selectionForAction(), model: model)
         guard case let (names, photos)? = await names(

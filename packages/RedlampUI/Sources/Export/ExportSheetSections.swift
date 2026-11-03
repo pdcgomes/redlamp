@@ -227,8 +227,8 @@ struct ExportBorderSection: View {
 
 /// The exported size, and its resolution for print.
 struct ExportSizeSection: View {
-    /// The photo's size, or its bordered canvas's when the export draws a border.
-    let photoSize: PixelSize
+    /// The photo's size, or its bordered canvas's when the export draws a border; nil while no photo is open.
+    let photoSize: PixelSize?
     var bordered = false
     @Binding var sizing: ExportSizing
 
@@ -275,8 +275,10 @@ struct ExportSizeSection: View {
                     )
                 }
             }
-            LabeledContent("Exported size") {
-                Text(readout).monospacedDigit().foregroundStyle(.secondary)
+            if let photoSize {
+                LabeledContent("Exported size") {
+                    Text(readout(photoSize)).monospacedDigit().foregroundStyle(.secondary)
+                }
             }
             field("Resolution", value: $sizing.ppi, unit: "ppi")
         } header: {
@@ -291,7 +293,7 @@ struct ExportSizeSection: View {
         }
     }
 
-    private var readout: String {
+    private func readout(_ photoSize: PixelSize) -> String {
         let size = sizing.isValid ? sizing.resolve(photoSize) : photoSize
         let source = "\(photoSize.width) × \(photoSize.height)"
         let text = size == photoSize ? "\(source) px (full size)" : "\(source) → \(size.width) × \(size.height) px"

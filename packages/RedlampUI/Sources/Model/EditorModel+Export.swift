@@ -4,6 +4,13 @@ import RedlampEngineAPI
 import RedlampLibrary
 
 extension EditorModel {
+    /// Whether Export and Export with Previous have photos to act on: the photo open, or in the Library the photos
+    /// selected there, which aren't open once another is chosen in the grid and export with the edits their sidecars
+    /// hold.
+    var canExport: Bool {
+        info != nil || module == .library && selection != nil
+    }
+
     /// Renders the open photo as `settings` describe and writes it to `url`, replacing any
     /// file there that isn't a photo. The photo and its edit are taken before the first
     /// suspension, and the render fails rather than export another photo opened in the meantime.

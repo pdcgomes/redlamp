@@ -12,7 +12,9 @@ public struct ExportSheet: View {
     /// settings scroll above the buttons.
     public static let size = CGSize(width: 540, height: 720)
 
-    let photoSize: PixelSize
+    /// The open photo's size; nil while no photo is open, as in the Library once another is chosen in the grid,
+    /// which leaves the exported size out.
+    let photoSize: PixelSize?
     /// The open photo's edit, for the bordered size; nil leaves the readout at the photo's size.
     let recipe: EditRecipe?
     /// The Borders recipes the Border menu offers.
@@ -52,7 +54,7 @@ public struct ExportSheet: View {
 
     init(
         plan: ExportPlan,
-        photoSize: PixelSize,
+        photoSize: PixelSize?,
         recipe: EditRecipe? = nil,
         borders: [ExportBorder] = [],
         store: ExportPresetStore,
@@ -157,9 +159,12 @@ public struct ExportSheet: View {
             ExportFileSection(settings: $settings)
             ExportBorderSection(border: $settings.border, borders: borders)
             ExportSizeSection(
-                photoSize: recipe.map { settings.sizingSource(recipe: $0, size: photoSize) } ?? photoSize,
-                bordered: recipe
-                    .map { settings.border.apply(to: $0).borderLayout(imageSize: photoSize).hasBorder } ?? false,
+                photoSize: photoSize.map { size in
+                    recipe.map { settings.sizingSource(recipe: $0, size: size) } ?? size
+                },
+                bordered: photoSize.flatMap { size in
+                    recipe.map { settings.border.apply(to: $0).borderLayout(imageSize: size).hasBorder }
+                } ?? false,
                 sizing: $settings.sizing,
             )
             Section {

@@ -116,7 +116,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
             },
             Tracker { [weak self] in
                 guard let self else { return }
-                exportItem?.isEnabled = model.info != nil
+                exportItem?.isEnabled = model.canExport
                 viewGroup?.setSelected(model.showBefore, at: 0)
                 viewGroup?.setSelected(model.filmstripVisible, at: 1)
                 viewGroup?.subitems.first?.image = Self.symbol(model.compareLayout.symbol, "Before / After")
@@ -165,7 +165,7 @@ public final class EditorWindowController: NSWindowController, NSToolbarDelegate
                 action: #selector(export),
             )
             item.autovalidates = false
-            item.isEnabled = model.info != nil
+            item.isEnabled = model.canExport
             exportItem = item
             return item
         case .view:

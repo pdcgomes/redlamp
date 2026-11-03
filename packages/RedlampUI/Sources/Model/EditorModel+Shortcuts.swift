@@ -263,9 +263,9 @@ public extension EditorModel {
         case .pasteSettings: return hasClipboard && photo
         case .pastePrevious: return previousSelection != nil && photo
         case .copySettings, .copySettingsAgain, .resetAll, .autoTone, .toggleBlackAndWhite, .newSnapshot, .newPreset,
-             .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment, .export,
-             .exportWithPrevious:
+             .previousSetting, .nextSetting, .increaseSetting, .decreaseSetting, .findAdjustment:
             return photo
+        case .export, .exportWithPrevious: return canExport
         case .autoWhiteBalance, .whiteBalanceSelector: return whiteBalance
         case .calibrateFromTarget: return canCalibrateFromTarget
         case .createVersion: return canChangeVersions

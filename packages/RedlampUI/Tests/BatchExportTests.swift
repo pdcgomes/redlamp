@@ -241,4 +241,59 @@ struct BatchExportTests {
         #expect(report.failures.count == 2)
         #expect(fixture.worker.opened.withLock { $0 } == Array(fixture.photos.dropFirst()))
     }
+
+    // MARK: - From the Library
+
+    /// The Library lets go of the photo open in Develop once another is chosen in the grid (#526).
+    @Test func `photos chosen in the Library's grid export without opening, from the toolbar, the menu and its keys`(
+    ) async throws {
+        let fixture = ModuleFixture()
+        defer { fixture.cleanUp() }
+        try await fixture.open(count: 4)
+        let model = fixture.model
+        let worker = StubEngine()
+        model.makeWorkerEngine = { worker }
+        let controller = EditorWindowController(
+            model: model, theme: ThemeSettings(), onOpen: {}, onExport: {}, onExportWithPrevious: {},
+        )
+        let window = try #require(controller.window)
+        defer { window.orderOut(nil) }
+        let export = try #require(window.toolbar?.items.first { $0.itemIdentifier.rawValue == "export" })
+        model.showLibrary(.grid)
+        model.click(fixture.photos[1])
+        model.click(fixture.photos[3], toggling: true)
+        try await fixture.settle()
+        #expect(model.info == nil && model.selectedCount == 2, "chosen in the grid, neither open")
+        #expect(export.isEnabled, "the toolbar's Export")
+        #expect(model.canPerform(.export) && model.canPerform(.exportWithPrevious), "the File menu's items")
+
+        let suite = "BatchExportTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = ExportPresetStore(defaults: defaults)
+        var settings = ExportSettings()
+        settings.revealInFinder = false
+        store.recordExport(settings, presetID: nil)
+        ExportActions.exportWithPrevious(model: model, store: store)
+        try await fixture.eventually { model.batchExport.summary != nil }
+        #expect(model.batchExport.summary == "Exported 2 photos")
+        let exports = [1, 3].map { fixture.folder.appending(path: String(format: "IMG_%05d-redlamp.jpg", $0)) }
+        #expect(exports.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        #expect(worker.opened.withLock { $0 } == [fixture.photos[1], fixture.photos[3]])
+        #expect(model.info == nil, "neither opened in Develop")
+    }
+
+    @Test func `the Library's active photo exports when no photo has been opened in Develop`() async throws {
+        let fixture = ModuleFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.model
+        model.showLibrary(.grid)
+        try FileManager.default.createDirectory(at: fixture.folder, withIntermediateDirectories: true)
+        let photo = fixture.folder.appending(path: "IMG_00001.ARW")
+        FileManager.default.createFile(atPath: photo.path, contents: Data([1]))
+        model.open([fixture.folder])
+        try await fixture.eventually { model.library.count == 1 && model.selection == photo }
+        #expect(model.selection == photo && model.info == nil)
+        #expect(model.canPerform(.export) && model.canPerform(.exportWithPrevious))
+    }
 }
