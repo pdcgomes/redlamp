@@ -217,6 +217,14 @@ ditto "$PRODUCTS/redlamp" "$APP/Contents/Helpers/redlamp"
 # so they're signed here, inside out. Its XPC services are only for sandboxed apps.
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$SPARKLE/XPCServices" "$SPARKLE/Versions/B/XPCServices"
+# Unless the app allows mixed localizations, Sparkle shows only the languages the app has, so
+# the rest go.
+if ! /usr/libexec/PlistBuddy -c "Print :CFBundleAllowMixedLocalizations" "$APP/Contents/Info.plist" >/dev/null 2>&1; then
+    for localization in "$SPARKLE"/Versions/B/Resources/*.lproj; do
+        name="$(basename "$localization")"
+        [ "$name" = Base.lproj ] || [ -d "$APP/Contents/Resources/$name" ] || rm -rf "$localization"
+    done
+fi
 # Sparkle's binaries come universal; Redlamp runs on Apple Silicon only.
 for binary in "$SPARKLE/Versions/B/Autoupdate" "$SPARKLE/Versions/B/Updater.app/Contents/MacOS/Updater" \
     "$SPARKLE/Versions/B/Sparkle"; do
