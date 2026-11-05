@@ -48,6 +48,32 @@ class Dichotomous:
         return {kind: maps[kind] for kind in kinds if kind in maps}
 
 
+class BEN2:
+    """BEN2 (PramaLLC): its own code from its repository, its weights from model.safetensors; it
+    resizes the photo itself and returns the foreground with the mask as its alpha."""
+
+    def __init__(self, repo):
+        import importlib.util
+
+        from huggingface_hub import hf_hub_download
+        from safetensors.torch import load_file
+
+        spec = importlib.util.spec_from_file_location("BEN2", hf_hub_download(repo, "BEN2.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.model = module.BEN_Base().to(device()).eval()
+        self.model.load_state_dict(load_file(hf_hub_download(repo, "model.safetensors")))
+
+    def predict(self, path, kinds):
+        image = Image.open(path).convert("RGB")
+        with torch.no_grad():
+            foreground = self.model.inference(image)
+        alpha = np.asarray(foreground.split()[-1], np.float32) / 255
+        subject = cv2.resize(alpha, image.size, interpolation=cv2.INTER_LINEAR)
+        maps = {"subject": subject, "background": 1 - subject}
+        return {kind: maps[kind] for kind in kinds if kind in maps}
+
+
 class OneFormerSky:
     def __init__(self, repo):
         from transformers import OneFormerForUniversalSegmentation, OneFormerProcessor
@@ -77,4 +103,6 @@ def load(spec):
         return Dichotomous(spec["repo"], spec.get("input", 1024))
     if spec["model"] == "oneformer":
         return OneFormerSky(spec["repo"])
+    if spec["model"] == "ben2":
+        return BEN2(spec["repo"])
     raise SystemExit(f"no Python model {spec['model']} (candidates.py)")

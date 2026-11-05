@@ -171,7 +171,7 @@ def run_python(run, spec, photos, kinds, processes=1):
     if spec.get("edges") == "redlamp":
         # Redlamp solves Background as the Subject it is the inverse of, so a model's Background is
         # its solved Subject inverted rather than solved again.
-        derived = "subject" in kinds and "background" in kinds and spec.get("model") == "dichotomous"
+        derived = "subject" in kinds and "background" in kinds and spec.get("model") in ("dichotomous", "ben2")
         run_redlamp(run, spec, photos, [k for k in kinds if not (derived and k == "background")], processes,
                     regions=regions)
         data = json.loads((c.RUNS / run / "run.json").read_text())

@@ -30,6 +30,7 @@ import common as c
 import scoring
 
 CHECK_MOVED = {"iou": 0.98, "boundaryF": 0.95, "regionDisagreement": 0.002}
+TEXTURE_LIMIT = 16384
 
 
 def build(_args=None):
@@ -56,6 +57,11 @@ def run(args):
     if not c.CLI.exists():
         build()
     entries = [e for e in c.select(args.photos) if e["path"].exists()]
+    # Redlamp aborts on a photo wider or taller than Metal's largest texture (16,384 px).
+    too_large = [e["id"] for e in entries if e.get("longEdge", 0) > TEXTURE_LIMIT]
+    if too_large:
+        print(f"    left out, over {TEXTURE_LIMIT} px on the long side, which Redlamp can't open: {', '.join(too_large)}")
+        entries = [e for e in entries if e["id"] not in too_large]
     for entry in entries:
         c.bench_jpeg(entry)
     name = args.run or datetime.datetime.now().strftime("%Y-%m-%d-%H%M")

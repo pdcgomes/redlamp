@@ -49,6 +49,7 @@ def pool():
             "conditions": image.get("conditions", []),
             "masks": image.get("masks", []),
             "raw": pathlib.Path(image["file"]).suffix.lower() not in BITMAP_SUFFIXES,
+            "longEdge": max(image.get("width", 0), image.get("height", 0)),
         })
     for image in manifest.get("lookDev", []):
         photos.append({

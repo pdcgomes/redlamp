@@ -47,6 +47,15 @@
       "notes": "Vision's Subject outlined again by Segment Anything 2.1 large: one prompt per part (its box and a point inside), then Redlamp's edges (MSK-39)."
     },
     {
+      "id": "redlamp-sky-gated",
+      "label": "Redlamp, Sky only where Vision sees sky",
+      "runner": "redlamp",
+      "env": {"REDLAMP_SKY_GATE": "0.01"},
+      "kinds": ["sky"],
+      "licence": "cleared",
+      "notes": "Today's Sky, except that a photo Vision's classifier gives under 0.01 of sky gets none: on the evaluation set, today's Sky marks a portrait's plain backdrop as sky on about one portrait in five, where the classifier gives 0.001 to 0.003 (MSK-40)."
+    },
+    {
       "id": "redlamp-sam-baseplus",
       "label": "Redlamp, Sky with Segment Anything 2.1 base+",
       "runner": "redlamp",
@@ -113,6 +122,17 @@
       "kinds": ["subject", "background"],
       "licence": "commercial",
       "notes": "BiRefNet's architecture trained on images BRIA licensed; CC BY-NC 4.0 weights, gated on Hugging Face (accept BRIA's terms with the account whose token this Mac has); shipping needs BRIA's commercial licence."
+    },
+    {
+      "id": "ben2",
+      "label": "BEN2",
+      "runner": "python",
+      "model": "ben2",
+      "repo": "PramaLLC/BEN2",
+      "edges": "redlamp",
+      "kinds": ["subject", "background"],
+      "licence": "evaluation",
+      "notes": "MIT weights (381 MB) trained on DIS5K, which is research-only, and PramaLLC's own 22,000 images; shipping it would need a decision row, as BiRefNet would."
     },
     {
       "id": "oneformer-sky",
