@@ -71,12 +71,47 @@ public struct VisionMaskProvider: Sendable {
         guard let observation = request.results?.first, !observation.allInstances.isEmpty else {
             throw MaskComputationError.nothingFound(.subject)
         }
-        let buffer = try observation.generateScaledMaskForImage(forInstances: observation.allInstances, from: handler)
+        let salient = ProcessInfo.processInfo.environment["REDLAMP_SUBJECT_INSTANCES"] == "salient"
+        let instances = salient ? try Self.salient(observation, handler: handler) : observation.allInstances
+        let buffer = try observation.generateScaledMaskForImage(forInstances: instances, from: handler)
         let mask = try Self.gray(buffer).fitted(longEdge: Self.storedLongEdge)
         return ProvidedMask(
-            kind: .subject, provider: "apple.vision.foreground", revision: request.revision,
-            mask: GuidedFilter.refine(mask, guide: image),
+            kind: .subject, provider: "apple.vision.foreground" + (salient ? "+salient" : ""),
+            revision: request.revision, mask: GuidedFilter.refine(mask, guide: image),
         )
+    }
+
+    /// Of the instances Vision separates, the ones that hold the eye: each instance's sum of Vision's
+    /// attention-based saliency, doubled where a face is, kept when it's at least a third of the most
+    /// salient instance's. REDLAMP_SUBJECT_INSTANCES=salient makes Subject from these rather than
+    /// from every instance, for the mask bench to measure (MSK-39).
+    static func salient(_ observation: VNInstanceMaskObservation, handler: VNImageRequestHandler) throws -> IndexSet {
+        let all = observation.allInstances
+        guard all.count > 1 else { return all }
+        let saliency = VNGenerateAttentionBasedSaliencyImageRequest()
+        let faces = VNDetectFaceRectanglesRequest()
+        try handler.perform([saliency, faces])
+        guard let heat = try saliency.results?.first.map({ try gray($0.pixelBuffer) }) else { return all }
+        let labels = try gray(observation.instanceMask)
+        var score: [Int: Double] = [:]
+        for y in 0 ..< labels.height {
+            for x in 0 ..< labels.width {
+                let label = Int(labels[x, y])
+                guard all.contains(label) else { continue }
+                score[label, default: 0] += Double(heat[x * heat.width / labels.width, y * heat.height / labels.height])
+            }
+        }
+        for face in faces.results ?? [] {
+            let x = Int(face.boundingBox.midX * Double(labels.width))
+            let y = Int((1 - face.boundingBox.midY) * Double(labels.height))
+            guard (0 ..< labels.width).contains(x), (0 ..< labels.height).contains(y) else { continue }
+            let label = Int(labels[x, y])
+            if all.contains(label) {
+                score[label, default: 0] *= 2
+            }
+        }
+        guard let best = score.values.max(), best > 0 else { return all }
+        return IndexSet(all.filter { score[$0, default: 0] >= best / 3 })
     }
 
     // MARK: - People

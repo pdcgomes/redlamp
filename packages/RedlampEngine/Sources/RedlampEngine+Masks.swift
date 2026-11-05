@@ -405,6 +405,11 @@ extension RedlampEngine {
             first.instance = nil
             provided = [first]
         }
+        if ProcessInfo.processInfo.environment["REDLAMP_SUBJECT_SAM"] == "1",
+           request.kind == .subject || request.kind == .background, provided.count == 1,
+           await isReady(Self.modelID(for: .objects)) {
+            provided[0] = try await promptedBySegmentAnything(provided[0], analysis: analysis)
+        }
         // Stray hairs and beard curls, per pixel at the size masks are stored at: by closed-form
         // matting, with the strands ViTMatte finds beyond it once it's downloaded. Embedded mattes
         // (iPhone) are already fine, and face parts are drawn shapes. REDLAMP_EDGE_MATTE=off keeps
@@ -437,6 +442,77 @@ extension RedlampEngine {
             keep((subjectKey, subject), in: subjectMatte, madeFrom: subjectKey.analysisHash)
         }
         return aiMasks(provided)
+    }
+
+    /// Vision's Subject (or Background) outlined again by Segment Anything: one prompt for each part
+    /// of it (`promptParts`), the box around the part and a point inside it, their masks added
+    /// together. REDLAMP_SUBJECT_SAM=1 makes Subject and Background so, for the mask bench (MSK-39).
+    func promptedBySegmentAnything(
+        _ mask: ProvidedMask, analysis: (image: CGImage, hash: String),
+    ) async throws -> ProvidedMask {
+        let subject = mask.kind == .background ? mask.mask.inverted : mask.mask
+        var outlined: GrayMask?
+        for part in Self.promptParts(of: subject) {
+            let (raw, _) = try await segmentObject(
+                MaskRequest(kind: .objects, prompts: [part.point], box: part.box), analysis: analysis,
+            )
+            outlined = outlined.map { $0.union(raw) } ?? raw
+        }
+        guard let outlined else { return mask }
+        var result = mask
+        let sized = outlined.resized(to: PixelSize(width: subject.width, height: subject.height))
+        result.mask = mask.kind == .background ? sized.inverted : sized
+        result.provider += "+sam"
+        return result
+    }
+
+    /// The separate parts of a mask, largest first and at most four, leaving out any under 2% of the
+    /// largest: each one's box, and its pixel nearest its centroid, as photo points.
+    static func promptParts(of mask: GrayMask) -> [(box: ImageRect, point: ImagePoint)] {
+        let small = mask.fitted(longEdge: 256)
+        let width = small.width, height = small.height
+        var label = [Int](repeating: -1, count: width * height)
+        var parts: [[Int]] = []
+        for start in 0 ..< label.count where label[start] < 0 && small.pixels[start] >= 128 {
+            var pixels = [start]
+            label[start] = parts.count
+            var next = 0
+            while next < pixels.count {
+                let index = pixels[next]
+                next += 1
+                let x = index % width, y = index / width
+                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                    let nx = x + dx, ny = y + dy
+                    guard nx >= 0, ny >= 0, nx < width, ny < height else { continue }
+                    let neighbour = ny * width + nx
+                    if label[neighbour] < 0, small.pixels[neighbour] >= 128 {
+                        label[neighbour] = parts.count
+                        pixels.append(neighbour)
+                    }
+                }
+            }
+            parts.append(pixels)
+        }
+        let largest = parts.map(\.count).max() ?? 0
+        return parts.filter { $0.count * 50 >= largest }.sorted { $0.count > $1.count }.prefix(4).map { pixels in
+            let xs = pixels.map { $0 % width }, ys = pixels.map { $0 / width }
+            let cx = Double(xs.reduce(0, +)) / Double(pixels.count), cy = Double(ys.reduce(0, +)) / Double(pixels.count)
+            let inside = pixels.min {
+                pow(Double($0 % width) - cx, 2) + pow(Double($0 / width) - cy, 2)
+                    < pow(Double($1 % width) - cx, 2) + pow(Double($1 / width) - cy, 2)
+            } ?? pixels[0]
+            let minX = xs.min() ?? 0, maxX = xs.max() ?? 0, minY = ys.min() ?? 0, maxY = ys.max() ?? 0
+            return (
+                box: ImageRect(
+                    x: Double(minX) / Double(width), y: Double(minY) / Double(height),
+                    width: Double(maxX - minX + 1) / Double(width), height: Double(maxY - minY + 1) / Double(height),
+                ),
+                point: ImagePoint(
+                    x: (Double(inside % width) + 0.5) / Double(width),
+                    y: (Double(inside / width) + 0.5) / Double(height),
+                ),
+            )
+        }
     }
 
     /// Subject doubts more of Vision's edge (`ClosedFormMatte.subjectInner`), and Background is
