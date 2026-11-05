@@ -452,6 +452,363 @@
         "spectacles",
         "eyeglasses"
       ]
+    },
+    {
+      "id": "subject-wildlife",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "wildlife animal",
+        "deer meadow",
+        "fox",
+        "squirrel"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-birds",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "bird perched branch",
+        "bird in flight",
+        "heron"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-vehicles",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "parked car",
+        "motorcycle",
+        "bicycle parked",
+        "boat on water"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-objects",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "still life",
+        "bottle on table",
+        "teapot",
+        "chair"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-food",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "food plate",
+        "cake",
+        "fruit"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-flowers-insects",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "flower close-up",
+        "butterfly",
+        "bee on flower"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-buildings",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "lighthouse",
+        "chapel",
+        "windmill",
+        "tower"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-small-in-scene",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "person walking beach",
+        "lone tree field",
+        "hiker mountains",
+        "boat at sea"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-several",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "two dogs",
+        "horses field",
+        "ducks"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-action",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "skateboarder",
+        "cyclist race",
+        "runner athlete"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-cluttered",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "market stall",
+        "workshop tools",
+        "bookshelf"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-silhouette",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "silhouette sunset",
+        "backlit person"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-camouflage",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "lizard on rock",
+        "owl in tree",
+        "frog leaf"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-glass",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 16,
+      "queries": [
+        "glass vase",
+        "wine glass",
+        "jellyfish"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-none-landscape",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 12,
+      "queries": [
+        "landscape panorama",
+        "forest path",
+        "seascape",
+        "wheat field"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "subject-none-texture",
+      "masks": [
+        "subject",
+        "background"
+      ],
+      "want": 12,
+      "queries": [
+        "stone wall",
+        "tiles pattern",
+        "grass close-up"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-reflections",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "lake reflection",
+        "river reflection",
+        "puddle reflection"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-through-windows",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "window view",
+        "looking out window",
+        "room with window"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-canopy",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "forest canopy",
+        "looking up trees",
+        "tree crown sky"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-stars",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "milky way",
+        "starry sky",
+        "star trails"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-city-night",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "city skyline night",
+        "illuminated city night"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-aerial",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "aerial photograph",
+        "drone photography",
+        "view from airplane"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-overcast-street",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "grey sky street",
+        "overcast village",
+        "cloudy day town"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-storm",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "storm clouds",
+        "thunderstorm",
+        "dark clouds field"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-rainbow",
+      "masks": [
+        "sky"
+      ],
+      "want": 16,
+      "queries": [
+        "rainbow"
+      ],
+      "added": "2026-11-05"
+    },
+    {
+      "id": "sky-none",
+      "masks": [
+        "sky"
+      ],
+      "want": 12,
+      "queries": [
+        "forest interior",
+        "indoor room",
+        "cave",
+        "underwater"
+      ],
+      "added": "2026-11-05"
     }
   ]
 }

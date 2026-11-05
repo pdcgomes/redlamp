@@ -10,6 +10,7 @@ Lightroom desktop side by side on the CC0 pool, scored, and judged blind in a re
     mise run maskbench -- lightroom prepare|calibrate|decode|selftest
     mise run maskbench -- check [--no-build]  the regression check before a mask change ships
     mise run maskbench -- accept <source>     the run `check` compares against, per contender
+    mise run maskbench -- pool search|add|drop  more CC0 photos, in the cells marked `added` (pool.py)
     mise run maskbench -- contenders          the contenders and their runs
     mise run maskbench -- prune               delete runs that are neither accepted nor a contender's latest
 
@@ -244,6 +245,11 @@ def main():
     p.add_argument("--inbox", default=str(c.LIGHTROOM / "inbox"))
     p.add_argument("--model", choices=["auto", "blend", "scale"], default="auto")
     p.set_defaults(func=lambda a: __import__("lightroom").main(a))
+    p = sub.add_parser("pool")
+    p.add_argument("action", choices=["search", "add", "drop"])
+    p.add_argument("files", nargs="*")
+    p.add_argument("--cells")
+    p.set_defaults(func=lambda a: __import__("pool").main(a))
     p = sub.add_parser("accept")
     p.add_argument("source")
     p.set_defaults(func=accept)

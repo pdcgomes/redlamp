@@ -28,6 +28,25 @@
       "notes": "Today's Redlamp with its masks found on an analysis render whose shadows are lifted and highlights recovered (Shadows +60, Highlights −60), instead of the default develop (MSK-39)."
     },
     {
+      "id": "redlamp-salient",
+      "label": "Redlamp, Subject from Vision's salient instances",
+      "runner": "redlamp",
+      "env": {"REDLAMP_SUBJECT_INSTANCES": "salient"},
+      "kinds": ["subject", "background"],
+      "licence": "cleared",
+      "notes": "Subject from the instances Vision separates that hold the eye (each one's sum of Vision's attention-based saliency, doubled where a face is, kept at a third of the most salient's or more), rather than every instance (MSK-39)."
+    },
+    {
+      "id": "redlamp-subject-sam-large",
+      "label": "Redlamp, Subject outlined by Segment Anything 2.1 large",
+      "runner": "redlamp",
+      "env": {"REDLAMP_SUBJECT_SAM": "1", "REDLAMP_SAM_MODEL": "sam2.1-large", "REDLAMP_EVALUATION_MODELS": "1"},
+      "download": "objects",
+      "kinds": ["subject", "background"],
+      "licence": "cleared",
+      "notes": "Vision's Subject outlined again by Segment Anything 2.1 large: one prompt per part (its box and a point inside), then Redlamp's edges (MSK-39)."
+    },
+    {
       "id": "redlamp-sam-baseplus",
       "label": "Redlamp, Sky with Segment Anything 2.1 base+",
       "runner": "redlamp",

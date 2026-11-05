@@ -169,9 +169,20 @@ def run_python(run, spec, photos, kinds, processes=1):
         if number % 10 == 0 or number == len(photos):
             print(f"    {spec['id']}: {number}/{len(photos)} photos", flush=True)
     if spec.get("edges") == "redlamp":
-        run_redlamp(run, spec, photos, kinds, processes, regions=regions)
+        # Redlamp solves Background as the Subject it is the inverse of, so a model's Background is
+        # its solved Subject inverted rather than solved again.
+        derived = "subject" in kinds and "background" in kinds and spec.get("model") == "dichotomous"
+        run_redlamp(run, spec, photos, [k for k in kinds if not (derived and k == "background")], processes,
+                    regions=regions)
         data = json.loads((c.RUNS / run / "run.json").read_text())
         entry = data["contenders"][spec["id"]]
+        if derived:
+            entry["masks"]["background"] = {}
+            for photo in photos:
+                subject = c.mask_path(out, "subject", photo["id"])
+                if subject.exists():
+                    c.write_mask(c.mask_path(out, "background", photo["id"]), 1 - c.read_mask(subject, c.size_of(photo)))
+                    entry["masks"]["background"][photo["id"]] = {"derived": "subject inverted"}
         entry.update({"runner": "python", "model": spec.get("model"), "repo": spec.get("repo"), "regionTimes": timings})
         record(run, spec["id"], entry)
         return

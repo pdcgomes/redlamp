@@ -134,7 +134,7 @@ def sources():
         if spec["runner"] == "lightroom":
             out += [f"lightroom@{v}" for v in c.lightroom_versions()]
         else:
-            out += [f"{contender_id}@{run}" for run in c.runs_of(contender_id)]
+            out += [f"{contender_id}@{run}" for run in c.runs_of(contender_id, checks=True)]
     return out
 
 

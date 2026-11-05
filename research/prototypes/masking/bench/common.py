@@ -150,11 +150,18 @@ def contenders():
     return {c["id"]: c for c in json.loads(CONTENDERS.read_text())["contenders"]}
 
 
-def runs_of(contender):
-    """The runs holding `contender`'s masks, oldest first."""
+def runs_of(contender, checks=False):
+    """The runs holding `contender`'s masks, oldest first by when they were made; `maskbench check`'s
+    own runs (named `…-check`) only when `checks`."""
     if not RUNS.exists():
         return []
-    return sorted(run.name for run in RUNS.iterdir() if (run / contender).is_dir())
+
+    def made(run):
+        path = run / "run.json"
+        return json.loads(path.read_text()).get("created", "") if path.exists() else ""
+
+    runs = [run for run in RUNS.iterdir() if (run / contender).is_dir() and (checks or not run.name.endswith("-check"))]
+    return [run.name for run in sorted(runs, key=lambda run: (made(run), run.name))]
 
 
 def lightroom_versions():
