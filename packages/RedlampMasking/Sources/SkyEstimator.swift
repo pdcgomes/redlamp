@@ -329,6 +329,14 @@ public enum SkyEstimator {
         return out
     }
 
+    /// How sure Vision's classifier is that the photo shows any kind of sky, from 0 to 1.
+    public static func skyConfidence(_ image: CGImage) -> Double {
+        let request = VNClassifyImageRequest()
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        guard (try? handler.perform([request])) != nil else { return 0 }
+        return Double((request.results ?? []).filter { $0.identifier.contains("sky") }.map(\.confidence).max() ?? 0)
+    }
+
     /// Whether Vision's classifier labels the photo with any kind of sky.
     static func hasSkyLabel(_ image: CGImage) -> Bool {
         let request = VNClassifyImageRequest()

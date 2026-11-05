@@ -303,9 +303,16 @@ extension RedlampEngine {
         guard let session = currentSession() else { throw EngineError.noImageOpen }
         let analysis = try await analysisImage(for: session)
         let url = session.info.url
-        if request.kind == .sky, !session.embeddedMattes.contains(.sky),
-           let sky = try await modelSky(analysis, session: session) {
-            return [sky]
+        if request.kind == .sky, !session.embeddedMattes.contains(.sky) {
+            // REDLAMP_SKY_GATE=<confidence>: no sky where Vision's classifier is less sure than that
+            // the photo has any (a portrait's plain backdrop), for the mask bench (MSK-40).
+            if let gate = Double(ProcessInfo.processInfo.environment["REDLAMP_SKY_GATE"] ?? ""),
+               SkyEstimator.skyConfidence(analysis.image) < gate {
+                throw MaskComputationError.nothingFound(.sky)
+            }
+            if let sky = try await modelSky(analysis, session: session) {
+                return [sky]
+            }
         }
         if request.kind == .depthRange, !session.embeddedMattes.contains(.depth) {
             let image = analysis.image
