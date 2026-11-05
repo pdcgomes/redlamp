@@ -68,9 +68,22 @@ Tests, lint, the push gate and the tracker's sync.
 | `rl test e2e [tier]` | The smoke tier by default, in a home of its own. |
 | `rl test tracker` | The roadmap and Lightroom comparison against the tracker, then the issue sync's dry run. |
 
+## The mask bench
+
+Subject, Sky and Background masks from Redlamp, candidate models and Lightroom desktop on the CC0 pool, scored and judged blind (MSK-38).
+
+| Command | What it does |
+| --- | --- |
+| `rl masks photos` | The CC0 evaluation set into build/mask-eval, checked against its manifest; the look-development raws come with mise run lookdev. ([doc](research/notes/MSK-25-photoset.md)) |
+| `rl masks run <contenders> [photos]` | Subject, Sky and Background masks from contenders in research/mask-eval/contenders.json, into build/mask-bench/runs. ([doc](plans/2026-11-05-mask-bench-design.md)) |
+| `rl masks review [a] [b]` | The review page in the browser: two sources' masks as A and B, a verdict and tags for each, appended to research/mask-eval/verdicts.jsonl. ([doc](plans/2026-11-05-mask-bench-design.md)) |
+| `rl masks score <candidate> <reference>` | Missed and extra area, IoU, boundary F, and region against edge disagreement, per kind, with the largest disagreements. |
+| `rl masks check` | The working tree's masks on the quick subset against the accepted run and the references; fails when a mask moves away from its reference. |
+| `rl masks lightroom <action>` | Prepare the import folders, calibrate from the grey card, or decode the exports into coverage kept on this Mac. |
+
 ## Not in the menu yet
 
 Run these as before; they join the menu as they're described in the registry.
 
-- **mise tasks:** `fixtures`, `fixtures-shoots`, `maskeval`, `notarize`, `profile-data`, `release`, `release-checks`, `render`, `screenshots`, `setup`, `site`, `vendor`, `video`
+- **mise tasks:** `fixtures`, `fixtures-shoots`, `notarize`, `profile-data`, `release`, `release-checks`, `render`, `screenshots`, `setup`, `site`, `vendor`, `video`
 - **redlamp subcommands:** `stack`, `mask`, `noise`, `bench`, `camera-bench`, `library`, `mcp`, `export`

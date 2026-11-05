@@ -1,0 +1,31 @@
+---
+description: Check AI mask changes on the mask bench before they ship, and record what it measured
+globs: packages/RedlampMasking/**,packages/RedlampEngine/Sources/RedlampEngine+Masks.swift,packages/RedlampEngine/Sources/RedlampEngine+Models.swift,apps/RedlampCLI/Sources/MaskCommand.swift,research/prototypes/masking/**,research/mask-eval/**
+alwaysApply: false
+---
+
+# The mask bench
+
+The mask bench (MSK-38, `docs/plans/2026-11-05-mask-bench-design.md`) sets Redlamp's Subject, Sky and Background masks beside candidate models' and Lightroom desktop's on a pool of CC0 photos, and the owner judges them blind. `docs/tools.md` lists its commands (`rl masks …`, or `mise run maskbench -- …`).
+
+## Before a change to how AI masks are made ships
+
+A change to how a Subject, Background or Sky mask is found or how its edge is solved (a model, a threshold, the analysis render, matting) runs the regression check:
+
+```bash
+mise run maskbench -- check
+```
+
+It builds the CLI from the working tree, makes the quick subset's masks, and compares them with the accepted run (`research/mask-eval/accepted.json`) and the references the owner accepted. It fails when a mask moves away from its reference. Masks that moved but have no reference are for the owner to judge: the command prints the line that opens the review page on them. Say in the commit message what moved and what the owner judged.
+
+Once a change ships, accept its run (`mise run maskbench -- accept redlamp@<run>`) so the next check compares against it.
+
+## What stays on this Mac
+
+- Photos, masks and runs live in `build/mask-bench` and are never committed.
+- Lightroom's exports and the masks decoded from them never leave this Mac. Only numbers and verdicts enter the repository (DEC-17, DEC-41). A reference taken from Lightroom's masks is kept locally, and never used to train anything.
+- Evaluation weights go in `/Volumes/SSD/redlamp-tmp/mask-bench/hf-hub`; delete them when a comparison ends.
+
+## Recording what it measured
+
+Findings go in `docs/research/notes/MSK-38-mask-bench.md` and the tracker row the change belongs to, naming the run and the counts behind each claim.

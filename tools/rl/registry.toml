@@ -30,6 +30,11 @@ id = "test"
 title = "Tests and checks"
 summary = "Tests, lint, the push gate and the tracker's sync."
 
+[[group]]
+id = "masks"
+title = "The mask bench"
+summary = "Subject, Sky and Background masks from Redlamp, candidate models and Lightroom desktop on the CC0 pool, scored and judged blind (MSK-38)."
+
 # ---------------------------------------------------------------- bench
 
 [[tool]]
@@ -406,6 +411,86 @@ title = "Tracker, roadmap and issues: what a sync would do"
 summary = "The roadmap and Lightroom comparison against the tracker, then the issue sync's dry run."
 run = "scripts/roadmap-sync.py && scripts/tracker-issues.py"
 
+# ---------------------------------------------------------------- masks
+
+[[tool]]
+id = "masks.photos"
+group = "masks"
+title = "Download the evaluation photos"
+summary = "The CC0 evaluation set into build/mask-eval, checked against its manifest; the look-development raws come with mise run lookdev."
+run = "mise run maskeval"
+doc = "docs/research/notes/MSK-25-photoset.md"
+
+[[tool]]
+id = "masks.run"
+group = "masks"
+title = "Run contenders on the pool"
+summary = "Subject, Sky and Background masks from contenders in research/mask-eval/contenders.json, into build/mask-bench/runs."
+run = "mise run maskbench -- run --contenders {contenders} [photos?--photos]"
+doc = "docs/plans/2026-11-05-mask-bench-design.md"
+
+[[tool.ask]]
+name = "contenders"
+prompt = "Which contenders? (IDs separated by commas, such as redlamp,birefnet)"
+
+[[tool.ask]]
+name = "photos"
+prompt = "Which photos? (empty: all; quick, cell:<cell> or IDs)"
+optional = true
+
+[[tool]]
+id = "masks.review"
+group = "masks"
+title = "Review masks blind"
+summary = "The review page in the browser: two sources' masks as A and B, a verdict and tags for each, appended to research/mask-eval/verdicts.jsonl."
+run = "mise run maskbench -- review [a?--a] [b?--b]"
+doc = "docs/plans/2026-11-05-mask-bench-design.md"
+
+[[tool.ask]]
+name = "a"
+prompt = "First source? (empty: redlamp)"
+optional = true
+
+[[tool.ask]]
+name = "b"
+prompt = "Against? (empty: lightroom)"
+optional = true
+
+[[tool]]
+id = "masks.score"
+group = "masks"
+title = "Score a source against another"
+summary = "Missed and extra area, IoU, boundary F, and region against edge disagreement, per kind, with the largest disagreements."
+run = "mise run maskbench -- score --candidate {candidate} --reference {reference}"
+
+[[tool.ask]]
+name = "candidate"
+prompt = "Candidate? (a contender, or contender@run)"
+
+[[tool.ask]]
+name = "reference"
+prompt = "Reference? (such as lightroom)"
+
+[[tool]]
+id = "masks.check"
+group = "masks"
+title = "Regression check before a mask change ships"
+summary = "The working tree's masks on the quick subset against the accepted run and the references; fails when a mask moves away from its reference."
+run = "mise run maskbench -- check"
+
+[[tool]]
+id = "masks.lightroom"
+group = "masks"
+title = "Lightroom desktop's masks"
+summary = "Prepare the import folders, calibrate from the grey card, or decode the exports into coverage kept on this Mac."
+run = "mise run maskbench -- lightroom {action}"
+
+[[tool.ask]]
+name = "action"
+prompt = "Which step?"
+kind = "choice"
+options = ["prepare", "calibrate", "decode", "selftest"]
+
 [later]
-mise = ["fixtures", "fixtures-shoots", "maskeval", "notarize", "profile-data", "release", "release-checks", "render", "screenshots", "setup", "site", "vendor", "video"]
+mise = ["fixtures", "fixtures-shoots", "notarize", "profile-data", "release", "release-checks", "render", "screenshots", "setup", "site", "vendor", "video"]
 redlamp = ["stack", "mask", "noise", "bench", "camera-bench", "library", "mcp", "export"]
