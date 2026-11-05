@@ -13,7 +13,17 @@ extension RedlampEngine {
     /// What the analysis and matte renders develop: the default, unframed, so a mask made from
     /// them sits at the photo points the renderer reads masks at. Framed, a photo's lens
     /// correction would shift every mask by as much as it moves the photo (#516).
-    static let analysisRecipe = EditRecipe().unframed
+    /// REDLAMP_ANALYSIS_RENDER=lifted lifts the shadows and recovers the highlights first, for the
+    /// mask bench to measure whether masks are found better on it (MSK-39).
+    static let analysisRecipe: EditRecipe = {
+        var recipe = EditRecipe().unframed
+        if ProcessInfo.processInfo.environment["REDLAMP_ANALYSIS_RENDER"] == "lifted" {
+            recipe[.shadows] = 60
+            recipe[.highlights] = -60
+        }
+        return recipe
+    }()
+
     /// Sky's method. `auto` (the default) uses what's on this Mac, best first, as the bake-off
     /// (MSK-17) measured it: Segment Anything (seeded inside the classical estimate, with the sky
     /// between bare branches given back) and Depth Anything 3's sky, arbitrated (IoU 0.945);
@@ -51,11 +61,12 @@ extension RedlampEngine {
         }
         let coarse: GrayMask
         let provider: String
+        let samID = Self.modelID(for: .objects) ?? "sam2.1-tiny"
         switch (sam, da3) {
         case let (sam?, da3?):
-            (coarse, provider) = (SkyEstimator.arbitrate(sam, da3), "redlamp.sky.sam2.1-tiny+depth-anything-3")
+            (coarse, provider) = (SkyEstimator.arbitrate(sam, da3), "redlamp.sky.\(samID)+depth-anything-3")
         case let (sam?, nil):
-            (coarse, provider) = (sam, "redlamp.sky.sam2.1-tiny")
+            (coarse, provider) = (sam, "redlamp.sky.\(samID)")
         case let (nil, da3?):
             (coarse, provider) = (da3, "redlamp.sky.depth-anything-3")
         case (nil, nil):

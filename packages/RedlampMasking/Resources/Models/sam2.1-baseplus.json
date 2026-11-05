@@ -1,0 +1,69 @@
+{
+  "id": "sam2.1-baseplus",
+  "version": 1,
+  "name": "Segment Anything 2.1 (base+)",
+  "purpose": "Evaluation: Objects and Sky with Segment Anything 2.1 base+, for the mask bench (MSK-40), set by REDLAMP_SAM_MODEL=sam2.1-baseplus.",
+  "provider": "redlamp.sam2.1-baseplus",
+  "assetPack": "models.sam2.1-baseplus.v1",
+  "source": "https://huggingface.co/apple/coreml-sam2.1-baseplus/resolve/main/",
+  "computeUnits": "cpuAndGPU",
+  "files": [
+    {
+      "path": "SAM2_1BasePlusImageEncoderFLOAT16.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+      "bytes": 298613,
+      "sha256": "be81ebd5fd3abee3b6db88723f0210791a12f3d4a408647fd0772b09129167d1"
+    },
+    {
+      "path": "SAM2_1BasePlusImageEncoderFLOAT16.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+      "bytes": 152949760,
+      "sha256": "809c1b82d3a4400f80c5bf88d2a3f98f2a0b183d1e89ff14c2a64b31f20ffe8d"
+    },
+    {
+      "path": "SAM2_1BasePlusImageEncoderFLOAT16.mlpackage/Manifest.json",
+      "bytes": 617,
+      "sha256": "ab6fc6f514242857c10c8952249350c2c50b8f62951a2c7b1a1fd0f6aee65026"
+    },
+    {
+      "path": "SAM2_1BasePlusMaskDecoderFLOAT16.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+      "bytes": 75167,
+      "sha256": "b450f1639ec27c8cd01f4c0617c9bf6b0c3f7cc26b556cb1939944d0251168fb"
+    },
+    {
+      "path": "SAM2_1BasePlusMaskDecoderFLOAT16.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+      "bytes": 10222400,
+      "sha256": "809bf07f9e80fca055faf92b536c3f5f8d244f2258d9e16303206c9ba124f1e5"
+    },
+    {
+      "path": "SAM2_1BasePlusMaskDecoderFLOAT16.mlpackage/Manifest.json",
+      "bytes": 617,
+      "sha256": "4f0aaf97658a48a1459d85b4fd15d3bd0ba929c09cb7c145cf09dbce467781da"
+    },
+    {
+      "path": "SAM2_1BasePlusPromptEncoderFLOAT16.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+      "bytes": 20618,
+      "sha256": "3a83c167d8bd63e80f86349a78c2ab0527ce97eca1f848a4ce57fe5351241fa3"
+    },
+    {
+      "path": "SAM2_1BasePlusPromptEncoderFLOAT16.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+      "bytes": 2101056,
+      "sha256": "ca8d97076ef4817ce3804c84398bd7fc1ac8f61008ff07eb4ca39727d394bbb6"
+    },
+    {
+      "path": "SAM2_1BasePlusPromptEncoderFLOAT16.mlpackage/Manifest.json",
+      "bytes": 617,
+      "sha256": "c4cf018f9e6c58822047467c9ad57506ba8da50bc4514c979a57f507fb7ebd5c"
+    }
+  ],
+  "licenses": {
+    "code": "Apache-2.0",
+    "weights": "Apache-2.0",
+    "data": [
+      "SA-1B",
+      "SA-V"
+    ]
+  },
+  "decision": "DEC-24",
+  "evaluationOnly": true,
+  "notes": "Apple's Core ML conversion of Meta's SAM 2.1 Hiera base+ (fp16), the same licence and data as the tiny model Redlamp ships; offered only with REDLAMP_EVALUATION_MODELS=1 until the mask bench says whether it's worth its 166 MB.",
+  "cleared": false
+}

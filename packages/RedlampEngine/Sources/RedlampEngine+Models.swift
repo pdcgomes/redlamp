@@ -4,10 +4,12 @@ import RedlampMasking
 
 /// Downloadable models (Segment Anything for Objects, Depth Anything for Depth Range).
 public extension RedlampEngine {
-    /// Which model each AI mask kind needs when the OS doesn't provide one.
+    /// Which model each AI mask kind needs when the OS doesn't provide one. REDLAMP_SAM_MODEL puts
+    /// another Segment Anything 2.1 (`sam2.1-baseplus`, `sam2.1-large`, evaluation models) behind
+    /// Objects and Sky, for the mask bench (MSK-40).
     internal static func modelID(for kind: MaskKind) -> String? {
         switch kind {
-        case .objects: "sam2.1-tiny"
+        case .objects: ProcessInfo.processInfo.environment["REDLAMP_SAM_MODEL"] ?? "sam2.1-tiny"
         case .depthRange: "depth-anything-v2-small"
         case .landscape: sam3ID
         default: nil
