@@ -1,0 +1,118 @@
+{
+  "about": "The mask bench's contenders (MSK-38): named ways of making Subject, Sky and Background masks. `runner`: redlamp (`redlamp mask --batch`, with `env`), python (a model in research/prototypes/masking/bench/candidates.py, its region given Redlamp's edges when `edges` is redlamp), or lightroom (decoded from Lightroom desktop's exports, never run). `licence`: cleared (ships today), evaluation (would need a decision row to ship), commercial (would need a paid licence), cloud (through the photographer's key, DEC-39), reference (never shipped or committed).",
+  "contenders": [
+    {
+      "id": "redlamp",
+      "label": "Redlamp",
+      "runner": "redlamp",
+      "kinds": ["subject", "sky", "background"],
+      "licence": "cleared",
+      "notes": "Today's Redlamp, with the optional models this Mac has downloaded (Segment Anything 2.1 tiny and Depth Anything 3 for Sky, ViTMatte's strands for Subject and Background)."
+    },
+    {
+      "id": "redlamp-no-models",
+      "label": "Redlamp without downloads",
+      "runner": "redlamp",
+      "env": {"REDLAMP_SKY_METHOD": "classical", "REDLAMP_EDGE_MATTE": "closed-form"},
+      "kinds": ["subject", "sky", "background"],
+      "licence": "cleared",
+      "notes": "What a Mac without the optional models makes: Sky from the classical estimate, Subject and Background without ViTMatte's strands."
+    },
+    {
+      "id": "redlamp-lifted",
+      "label": "Redlamp on a lifted analysis render",
+      "runner": "redlamp",
+      "env": {"REDLAMP_ANALYSIS_RENDER": "lifted"},
+      "kinds": ["subject", "sky", "background"],
+      "licence": "cleared",
+      "notes": "Today's Redlamp with its masks found on an analysis render whose shadows are lifted and highlights recovered (Shadows +60, Highlights −60), instead of the default develop (MSK-39)."
+    },
+    {
+      "id": "redlamp-sam-baseplus",
+      "label": "Redlamp, Sky with Segment Anything 2.1 base+",
+      "runner": "redlamp",
+      "env": {"REDLAMP_SAM_MODEL": "sam2.1-baseplus", "REDLAMP_EVALUATION_MODELS": "1"},
+      "download": "objects",
+      "kinds": ["sky"],
+      "licence": "cleared",
+      "notes": "Sky as Redlamp makes it, with Segment Anything 2.1 base+ (166 MB) in place of tiny (80 MB); the same licence and data as tiny (DEC-24), offered only for evaluation until measured (MSK-40)."
+    },
+    {
+      "id": "redlamp-sam-large",
+      "label": "Redlamp, Sky with Segment Anything 2.1 large",
+      "runner": "redlamp",
+      "env": {"REDLAMP_SAM_MODEL": "sam2.1-large", "REDLAMP_EVALUATION_MODELS": "1"},
+      "download": "objects",
+      "kinds": ["sky"],
+      "licence": "cleared",
+      "notes": "Sky as Redlamp makes it, with Segment Anything 2.1 large (457 MB) in place of tiny (MSK-40)."
+    },
+    {
+      "id": "birefnet",
+      "label": "BiRefNet (general)",
+      "runner": "python",
+      "model": "dichotomous",
+      "repo": "ZhengPeng7/BiRefNet",
+      "input": 1024,
+      "edges": "redlamp",
+      "kinds": ["subject", "background"],
+      "licence": "evaluation",
+      "notes": "MIT weights (445 MB), trained partly on DIS5K, which is research-only; shipping it would need a decision row, as DEC-35 did for ViTMatte. Its region, then Redlamp's edges (Refine Edges)."
+    },
+    {
+      "id": "birefnet-hr",
+      "label": "BiRefNet (high resolution)",
+      "runner": "python",
+      "model": "dichotomous",
+      "repo": "ZhengPeng7/BiRefNet_HR",
+      "input": 2048,
+      "edges": "redlamp",
+      "kinds": ["subject", "background"],
+      "licence": "evaluation",
+      "notes": "MIT weights (445 MB) trained at 2048 px, on the same data as BiRefNet."
+    },
+    {
+      "id": "birefnet-lite",
+      "label": "BiRefNet (lite)",
+      "runner": "python",
+      "model": "dichotomous",
+      "repo": "ZhengPeng7/BiRefNet_lite",
+      "input": 1024,
+      "edges": "redlamp",
+      "kinds": ["subject", "background"],
+      "licence": "evaluation",
+      "notes": "MIT weights (178 MB) on a smaller backbone (Swin-T), on the same data as BiRefNet."
+    },
+    {
+      "id": "rmbg-2.0",
+      "label": "BRIA RMBG-2.0",
+      "runner": "python",
+      "model": "dichotomous",
+      "repo": "briaai/RMBG-2.0",
+      "input": 1024,
+      "edges": "redlamp",
+      "kinds": ["subject", "background"],
+      "licence": "commercial",
+      "notes": "BiRefNet's architecture trained on images BRIA licensed; CC BY-NC 4.0 weights, gated on Hugging Face (accept BRIA's terms with the account whose token this Mac has); shipping needs BRIA's commercial licence."
+    },
+    {
+      "id": "oneformer-sky",
+      "label": "OneFormer (ADE20K) sky",
+      "runner": "python",
+      "model": "oneformer",
+      "repo": "shi-labs/oneformer_ade20k_swin_large",
+      "edges": "redlamp",
+      "kinds": ["sky"],
+      "licence": "evaluation",
+      "notes": "The ceiling MSK-17 measured against: MIT weights trained on ADE20K, whose images come partly from Places, so evaluation only (DEC-24). Its sky class, then SkyMatte's edges."
+    },
+    {
+      "id": "lightroom",
+      "label": "Lightroom desktop",
+      "runner": "lightroom",
+      "kinds": ["subject", "sky", "background"],
+      "licence": "reference",
+      "notes": "Decoded from Lightroom desktop's exports by `maskbench lightroom decode`; kept on this Mac only, with only numbers and verdicts in the repository (DEC-17, DEC-41)."
+    }
+  ]
+}

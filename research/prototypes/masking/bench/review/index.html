@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mask bench review</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <strong>Mask bench</strong>
+  <label>A or B <select id="source-a"></select></label>
+  <label>against <select id="source-b"></select></label>
+  <label>Kind <select id="kind"><option value="all">All</option></select></label>
+  <label>Queue <select id="order"></select></label>
+  <button id="load">Load</button>
+  <span id="progress" class="quiet"></span>
+  <span class="spacer"></span>
+  <button id="show-areas">Problem areas</button>
+  <button id="show-help">Keys</button>
+</header>
+<main id="review">
+  <section id="viewer">
+    <canvas id="canvas"></canvas>
+    <div id="badge"></div>
+    <div id="toast" hidden></div>
+  </section>
+  <aside>
+    <div id="item" class="quiet"></div>
+    <h3>Which is better?</h3>
+    <div id="answers">
+      <button data-answer="A"><kbd>1</kbd> A is better</button>
+      <button data-answer="B"><kbd>2</kbd> B is better</button>
+      <button data-answer="both-right"><kbd>3</kbd> Both are right</button>
+      <button data-answer="both-wrong"><kbd>4</kbd> Both are wrong</button>
+      <button data-answer="cant-tell"><kbd>0</kbd> Can't tell</button>
+    </div>
+    <h3>What's wrong with the worse one</h3>
+    <div id="tags"></div>
+    <textarea id="note" rows="3" placeholder="A note (N)"></textarea>
+    <div class="row">
+      <button id="submit" class="primary"><kbd>Enter</kbd> Send and next</button>
+      <button id="skip"><kbd>S</kbd> Skip</button>
+    </div>
+    <h3>View</h3>
+    <div id="modes" class="row"></div>
+    <p class="quiet">Space flips between A and B; Z zooms to 100% where they differ most, or where you click; drag to look around. R accepts the mask shown as this photo's reference.</p>
+  </aside>
+</main>
+<main id="areas" hidden>
+  <section>
+    <h2>Problem areas</h2>
+    <p id="areas-total" class="quiet"></p>
+    <h3>Verdicts by pair and kind</h3>
+    <table id="areas-pairs"></table>
+    <h3>What's wrong, by contender</h3>
+    <table id="areas-tags"></table>
+    <h3>Where each contender was worse, by cell</h3>
+    <table id="areas-cells"></table>
+  </section>
+</main>
+<dialog id="help">
+  <h3>Keys</h3>
+  <p><kbd>1</kbd> A is better · <kbd>2</kbd> B is better · <kbd>3</kbd> both are right · <kbd>4</kbd> both are wrong · <kbd>0</kbd> can't tell</p>
+  <p><kbd>Enter</kbd> send and next · <kbd>S</kbd> skip · <kbd>←</kbd> the one before · <kbd>N</kbd> note</p>
+  <p><kbd>Space</kbd> flip A and B · <kbd>Z</kbd> zoom to 100% · <kbd>M</kbd> next view · <kbd>X</kbd> where they differ</p>
+  <p><kbd>R</kbd> accept the mask shown as this photo's reference</p>
+  <p class="quiet">Which source is A is fixed per photo and unrelated to the sources; it's shown after you send.</p>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
+<script src="/static/app.js"></script>
+</body>
+</html>

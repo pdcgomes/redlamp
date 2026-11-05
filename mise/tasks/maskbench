@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="The mask bench (MSK-38): run contenders, score them, decode Lightroom's masks and review them blind (maskbench --help)"
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+PYTHON=research/prototypes/masking/.venv/bin/python
+if [ ! -x "$PYTHON" ]; then
+    echo "The masking research environment is missing: python3 -m venv research/prototypes/masking/.venv" >&2
+    echo "and install numpy, opencv-python, scipy and pillow into it (torch and transformers for the models)." >&2
+    exit 1
+fi
+cd research/prototypes/masking/bench
+exec "../.venv/bin/python" maskbench.py "$@"
