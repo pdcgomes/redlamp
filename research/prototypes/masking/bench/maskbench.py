@@ -193,6 +193,33 @@ def check(args):
     sys.exit(1 if worse else 0)
 
 
+def fetch_model(args):
+    """A Hugging Face-hosted model's files into Redlamp's model store, through Python, whose
+    downloads reach the network from the agents' sandbox where the app's own time out; each file is
+    checked against its manifest's size and SHA-256."""
+    import hashlib
+    import os
+    import re
+
+    from huggingface_hub import hf_hub_download
+
+    manifest = json.loads((c.ROOT / "packages/RedlampMasking/Resources/Models" / f"{args.model}.json").read_text())
+    found = re.match(r"https://huggingface.co/([^/]+/[^/]+)/resolve/([^/]+)/", manifest["source"])
+    if not found:
+        sys.exit(f"{args.model} isn't served from Hugging Face ({manifest['source']})")
+    repo, revision = found.groups()
+    target = c.pathlib.Path.home() / "Library/Application Support/Redlamp/Models" / manifest["id"] / str(manifest["version"])
+    os.environ.setdefault("HF_HUB_CACHE", "/Volumes/SSD/redlamp-tmp/mask-bench/hf-hub")
+    for file in manifest["files"]:
+        path = c.pathlib.Path(hf_hub_download(repo, file["path"], revision=revision))
+        if path.stat().st_size != file["bytes"] or hashlib.sha256(path.read_bytes()).hexdigest() != file["sha256"]:
+            sys.exit(f"{file['path']} doesn't match the manifest")
+        destination = target / file["path"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, destination)
+    print(f"==> {manifest['name']}: {len(manifest['files'])} files in {target}")
+
+
 def list_contenders(_args):
     keep = accepted()
     for contender_id, spec in c.contenders().items():
@@ -259,6 +286,9 @@ def main():
     p = sub.add_parser("accept")
     p.add_argument("source")
     p.set_defaults(func=accept)
+    p = sub.add_parser("fetch-model")
+    p.add_argument("model")
+    p.set_defaults(func=fetch_model)
     sub.add_parser("contenders").set_defaults(func=list_contenders)
     sub.add_parser("prune").set_defaults(func=prune)
     args = parser.parse_args()

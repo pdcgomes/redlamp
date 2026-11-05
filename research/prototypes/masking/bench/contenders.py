@@ -83,10 +83,14 @@ def run_redlamp(run, contender, photos, kinds, processes=1, regions=None, missin
         # A model another kind uses (Objects' Segment Anything, for Sky) is downloaded before the
         # batches start, or their first masks would be made without it.
         scratch = out / f"_download.{spec['download']}.png"
-        batch([{"image": str(photos[0]["path"]), "kind": spec["download"], "points": [[0.5, 0.5]],
-                "output": str(scratch)}], spec.get("env", {}), f"{spec['id']} download")
+        lines = batch([{"image": str(photos[0]["path"]), "kind": spec["download"], "points": [[0.5, 0.5]],
+                        "output": str(scratch)}], spec.get("env", {}), f"{spec['id']} download")
         for leftover in out.glob("_download.*"):
             leftover.unlink()
+        if not lines or "error" in lines[0]:
+            # Without the model the masks would quietly be made another way.
+            raise SystemExit(f"{spec['id']}: its model isn't on this Mac ({lines[0]['error'] if lines else 'no answer'}); "
+                             f"maskbench fetch-model <id> puts it there")
     shares = [[] for _ in range(max(1, processes))]
     for index, entry in enumerate(photos):
         shares[index % len(shares)].extend(job for job in jobs if job[0] is entry)
