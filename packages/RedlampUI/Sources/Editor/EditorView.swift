@@ -12,20 +12,27 @@ enum PanelMetrics {
     static let inset: CGFloat = 8
     /// How close to the bottom edge the pointer brings the filmstrip in.
     static let filmstripTrigger: CGFloat = 14
+    /// The stage's gap to the toolbar, and to the window's edges or what floats there, while cropping.
+    /// A corner handle's click area would otherwise reach the toolbar, where a drag moves the window,
+    /// or the window's edge, where it resizes it.
+    static let cropClearance = CropOverlayView.cornerClickReach + 5
 
     /// The stage the photo is fitted to (`CanvasController.stageInsets`): clear of the toolbar, of
     /// each side panel's nominal width while it shows, and of the filmstrip, `filmstrip` tall, while the photo
     /// makes room for it (`EditorModel.makesRoomForFilmstrip`), with the gap the panels keep; nil while it
-    /// floats over the photo. Presenting gives the photo the whole window.
+    /// floats over the photo. `cropping` keeps it `cropClearance` from all of these.
+    /// Presenting gives the photo the whole window.
     static func stageInsets(
         toolbarHeight: CGFloat, presenting: Bool, leftPanel: Bool, rightPanel: Bool, filmstrip: CGFloat?,
+        cropping: Bool = false,
     ) -> StageInsets {
         guard !presenting else { return .zero }
+        let edge = cropping ? cropClearance : inset
         return StageInsets(
-            leading: inset + (leftPanel ? sidebarNominal + inset : 0),
-            trailing: (rightPanel ? inspectorNominal : 0) + inset,
-            top: toolbarHeight,
-            bottom: inset + (filmstrip.map { $0 + inset } ?? 0),
+            leading: edge + (leftPanel ? sidebarNominal + inset : 0),
+            trailing: (rightPanel ? inspectorNominal : 0) + edge,
+            top: toolbarHeight + (cropping ? cropClearance : 0),
+            bottom: edge + (filmstrip.map { $0 + inset } ?? 0),
         )
     }
 }
@@ -79,6 +86,7 @@ struct EditorContentView: View {
             .onChange(of: model.rightPanelVisible) { _, _ in updateStage() }
             .onChange(of: model.makesRoomForFilmstrip) { _, _ in updateStage() }
             .onChange(of: model.filmstripHeight) { _, _ in updateStage() }
+            .onChange(of: model.activeTool) { _, _ in updateStage() }
             .environment(model)
             .environment(theme)
             .tint(Theme.nativeTint)
@@ -89,6 +97,7 @@ struct EditorContentView: View {
             toolbarHeight: toolbarHeight, presenting: model.isPresenting, leftPanel: model.leftPanelVisible,
             rightPanel: model.rightPanelVisible,
             filmstrip: model.makesRoomForFilmstrip ? model.filmstripHeight : nil,
+            cropping: model.activeTool == .crop,
         )
     }
 }
