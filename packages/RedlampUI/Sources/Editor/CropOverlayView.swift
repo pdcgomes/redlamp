@@ -36,6 +36,11 @@ struct CropOverlayView: View {
         }
     }
 
+    private nonisolated static let cornerSize: CGFloat = 10
+    private nonisolated static let handleClickMargin: CGFloat = 8
+    /// How far past the photo's corner a corner handle takes clicks.
+    nonisolated static let cornerClickReach = cornerSize / 2 + handleClickMargin
+
     private static let handles = [
         Handle(x: -1, y: -1), Handle(x: 0, y: -1), Handle(x: 1, y: -1), Handle(x: -1, y: 0),
         Handle(x: 1, y: 0), Handle(x: -1, y: 1), Handle(x: 0, y: 1), Handle(x: 1, y: 1),
@@ -102,12 +107,12 @@ struct CropOverlayView: View {
                     Rectangle()
                         .fill(Color.white)
                         .frame(
-                            width: handle.x == 0 || handle.y == 0 ? 14 : 10,
-                            height: handle.x == 0 || handle.y == 0 ? 4 : 10,
+                            width: handle.x == 0 || handle.y == 0 ? 14 : Self.cornerSize,
+                            height: handle.x == 0 || handle.y == 0 ? 4 : Self.cornerSize,
                         )
                         .rotationEffect(handle.x != 0 && handle.y == 0 ? .degrees(90) : .zero)
                         .shadow(color: .black.opacity(0.5), radius: 1.5)
-                        .contentShape(Rectangle().inset(by: -8))
+                        .contentShape(Rectangle().inset(by: -Self.handleClickMargin))
                         .pointerStyle(.frameResize(position: handle.position))
                         .position(
                             x: handle.x < 0 ? rect.minX : (handle.x > 0 ? rect.maxX : rect.midX),
