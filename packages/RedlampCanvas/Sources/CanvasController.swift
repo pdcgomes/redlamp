@@ -19,28 +19,35 @@ public struct StageInsets: Hashable, Sendable {
     public static let zero = StageInsets()
 }
 
-/// Zooming out onto Fit holds there for a few notches before going on below it, as a detent does:
-/// it's easy to stop at Fit, and going on takes only more of the same gesture. Zooming in passes
-/// Fit. Each event spends a notch of the hold at most, so a wheel spun hard still holds for as many
-/// of its events.
+/// Zooming onto Fit holds there for a few notches before going on past it, as a detent does: it's
+/// easy to stop at Fit, and going on takes only more of the same gesture. Zooming out is held
+/// coming down to Fit and starting from it; zooming in is held only coming up to Fit from below,
+/// so from Fit it zooms in at once. Each event spends a notch of the hold at most, so a wheel spun
+/// hard still holds for as many of its events.
 public struct FitHold: Hashable, Sendable {
     /// Notches it holds for.
     public let notches: Double
-    /// Notches spent at Fit since it last started.
+    /// Notches spent at Fit, one way, since it last started.
     public internal(set) var spent = 0.0
+    /// Whether the zoom came up to Fit from below, which is what holds zooming in there.
+    var cameFromBelow = false
+    /// The way it last zoomed: turning back at Fit starts the count again.
+    var zoomingIn = false
 
     public init(notches: Double) {
         self.notches = notches
     }
 
-    /// The mouse wheel's: three notches.
-    public static let wheel = FitHold(notches: 3)
+    /// The mouse wheel's: six notches.
+    public static let wheel = FitHold(notches: 6)
     /// A pinch's: as far as one notch of the wheel zooms. A pinch's scale changes continuously,
-    /// and three notches would be half a light pinch spent standing still.
+    /// and the wheel's six notches would be most of a light pinch spent standing still.
     public static let pinch = FitHold(notches: 1)
 
     public mutating func restart() {
         spent = 0
+        cameFromBelow = false
+        zoomingIn = false
     }
 }
 
@@ -308,19 +315,34 @@ public final class CanvasController {
     }
 
     /// The zoom `notches` from `scale` (four double it; negative zooms out), limited as
-    /// `clampedScale` does. Zooming out onto Fit spends `hold` there first; once it's spent, the
-    /// rest of the gesture goes on from Fit, until it zooms in or is above Fit again.
+    /// `clampedScale` does. Zooming out onto Fit, or in onto it from below, spends `hold` there
+    /// first; once it's spent, the rest of the gesture goes on from Fit. The hold starts again
+    /// once the zoom is away from Fit, so a zoom in that starts at Fit passes it at once.
     public func zoomedScale(from scale: Double, byNotches notches: Double, holding hold: inout FitHold) -> Double {
         let wanted = scale * pow(2, notches / 4)
+        guard notches != 0 else { return clampedScale(wanted) }
         let fit = fitScale
-        if notches > 0 || scale > fit * (1 + 1e-6) {
+        let zoomingIn = notches > 0
+        let below = scale < fit * (1 - 1e-6)
+        if below || scale > fit * (1 + 1e-6) {
+            hold.restart()
+            hold.cameFromBelow = below && zoomingIn && wanted > fit * (1 - 1e-6)
+        } else if zoomingIn != hold.zoomingIn {
+            hold.spent = 0
+        }
+        hold.zoomingIn = zoomingIn
+        let held = zoomingIn ? hold.cameFromBelow : !below && wanted < fit
+        guard held else { return clampedScale(wanted) }
+        hold.spent += min(abs(4 * log2(wanted / fit)), 1)
+        // A zoom that lands on Fit leaves rounding behind, not a step.
+        guard hold.spent > hold.notches + 1e-6 else { return fit }
+        let past = (hold.spent - hold.notches) / 4
+        let passed = clampedScale(fit * pow(2, zoomingIn ? past : -past))
+        // Once the zoom has left Fit, coming back to it by other means, such as Z, meets a new hold.
+        if !isFit(passed) {
             hold.restart()
         }
-        guard notches < 0, scale > fit * (1 - 1e-6), wanted < fit else { return clampedScale(wanted) }
-        hold.spent += min(4 * log2(fit / wanted), 1)
-        // A zoom that lands on Fit from above leaves rounding behind, not a step.
-        guard hold.spent > hold.notches + 1e-6 else { return fit }
-        return clampedScale(fit * pow(2, -(hold.spent - hold.notches) / 4))
+        return passed
     }
 
     public func zoomIn() {
@@ -354,6 +376,11 @@ public final class CanvasController {
         center = CGPoint(x: current.x - delta.width / rect.width, y: current.y - delta.height / rect.height)
     }
 
+    /// Whether a zoom to `scale` is Fit, which follows the window as it resizes.
+    private func isFit(_ scale: Double) -> Bool {
+        abs(scale - fitScale) < 1e-4
+    }
+
     /// A pinch's step, which counts its scale in the wheel's notches against `hold`.
     public func magnify(by factor: Double, at viewPoint: CGPoint, holding hold: inout FitHold) {
         guard factor > 0 else { return }
@@ -373,7 +400,7 @@ public final class CanvasController {
             y: (viewPoint.y - before.minY) / before.height,
         )
         let newScale = clampedScale(scale)
-        zoom = abs(newScale - fitScale) < 1e-4 ? .fit : .scale(newScale)
+        zoom = isFit(newScale) ? .fit : .scale(newScale)
         guard isZoomedIn else { return }
         let rect = imageRect(in: viewSize)
         let stage = stage(in: viewSize)
