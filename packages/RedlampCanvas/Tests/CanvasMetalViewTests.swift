@@ -99,11 +99,11 @@ struct CanvasMetalViewTests {
         return event
     }
 
-    @Test func `the wheel holds at Fit for three notches, through each notch's easing, until it rests`() throws {
+    @Test func `the wheel holds at Fit for six notches, through each notch's easing, until it rests`() throws {
         let (view, controller) = fittedView()
         defer { view.stopWheelZoom() }
         let fit = controller.fitScale
-        for _ in 0 ..< 3 {
+        for _ in 0 ..< 6 {
             try view.scrollWheel(with: notch(away: false))
             #expect(view.wheelZoom.target == fit)
             // At Fit, each notch's easing ends at once.
@@ -113,7 +113,7 @@ struct CanvasMetalViewTests {
         try view.scrollWheel(with: notch(away: false, restingFor: 10))
         #expect(view.wheelZoom.target == fit)
         view.stopWheelZoom()
-        for _ in 0 ..< 2 {
+        for _ in 0 ..< 5 {
             try view.scrollWheel(with: notch(away: false))
             view.stopWheelZoom()
         }
@@ -123,7 +123,33 @@ struct CanvasMetalViewTests {
         #expect(abs(target - notchBelow) < 1e-12)
     }
 
-    @Test func `each pinch meets the hold at Fit again, and pinching in passes Fit`() throws {
+    @Test func `the wheel coming up to Fit holds there for six notches, and from Fit it zooms in at once`() throws {
+        let (view, controller) = fittedView()
+        defer { view.stopWheelZoom() }
+        let fit = controller.fitScale
+        let notchAbove = fit * pow(2, 0.25)
+        controller.zoom = .scale(fit * pow(2, -0.25))
+        // A notch in reaches Fit, and the next six hold there.
+        for _ in 0 ..< 7 {
+            try view.scrollWheel(with: notch(away: true))
+            #expect(view.wheelZoom.target == fit)
+        }
+        try view.scrollWheel(with: notch(away: true))
+        var target = try #require(view.wheelZoom.target)
+        #expect(abs(target - notchAbove) < 1e-12)
+        // Coming up to Fit and resting there, the wheel then starts from Fit.
+        view.stopWheelZoom()
+        controller.zoom = .scale(fit * pow(2, -0.25))
+        try view.scrollWheel(with: notch(away: true))
+        #expect(view.wheelZoom.target == fit)
+        view.stopWheelZoom()
+        controller.zoom = .fit
+        try view.scrollWheel(with: notch(away: true, restingFor: 10))
+        target = try #require(view.wheelZoom.target)
+        #expect(abs(target - notchAbove) < 1e-12)
+    }
+
+    @Test func `each pinch meets the hold at Fit again, and a pinch in holds only coming up to Fit`() throws {
         let (view, controller) = fittedView()
         // Each 5% step spends about 0.3 of the pinch's one notch.
         for phase: Int64 in [1, 2, 2] {
@@ -137,7 +163,17 @@ struct CanvasMetalViewTests {
             try view.magnify(with: pinch(-0.05, phase: 2))
         }
         #expect(controller.pixelScale < controller.fitScale)
+        // Back in, the pinch reaches Fit and holds there for a notch (a 10% step is 0.55 of one).
+        try view.magnify(with: pinch(0.1, phase: 2))
+        #expect(abs(controller.pixelScale - controller.fitScale) < 1e-12)
+        try view.magnify(with: pinch(0.1, phase: 2))
+        #expect(abs(controller.pixelScale - controller.fitScale) < 1e-12)
         try view.magnify(with: pinch(0.3, phase: 2))
+        #expect(controller.isZoomedIn)
+        try view.magnify(with: pinch(0, phase: 4))
+        // A pinch that starts at Fit zooms in at once.
+        controller.zoom = .fit
+        try view.magnify(with: pinch(0.05, phase: 1))
         #expect(controller.isZoomedIn)
         try view.magnify(with: pinch(0, phase: 4))
     }

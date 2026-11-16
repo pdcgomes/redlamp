@@ -111,42 +111,79 @@ struct CanvasControllerTests {
         }
     }
 
-    @Test func `zooming out holds at Fit for three notches of the wheel, then goes on from Fit`() {
+    @Test func `zooming out holds at Fit for six notches of the wheel, then goes on from Fit`() {
         let controller = makeController()
         var hold = FitHold.wheel
         let scales = steps(
             controller,
             from: controller.fitScale * pow(2, 0.5),
-            Array(repeating: -1, count: 7),
+            Array(repeating: -1, count: 10),
             holding: &hold,
         )
-        // Two notches reach Fit, the next three hold there, and the sixth goes on a notch below it.
-        expectClose(scales, [pow(2, 0.25), 1, 1, 1, 1, pow(2, -0.25), pow(2, -0.5)])
+        // Two notches reach Fit, the next six hold there, and the ninth goes on a notch below it.
+        expectClose(scales, [pow(2, 0.25), 1, 1, 1, 1, 1, 1, 1, pow(2, -0.25), pow(2, -0.5)])
     }
 
     @Test func `a wheel spun hard turns through the hold a notch at a time`() {
         let controller = makeController()
         var hold = FitHold.wheel
-        let scales = steps(controller, from: controller.fitScale, Array(repeating: -4, count: 5), holding: &hold)
-        expectClose(scales, [1, 1, 1, pow(2, -0.25), pow(2, -1.25)])
+        let scales = steps(controller, from: controller.fitScale, Array(repeating: -4, count: 8), holding: &hold)
+        expectClose(scales, [1, 1, 1, 1, 1, 1, pow(2, -0.25), pow(2, -1.25)])
+        // And on the way back in: the first turn reaches Fit, and the next six hold there.
+        let inward = steps(controller, from: controller.minScale, Array(repeating: 4, count: 10), holding: &hold)
+        expectClose(inward, [0.5, 1, 1, 1, 1, 1, 1, 1, pow(2, 0.25), pow(2, 1.25)])
     }
 
-    @Test func `zooming in passes Fit, and the hold starts again for the next zoom out`() {
+    @Test func `zooming in from below holds at Fit for six notches of the wheel, then goes on from Fit`() {
         let controller = makeController()
         var hold = FitHold.wheel
-        // From a quarter of Fit, nine notches in end a notch above it, with no hold on the way.
-        let inward = steps(controller, from: controller.minScale, Array(repeating: 1, count: 9), holding: &hold)
-        expectClose(Array(inward.suffix(2)), [1, pow(2, 0.25)])
+        let scales = steps(
+            controller,
+            from: controller.fitScale * pow(2, -0.5),
+            Array(repeating: 1, count: 10),
+            holding: &hold,
+        )
+        // Two notches reach Fit, the next six hold there, and the ninth goes on a notch above it.
+        expectClose(scales, [pow(2, -0.25), 1, 1, 1, 1, 1, 1, 1, pow(2, 0.25), pow(2, 0.5)])
+    }
+
+    @Test func `zooming in from Fit passes it at once, and the hold starts again for the next zoom out`() {
+        let controller = makeController()
+        var hold = FitHold.wheel
+        let inward = steps(controller, from: controller.fitScale, [1, 1], holding: &hold)
+        expectClose(inward, [pow(2, 0.25), pow(2, 0.5)])
         // Two notches into the hold, a notch in leaves it, and zooming out meets all of it again.
-        let wiggle = steps(controller, from: controller.fitScale, [-1, -1, 1, -1, -1, -1, -1, -1], holding: &hold)
-        expectClose(wiggle, [1, 1, pow(2, 0.25), 1, 1, 1, 1, pow(2, -0.25)])
+        let wiggle = steps(
+            controller, from: controller.fitScale, [-1, -1, 1] + Array(repeating: -1, count: 8), holding: &hold,
+        )
+        expectClose(wiggle, [1, 1, pow(2, 0.25), 1, 1, 1, 1, 1, 1, 1, pow(2, -0.25)])
+    }
+
+    @Test func `turning back at Fit, having come up to it, meets the hold again either way`() {
+        let controller = makeController()
+        var hold = FitHold.wheel
+        // A notch in reaches Fit and two more are held; turning back out is held too, for all six,
+        // and so is turning in again, as the zoom came up to Fit and hasn't left it.
+        let notches: [Double] = [1, 1, 1] + Array(repeating: -1, count: 5) + Array(repeating: 1, count: 7)
+        let scales = steps(controller, from: controller.fitScale * pow(2, -0.25), notches, holding: &hold)
+        expectClose(scales, Array(repeating: 1, count: 14) + [pow(2, 0.25)])
+    }
+
+    @Test func `a hold that starts again at Fit, as the wheel's does once it rests, passes a zoom in`() {
+        let controller = makeController()
+        var hold = FitHold.wheel
+        let arriving = steps(controller, from: controller.fitScale * pow(2, -0.25), [1, 1], holding: &hold)
+        expectClose(arriving, [1, 1])
+        hold.restart()
+        #expect(controller.zoomedScale(from: controller.fitScale, byNotches: 1, holding: &hold) > controller.fitScale)
     }
 
     @Test func `zooming out stops at a quarter of Fit`() {
         let controller = makeController()
         var hold = FitHold.wheel
-        let scales = steps(controller, from: controller.fitScale, Array(repeating: -1, count: 14), holding: &hold)
-        expectClose(Array(scales.suffix(4)), [0.25, 0.25, 0.25, 0.25])
+        // Six notches hold at Fit, and eight more reach a quarter of it.
+        let scales = steps(controller, from: controller.fitScale, Array(repeating: -1, count: 17), holding: &hold)
+        expectClose(Array(scales.suffix(5)), [pow(2, -1.75), 0.25, 0.25, 0.25, 0.25])
     }
 
     @Test func `a pinch counts its scale in notches and holds at Fit for one`() {
@@ -162,8 +199,19 @@ struct CanvasControllerTests {
         let spent: Double = 4 * 4 * log2(1 / 0.95)
         let below = controller.fitScale * pow(2, -(spent - 1) / 4)
         #expect(abs(controller.pixelScale - below) < 1e-12)
-        // Pinching in passes Fit at once.
-        controller.magnify(by: 1.2, at: middle, holding: &hold)
+        // Pinching back in holds at Fit for a notch too: 15% is 0.81 of a notch, of which 0.18 reach
+        // Fit, and the pinch after spends the rest of the hold and goes on 0.43 of a notch above.
+        controller.magnify(by: 1.15, at: middle, holding: &hold)
+        #expect(abs(controller.pixelScale - controller.fitScale) < 1e-12)
+        controller.magnify(by: 1.15, at: middle, holding: &hold)
+        let above = controller.fitScale * pow(2, (2 * 4 * log2(1.15) - (spent - 1) - 1) / 4)
+        #expect(abs(controller.pixelScale - above) < 1e-12)
+    }
+
+    @Test func `a pinch in from Fit passes it at once`() {
+        let controller = makeController()
+        var hold = FitHold.pinch
+        controller.magnify(by: 1.05, at: CGPoint(x: 500, y: 400), holding: &hold)
         #expect(controller.isZoomedIn)
     }
 
