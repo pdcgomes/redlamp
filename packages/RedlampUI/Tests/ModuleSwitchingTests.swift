@@ -168,6 +168,33 @@ struct ModuleSwitchingTests {
         #expect(fixture.engine.opened.withLock { $0.last } == target)
     }
 
+    @Test func `the previous photo's edit leaves the sliders at once when another photo is chosen, and stays saved`()
+        async throws {
+        let fixture = ModuleFixture()
+        defer { fixture.cleanUp() }
+        try await fixture.open(count: 2)
+        let model = fixture.model
+        let (edited, next) = (fixture.photos[0], fixture.photos[1])
+        try await fixture.eventually { model.info?.url == edited }
+        model.setValue(.exposure, 1)
+        model.showModule(.library)
+
+        model.click(next)
+        #expect(model.selection == next && model.info == nil)
+        #expect(model.value(.exposure) == 0, "the sliders don't wait for the next photo to open")
+
+        model.showModule(.develop)
+        #expect(model.value(.exposure) == 0)
+        try await fixture.eventually { model.info?.url == next }
+        #expect(model.info?.url == next)
+
+        model.showModule(.library)
+        model.click(edited)
+        model.showModule(.develop)
+        try await fixture.eventually { model.info?.url == edited }
+        #expect(model.value(.exposure) == 1, "the edit left behind is still the photo's")
+    }
+
     @Test func `each module's views are built once, and a switch rebuilds and reloads nothing`() async throws {
         let fixture = ModuleFixture()
         defer { fixture.cleanUp() }
