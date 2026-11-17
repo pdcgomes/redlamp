@@ -11,7 +11,7 @@ sources = [
 ]
 +++
 
-Below Detail, a mask's settings list its own adjustments: the Edit panels' controls, as Lightroom's masks have them. They all start at 0, so a new mask changes nothing until you move one, and each acts only where the mask covers, in proportion to how much it covers.
+Below the Effect menu, a mask's settings list its own adjustments: the Edit panels' controls, as Lightroom's masks have them. They all start at 0, so a new mask changes nothing until you move one, and each acts only where the mask covers, in proportion to how much it covers.
 
 {{figure: mask-adjustments}}
 
