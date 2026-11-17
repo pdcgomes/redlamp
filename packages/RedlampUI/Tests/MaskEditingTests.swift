@@ -629,6 +629,15 @@ struct MaskEditingTests {
         model.beginEdit(.maskFeather)
         #expect(model.maskOverlayShown == mask, "feather shapes the mask: the overlay shows it")
         model.endEdit()
+
+        // The pointer over Adjustments does what a drag there does, before a slider moves.
+        model.pointerOverMaskAdjustments = true
+        #expect(model.maskOverlayShown == nil && model.showsMaskEditAlone)
+        model.pointerOverMaskAdjustments = false
+        #expect(model.maskOverlayShown == mask && !model.showsMaskEditAlone)
+        model.beginEdit(.localExposure)
+        #expect(model.showsMaskEditAlone, "a drag alone, as a finger's, hides the pins and handles too")
+        model.endEdit()
     }
 
     /// A tool armed for a new mask takes the selected mask's overlay off the canvas until it has

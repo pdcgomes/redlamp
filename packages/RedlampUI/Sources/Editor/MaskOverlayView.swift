@@ -49,8 +49,10 @@ struct MaskOverlayView: View {
                 }
 
                 let shapes = model.maskShapes
+                // The pins and handles go with the overlay while the edit shows alone.
+                let showsPins = model.showMaskPins && !model.showsMaskEditAlone
                 ForEach(model.maskOutlines) { mask in
-                    if model.showMaskPins, mask.id != model.selectedMaskID, let first = mask.components.first,
+                    if showsPins, mask.id != model.selectedMaskID, let first = mask.components.first,
                        let center = model.maskPins[mask.id] ?? shapes[first.id]?.center {
                         // The hover and the tooltip go on the pin itself: after `position` they'd
                         // follow its frame, which is the whole canvas.
@@ -76,7 +78,7 @@ struct MaskOverlayView: View {
                 }
 
                 // Shown while a shape is being drawn too, so its guides follow the drag.
-                if model.showMaskPins, let mask = model.selectedOutline {
+                if showsPins, let mask = model.selectedOutline {
                     ForEach(mask.components) { component in
                         if let shape = shapes[component.id] {
                             ComponentHandles(

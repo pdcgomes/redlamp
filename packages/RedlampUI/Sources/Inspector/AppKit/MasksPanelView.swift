@@ -42,6 +42,8 @@ final class MasksPanelView: ColumnView {
     )
     /// Each mask's panels, kept while the mask exists so switching between masks reuses them.
     private var editors: [UUID: Editor] = [:]
+    /// Keeps `EditorModel.pointerOverMaskAdjustments` as the pointer moves over the panels.
+    private lazy var adjustmentsPointer = AdjustmentsPointer(model: model, panels: self)
 
     private struct Editor {
         var mask: MaskOutline
@@ -57,6 +59,11 @@ final class MasksPanelView: ColumnView {
     /// A row of the Masks panel, in from the card's sides as a panel's rows are.
     private func padded(_ view: some View) -> HostedControl {
         panelRows.native(view.padding(.horizontal, Metrics.panelCardPadding))
+    }
+
+    /// The Adjustments panel on screen, if the selected mask's panels are.
+    fileprivate var adjustmentsPanel: NSView? {
+        arrangedViews.count > 1 ? arrangedViews.last : nil
     }
 
     /// What the rows depend on (everything but adjustment values).
@@ -87,7 +94,11 @@ final class MasksPanelView: ColumnView {
         tracker = nil
         naming?.cancel()
         naming = nil
-        guard window != nil else { return }
+        _ = adjustmentsPointer
+        guard window != nil else {
+            model.pointerOverMaskAdjustments = false
+            return
+        }
         // The Masking tool is open: get AI masks ready for this photo and the next ones.
         model.engine.warmUpMasks()
         tracker = Tracker { [weak self] in
@@ -123,6 +134,10 @@ final class MasksPanelView: ColumnView {
             let panels = [masksPanel] + editorPanels(for: next)
             if !panels.elementsEqual(arrangedViews, by: ===) {
                 setArrangedViews(panels)
+                // A panel taken away under the pointer gets no exit; the next move says where it is.
+                if panels.count == 1 {
+                    model.pointerOverMaskAdjustments = false
+                }
             }
         }
     }
@@ -313,5 +328,50 @@ extension PanelSectionView {
 @_spi(Harness) public enum MasksPanelViews {
     @MainActor public static func make(model: EditorModel) -> NSView {
         MasksPanelView(model: model)
+    }
+}
+
+/// Keeps `EditorModel.pointerOverMaskAdjustments`: whether the pointer is over the Adjustments panel,
+/// where the overlay steps aside before a slider moves. One tracking area over the panels, as the
+/// Adjustments panel is made again when its mask changes.
+private final class AdjustmentsPointer: NSResponder {
+    private let model: EditorModel
+    private weak var panels: MasksPanelView?
+
+    init(model: EditorModel, panels: MasksPanelView) {
+        self.model = model
+        self.panels = panels
+        super.init()
+        panels.addTrackingArea(NSTrackingArea(
+            rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect], owner: self,
+        ))
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        update(event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        update(event)
+    }
+
+    override func mouseExited(with _: NSEvent) {
+        set(false)
+    }
+
+    private func update(_ event: NSEvent) {
+        guard let panel = panels?.adjustmentsPanel else { return set(false) }
+        set(panel.bounds.contains(panel.convert(event.locationInWindow, from: nil)))
+    }
+
+    private func set(_ over: Bool) {
+        if model.pointerOverMaskAdjustments != over {
+            model.pointerOverMaskAdjustments = over
+        }
     }
 }

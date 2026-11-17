@@ -70,6 +70,8 @@ import SwiftUI
                 } content: {
                     MaskAdjustments(mask: mask)
                 }
+                .onHover { model.pointerOverMaskAdjustments = $0 }
+                .onDisappear { model.pointerOverMaskAdjustments = false }
             }
         }
         .task(id: model.maskOutlines) { await model.findPeopleForNames() }

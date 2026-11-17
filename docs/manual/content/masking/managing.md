@@ -53,7 +53,7 @@ The selected mask shows its components' handles and pins instead, and dragging a
 
 ## The overlay
 
-The overlay's switch, the half-filled circle in the Masks panel's header, shows what the selected mask covers, in red at 55% to start; [[O]] does the same. The overlay steps aside while you drag one of the mask's adjustments, and while you look at Before. It also steps aside when you choose a tool to make a new mask, so you see only what the new mask selects, and shows the new mask once your first click or stroke has made it.
+The overlay's switch, the half-filled circle in the Masks panel's header, shows what the selected mask covers, in red at 55% to start; [[O]] does the same. The overlay steps aside, with the pins and the selected mask's handles, while the pointer is over the Adjustments panel and while you drag one of the mask's adjustments, so you see the edit itself; it also steps aside while you look at Before. It also steps aside when you choose a tool to make a new mask, so you see only what the new mask selects, and shows the new mask once your first click or stroke has made it.
 
 The button beside the switch, Overlay Options, opens three settings:
 
