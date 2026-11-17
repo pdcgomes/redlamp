@@ -193,7 +193,8 @@ final class LibraryGridCell {
             isMenuTarget = false
             isDropTarget = false
         }
-        root.opacity = item.metadata.flag == .reject ? 0.45 : 1
+        // Only the photo dims: a reject's badges keep their strength, to read on a light photo.
+        thumbnail.opacity = item.metadata.flag == .reject ? 0.45 : 1
         showBadges(of: item)
     }
 
@@ -293,10 +294,10 @@ final class LibraryGridCell {
         let slots = geometry.style == .expanded && item != nil
         let metadata = item?.metadata ?? PhotoMetadata()
         let proposed: GridBadges.Kind? = softFrame.map { $0.verdict == .proposed ? .proposedPick : .proposedReject }
-        let flag: GridBadges.Kind? = switch metadata.flag {
-        case .pick: .pick
-        case .reject: .reject
-        case nil: proposed ?? (slots ? .flagSlot : nil)
+        let flag: GridBadges.Kind? = if let flagged = metadata.flag {
+            GridBadges.Kind(flagged)
+        } else {
+            proposed ?? (slots ? .flagSlot : nil)
         }
         set(.flag, shows ? flag : nil, centre: geometry.flag)
         let document = item.map { SupportedFormats.isStack($0.url) } == true

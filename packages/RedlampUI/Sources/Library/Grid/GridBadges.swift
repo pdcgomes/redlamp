@@ -37,6 +37,14 @@ enum GridBadges {
         /// A version of its file's edit (LIB-48), as Lightroom Classic's page curl marks a virtual copy.
         case version
 
+        /// A flag's badge, in the grid and the filmstrip alike.
+        init(_ flag: PhotoFlag) {
+            self = switch flag {
+            case .pick: .pick
+            case .reject: .reject
+            }
+        }
+
         /// Drawn on the cell's tile rather than over its photo, so in the theme's colours: an expanded cell's footer
         /// slots, and the cloud of a photo without a thumbnail.
         var isOnTile: Bool {
