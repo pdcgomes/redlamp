@@ -323,8 +323,8 @@ struct LibraryGridTests {
         details.aperture = 3.5
         details.iso = 1000
         details.focal = 35
-        let fields = ["1/4 s", "ƒ/3.5", "ISO 1000", "35 mm"]
-        #expect(details.settings == fields.joined(separator: "  "))
+        let fields = ["1/4 s", "ƒ/\(3.5.formatted())", "ISO 1000", "35 mm"]
+        #expect(details.settings == fields.joined(separator: "  "), "ƒ/3.5 or ƒ/3,5, as the Mac's region writes it")
         let font = try #require(CTFontCreateUIFontForLanguage(.system, 10, nil))
         func width(_ text: String) -> CGFloat {
             let string = NSAttributedString(string: text, attributes: [.font: font]) as CFAttributedString
