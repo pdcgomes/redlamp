@@ -679,6 +679,7 @@ public final class EditorModel {
     /// The user's mask effects; a test gives the model a store of its own.
     @ObservationIgnored var maskEffectStore = MaskEffectStore.shared
     public var expandedPanels: Set<PanelID> = [.basic, .toneCurve, .colorMixer]
+    public var expandedMaskPanels = Set(MaskPanelID.allCases)
     public var expandedSidebarSections = Set(SidebarSection.allCases)
     public var soloMode = false
     public var leftPanelVisible = true
@@ -2351,6 +2352,17 @@ public final class EditorModel {
             expandedPanels.remove(panel)
         } else {
             expandedPanels.insert(panel)
+        }
+    }
+
+    /// The Masking tool's panels expand and collapse as the Develop panels do, Solo Mode included.
+    public func toggleMaskPanel(_ panel: MaskPanelID, solo: Bool) {
+        if solo || soloMode {
+            expandedMaskPanels = expandedMaskPanels == [panel] ? [] : [panel]
+        } else if expandedMaskPanels.contains(panel) {
+            expandedMaskPanels.remove(panel)
+        } else {
+            expandedMaskPanels.insert(panel)
         }
     }
 

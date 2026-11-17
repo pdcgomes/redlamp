@@ -23,6 +23,39 @@ public extension EditorModel {
         return mask.components.first { $0.id == selectedComponentID } ?? mask.components.last
     }
 
+    // MARK: - Panels
+
+    /// Whether one of the Masking tool's panels shows its rows. The Masks panel stays open while
+    /// it holds the drawing hint, a message or the People or Landscape picker, which its header's
+    /// New Mask can open while it's collapsed.
+    func isExpanded(_ panel: MaskPanelID) -> Bool {
+        if panel == .masks, drawingKind != nil || isRefiningEdges || peoplePicker != nil || landscapePicker != nil
+            || aiMaskProgress != nil || maskMessage != nil || pendingModel != nil || offeredModels != nil
+            || modelDownloadProgress != nil {
+            return true
+        }
+        return expandedMaskPanels.contains(panel)
+    }
+
+    /// What the mask's adjustments have changed, in the Adjustments panel's order: the sliders
+    /// away from 0, Color, Curves and Point Color, which the panel's Edited chip counts.
+    func editedAdjustments(of id: UUID) -> [String] {
+        guard let mask = recipe.mask(id) else { return [] }
+        var items = ParameterID.localParameters
+            .filter { !ParameterID.swatchParameters.contains($0) && mask.adjustments[$0] != nil }
+            .map(\.spec.label)
+        if ParameterID.swatchParameters.contains(where: { mask.adjustments[$0] != nil }) {
+            items.append("Color")
+        }
+        if mask.curves != nil {
+            items.append("Curves")
+        }
+        if !mask.pointColor.isEmpty {
+            items.append("Point Color")
+        }
+        return items
+    }
+
     // MARK: - Drawing
 
     /// Whether a tool is armed for a new mask that its first stroke, click or sample hasn't made

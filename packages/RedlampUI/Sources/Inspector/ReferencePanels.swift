@@ -441,6 +441,9 @@ struct ProcessVersion: View {
                     SwiftUIDevelopPanels()
                 } else if model.activeTool == .masking {
                     MasksPanel()
+                        .padding(.horizontal, Theme.panelCardMargin)
+                        .padding(.top, Theme.panelCardGap)
+                        .padding(.bottom, Theme.panelCardMargin)
                 } else if model.activeTool == .crop {
                     CropToolPanel()
                     ParameterSlider(parameter: .cropAngle)

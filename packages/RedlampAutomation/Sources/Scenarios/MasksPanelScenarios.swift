@@ -14,7 +14,7 @@
         static let panel = Scenario(
             "masking.panel",
             "The Masks panel by its controls: the picker, a mask's menu, eye and Invert, Add, Subtract and Intersect "
-                + "with Existing Mask, a component's menus, and the header's",
+                + "with Existing Mask, a component's menus, collapsing Adjustments, and the header's",
             claims: [
                 .feature("masking.overlay"),
                 .feature("masking.combining"),
@@ -97,7 +97,13 @@
             try app.choose("Delete", inMenuOf: .component(component, "menu"))
             try app.wait("the component deleted") { $0.component(component, in: first) == nil }
 
-            // The header: the overlay and the pins, then Delete All Masks from its menu.
+            // The mask's panels collapse and expand by their headers, as the Develop panels do.
+            try app.click(.identifier("masks.panel.adjustments.header"))
+            try app.wait("Adjustments collapsed") { !$0.expandedMaskPanels.contains(.adjustments) }
+            try app.click(.identifier("masks.panel.adjustments.header"))
+            try app.wait("Adjustments expanded") { $0.expandedMaskPanels.contains(.adjustments) }
+
+            // The Masks panel's header: the overlay and the pins, then Delete All Masks from its menu.
             let overlay = try app.main { $0.showMaskOverlay }
             try app.tap(.identifier("masks.overlay"))
             try app.wait("the overlay switched") { $0.showMaskOverlay != overlay }
@@ -231,7 +237,7 @@
             try app.expect(try app.main { $0.recipe.mask(mask) != nil }, "The Sky mask went")
             app.covered(.feature("masking.refine"), via: .mouse)
 
-            // A preset from the header's Mask Presets menu.
+            // A preset from Mask Presets, beside New Mask.
             if let preset = MaskPreset.builtIn.first(where: { $0.name == "Blue Sky" }),
                try app.main({ $0.canApply(preset) }) {
                 try app.choose(preset.name, inMenuOf: .identifier("masks.presets"))
@@ -264,7 +270,12 @@
             try app.tap(.identifier("masks.people.cancel"))
             try app.waitFor(.identifier("masks.people.cancel"), shown: false)
 
-            try app.pick(.people, from: "masks.new")
+            // With no masks, the picker is the list, and New Mask gives way to it.
+            try app.expect(
+                try !(app.exists(.identifier("masks.new"))),
+                "New Mask shows beside the picker it would open",
+            )
+            try app.tap(.identifier("masks.picker.people"))
             try app.waitFor(.identifier("masks.people.create"))
             let found = Mutex<[Int]>([])
             try app.run("who is in the photo", timeout: 120) { model in
@@ -371,7 +382,12 @@
             try app.tap(.identifier("masks.landscape.cancel"))
             try app.waitFor(.identifier("masks.landscape.cancel"), shown: false)
 
-            try app.pick(.landscape, from: "masks.new")
+            // With no masks, the picker is the list, and New Mask gives way to it.
+            try app.expect(
+                try !(app.exists(.identifier("masks.new"))),
+                "New Mask shows beside the picker it would open",
+            )
+            try app.tap(.identifier("masks.picker.landscape"))
             try app.waitFor(.identifier("masks.landscape.create"))
             let found = Mutex<[LandscapeClass]>([])
             try app.run("the regions in the photo", timeout: 300) { model in
