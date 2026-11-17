@@ -59,6 +59,27 @@ struct PhotoSelectionTests {
         #expect(photosRead < rowsRead * 3 + .milliseconds(1), "selectedPhotos \(photosRead), selectedRows \(rowsRead)")
     }
 
+    @Test func `selecting all with no photo active selects every one, and the first is active`() {
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let model = EditorModel(engine: StubEngine())
+        model.showModule(.library)
+        let photos = ["A", "B", "C", "D"].map { folder.appending(path: "\($0).ARW") }
+        model.library.replace(with: photos.map { LibraryItem(url: $0) })
+        #expect(model.selection == nil && model.photoSelection.isEmpty)
+        #expect(model.canPerform(.selectAllPhotos))
+
+        #expect(model.perform(.selectAllPhotos))
+        #expect(model.selectedPhotos == photos)
+        #expect(model.selection == photos[0])
+        #expect(model.activeID == model.library.photoID(of: photos[0]))
+        #expect(!model.canPerform(.selectAllPhotos), "every photo is selected")
+
+        model.click(photos[2])
+        model.selectAllPhotos()
+        #expect(model.selectedPhotos == photos)
+        #expect(model.selection == photos[2], "the active photo stays active")
+    }
+
     @Test func `clicks select several photos, the clicked one active`() {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let model = EditorModel(engine: StubEngine())

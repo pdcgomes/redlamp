@@ -279,7 +279,7 @@ extension EditorModel {
         case .selectAllPhotos:
             guard let list, outline.someClosed else { return nil }
             let shown = list.groups.indices.reduce(0) { $0 + (list.isOpen($1) ? list.groups.count(ofGroup: $1) : 0) }
-            return selection != nil && photoSelection.count < shown
+            return photoSelection.count < shown
         default:
             guard CullingChange(action) != nil, module == .library, photoSelection.isEmpty, activePhotoIsClosed else {
                 return nil
@@ -288,10 +288,11 @@ extension EditorModel {
         }
     }
 
-    /// ⌘⌥A while groups are closed: the photos on show, the active one staying active when it's among them.
+    /// ⌘A while groups are closed: the photos on show, the active one staying active when it's among them, and the
+    /// first otherwise.
     private func selectShownPhotos() {
         let shown = gridGroups.shownPhotos
-        guard selection != nil, let first = shown.first else { return }
+        guard let first = shown.first else { return }
         let active = selectionID
             .flatMap { gridGroups.list?.isVisible($0) == true ? $0 : nil }
         photoSelection.select(shown, active: active ?? first, in: library.photoList)

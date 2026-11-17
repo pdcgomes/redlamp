@@ -84,13 +84,27 @@ struct KeymapTests {
     ) {
         let keymap = Keymap(preset: preset)
         for action in ShortcutAction.allCases {
-            for combo in keymap.combos(for: action) {
+            for combo in keymap.combos(for: action) where Keymap.sharedWithText[combo] != action {
                 #expect(Keymap.reserved[combo] == nil, "\(preset.title) gives \(action) \(combo.display)")
                 if combo.command {
                     #expect(combo.keyboardShortcut != nil, "\(combo.display) can't be a key equivalent")
                 }
             }
         }
+    }
+
+    @Test(arguments: KeymapPreset.allCases)
+    func `⌘A selects every photo in each preset, after ⌥⌘A, which its menu item carries`(preset: KeymapPreset) {
+        let keymap = Keymap(preset: preset)
+        let selectAll = KeyCombo.char("a", command: true)
+        #expect(keymap.combos(for: .selectAllPhotos) == [.char("a", option: true, command: true), selectAll])
+        for module in AppModule.allCases {
+            #expect(keymap.resolve(selectAll, in: module)?.action == .selectAllPhotos, "\(module)")
+            #expect(keymap.menuCarriesKey(of: .selectAllPhotos, in: module))
+        }
+        #expect(keymap.actions(with: selectAll) == [.selectAllPhotos])
+        #expect(keymap.conflicts(assigning: selectAll, to: .selectAllPhotos).isEmpty)
+        #expect(keymap.conflicts(assigning: selectAll, to: .toggleAutoSync) == [.reserved("Select All")])
     }
 
     @Test func `Photo Mechanic's keys rate on ⌃0 to ⌃5, label on ⌘1 to ⌘5, and move the panels to ⌃⌘1 to ⌃⌘9`() {

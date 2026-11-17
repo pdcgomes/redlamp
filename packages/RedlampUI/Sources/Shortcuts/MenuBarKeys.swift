@@ -10,7 +10,8 @@ import AppKit
     /// key is taken in its item's place: the item is still disabled though its action can run, as after a change
     /// in the key's own turn, before SwiftUI's update; the item is chosen once SwiftUI has filled it in enabled.
     /// A key no item carries that the key monitor doesn't read (⌘ or ⌃ with a key, or F1, F3, F4 and F9 on) runs
-    /// the action the keymap gives it (LIB-36), and is taken when it does.
+    /// the action the keymap gives it (LIB-36), and is taken when it does. So is ⌘A, which the Edit menu's Select All
+    /// carries, where the editor has the keys (`sharedKeyAction`).
     public static func prepare(for event: NSEvent, model: EditorModel) -> Bool {
         guard event.type == .keyDown, !KeyRecorderView.isRecording else { return false }
         let combo = KeyCombo(event: event)
@@ -22,6 +23,12 @@ import AppKit
             return true
         }
         if event.isARepeat, let combo, model.action(forKey: combo)?.action.actsOncePerPress == true {
+            return true
+        }
+        // ⌘A selects the photos before the Edit menu's Select All, which a list with a selection of its own, as the
+        // sidebar's, would answer; taken even when every photo is selected already.
+        if let combo, let action = sharedKeyAction(for: combo, model: model, in: NSApp?.keyWindow) {
+            model.perform(action)
             return true
         }
         guard let mainMenu = NSApp?.mainMenu else { return false }
@@ -43,14 +50,28 @@ import AppKit
     /// Runs the action the keymap gives a key no menu item carries, where the editor's keys go: not while text is
     /// edited, the palette is open, a dialog or sheet holds the editor, or another window has the keys.
     private static func perform(_ combo: KeyCombo, model: EditorModel) -> Bool {
-        guard !combo.isTextNavigation, !combo.isMonitored else { return false }
-        let window = NSApp.keyWindow
-        guard window == nil || window?.windowController is EditorWindowController,
-              !(window?.firstResponder is NSTextView), window?.attachedSheet == nil, model.commandPalette == nil,
-              !model.isModalDialogOpen,
+        guard !combo.isTextNavigation, !combo.isMonitored, editorHasKeys(model, in: NSApp.keyWindow),
               let (action, shifted) = model.action(forKey: combo)
         else { return false }
         return model.perform(action, shifted: shifted)
+    }
+
+    /// Whether the editor's keys go to it with `window` the key window: not while text is edited, the palette is
+    /// open, a dialog or sheet holds the editor, or another window has the keys.
+    static func editorHasKeys(_ model: EditorModel, in window: NSWindow?) -> Bool {
+        (window == nil || window?.windowController is EditorWindowController)
+            && !(window?.firstResponder is NSTextView) && window?.attachedSheet == nil && model.commandPalette == nil
+            && !model.isModalDialogOpen
+    }
+
+    /// The action a key of the Mac's that it shares with the text system runs now (`Keymap.sharedWithText`): ⌘A's
+    /// Select All Photos while the keymap gives it the key and the editor has the keys (#543); nil where the
+    /// Edit menu's Select All takes it, in a text field, the palette, a sheet or another window.
+    static func sharedKeyAction(for combo: KeyCombo, model: EditorModel, in window: NSWindow?) -> ShortcutAction? {
+        guard let action = Keymap.sharedWithText[combo], model.action(forKey: combo)?.action == action,
+              editorHasKeys(model, in: window)
+        else { return nil }
+        return action
     }
 
     /// Chooses `action`'s menu item, as a click on it does: how a key that isn't the item's own reaches what only

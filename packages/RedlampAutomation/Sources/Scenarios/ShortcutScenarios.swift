@@ -100,7 +100,7 @@
     /// The keys as customised in Settings › Shortcuts (LIB-36), the menu bar's keys each reaching their own item, and
     /// the palette's commands run last, its actions on the selection and what else a row does on ⌘↵ (LIB-19).
     enum ShortcutScenarios {
-        static let all: [Scenario] = [oneKeyEach, editor, paletteActions, askBeforeQuitting]
+        static let all: [Scenario] = [oneKeyEach, editor, paletteActions, askBeforeQuitting, selectAll]
 
         /// The menu bar, in Library and in Develop, with each preset's keys: no two items have one key, no item with
         /// a key and ⇧ comes ahead of an action's item with the key (the driver's presses would reach it first, as ⌘R
@@ -403,6 +403,95 @@
                 model.module == .develop && model.selection?.lastPathComponent == "Portrait.jpg"
             }
             app.covered([.feature("workspace.palette")], via: .key)
+        }
+
+        /// ⌘A as Lightroom Classic has it (#543): every photo of the source shown, from the grid with no photo
+        /// selected, the first made active, and from the loupe and Develop; the text in a text field.
+        static let selectAll = Scenario(
+            "shortcuts.select-all",
+            "⌘A in Rejected with no photo selected selects every photo and makes the first active, selects every "
+                + "photo from the loupe and Develop too, and selects the text in the palette's field",
+            claims: [.action(.selectAllPhotos)], needsFocus: true,
+        ) { app in
+            let scratch = try SourcesScratch(app, photos: ["A.jpg", "B.jpg", "C.jpg", "D.jpg"])
+            let depth = try app.main { $0.cullingUndoCount }
+            defer {
+                try? app.main { model in
+                    model.closeCommandPalette()
+                    model.showModule(.develop)
+                }
+                try? app.takeBackCulling(to: depth)
+                app.removeScratch(scratch)
+            }
+            try scratch.index(app)
+            let selectAll = KeyCombo.char("a", command: true)
+            let rejected = ["A.jpg", "B.jpg", "C.jpg"]
+            try app.run("the library counted") { model in
+                model.librarySources.recount()
+                await model.librarySources.counted()
+            }
+            let before = try app.main { $0.librarySources.count(of: .rejected) ?? 0 }
+
+            // A, B and C rejected from the grid, then Rejected shown from its row.
+            try app.main { model in
+                model.select(scratch.photo(rejected[0]))
+                for name in rejected.dropFirst() {
+                    model.click(scratch.photo(name), toggling: true)
+                }
+            }
+            try app.wait("A, B and C selected") { $0.selectedCount == rejected.count }
+            try app.press(.flagReject)
+            try app.waitWritten()
+            let label = "Rejected, \((before + rejected.count).formatted()) photos"
+            try app.wait("the Library panel counting A, B and C rejected", timeout: 30) { _ in
+                app.sourceRowLabel("sources.rejected")?.hasPrefix(label) == true
+            }
+            try app.clickSourceRow("sources.rejected")
+            try app.waitForSource("Rejected's photos", timeout: 30) { model in
+                let names = model.items.map(\.name)
+                return model.librarySources.shown == .rejected && !model.librarySources.isListing
+                    && Set(rejected).isSubset(of: Set(names)) && !names.contains("D.jpg")
+            }
+
+            // No photo selected, then ⌘A.
+            try app.main { $0.selectNoPhoto() }
+            try app.wait("no photo selected") { $0.selection == nil && $0.selectedCount == 0 }
+            try app.press(selectAll)
+            try app.wait("every photo in Rejected selected, the first active") { model in
+                !model.items.isEmpty && model.selectedCount == model.items.count
+                    && model.selection == model.items[0].url
+            }
+            app.covered(.action(.selectAllPhotos), via: .key)
+
+            // From the loupe and from Develop, every photo in the filmstrip.
+            for (view, shown) in [(ShortcutAction.loupeView, "the loupe"), (.developModule, "Develop")] {
+                try app.main { $0.deselectOtherPhotos() }
+                try app.press(view)
+                try app.wait("\(shown), with one photo selected") { model in
+                    model.selectedCount == 1
+                        && (view == .loupeView ? model.libraryView == .loupe : model.module == .develop)
+                }
+                try app.press(selectAll)
+                try app.wait("every photo selected from \(shown)") { $0.selectedCount == $0.items.count }
+            }
+
+            // In a text field the text is selected, and the photos stay as they are: Select All's, which reaches the
+            // field's editor only in the key window.
+            guard try app.focus() else { return }
+            try app.main { $0.deselectOtherPhotos() }
+            try app.press(.commandPalette)
+            try app.wait("the palette's field taking the keys") { model in
+                model.commandPalette != nil && Views.editorWindow?.firstResponder is NSTextView
+            }
+            try app.type("sel")
+            try app.wait("sel typed in the palette's field") { _ in
+                (Views.editorWindow?.firstResponder as? NSTextView)?.string == "sel"
+            }
+            try app.press(selectAll)
+            try app.wait("the text selected, and one photo still") { model in
+                (Views.editorWindow?.firstResponder as? NSTextView)?.selectedRange() == NSRange(location: 0, length: 3)
+                    && model.selectedCount == 1
+            }
         }
     }
 #endif

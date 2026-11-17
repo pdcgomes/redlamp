@@ -249,7 +249,7 @@ public extension EditorModel {
              .toggleLeftPanel, .toggleRightPanel, .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading,
              .panelDetail, .panelLens, .panelTransform, .panelEffects, .panelCalibration:
             return true
-        case .selectAllPhotos: return selection != nil && photoSelection.count < items.count
+        case .selectAllPhotos: return photoSelection.count < items.count
         case .syncSettings, .syncSettingsAgain: return canSync
         case .undoSync: return settingsSync.canUndo
         case .toggleAutoSync: return true

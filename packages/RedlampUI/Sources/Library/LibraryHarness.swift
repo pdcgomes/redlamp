@@ -86,6 +86,12 @@ import RedlampLibrary
 }
 
 @_spi(Harness) public extension EditorModel {
+    /// No photo active or selected, as after the last photo shown went to the Trash: where the regression suite's ⌘A
+    /// starts from (#543).
+    func selectNoPhoto() {
+        letGoOfActivePhoto()
+    }
+
     /// Returns once the library is open and lists the photos folder, or after a minute.
     func waitForHarnessLibrary(_ fixture: LibraryHarnessFixture) async {
         showModule(.library)

@@ -1,6 +1,7 @@
 import AppKit
+import RedlampEngineAPI
 import Testing
-@testable import RedlampUI
+@_spi(Harness) @testable import RedlampUI
 
 /// The item a ⌘ key reaches in the menu bar (LIB-14), found as AppKit gives a key to the first item that has it.
 @MainActor
@@ -44,5 +45,49 @@ struct MenuBarKeysTests {
         #expect(try MenuBarKeys.item(for: key("n"), in: bar)?.1.title == "New Collection…")
         #expect(try MenuBarKeys.item(for: key("x"), in: bar) == nil)
         #expect(try MenuBarKeys.item(for: key("r", [.command, .option]), in: bar) == nil)
+    }
+
+    @Test func `⌘A selects the photos where the editor has the keys, and is Select All in text and other windows`()
+        throws {
+        _ = NSApplication.shared
+        let model = EditorModel(engine: StubEngine())
+        let controller = EditorWindowController(
+            model: model, theme: ThemeSettings(), onOpen: {}, onExport: {}, onExportWithPrevious: {},
+        )
+        let window = try #require(controller.window)
+        let selectAll = KeyCombo.char("a", command: true)
+        func action(in window: NSWindow?) -> ShortcutAction? {
+            MenuBarKeys.sharedKeyAction(for: selectAll, model: model, in: window)
+        }
+
+        window.makeFirstResponder(nil)
+        #expect(action(in: window) == .selectAllPhotos)
+        #expect(action(in: nil) == .selectAllPhotos, "no window has the keys")
+        #expect(
+            MenuBarKeys.sharedKeyAction(for: .char("a", option: true, command: true), model: model, in: window) == nil,
+            "⌥⌘A is its menu item's",
+        )
+
+        let text = NSTextView(frame: CGRect(x: 0, y: 0, width: 100, height: 20))
+        window.contentView?.addSubview(text)
+        #expect(window.makeFirstResponder(text))
+        #expect(action(in: window) == nil, "a text field selects its text")
+        window.makeFirstResponder(nil)
+        text.removeFromSuperview()
+
+        model.openCommandPalette()
+        #expect(action(in: window) == nil, "the palette's field selects its text")
+        model.closeCommandPalette()
+        #expect(action(in: window) == .selectAllPhotos)
+
+        let other = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        other.isReleasedWhenClosed = false
+        #expect(action(in: other) == nil, "another window's")
+
+        var keymap = Keymap.standard
+        keymap.setCombos([.char("a", option: true, command: true)], for: .selectAllPhotos)
+        ShortcutKeymap.$override.withValue(keymap) {
+            #expect(action(in: window) == nil, "taken from Select All Photos in Settings")
+        }
     }
 }
