@@ -1245,6 +1245,10 @@ public final class EditorModel {
         if !ready, info != nil {
             info = nil
         }
+        // The sliders show no edit until the next photo's is read, rather than the photo left's.
+        if !ready, storedRecipe != EditRecipe() {
+            recipe = EditRecipe()
+        }
         if errorMessage != nil {
             errorMessage = nil
         }
