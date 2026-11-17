@@ -131,6 +131,34 @@ import AppKit
         window?.makeFirstResponder(grid.collectionView)
     }
 
+    /// The places of the photos selected in the grid, in its order.
+    var selectedPlaces: [Int] {
+        grid.selectedPlaces.sorted()
+    }
+
+    /// The middle of the cell of the photo at `place`, in the window, the cell scrolled into view first as a person
+    /// scrolls to it.
+    func pointOfPhoto(at place: Int) -> NSPoint? {
+        grid.reveal(place)
+        let collection = grid.collectionView
+        collection.layoutSubtreeIfNeeded()
+        guard let path = grid.path(of: place), let frame = collection.layoutAttributesForItem(at: path)?.frame
+        else { return nil }
+        return collection.convert(NSPoint(x: frame.midX, y: frame.midY), to: nil)
+    }
+
+    /// The middle of group `group`'s header, in the window, its first photo scrolled into view first.
+    func pointOfGroup(_ group: Int) -> NSPoint? {
+        guard model.groups.indices.contains(group), let first = model.groups[group].places.first else { return nil }
+        grid.reveal(first)
+        let collection = grid.collectionView
+        collection.layoutSubtreeIfNeeded()
+        guard let header = collection.supplementaryView(
+            forElementKind: NSCollectionView.elementKindSectionHeader, at: IndexPath(item: 0, section: group),
+        ) else { return nil }
+        return header.convert(NSPoint(x: header.bounds.midX, y: header.bounds.midY), to: nil)
+    }
+
     /// The groups the grid shows, by their names, each with its photos' names; one without a name when it isn't
     /// grouped.
     var groups: [(name: String, photos: [String])] {

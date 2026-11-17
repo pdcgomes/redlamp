@@ -9,7 +9,7 @@
     /// The import window (LIB-27), from copies of the run's raws in a folder of the run's own: never a
     /// card, and never this Mac's volumes, which the window is told to leave alone.
     enum ImportScenarios {
-        static let all: [Scenario] = [fromFolder, cardMoments, performance]
+        static let all: [Scenario] = [fromFolder, cardMoments, rangeSelection, performance]
 
         static let cardMoments = Scenario(
             "import.card-moments",
@@ -50,6 +50,75 @@
             try app.expect(
                 try app.inImportWindow { window in window.groups.flatMap(\.photos) } == order, "the same order",
             )
+            app.covered(.feature("library.import"), via: .mouse)
+        }
+
+        static let rangeSelection = Scenario(
+            "import.range-selection",
+            "In the import grid a click selects a photo, Shift-click every photo from it through another across "
+                + "moments, Command-click one fewer, a moment's header its photos and Shift-click on another header "
+                + "adds those, Shift with the arrow keys extends from the photo clicked, and Shift still extends "
+                + "from it once Group By has changed",
+            claims: [.feature("library.import")],
+        ) { app in
+            try app.openWorking()
+            let card = try ImportCardScratch(app)
+            defer { card.remove(app) }
+            try app.main { _ in ImportWindowController.ignoresVolumes = true }
+            try app.choose(.importPhotos)
+            try app.waitForImportWindow()
+            try app.run("adding the card") { _ in try? await ImportWindowController.current?.add(card: card.root) }
+            try app.wait("the card browsed", timeout: 60) { _ in
+                ImportWindowController.current.map { $0.isBrowsed && $0.photoCount == card.count } == true
+            }
+            try app.run("the photos grouped again") { _ in await ImportWindowController.current?.regrouped() }
+            let raws = Set(card.originals.values).count
+            guard raws >= 3 else { throw ScenarioFailure("The card needs three moments, and the run has \(raws) raws") }
+            try app.wait("a moment for each raw's copies", timeout: 30) { _ in
+                ImportWindowController.current.map { $0.grouping == "Moment" && $0.groups.count == raws } == true
+            }
+            // Each moment holds a raw's three copies: moment m is places 3m to 3m + 2.
+            let moment = { (index: Int) in Array(3 * index ... 3 * index + 2) }
+
+            try app.clickInImportGrid(photo: 1)
+            try app.expectImportSelection([1], "a click")
+            try app.clickInImportGrid(photo: 7, modifiers: .shift)
+            try app.expectImportSelection(Array(1 ... 7), "Shift-click, across the moments")
+            try app.clickInImportGrid(photo: 4, modifiers: .command)
+            try app.expectImportSelection([1, 2, 3, 5, 6, 7], "Command-click")
+            try app.clickInImportGrid(group: 2)
+            try app.expectImportSelection(moment(2), "a click on the third moment's header")
+            try app.clickInImportGrid(group: 0, modifiers: .shift)
+            try app.expectImportSelection(moment(0) + moment(2), "Shift-click on the first's")
+
+            try app.clickInImportGrid(photo: 3)
+            for _ in 0 ..< 2 {
+                try app.pressInImportWindow(KeyCombo(.right, shift: true))
+            }
+            try app.expectImportSelection([3, 4, 5], "Shift-→ twice")
+            for _ in 0 ..< 3 {
+                try app.pressInImportWindow(KeyCombo(.left, shift: true))
+            }
+            try app.expectImportSelection([2, 3], "Shift-← three times, from the photo clicked")
+
+            // Ungrouped, the photos are in another order: the selection and the photo clicked are followed by name.
+            let inMoments = try app.inImportWindow { window in window.groups.flatMap(\.photos) }
+            try app.chooseInImportWindow("None", inPopUp: "import.group-by")
+            try app.wait("the photos ungrouped") { _ in
+                ImportWindowController.current.map { $0.groups.count == 1 && $0.groups[0].name.isEmpty } == true
+            }
+            let ungrouped = try app.inImportWindow { window in window.groups.flatMap(\.photos) }
+            guard let clicked = ungrouped.firstIndex(of: inMoments[3]),
+                  let other = ungrouped.firstIndex(of: inMoments[2])
+            else { throw ScenarioFailure("The photos ungrouped aren't those in moments: \(ungrouped)") }
+            try app.expectImportSelection([clicked, other].sorted(), "the selection kept as the grid is reloaded")
+            let target = clicked + 2 < ungrouped.count ? clicked + 2 : clicked - 2
+            try app.clickInImportGrid(photo: target, modifiers: .shift)
+            try app.expectImportSelection(
+                Array(min(clicked, target) ... max(clicked, target)),
+                "Shift-click from the photo clicked before the reload",
+            )
+            try app.chooseInImportWindow("Moment", inPopUp: "import.group-by")
             app.covered(.feature("library.import"), via: .mouse)
         }
 
@@ -422,6 +491,60 @@
                 window.sendEvent(events[0])
             }
             pause(0.2)
+        }
+
+        /// Clicks the cell of the photo at `place` in the import grid, holding `modifiers`, as the mouse does, the cell
+        /// scrolled into view first.
+        func clickInImportGrid(photo place: Int, modifiers: NSEvent.ModifierFlags = []) throws {
+            try clickInImportGrid("the photo at \(place)", modifiers: modifiers) { $0.pointOfPhoto(at: place) }
+        }
+
+        /// Clicks group `group`'s header in the import grid, holding `modifiers`, as the mouse does.
+        func clickInImportGrid(group: Int, modifiers: NSEvent.ModifierFlags = []) throws {
+            try clickInImportGrid("group \(group)'s header", modifiers: modifiers) { $0.pointOfGroup(group) }
+        }
+
+        /// A press and a release at the point `where` finds in the import window, through the app as the mouse's
+        /// come, or to the view under it when the window isn't key and the view doesn't take a first click.
+        private func clickInImportGrid(
+            _ what: String, modifiers: NSEvent.ModifierFlags,
+            at point: @escaping @MainActor (ImportWindowController) -> NSPoint?,
+        ) throws {
+            try inImportWindow { controller in
+                guard let window = controller.window, let location = point(controller) else {
+                    throw ScenarioFailure("\(what) isn't in the import grid")
+                }
+                window.makeKeyAndOrderFront(nil)
+                let events = [NSEvent.EventType.leftMouseDown, .leftMouseUp].compactMap { type in
+                    NSEvent.mouseEvent(
+                        with: type, location: location, modifierFlags: modifiers,
+                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                        context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1,
+                    )
+                }
+                guard events.count == 2 else { throw ScenarioFailure("No mouse events for \(what)") }
+                let hit = window.contentView?.superview?.hitTest(location)
+                if window.isKeyWindow || hit?.acceptsFirstMouse(for: events[0]) == true {
+                    for event in events {
+                        NSApp.sendEvent(event)
+                    }
+                } else if let hit {
+                    hit.mouseDown(with: events[0])
+                    hit.mouseUp(with: events[1])
+                }
+            }
+            pause(0.1)
+        }
+
+        /// Waits for the import grid's selection to be the photos at `places`; a failure says what it is, or what
+        /// kept the wait from reading it.
+        func expectImportSelection(_ places: [Int], _ what: String) throws {
+            do {
+                try wait("\(what) selects \(places)") { _ in ImportWindowController.current?.selectedPlaces == places }
+            } catch {
+                guard let selected = try? inImportWindow({ $0.selectedPlaces }) else { throw error }
+                throw ScenarioFailure("\(what) selects \(selected), not \(places) (\(importWindowState()))")
+            }
         }
 
         /// The last click `clickInImportWindow` sent: what the window's hit test found under it, and whether the
