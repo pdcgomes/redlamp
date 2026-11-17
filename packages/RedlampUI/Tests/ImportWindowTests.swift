@@ -148,6 +148,72 @@ struct ImportWindowTests {
         #expect(await example() == "2026/2026-10-05 Wedding/IMG_0000.JPG", "the first photo chosen")
     }
 
+    @Test func `To's templates and keywords grow to two lines when their text needs them, as it's typed too`(
+    ) async throws {
+        let fixture = try await ImportWindowFixture.make()
+        defer { fixture.remove() }
+        let to = ImportDestinationViewController(model: fixture.model())
+        // The column at the width the window gives it, ordered out: CI's screen is smaller than this Mac's.
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 700), styleMask: [.titled], backing: .buffered,
+            defer: false,
+        )
+        window.contentView = to.view
+        let folders = try #require(ApplePhotosWindowTests.view("import.folders", in: to.view) as? NSTextField)
+        let keywords = try #require(ApplePhotosWindowTests.view("import.keywords", in: to.view) as? NSTokenField)
+        func height(_ field: NSTextField) -> CGFloat {
+            to.view.layoutSubtreeIfNeeded()
+            return field.frame.height
+        }
+        func type(_ text: String, in field: NSTextField) throws {
+            if field.currentEditor() == nil {
+                window.makeFirstResponder(field)
+            }
+            let editor = try #require(field.currentEditor() as? NSTextView)
+            editor.selectAll(nil)
+            editor.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+        }
+
+        let oneLine = height(folders)
+        // Auto Layout rounds a frame to the screen's pixels; a line can be a fraction of a point taller.
+        let twoLines = try oneLine + NSLayoutManager().defaultLineHeight(for: #require(folders.font))
+        try type("{date:yyyy}/{date:yyyy-MM-dd} {text:shoot}/{camera}", in: folders)
+        #expect(abs(height(folders) - twoLines) < 1, "a template longer than the column, as it's typed")
+        try type(String(repeating: "{date:yyyy-MM-dd}/", count: 8), in: folders)
+        #expect(abs(height(folders) - twoLines) < 1, "no more than two lines")
+        window.makeFirstResponder(nil)
+        #expect(abs(height(folders) - twoLines) < 1, "once typed")
+        try type("{name}", in: folders)
+        #expect(height(folders) == oneLine, "a short template on one line")
+
+        window.makeFirstResponder(nil)
+        let oneRow = height(keywords)
+        try type("Portugal,Lisbon,Alfama,Street,Night,Tram 28,Miradouro,Graça,Belém", in: keywords)
+        #expect(height(keywords) > oneRow, "keywords longer than the column, as they're typed")
+        window.makeFirstResponder(nil)
+        let twoRows = height(keywords)
+        #expect(twoRows > oneRow, "once they're tokens")
+        keywords.objectValue = [
+            "Portugal",
+            "Lisbon",
+            "Alfama",
+            "Street",
+            "Night",
+            "Tram 28",
+            "Miradouro",
+            "Graça",
+            "Belém",
+            "Sintra",
+            "Cascais",
+            "Porto",
+            "Coimbra",
+            "Évora",
+        ]
+        #expect(height(keywords) == twoRows, "no more than two lines")
+        keywords.objectValue = ["Lisbon"]
+        #expect(height(keywords) == oneRow, "a keyword on one line")
+    }
+
     @Test func `importing copies the photos chosen to the destination and the backup, with their choices, then shows them in Library, selected`(
     ) async throws {
         let fixture = try await ImportWindowFixture.make()

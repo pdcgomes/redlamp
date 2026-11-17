@@ -16,7 +16,7 @@ final class NamingTemplateField: NSObject, NSTextFieldDelegate {
     }
 
     let presets = NSPopUpButton()
-    let field = NSTextField()
+    let field = GrowingTextField()
     let tokens = NSPopUpButton(frame: .zero, pullsDown: true)
     let error = NSTextField(wrappingLabelWithString: "")
     /// The text each time it changes here: typed, a token put in, or a preset chosen, with the preset's options.
@@ -65,8 +65,9 @@ final class NamingTemplateField: NSObject, NSTextFieldDelegate {
     }()
 
     /// The same for a narrow column: the presets with the tokens beside them, then the field across the column, so
-    /// a template of dates has the room it needs; then the error.
+    /// a template of dates has the room it needs, on two lines when one won't hold it; then the error.
     private(set) lazy var columnRows: [NSView] = {
+        field.lines = 2
         let row = NSStackView(views: [presets, tokens])
         row.orientation = .horizontal
         row.spacing = 6
