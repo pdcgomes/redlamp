@@ -80,6 +80,11 @@ struct KeymapTests {
             .maskPanelAdjustments,
         ])
         #expect(Set(keymap.menuKeyTakers) == [.putBack, .maskPanelMasks, .maskPanelMask, .maskPanelAdjustments])
+        // In Library, where neither runs, Basic's item keeps ⌘1 and Masks Panel's doesn't.
+        #expect(keymap.menuCarriesKey(of: .panelBasic, in: .library))
+        #expect(!keymap.menuCarriesKey(of: .maskPanelMasks, in: .library))
+        #expect(!keymap.menuCarriesKey(of: .panelBasic, in: .develop, claimed: [.maskPanelMasks]))
+        #expect(keymap.menuCarriesKey(of: .maskPanelMasks, in: .develop, claimed: [.maskPanelMasks]))
         #expect(!keymap.moduleKeyedActions.contains(.putBack))
     }
 
