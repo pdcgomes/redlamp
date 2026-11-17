@@ -149,7 +149,8 @@ final class FilmstripCellView: NSView {
         badges.item = item
         badges.hasImage = thumbnail.contents != nil
         badges.uneditedPreview = showsUneditedPreview
-        layer?.opacity = item.metadata.flag == .reject ? 0.45 : 1
+        // Only the photo dims: a reject's mark keeps its strength, to read on a light photo.
+        thumbnail.opacity = item.metadata.flag == .reject ? 0.45 : 1
         setAccessibilityLabel(item.title)
         setAccessibilityIdentifier("filmstrip.\(item.accessibilityName)")
         describe()
@@ -342,15 +343,9 @@ final class FilmstripBadgesView: LayerDrawnView {
         if badges.metadata.mark, let mark = GridBadges.image(.mark, scale: scale) {
             context.draw(mark, in: CGRect(x: rect.width - 17, y: 1, width: 16, height: 16))
         }
-        switch badges.metadata.flag {
-        case .pick:
-            Symbol.draw("flag.fill", pointSize: 8, color: white, centeredAt: CGPoint(x: 9, y: 9), scale: scale)
-        case .reject:
-            Symbol.draw(
-                "xmark", pointSize: 8, weight: .bold, color: white, centeredAt: CGPoint(x: 9, y: 9), scale: scale,
-            )
-        case nil:
-            break
+        // The grid's, on its disc, which reads on a light photo as well as a dark one.
+        if let flag = badges.metadata.flag, let image = GridBadges.image(GridBadges.Kind(flag), scale: scale) {
+            drawUpright(image, in: CGRect(x: 1, y: 1, width: 16, height: 16), context)
         }
         // A focus stack suggested takes a stack document's place, as in the grid.
         let suggested = !badges.stack && isFocusSuggested
