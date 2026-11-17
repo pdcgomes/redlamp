@@ -36,7 +36,7 @@ The list
 : Your masks, newest first, each with a picture of what it covers; see [](#masking.manage).
 
 The selected mask
-: Its name with Invert and Reset, its Amount and Detail, its components, the selected component's own settings, then its Effect menu and its adjustments.
+: Its name with Invert, its Amount and Detail, its components, the selected component's own settings, then its Effect menu and its adjustments.
 
 ## Make a mask
 
@@ -88,7 +88,7 @@ Lightroom can start a new mask from an existing one. Redlamp can also add, subtr
 
 ## The mask's own sliders: Amount and Detail
 
-A mask's settings are headed by its name, with Invert and a Reset button beside it, and Amount and Detail directly under them. Both act on the mask as a whole:
+A mask's settings are headed by its name, with Invert beside it, and Amount and Detail directly under them. Both act on the mask as a whole:
 
 {{table: sliders maskAmount maskDetail}}
 

@@ -19,7 +19,7 @@ Move the pointer over a row and the photo shows what that mask covers, in the ov
 
 Click a mask to select it and see its settings. Double-click its name to rename it. Drag a mask onto another to reorder the list; since masks add up, the order doesn't change the photo. New masks are called Mask 1, Mask 2 and so on, and AI masks are named after what they found.
 
-The selected row, and the row under the pointer, has a menu button at its end. Right-clicking any row opens the same menu:
+Every row has a menu button at its end. Right-clicking a row opens the same menu:
 
 Rename…
 : Edit its name in place.

@@ -412,9 +412,8 @@ struct EdgeBrushSize: View {
     }
 }
 
-/// The photo's masks, newest first: each row with its coverage, its name, its eye, and on the
-/// selected row and the one under the pointer a menu of the context menu's actions. The canvas
-/// previews the mask under the pointer.
+/// The photo's masks, newest first: each row with its coverage, its name, its eye and a menu of
+/// the context menu's actions. The canvas previews the mask under the pointer.
 struct MaskList: View {
     @Environment(EditorModel.self) private var model
     @State private var hovered: UUID?
@@ -465,21 +464,19 @@ struct MaskList: View {
                     .help(mask
                         .isVisible ? "Hide mask. Option-click to show it alone" :
                         "Show mask. Option-click to show it alone")
-                    if selected || hovered == mask.id {
-                        Menu {
-                            actions(for: mask)
-                        } label: {
-                            Image(systemName: "ellipsis.circle").font(.system(size: 11))
-                        }
-                        .menuStyle(.button)
-                        .buttonStyle(.plain)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
-                        .foregroundStyle(Theme.secondaryLabel)
-                        .help("Rename, Duplicate, Save as Mask Preset, Delete")
-                        .accessibilityLabel("\(mask.name)'s actions")
-                        .automationIdentifier("masks.row.\(mask.id.uuidString).menu")
+                    Menu {
+                        actions(for: mask)
+                    } label: {
+                        Image(systemName: "ellipsis.circle").font(.system(size: 11))
                     }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .help("Rename, Duplicate, Save as Mask Preset, Delete")
+                    .accessibilityLabel("\(mask.name)'s actions")
+                    .automationIdentifier("masks.row.\(mask.id.uuidString).menu")
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 28)
@@ -569,7 +566,7 @@ struct MaskList: View {
     }
 }
 
-/// The selected mask's settings: its name with Invert and Reset, Amount and Detail (which act on
+/// The selected mask's settings: its name with Invert, Amount and Detail (which act on
 /// the whole mask), its components, the selected component's own settings, then its effect and
 /// adjustments.
 struct SelectedMaskEditor: View {
@@ -956,19 +953,8 @@ struct MaskEffectMenu: View {
     }
 }
 
-struct ResetMaskButton: View {
-    let mask: MaskOutline
-    @Environment(EditorModel.self) private var model
-
-    var body: some View {
-        Button("Reset") { model.resetMaskAdjustments(mask.id) }
-            .controlSize(.mini)
-            .automationIdentifier("masks.mask.reset")
-    }
-}
-
-/// Invert for the whole mask, and Reset, beside its name at the top of its settings. The AppKit
-/// panel keeps a mask's settings through an Invert, so this reads the mask's state from the model.
+/// Invert for the whole mask, beside its name at the top of its settings. The AppKit panel keeps
+/// a mask's settings through an Invert, so this reads the mask's state from the model.
 struct MaskHeaderControls: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
@@ -981,7 +967,6 @@ struct MaskHeaderControls: View {
             .font(Theme.labelFont)
             .help("Invert the whole mask")
             .automationIdentifier("masks.mask.invert")
-        ResetMaskButton(mask: mask)
     }
 }
 

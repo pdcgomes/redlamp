@@ -36,7 +36,7 @@
             let second = try app.selectedMask()
             try app.expect(first != second, "New Mask made no mask")
 
-            // The selected mask's menu, and Invert and Reset at the top of its settings.
+            // The selected mask's menu, and Invert at the top of its settings.
             try app.choose("Duplicate", inMenuOf: .row(second, "menu"))
             try app.wait("a copy") { $0.masks.count == 3 }
             let copy = try app.selectedMask()
@@ -45,9 +45,6 @@
             let inverted = try app.selectedMask()
             try app.tap(.identifier("masks.mask.invert"))
             try app.wait("Invert at the top of the mask") { $0.selectedMask?.inverted == false }
-            try app.set(.localExposure, 0.5)
-            try app.tap(.identifier("masks.mask.reset"))
-            try app.wait("Reset") { $0.sliderValue(.localExposure) == 0 }
             try app.set(.localExposure, 0.5)
             try app.choose("Reset Adjustments", inMenuOf: .row(inverted, "menu"))
             try app.wait("Reset Adjustments") { $0.sliderValue(.localExposure) == 0 }

@@ -3,7 +3,7 @@ deck = "Each mask has its own sliders, from Temp to Bloom, plus a colour tint an
 sources = [
   "`README.md`: Masking; Using Redlamp, slider gestures",
   "`packages/RedlampEngineAPI/Sources/ParameterID.swift` (localParameters), `ParameterSpec.swift`",
-  "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift` (SelectedMaskEditor, MaskEffectMenu, MaskColorSwatch, MaskCurvesEditor, ResetMaskButton)",
+  "`packages/RedlampUI/Sources/Inspector/MaskingPanel.swift` (SelectedMaskEditor, MaskEffectMenu, MaskColorSwatch, MaskCurvesEditor)",
   "`packages/RedlampEngineAPI/Sources/MaskEffects.swift` (MaskEffect.builtIn, MaskLayer.apply); `packages/RedlampUI/Sources/Model/EditorModel+MaskEffects.swift` (effectTitle, saveMaskEffect, deleteMaskEffect)",
   "`packages/RedlampUI/Sources/Inspector/PointColorControls.swift` (MaskPointColor, PointColorSwatches, PointColorVisualizeToggle); `packages/RedlampEngineAPI/Sources/MaskPresets.swift` (Even Skin Tone)",
   "`packages/RedlampUI/Sources/Model/EditorModel.swift`, `EditorModel+Shortcuts.swift`",
@@ -102,7 +102,7 @@ Lightroom's Effect menu has effects such as Dodge, Burn, Soften Skin and Teeth W
 - They take the same gestures as every slider: double-click a label or thumb to reset it, [[⇧]]-drag for fine control, click a value to type a new one or drag it to scrub it ([[⇧]] for fine control), and use the arrow keys to step it ([[⇧]] steps by ten).
 - With the Masking tool open, [[,]] and [[.]] select the previous and next of the mask's sliders, and [[-]] and [[=]] move the selected one ([[⇧]] for larger steps).
 - The overlay steps aside while you drag an adjustment or Amount, and comes back when you let go. Sliders that shape the mask itself, such as Feather, Detail and Refine, keep it showing.
-- Reset, beside the mask's name at the top of its settings, sets every adjustment back to 0, straightens the curves, removes its Point Color swatches, and returns Amount to 100 and Detail to 0. It leaves the components as they are. Reset Adjustments, in the mask's menu in the list, does the same.
+- Reset Adjustments, in the mask's menu in the list, sets every adjustment back to 0, straightens the curves, removes its Point Color swatches, and returns Amount to 100 and Detail to 0. It leaves the components as they are.
 
 ::: lightroom
 The sliders are Lightroom's, in Lightroom's order. Halation and Bloom have no Lightroom equivalent; they go with Redlamp's film effects.
