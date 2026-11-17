@@ -103,14 +103,20 @@ public final class ImportWindowController: NSWindowController, NSWindowDelegate 
         bar.orientation = .horizontal
         bar.spacing = 12
         bar.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 14, right: 16)
-        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        // The line takes the bar's room, so the buttons stay at its trailing edge.
+        status.setContentHuggingPriority(.init(1), for: .horizontal)
         status.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         progress.widthAnchor.constraint(equalToConstant: 160).isActive = true
 
-        let content = NSStackView(views: [split, NSBox.separator, bar])
+        let separator = NSBox.separator
+        let content = NSStackView(views: [split, separator, bar])
         content.orientation = .vertical
         content.spacing = 0
-        content.alignment = .width
+        content.alignment = .leading
+        // A stack view leaves its views their width: these take the window's, however it's resized.
+        for view in [split, separator, bar] {
+            view.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+        }
         split.setContentHuggingPriority(.defaultLow, for: .vertical)
         return content
     }
