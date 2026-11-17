@@ -114,6 +114,7 @@ extension FolderLibrary {
     func volumesChanged() {
         recheckRoots { [weak self] appeared in
             guard let self else { return }
+            takeInNestedRoots()
             watchRoots()
             guard let open = openFolder, let root = root(containing: open) else { return }
             if missing.contains(root.id) {

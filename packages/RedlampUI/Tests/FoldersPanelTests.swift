@@ -72,6 +72,24 @@ struct FoldersPanelTests {
         #expect(model.library.isExpanded(trip.url))
     }
 
+    @Test func `a folder added holding roots lists each of them once, inside it`() async throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        try photos(["2026/Beach/a.ARW", "2026/Party/b.ARW", "2026/Other/c.ARW"])
+        let year = root.appending(path: "2026")
+        let model = EditorModel(engine: StubEngine())
+        model.open([year.appending(path: "Beach"), year.appending(path: "Party")])
+        let (list, window) = showPanel(model)
+        defer { window.contentView = nil }
+        try await eventually { rows(list.folders).map(\.name) == ["Beach", "Party"] }
+
+        // Add Folder…'s panel hands over the folder holding both.
+        model.library.setExpanded(year, true)
+        model.open([year])
+        try await eventually { rows(list.folders).map(\.name) == ["2026", "Beach", "Other", "Party"] }
+        #expect(rows(list.folders).map(\.name) == ["2026", "Beach", "Other", "Party"])
+        #expect(rows(list.folders).filter(\.isRoot).map(\.name) == ["2026"])
+    }
+
     @Test func `the highlight moves to the folder that opens, not only its name`() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         try photos(["Trip/a.ARW", "Trip/Day 2/b.ARW"])

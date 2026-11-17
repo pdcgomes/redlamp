@@ -80,6 +80,14 @@ public final class LibraryService {
     @ObservationIgnored private var removal: Task<Void, Never>?
     /// Removals asked for before the library was open: done as it opens.
     @ObservationIgnored private var waitingRemovals: [(root: URL, kept: [URL])] = []
+    /// The roots Folders took into a root holding them (`takeIn`), by path, that the index may still keep as roots
+    /// of their own: kept for the next launch, as indexing the root holding them can outlast this one.
+    @ObservationIgnored private var takingIn: Set<String> = [] {
+        didSet {
+            defaults?.set(takingIn.isEmpty ? nil : takingIn.sorted(), forKey: Self.takingInKey)
+        }
+    }
+
     /// As it opens, the library takes out the roots Folders doesn't have (`start`).
     @ObservationIgnored private var removesOthers = false
     /// Called once a folder has left the library, however it was taken out (`remove`, and as the library opens):
@@ -121,6 +129,8 @@ public final class LibraryService {
     static let damagedKey = "library.indexDamaged"
     /// The defaults key keeping the photos whose XMP the app quit before syncing, for the next launch.
     static let xmpWaitingKey = "library.xmpWaiting"
+    /// The defaults key keeping the roots Folders took in that the index hadn't yet (`takingIn`).
+    static let takingInKey = "library.takingIn"
 
     /// `sidecars` is the placement Folders and the editor read and write sidecars through; `thumbnail`
     /// the engine's `decodeThumbnail(for:maxPixelSize:)`, and `photos` Photos' images, which the store's of photos
@@ -143,6 +153,7 @@ public final class LibraryService {
         if let defaults, let saved = SidecarLocator.saved(in: defaults) {
             sidecars.locator = saved
         }
+        takingIn = Set(defaults?.stringArray(forKey: Self.takingInKey) ?? [])
         filters.service = self
     }
 
@@ -427,11 +438,19 @@ extension LibraryService {
         let report: @Sendable (Progress) async -> Void = { [weak self] progress in
             await self?.progressed(progress)
         }
-        let removal = removal
+        let (removal, takingIn) = (removal, takingIn)
         following = Task.detached(priority: .utility) {
             await removal?.value
-            await Self.follow(paths, core: core, report: report)
+            await Self.follow(paths, takingIn: takingIn, core: core, report: report)
         }
+    }
+
+    /// Has the library take in `roots`, which Folders took into a root it follows that holds them: once that root is
+    /// indexed, the index keeps their folders as its own rather than as roots of their own, with their photos and what
+    /// it keeps of them (`LibraryRoots.remove(_:keeping:)`). Nothing leaves the library. Done as the roots are next
+    /// followed.
+    func takeIn(_ roots: [URL]) {
+        takingIn.formUnion(Self.paths(roots))
     }
 
     /// Takes `root` out of the library as Folders loses it, keeping the folders of `roots`, those Folders keeps:
@@ -525,17 +544,17 @@ extension LibraryService {
         case indexed(String)
         /// Where the roots keep their sidecars, once new roots' placements are chosen.
         case placed(SidecarLocator)
+        /// The index took in these roots (`takeIn`).
+        case takenIn([String])
     }
 
     private nonisolated static func follow(
-        _ paths: [String], core: LibraryCore, report: @escaping @Sendable (Progress) async -> Void,
+        _ paths: [String], takingIn: Set<String>, core: LibraryCore,
+        report: @escaping @Sendable (Progress) async -> Void,
     ) async {
         await core.recovered()
         let roots = paths.filter { !isInICloudDrive($0) }
-        let known = await Set((try? core.index.read { reader -> [String] in
-            let removed = try Set(reader.removedRoots().values)
-            return try reader.roots().map(\.path).filter { !removed.contains($0) }
-        }) ?? [])
+        let known = await indexRoots(core)
         let added = roots.filter { !known.contains($0) }
         if !added.isEmpty {
             for await event in core.indexer.index(added.map { URL(fileURLWithPath: $0, isDirectory: true) }) {
@@ -546,10 +565,55 @@ extension LibraryService {
                 await report(.placed(locator))
             }
         }
+        // Once the roots holding them are indexed: taking one in makes the root holding it one of the index's, which
+        // following it then wouldn't index.
+        if !Task.isCancelled {
+            await takeIn(takingIn, by: roots, following: paths, core: core, report: report)
+        }
         Task.detached(priority: .utility) { _ = try? await core.roots.bookmark() }
         guard !Task.isCancelled else { return }
         for await event in core.tracker.start(roots.map { URL(fileURLWithPath: $0, isDirectory: true) }) {
             await followed(event, core: core, report: report)
+        }
+    }
+
+    /// The paths of the roots the index has, but those being taken out.
+    private nonisolated static func indexRoots(_ core: LibraryCore) async -> Set<String> {
+        await Set((try? core.index.read { reader -> [String] in
+            let removed = try Set(reader.removedRoots().values)
+            return try reader.roots().map(\.path).filter { !removed.contains($0) }
+        }) ?? [])
+    }
+
+    /// Takes in the roots of `takingIn` that one of `roots`, those indexed, holds and that `paths`, those followed,
+    /// don't have: each stays in the index as the holding root's folders. One whose holding root isn't in the index,
+    /// as when its volume didn't answer, waits.
+    private nonisolated static func takeIn(
+        _ takingIn: Set<String>, by roots: [String], following paths: [String], core: LibraryCore,
+        report: @Sendable (Progress) async -> Void,
+    ) async {
+        guard !takingIn.isEmpty else { return }
+        let index = await indexRoots(core)
+        let indexed = roots.filter(index.contains)
+        let held = takingIn.filter { path in
+            !paths.contains(path) && indexed.contains { path.hasPrefix($0 == "/" ? $0 : $0 + "/") }
+        }
+        guard !held.isEmpty else { return }
+        let kept = paths.map { URL(fileURLWithPath: $0, isDirectory: true) }
+        var taken: [String] = []
+        for path in held.sorted() {
+            do {
+                try await core.roots.remove(URL(fileURLWithPath: path, isDirectory: true), keeping: kept)
+                taken.append(path)
+            } catch {
+                let reason = String(describing: error)
+                Self.log.error("A folder taken into another in Folders stays a root: \(reason, privacy: .public)")
+            }
+        }
+        guard !taken.isEmpty else { return }
+        await report(.takenIn(taken))
+        if let locator = try? await core.sidecars.locator() {
+            await report(.placed(locator))
         }
     }
 
@@ -619,6 +683,9 @@ extension LibraryService {
             notify()
         case let .placed(locator):
             placed(locator)
+            notify()
+        case let .takenIn(paths):
+            takingIn.subtract(paths)
             notify()
         }
     }

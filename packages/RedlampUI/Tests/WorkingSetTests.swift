@@ -48,6 +48,88 @@ struct WorkingSetTests {
         #expect(relaunched.root(containing: root.appending(path: "Trips/Rome/a.ARW"))?.name == "Trips")
     }
 
+    @Test func `a folder added takes in the roots inside it, saved in its place until its bookmark is made`(
+    ) async throws {
+        defer { cleanUp() }
+        try photos(["2026/Beach/a.ARW", "2026/Party/b.ARW", "2026/Other/c.ARW", "Family/d.ARW"])
+        let year = root.appending(path: "2026")
+        let beach = year.appending(path: "Beach")
+        let model = EditorModel(engine: StubEngine(), library: FolderLibrary(defaults: defaults))
+        let library = model.library
+        model.open([beach, year.appending(path: "Party"), root.appending(path: "Family")])
+        try await eventually { library.count == 1 && library.roots.allSatisfy { $0.bookmark != nil } }
+        let before = FolderLibrary(defaults: defaults).roots
+
+        #expect(library.add([year]).map(\.name) == ["2026"])
+        #expect(library.roots.map(\.name) == ["Family", "2026"])
+        #expect(library.root(containing: beach)?.name == "2026")
+        #expect(library.openFolder?.path == beach.standardizedFileURL.path, "the folder open stays open")
+        #expect(model.folder?.path == beach.standardizedFileURL.path && library.count == 1)
+        #expect(Set(FolderLibrary(defaults: defaults).roots) == Set(before), "saved as they were until 2026's bookmark")
+
+        try await eventually { FolderLibrary(defaults: defaults).roots.map(\.name) == ["Family", "2026"] }
+        let saved = FolderLibrary(defaults: defaults).roots
+        #expect(saved.map(\.name) == ["Family", "2026"] && saved.allSatisfy { $0.bookmark != nil })
+        #expect(Set(library.accessing.keys) == Set(saved.map(\.id)), "the roots taken in have their access stopped")
+        #expect(library.count == 1)
+    }
+
+    @Test func `a folder added with a folder inside it adds the outer one alone`() {
+        defer { cleanUp() }
+        let library = FolderLibrary(defaults: defaults)
+        let added = library.add([root.appending(path: "Trips/Rome"), root.appending(path: "Trips")])
+        #expect(added.map(\.name) == ["Trips"])
+        #expect(library.roots.map(\.name) == ["Trips"])
+        #expect(library.bookmarking.count == 1 && library.savedRoots.isEmpty)
+    }
+
+    @Test func `a working set a launch kept with roots inside another takes them in once it's found`() async throws {
+        defer { cleanUp() }
+        try photos(["2026/Beach/a.ARW", "2026/Party/b.ARW", "Gone/Moved/c.ARW"])
+        let year = WorkingFolder.make(for: root.appending(path: "2026"))
+        let beach = WorkingFolder.make(for: root.appending(path: "2026/Beach"))
+        let party = WorkingFolder.make(for: root.appending(path: "2026/Party"))
+        let gone = WorkingFolder.make(for: root.appending(path: "Gone"))
+        let moved = WorkingFolder.make(for: root.appending(path: "Gone/Moved"))
+        // Moved leaves Gone, which goes: Moved is found where its bookmark leads, outside any root.
+        try FileManager.default.moveItem(at: root.appending(path: "Gone/Moved"), to: root.appending(path: "Moved"))
+        try FileManager.default.removeItem(at: root.appending(path: "Gone"))
+        try defaults.set(JSONEncoder().encode([beach, party, year, gone, moved]), forKey: "folders.roots")
+        defaults.set(beach.path, forKey: "folders.open")
+
+        let library = FolderLibrary(defaults: defaults)
+        #expect(library.roots.count == 5)
+        var reopened: URL?
+        library.restore { folder, _ in reopened = folder }
+        try await eventually { reopened != nil }
+        #expect(library.roots.map(\.id) == [year.id, gone.id, moved.id])
+        #expect(library.missing == [gone.id])
+        #expect(
+            library.roots.last.map { $0.name == "Moved" && !$0.path.contains("/Gone/") } == true,
+            "found outside Gone",
+        )
+        #expect(reopened?.path == beach.path, "the folder open reopens, in 2026")
+        #expect(FolderLibrary(defaults: defaults).roots.map(\.id) == [year.id, gone.id, moved.id])
+    }
+
+    @Test func `roots a volume brings back inside another are taken in`() async throws {
+        defer { cleanUp() }
+        let year = WorkingFolder(path: root.appending(path: "2026").standardizedFileURL.path)
+        let beach = WorkingFolder(path: root.appending(path: "2026/Beach").standardizedFileURL.path)
+        try defaults.set(JSONEncoder().encode([beach, year]), forKey: "folders.roots")
+        let library = FolderLibrary(defaults: defaults)
+        var restored = false
+        library.restore { _, _ in restored = true }
+        try await eventually { restored }
+        #expect(library.missing == [beach.id, year.id], "both away with their volume, neither taken in")
+
+        try photos(["2026/Beach/a.ARW"])
+        library.volumesChanged()
+        try await eventually { library.roots.count == 1 }
+        #expect(library.roots.map(\.id) == [year.id] && library.missing.isEmpty)
+        #expect(FolderLibrary(defaults: defaults).roots.map(\.id) == [year.id])
+    }
+
     @Test func `the folder earlier versions remembered becomes the first root`() {
         defer { cleanUp() }
         defaults.set(root.path, forKey: "lastFolder")

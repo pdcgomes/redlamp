@@ -114,6 +114,119 @@
             try app.wait("the photos folder again", timeout: 20) { $0.folder == photos && !$0.library.isListing }
         }
 
+        /// Add Folder… with the folder holding two shoots Folders has, as imports leave them (#555): the shoots
+        /// leave
+        /// Folders' top level and are listed once, inside it, and their photos stay in the library with their rating,
+        /// keyword and collection, a shoot Folders didn't have joining them.
+        static let addedFolderTakesIn = Scenario(
+            "library.add-folder-takes-in",
+            "Add Folder… with a folder holding folders of Folders: they're listed once, inside it, and their photos "
+                + "stay in the library with their rating, keyword and collection",
+            claims: [.feature("library.folders"), .feature("library.collections")],
+        ) { app in
+            let scratch = try SourcesScratch(
+                app, photos: [
+                    "Beach/Beach A.jpg",
+                    "Beach/Beach B.jpg",
+                    "Party/Party A.jpg",
+                    "Other/Other A.jpg",
+                ],
+            )
+            let tag = scratch.folder.lastPathComponent.suffix(8)
+            let collection = "Shoots \(tag)"
+            let keyword = "Shoot \(tag)"
+            try SidecarStore().save(
+                Sidecar(recipe: EditRecipe(), metadata: PhotoMetadata(
+                    rating: 4, keywords: [keyword], collections: [collection],
+                )),
+                for: scratch.photo("Beach/Beach A.jpg"),
+            )
+            defer {
+                app.removeCollectionsMade()
+                // The shoots are roots of their own until the folder holding them takes them in.
+                let inside = scratch.folder.standardizedFileURL.path + "/"
+                try? app.main { model in
+                    for root in model.library.roots where root.path.hasPrefix(inside) {
+                        model.library.remove(root)
+                    }
+                }
+                scratch.remove(app)
+            }
+            let year = scratch.folder
+            let shoots = ["Beach", "Party"].map { year.appending(path: $0, directoryHint: .isDirectory) }
+            /// Develop's column keeps its Folders rows while Library's is shown, only transparent.
+            @MainActor func rows(_ folder: URL) -> Int {
+                let identifier = "folders." + folder.standardizedFileURL.path
+                guard let content = Views.editorWindow?.contentView else { return 0 }
+                return Views.all(NSView.self, in: content).count { view in
+                    view.accessibilityIdentifier() == identifier && view.isDrawn
+                }
+            }
+
+            // Two shoots in Folders, as two imports showing their photos leave them, indexed.
+            let service = try app.main { $0.library.service }
+            guard let service else { throw ScenarioSkip("the library is off") }
+            try app.main { model in
+                model.expandedSidebarSections.insert(.folders)
+                model.open(shoots)
+                model.showLibrary(.grid)
+            }
+            let indexed = Flag()
+            try app.run("the library to index both shoots", timeout: 90) { _ in
+                for _ in 0 ..< 900 {
+                    var both = true
+                    for shoot in shoots where await !service.canShow(shoot, includingSubfolders: true) {
+                        both = false
+                    }
+                    if both {
+                        indexed.set()
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
+            try app.expect(indexed.isSet, "the library didn't index the shoots")
+            try app.wait("the shoot's collection counted", timeout: 60) { model in
+                model.librarySources.recount()
+                return model.librarySources.count(of: .collection(CollectionPath(collection)!)) == 1
+            }
+            let all = try app.main { $0.librarySources.count(of: .allPhotographs) ?? 0 }
+            try app.wait("each shoot's row in the Folders panel") { _ in shoots.allSatisfy { rows($0) == 1 } }
+
+            // Add Folder… with the folder holding them, as its panel hands it over, its row open.
+            try app.main { model in
+                model.library.setExpanded(year, true)
+                model.open([year])
+            }
+            try app
+                .wait(
+                    "the shoots out of Folders' top level, each listed once inside the folder",
+                    timeout: 30,
+                ) { model in
+                    model.library.roots.map(\.path).filter { $0.hasPrefix(year.standardizedFileURL.path) }
+                        == [year.standardizedFileURL.path]
+                        && rows(year) == 1 && shoots.allSatisfy { rows($0) == 1 }
+                }
+            try app
+                .wait("All Photographs counting every photo once, the other shoot's with them", timeout: 90) { model in
+                    model.librarySources.recount()
+                    return model.librarySources.count(of: .allPhotographs) == all + 1
+                        && model.librarySources.count(of: .collection(CollectionPath(collection)!)) == 1
+                }
+            let found = try app.photosFound("kw:\"\(keyword)\" rating>=4")
+            try app.expect(found == 1, "the rated photo with its keyword and stars: \(found)")
+            app.covered(.feature("library.folders"), via: .model)
+            app.covered(.feature("library.collections"), via: .model)
+
+            // As the run had it.
+            let photos = app.photos
+            try app.main { model in
+                model.showFolder(photos)
+                model.showModule(.develop)
+            }
+            try app.wait("the photos folder again", timeout: 20) { $0.folder == photos && !$0.library.isListing }
+        }
+
         /// ⌘Z after Remove from Folders: a culling change made in a folder that then left the library from its root's
         /// menu reaches none of the photos of a folder added after it, which SQLite would have given its photos' IDs.
         static let removedFolderUndo = Scenario(
