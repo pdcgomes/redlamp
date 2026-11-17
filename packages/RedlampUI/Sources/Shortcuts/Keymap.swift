@@ -101,10 +101,11 @@ public struct Keymap: Sendable {
     // MARK: - Conflicts
 
     /// What giving `combo` to `action` would collide with, before anything is saved: another action that has it
-    /// where both run, an action that answers it as its key with ⇧, or the Mac's and the app's own keys. Actions that
-    /// share keys (`ShortcutAction.givesKeys`) don't collide.
+    /// where both run, an action that answers it as its key with ⇧, or the Mac's and the app's own keys, but for the
+    /// action one of them is shared with (`sharedWithText`). Actions that share keys (`ShortcutAction.givesKeys`)
+    /// don't collide.
     public func conflicts(assigning combo: KeyCombo, to action: ShortcutAction) -> [KeyConflict] {
-        if let use = Self.reserved[combo] {
+        if let use = Self.reserved[combo], Self.sharedWithText[combo] != action {
             return [.reserved(use)]
         }
         let taken = actions(with: combo).filter { $0 != action && $0.contends(with: action) }
@@ -159,6 +160,11 @@ public struct Keymap: Sendable {
         KeyCombo(.up, control: true): "Mission Control",
         KeyCombo(.down, control: true): "Mission Control",
     ]
+
+    /// The keys of `reserved` an action has as well (#543): the Edit menu's item keeps the key for text, and the
+    /// action takes it wherever else the editor has the keys (`MenuBarKeys`), as ⌘A selects every photo in
+    /// Lightroom Classic. No other action can take it.
+    public static let sharedWithText: [KeyCombo: ShortcutAction] = [.char("a", command: true): .selectAllPhotos]
 }
 
 /// What a key would collide with if an action took it (`Keymap.conflicts`).

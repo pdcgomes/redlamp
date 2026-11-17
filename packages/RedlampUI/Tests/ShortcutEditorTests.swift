@@ -56,6 +56,23 @@ struct ShortcutEditorTests {
         #expect(editor.keymap == .standard)
     }
 
+    @Test func `⌘A, removed from Select All Photos, can be given back to it and to no other action`() {
+        let editor = editor()
+        let selectAll = KeyCombo.char("a", command: true)
+        editor.remove(selectAll, from: .selectAllPhotos)
+        #expect(editor.keymap.combos(for: .selectAllPhotos) == [.char("a", option: true, command: true)])
+
+        editor.record(.flagPick, adding: true)
+        editor.press(selectAll)
+        #expect(editor.pending?.conflicts == [.reserved("Select All")])
+        editor.cancel()
+
+        editor.record(.selectAllPhotos, adding: true)
+        editor.press(selectAll)
+        #expect(editor.pending == nil)
+        #expect(editor.keymap == .standard)
+    }
+
     @Test func `pressing the key the action already has changes nothing`() {
         let editor = editor()
         editor.record(.flagPick)

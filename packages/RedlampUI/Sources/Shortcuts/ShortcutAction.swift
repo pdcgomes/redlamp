@@ -564,8 +564,10 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .syncSettingsAgain: [.char("s", shift: true, option: true, command: true)]
         case .undoSync: []
         case .toggleAutoSync: [.char("a", shift: true, option: true, command: true)]
-        // Lightroom's ⌘A and ⌘D with Option: without it they would take Select All from text fields.
-        case .selectAllPhotos: [.char("a", option: true, command: true)]
+        // Lightroom's ⌘A and ⌘D with Option, which their menu items carry: the Edit menu's Select All carries ⌘A, and
+        // keeps it for text fields. ⌘A is Select All Photos' as well wherever else the editor has the keys
+        // (`Keymap.sharedWithText`, #543).
+        case .selectAllPhotos: [.char("a", option: true, command: true), .char("a", command: true)]
         case .deselectOtherPhotos: [.char("d", option: true, command: true)]
         case .pasteSettings: [.char("v", shift: true, command: true)]
         case .pastePrevious: [.char("v", option: true, command: true)]
