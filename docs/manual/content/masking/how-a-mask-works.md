@@ -72,7 +72,7 @@ The button at the end of a component's row has Delete, and for an AI mask Refine
 
 Each component has an **Invert** checkbox, which makes it cover everything outside its shape: tick it on a radial gradient around a face to edit everything but the face.
 
-To invert a whole mask, tick **Invert** beside its name at the top of its settings, or choose Invert from its menu in the list of masks. The mask then covers everything its components leave out, however many there are. Duplicate and Invert, in the same menu, makes an inverted copy and leaves the original as it is.
+To invert a whole mask, tick **Invert** beside its name at the top of its settings. The mask then covers everything its components leave out, however many there are. Duplicate and Invert, in its menu in the list of masks, makes an inverted copy and leaves the original as it is.
 
 ::: note
 A mask's Invert is kept with the edit. An earlier Redlamp keeps it too, but draws the mask uninverted.

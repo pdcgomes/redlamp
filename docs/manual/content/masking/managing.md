@@ -24,9 +24,6 @@ The selected row, and the row under the pointer, has a menu button at its end. R
 Rename…
 : Edit its name in place.
 
-Invert
-: Invert the whole mask; the item is ticked while it's inverted.
-
 Duplicate
 : A copy with the same components and adjustments, named after the original with Copy at the end.
 

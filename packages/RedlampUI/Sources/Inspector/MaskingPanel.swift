@@ -557,7 +557,6 @@ struct MaskList: View {
             draftName = mask.name
             renaming = mask.id
         }
-        Toggle("Invert", isOn: Binding(get: { mask.inverted }, set: { model.setMaskInverted(mask.id, $0) }))
         Button("Duplicate") { model.duplicateMask(mask.id) }
         Button("Duplicate and Invert") { model.duplicateMask(mask.id, inverted: true) }
         Button("Reset Adjustments") { model.resetMaskAdjustments(mask.id) }
@@ -978,8 +977,8 @@ struct MaskHeaderControls: View {
         let inverted = model.maskOutlines.first { $0.id == mask.id }?.inverted ?? mask.inverted
         Toggle("Invert", isOn: Binding(get: { inverted }, set: { model.setMaskInverted(mask.id, $0) }))
             .toggleStyle(.checkbox)
-            .controlSize(.mini)
-            .font(Theme.captionFont)
+            .controlSize(.small)
+            .font(Theme.labelFont)
             .help("Invert the whole mask")
             .automationIdentifier("masks.mask.invert")
         ResetMaskButton(mask: mask)
@@ -1076,8 +1075,8 @@ struct ComponentRow: View {
                 set: { model.setComponentInverted(component.id, in: mask.id, $0) },
             ))
             .toggleStyle(.checkbox)
-            .controlSize(.mini)
-            .font(Theme.captionFont)
+            .controlSize(.small)
+            .font(Theme.labelFont)
             .automationIdentifier("masks.component.\(component.id.uuidString).invert")
             Menu {
                 refinements

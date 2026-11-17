@@ -43,10 +43,8 @@
             try app.choose("Duplicate and Invert", inMenuOf: .row(copy, "menu"))
             try app.wait("an inverted copy") { $0.masks.count == 4 && $0.selectedMask?.inverted == true }
             let inverted = try app.selectedMask()
-            try app.choose("Invert", inMenuOf: .row(inverted, "menu"))
-            try app.wait("Invert in the mask's menu") { $0.selectedMask?.inverted == false }
             try app.tap(.identifier("masks.mask.invert"))
-            try app.wait("Invert at the top of the mask") { $0.selectedMask?.inverted == true }
+            try app.wait("Invert at the top of the mask") { $0.selectedMask?.inverted == false }
             try app.set(.localExposure, 0.5)
             try app.tap(.identifier("masks.mask.reset"))
             try app.wait("Reset") { $0.sliderValue(.localExposure) == 0 }
