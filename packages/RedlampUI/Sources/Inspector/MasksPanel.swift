@@ -367,7 +367,8 @@ struct MaskMessages: View {
     }
 }
 
-/// Add, Subtract and Intersect, each opening the picker for the mask's components.
+/// Add, Subtract and Intersect, sharing the row's width, each opening the picker for the mask's
+/// components.
 struct ComponentOperationButtons: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
@@ -379,7 +380,9 @@ struct ComponentOperationButtons: View {
                 Button {
                     picking = operation
                 } label: {
-                    Label(operation.name, systemImage: operation.symbol).font(Theme.labelFont)
+                    Label(operation.name, systemImage: operation.symbol)
+                        .font(Theme.labelFont)
+                        .frame(maxWidth: .infinity)
                 }
                 .controlSize(.small)
                 .automationIdentifier("masks.\(operation.rawValue)")
