@@ -29,12 +29,37 @@ public extension EditorModel {
     /// it holds the drawing hint, a message or the People or Landscape picker, which its header's
     /// New Mask can open while it's collapsed.
     func isExpanded(_ panel: MaskPanelID) -> Bool {
-        if panel == .masks, drawingKind != nil || isRefiningEdges || peoplePicker != nil || landscapePicker != nil
+        (panel == .masks && masksPanelHeldOpen) || expandedMaskPanels.contains(panel)
+    }
+
+    /// Whether the Masks panel has something to show that keeps it open, whatever its header says.
+    var masksPanelHeldOpen: Bool {
+        drawingKind != nil || isRefiningEdges || peoplePicker != nil || landscapePicker != nil
             || aiMaskProgress != nil || maskMessage != nil || pendingModel != nil || offeredModels != nil
-            || modelDownloadProgress != nil {
-            return true
+            || modelDownloadProgress != nil
+    }
+
+    /// Whether one of the Masking tool's panels is on screen to expand or collapse: the selected mask's two
+    /// while a mask is selected and no picker has put them away, and Masks unless it's held open.
+    func canToggle(_ panel: MaskPanelID) -> Bool {
+        guard activeTool == .masking else { return false }
+        switch panel {
+        case .masks: return !masksPanelHeldOpen
+        case .mask, .adjustments: return selectedOutline != nil && peoplePicker == nil && landscapePicker == nil
         }
-        return expandedMaskPanels.contains(panel)
+    }
+
+    /// Opens or closes one of the Masking tool's panels from its key, as `revealPanel` does a Develop panel, and
+    /// whether it could.
+    func revealMaskPanel(_ panel: MaskPanelID) -> Bool {
+        guard canToggle(panel) else { return false }
+        rightPanelVisible = true
+        if expandedMaskPanels.contains(panel) {
+            expandedMaskPanels.remove(panel)
+        } else {
+            toggleMaskPanel(panel, solo: soloMode)
+        }
+        return true
     }
 
     /// What the mask's adjustments have changed, in the Adjustments panel's order: the sliders

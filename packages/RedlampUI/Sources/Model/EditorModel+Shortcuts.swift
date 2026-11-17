@@ -98,6 +98,9 @@ public extension EditorModel {
         case .panelTransform: revealPanel(.transform)
         case .panelEffects: revealPanel(.effects)
         case .panelCalibration: revealPanel(.calibration)
+        case .maskPanelMasks: return revealMaskPanel(.masks)
+        case .maskPanelMask: return revealMaskPanel(.mask)
+        case .maskPanelAdjustments: return revealMaskPanel(.adjustments)
         // Navigation
         case .previousPhoto: selectPrevious()
         case .nextPhoto: selectNext()
@@ -289,6 +292,9 @@ public extension EditorModel {
         case .maskOverlay, .maskOverlayColor: return masking || activeTool == .crop
         case .maskPins: return masking || activeTool == .heal
         case .deleteMask: return (masking && selectedMaskID != nil) || (activeTool == .heal && selectedSpotID != nil)
+        case .maskPanelMasks: return canToggle(.masks)
+        case .maskPanelMask: return canToggle(.mask)
+        case .maskPanelAdjustments: return canToggle(.adjustments)
         default:
             return false
         }

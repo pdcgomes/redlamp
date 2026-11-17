@@ -173,6 +173,9 @@ extension ShortcutAction {
         .maskOverlayColor: ["mask", "overlay", "color"],
         .maskPins: ["mask", "pins", "handles", "spots", "outlines"],
         .deleteMask: ["mask", "remove"],
+        .maskPanelMasks: ["masking", "list", "collapse", "expand"],
+        .maskPanelMask: ["masking", "components", "collapse", "expand"],
+        .maskPanelAdjustments: ["masking", "local", "collapse", "expand"],
         .rating0: ["stars", "rating", "unrate", "no stars"],
         .rating1: ["stars", "rating", "one"],
         .rating2: ["stars", "rating", "two"],
@@ -354,6 +357,9 @@ extension ShortcutAction {
         case .maskOverlayColor: "paintpalette"
         case .maskPins: "mappin"
         case .deleteMask: "trash"
+        case .maskPanelMasks: MaskPanelID.masks.symbol
+        case .maskPanelMask: MaskPanelID.mask.symbol
+        case .maskPanelAdjustments: MaskPanelID.adjustments.symbol
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating: "star"
         case .flagPick: "flag"
         case .flagReject: "xmark.circle"

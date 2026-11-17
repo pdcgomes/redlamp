@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import RedlampEngineAPI
 import Testing
 @_spi(Harness) @testable import RedlampUI
 
@@ -73,8 +74,12 @@ struct KeymapTests {
             #expect(!keymap.menuCarriesKey(of: .moveToTrash, in: module, claimed: [.putBack]))
             #expect(keymap.menuCarriesKey(of: .putBack, in: module, claimed: [.putBack]))
         }
-        #expect(keymap.sharedKeyActions == [.moveToTrash, .putBack])
-        #expect(keymap.menuKeyTakers == [.putBack])
+        // With the first three panels' keys, which the Masking tool's panels share (UX-17).
+        #expect(Set(keymap.sharedKeyActions) == [
+            .moveToTrash, .putBack, .panelBasic, .panelToneCurve, .panelColorMixer, .maskPanelMasks, .maskPanelMask,
+            .maskPanelAdjustments,
+        ])
+        #expect(Set(keymap.menuKeyTakers) == [.putBack, .maskPanelMasks, .maskPanelMask, .maskPanelAdjustments])
         #expect(!keymap.moduleKeyedActions.contains(.putBack))
     }
 
@@ -101,7 +106,9 @@ struct KeymapTests {
         #expect(keymap.resolve(.char("1", command: true), in: .develop)?.action == .labelRed)
         #expect(keymap.resolve(.char("5", command: true), in: .library)?.action == .labelPurple)
         #expect(keymap.resolve(.char("0", command: true), in: .library)?.action == .clearLabel)
-        #expect(keymap.resolve(.char("1", command: true, control: true), in: .develop)?.action == .panelBasic)
+        let controlOne = KeyCombo.char("1", command: true, control: true)
+        #expect(keymap.resolve(controlOne, in: .develop, claims: { _ in false })?.action == .panelBasic)
+        #expect(keymap.resolve(controlOne, in: .develop)?.action == .maskPanelMasks, "in the Masking tool")
         #expect(keymap.resolve(.char("t"), in: .library)?.action == .toggleMark)
         #expect(keymap.resolve(.char("g", command: true), in: .library)?.action == .importPhotos)
         #expect(keymap.resolve(.char("b", command: true), in: .library)?.action == .addToTargetCollection)
@@ -257,7 +264,7 @@ struct PanelKeyTests: PaletteTesting {
             for arrangement in 0 ..< 3 {
                 for (action, panel) in Self.panels {
                     let key = try #require(action.combos.first, "\(preset.title) gives \(action) no key")
-                    let resolved = ShortcutAction.resolve(key, in: .develop)
+                    let resolved = model.action(forKey: key)
                     #expect(resolved?.action == action, "\(key.display) in \(preset.title)")
                     model.rightPanelVisible = arrangement != 1
                     model.soloMode = arrangement == 2
@@ -268,5 +275,68 @@ struct PanelKeyTests: PaletteTesting {
                 }
             }
         }
+    }
+}
+
+/// In the Masking tool the first three panels' keys open and close its own panels, Masks, the selected mask and its
+/// Adjustments, rather than leaving the tool for Basic, Tone Curve or Color Mixer; elsewhere they're the Develop
+/// panels' (UX-17).
+@MainActor
+struct MaskPanelKeyTests: PaletteTesting {
+    private static let panels: [(ShortcutAction, ShortcutAction, MaskPanelID)] = [
+        (.panelBasic, .maskPanelMasks, .masks), (.panelToneCurve, .maskPanelMask, .mask),
+        (.panelColorMixer, .maskPanelAdjustments, .adjustments),
+    ]
+
+    @Test(arguments: KeymapPreset.allCases)
+    func `the Masking tool's panels take the first three panels' keys there`(preset: KeymapPreset) async throws {
+        let (model, _, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.module = .develop
+        try ShortcutKeymap.$override.withValue(Keymap(preset: preset)) {
+            model.activeTool = .masking
+            model.startDrawing(.radial)
+            model.beginDrawing(.radial(RadialMask(center: ImagePoint(x: 0.5, y: 0.5), radiusX: 0.1, radiusY: 0.1)))
+            model.finishDrawing()
+            #expect(model.selectedMaskID != nil)
+            for (develop, masking, panel) in Self.panels {
+                let key = try #require(develop.combos.first)
+                #expect(masking.combos.first == key, "\(masking) shares \(develop)'s key in \(preset.title)")
+                let resolved = try #require(model.action(forKey: key)?.action)
+                #expect(resolved == masking, "\(key.display) in the Masking tool in \(preset.title)")
+                #expect(model.perform(resolved))
+                #expect(!model.expandedMaskPanels.contains(panel), "\(key.display) closes \(panel)")
+                #expect(model.perform(resolved))
+                #expect(model.expandedMaskPanels.contains(panel), "and opens it again")
+                #expect(model.activeTool == .masking)
+            }
+
+            model.activeTool = .edit
+            for (develop, _, _) in Self.panels {
+                let key = try #require(develop.combos.first)
+                #expect(model.action(forKey: key)?.action == develop, "\(key.display) in the Edit tool")
+            }
+        }
+    }
+
+    @Test func `a mask panel's key does nothing while its panel isn't shown, and never opens a Develop panel`(
+    ) async throws {
+        let (model, _, cleanup) = try await openEditor()
+        defer { cleanup() }
+        model.module = .develop
+        model.activeTool = .masking
+        model.expandedPanels = []
+        for (develop, masking, panel) in Self.panels where panel != .masks {
+            let key = try #require(develop.combos.first)
+            #expect(model.action(forKey: key)?.action == masking, "\(key.display) with no mask selected")
+            #expect(!model.canPerform(masking))
+            #expect(!model.perform(masking))
+            #expect(model.activeTool == .masking && model.expandedPanels.isEmpty)
+        }
+
+        // A message holds the Masks panel open: its key leaves it be rather than change what shows later.
+        model.maskMessage = "Nothing found"
+        #expect(!model.canPerform(.maskPanelMasks))
+        #expect(model.isExpanded(.masks))
     }
 }
