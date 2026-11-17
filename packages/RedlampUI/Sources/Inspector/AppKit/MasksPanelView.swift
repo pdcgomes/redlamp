@@ -146,19 +146,20 @@ final class MasksPanelView: ColumnView {
     }
 
     /// The selected mask's settings, in `SelectedMaskEditor`'s order: the mask's name with
-    /// Invert and Amount, its components, the selected component's settings, then the effect and
-    /// the adjustments.
+    /// Invert, Amount and Detail, its components, the selected component's settings, then the
+    /// effect and the adjustments.
     private func editorColumn(_ mask: MaskOutline, tools: MaskKind?, rows: PanelRows) -> ColumnView {
         var views: [NSView] = [
             rows.header(mask.name, [], accessory: rows.native(HStack { MaskHeaderControls(mask: mask) })),
             rows.slider(.maskAmount),
+            rows.slider(.maskDetail),
             rows.gap(6),
             rows.header("Components, applied top to bottom", []),
         ]
         views += mask.components.map { rows.native(ComponentRow(mask: mask, component: $0)) }
         views.append(rows.native(ComponentOperationButtons(mask: mask).padding(.top, 4)))
         views += componentTools(tools, mask: mask, rows: rows)
-        views += [rows.gap(6), rows.slider(.maskDetail), rows.gap(), rows.native(MaskEffectMenu(mask: mask))]
+        views += [rows.gap(6), rows.native(MaskEffectMenu(mask: mask))]
         for parameter in ParameterID.localParameters where !ParameterID.swatchParameters.contains(parameter) {
             views.append(rows.slider(parameter))
             if MasksPanel.gapAfter.contains(parameter) {

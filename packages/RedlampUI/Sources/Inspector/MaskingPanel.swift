@@ -570,8 +570,9 @@ struct MaskList: View {
     }
 }
 
-/// The selected mask's settings: its name with Invert and Reset, Amount, its components, the
-/// selected component's own settings, then its effect and adjustments.
+/// The selected mask's settings: its name with Invert and Reset, Amount and Detail (which act on
+/// the whole mask), its components, the selected component's own settings, then its effect and
+/// adjustments.
 struct SelectedMaskEditor: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
@@ -582,6 +583,7 @@ struct SelectedMaskEditor: View {
                 MaskHeaderControls(mask: mask)
             }
             ParameterSlider(parameter: .maskAmount)
+            ParameterSlider(parameter: .maskDetail)
             Spacer().frame(height: 6)
             SubsectionHeader(title: "Components, applied top to bottom", parameters: [])
             ForEach(mask.components) { component in
@@ -621,8 +623,6 @@ struct SelectedMaskEditor: View {
             }
 
             Spacer().frame(height: 6)
-            ParameterSlider(parameter: .maskDetail)
-            Spacer().frame(height: 4)
             MaskEffectMenu(mask: mask)
             ForEach(ParameterID.localParameters.filter { !ParameterID.swatchParameters.contains($0) }, id: \.self) {
                 parameter in
