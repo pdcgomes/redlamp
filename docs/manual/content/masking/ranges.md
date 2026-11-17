@@ -19,7 +19,7 @@ Range masks are at their best as a second component. Intersect a colour range wi
 2. Click the colour you want. To take the average of an area instead, drag outwards from its centre: the circle you drag out is the area sampled.
 3. [[⇧]]-click to add another colour, up to five in all. Each sample shows on the photo as a white ring while the component is selected.
 4. Set Refine: how far a colour may be from the samples and still be selected.
-5. Click Done, in the strip under the panel's header.
+5. Click Done, in the strip at the top of the Masks panel.
 
 {{table: sliders maskColorRefine}}
 

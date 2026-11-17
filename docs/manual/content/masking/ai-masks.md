@@ -53,7 +53,7 @@ When a part isn't found on anyone, the panel says so, as in Not found: Teeth, Li
 1. Choose Objects in the picker. As you move the pointer over the photo, Redlamp tints what a click would select.
 2. Click the thing you want, or drag a box around it.
 3. Click again, or drag another box, to add to the selection. Hold [[⌥]] to take away instead.
-4. Click Done, in the strip under the panel's header.
+4. Click Done, in the strip at the top of the Masks panel.
 
 To brush over things rather than box them, set Drag to Brush in the same strip before you drag. A stroke selects what it passes over, and adds to the selection, or takes away with [[⌥]], as clicks do.
 
@@ -90,7 +90,7 @@ Nothing asks for ViTMatte: download it in Settings › Models, and Subject, Back
 
 ## AI masks stay where they are
 
-An AI mask is found once, from the photo without its edit, and kept with the edit. It never moves while you work, and it looks the same in every export and on every Mac. When models improve, choose Update AI Masks from the menu at the right of the panel's header: Redlamp finds every AI mask in the edit again, keeping each component's place, how it combines and whether it's inverted, on every selected photo when there are several. Pasting or syncing settings onto another photo finds its AI masks again for that photo.
+An AI mask is found once, from the photo without its edit, and kept with the edit. It never moves while you work, and it looks the same in every export and on every Mac. When models improve, choose Update AI Masks from the menu at the right of the Masks panel's header: Redlamp finds every AI mask in the edit again, keeping each component's place, how it combines and whether it's inverted, on every selected photo when there are several. Pasting or syncing settings onto another photo finds its AI masks again for that photo.
 
 ## Edges
 
@@ -108,7 +108,7 @@ Refine Edges
 : Solves the mask's edge again from the photo, as masks of its kind are made now, bringing back stray hairs an older mask missed. It has no settings.
 
 Refine Edge Brush
-: Paint over an edge, such as hair, fur or a frayed sleeve, and Redlamp works the edge out again there from the photo, hair by hair, leaving the rest of the mask as it was. Its Size, from 1 to 100 and 12 to start, is in the strip under the panel's header, with a value to drag or type; <kbd>[</kbd>, <kbd>]</kbd> and [[⌘]]-scroll change it too. Each stroke is a step in History and is kept with the mask, so Update AI Masks applies it again. Click Done, or press [[Esc]], to finish.
+: Paint over an edge, such as hair, fur or a frayed sleeve, and Redlamp works the edge out again there from the photo, hair by hair, leaving the rest of the mask as it was. Its Size, from 1 to 100 and 12 to start, is in the strip at the top of the Masks panel, with a value to drag or type; <kbd>[</kbd>, <kbd>]</kbd> and [[⌘]]-scroll change it too. Each stroke is a step in History and is kept with the mask, so Update AI Masks applies it again. Click Done, or press [[Esc]], to finish.
 
 ::: lightroom
 Lightroom's AI masks are all here, Feather and Edge included, as Lightroom Classic 15.5 has them. Refining an edge works differently: Refine Edges solves the whole edge again, and the Refine Edge Brush only where you paint.
