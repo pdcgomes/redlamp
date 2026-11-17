@@ -38,7 +38,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
     private let backup = NSTextField(labelWithString: "")
     private let backupChoose = NSButton(title: "Choose…", target: nil, action: nil)
     private let rawOnly = NSButton(checkboxWithTitle: "Raw files only", target: nil, action: nil)
-    private let keywords = NSTokenField()
+    private let keywords = GrowingTokenField()
     private let presets = NSPopUpButton()
     private let presetNote = ImportDestinationViewController.note("")
     private let ejects = NSButton(checkboxWithTitle: "Eject cards after importing", target: nil, action: nil)
@@ -97,6 +97,7 @@ final class ImportDestinationViewController: NSViewController, NSTextFieldDelega
         keywords.delegate = self
         keywords.tokenizingCharacterSet = CharacterSet(charactersIn: ",")
         keywords.placeholderString = "Keywords, separated by commas"
+        keywords.lines = 2
         keywords.setAccessibilityIdentifier("import.keywords")
         presets.target = self
         presets.action = #selector(presetChosen)
