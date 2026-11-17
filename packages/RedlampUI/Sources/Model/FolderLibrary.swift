@@ -171,9 +171,10 @@ public final class FolderLibrary {
     @ObservationIgnored var lastPhotoOrder: [String] = []
     /// Roots whose access was started, by ID, and the URL each was started through.
     @ObservationIgnored var accessing: [UUID: URL] = [:]
-    /// Roots whose bookmark is being made (`add`, `locate`), by ID, and what's saved of each meanwhile: nil for one
-    /// just added, which isn't saved until it has its bookmark.
-    @ObservationIgnored var bookmarking: [UUID: WorkingFolder?] = [:]
+    /// Roots whose bookmark is being made (`add`, `locate`), by ID, and what's saved in place of each meanwhile: the
+    /// root as it was for one located again; for one just added, which isn't saved until it has its bookmark, the roots
+    /// it took in, if any.
+    @ObservationIgnored var bookmarking: [UUID: [WorkingFolder]] = [:]
     /// The directories whose photos are shown (the open folder, and its subtree with subfolders).
     @ObservationIgnored var listedDirectories: Set<String> = []
     /// File-system watching (see `FolderLibrary+Watching`).

@@ -14,6 +14,7 @@
             libraryPanel,
             removedFolder,
             removedFolderUndo,
+            addedFolderTakesIn,
             previousImportFollows,
             removeFolderPerformance,
             removeFolderAllPerformance,

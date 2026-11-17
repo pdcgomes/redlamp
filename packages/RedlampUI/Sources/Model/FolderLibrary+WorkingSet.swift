@@ -10,16 +10,20 @@ public extension FolderLibrary {
         roots.first { $0.contains(url) }
     }
 
-    /// Adds folders to the working set (a folder inside one already there isn't added again) and
-    /// returns them. Their bookmarks are made in the background, and each is saved once it has one.
+    /// Adds folders to the working set and returns them. A folder inside one already there isn't added again, and one
+    /// holding roots takes them in. Their bookmarks are made in the background, and each is saved once it has one;
+    /// until then, the roots it took in are saved in its place.
     @discardableResult
     func add(_ folders: [URL]) -> [WorkingFolder] {
         var added: [WorkingFolder] = []
         for folder in folders where root(containing: folder) == nil {
             let root = WorkingFolder(path: folder.standardizedFileURL.path)
+            let inside = roots.filter { root.contains($0.url) }
+            bookmarking[root.id] = inside.flatMap { bookmarking[$0.id] ?? [$0] }
+            added.removeAll(where: inside.contains)
+            takeIn(inside)
             roots.append(root)
             added.append(root)
-            bookmarking[root.id] = .some(nil)
         }
         guard !added.isEmpty else { return [] }
         watchRoots()
@@ -27,6 +31,30 @@ public extension FolderLibrary {
             bookmark(root, at: root.url)
         }
         return added
+    }
+
+    /// Takes the roots inside another root that can be found into it, as adding that root does: those a launch kept
+    /// from before adding a root took in the roots inside it, or that a volume coming back finds inside another.
+    internal func takeInNestedRoots() {
+        let nested = roots.filter { root in
+            roots.contains { $0.path != root.path && !missing.contains($0.id) && $0.contains(root.url) }
+        }
+        guard !nested.isEmpty else { return }
+        takeIn(nested)
+        saveSettings()
+    }
+
+    /// Takes roots another root holds out of the working set, the folder open staying open: the other root shows their
+    /// folders, and the library keeps their photos as its own once it has indexed it (`LibraryService.takeIn`).
+    private func takeIn(_ nested: [WorkingFolder]) {
+        guard !nested.isEmpty else { return }
+        for root in nested {
+            roots.removeAll { $0.id == root.id }
+            missing.remove(root.id)
+            bookmarking.removeValue(forKey: root.id)
+            stopAccess(root.id)
+        }
+        service?.takeIn(nested.map(\.url))
     }
 
     /// Takes a root out of the working set and, with the library on, out of the library: its photos leave every
@@ -53,7 +81,7 @@ public extension FolderLibrary {
     func locate(_ root: WorkingFolder, at url: URL) {
         stopAccess(root.id)
         if bookmarking[root.id] == nil, let saved = roots.first(where: { $0.id == root.id }) {
-            bookmarking[root.id] = saved
+            bookmarking[root.id] = [saved]
         }
         let moved = WorkingFolder(id: root.id, path: url.standardizedFileURL.path)
         replaceRoot(moved)
@@ -106,6 +134,7 @@ public extension FolderLibrary {
                         missing.insert(root.id)
                     }
                 }
+                takeInNestedRoots()
                 watchRoots()
                 let folder = open.flatMap { open in
                     root(containing: open).flatMap { missing.contains($0.id) ? nil : open }
@@ -294,13 +323,10 @@ extension FolderLibrary {
     }
 
     /// The roots as they're saved: each with its bookmark, which in the App Sandbox is what reaches it after a
-    /// relaunch. One whose bookmark is being made is saved as it was before (`bookmarking`): not at all, if it was
-    /// just added.
+    /// relaunch. One whose bookmark is being made is saved as it was before (`bookmarking`): if it was just added, as
+    /// the roots it took in, or not at all.
     var savedRoots: [WorkingFolder] {
-        roots.compactMap { root in
-            guard let saved = bookmarking[root.id] else { return root }
-            return saved
-        }
+        roots.flatMap { bookmarking[$0.id] ?? [$0] }
     }
 
     func saveSettings() {
