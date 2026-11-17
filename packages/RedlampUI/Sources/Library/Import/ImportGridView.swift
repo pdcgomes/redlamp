@@ -7,10 +7,11 @@ import RedlampLibrary
 /// of its own, each cell its preview once browsing has made it (a large JPEG's EXIF thumbnail until
 /// then), whether it's chosen, its name, and the rating, flag and label it's given; grouped as Group By
 /// says, a card's by moment until it's changed (DEC-69), each group under a header with its name and count.
-/// Click, Shift-click and Command-click select as in Finder, and
-/// Library's keys act on the selection: 0 to 5 rate, P, X and U flag, 6 to 9 label (again to take the
-/// label off), Space chooses or leaves out, Command-A selects every photo. The cells on screen are read
-/// first.
+/// A click selects a photo, Shift-click every photo from the one last clicked through it, across groups, as in
+/// Library, and Command-click adds or removes one; a click on a header selects its group's photos, with Shift or
+/// Command added to the selection. The arrow keys move the selection, and with Shift extend it. Library's keys act
+/// on the selection: 0 to 5 rate, P, X and U flag, 6 to 9 label (again to take the label off), Space chooses or
+/// leaves out, Command-A selects every photo. The cells on screen are read first.
 @MainActor
 final class ImportGridViewController: NSViewController, NSCollectionViewDataSource, NSCollectionViewDelegate {
     let model: ImportWindowModel
@@ -25,6 +26,10 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     /// has its new ones before it says so.
     private var shownGroups: [ImportGroup] = []
     private var shownIDs: [String] = []
+    /// The photo last clicked or moved to without Shift, which Shift extends from, and the photo last clicked or
+    /// moved to, which the arrow keys move from: by ID, so they stay as the grid is reloaded.
+    private var anchor: String?
+    private var active: String?
     private var prioritising: Task<Void, Never>?
     /// Previews put on screen so far, and those of them that were provisional, for the harness.
     @_spi(Harness) public private(set) var imagesShown = 0
@@ -61,6 +66,7 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         )
         collectionView.setAccessibilityIdentifier("import.photos")
         collectionView.onKey = { [weak self] event in self?.handle(event) ?? false }
+        collectionView.onPress = { [weak self] event in self?.pressed(event) ?? false }
         scrollView.documentView = collectionView
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
@@ -237,6 +243,11 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         if let header = view as? ImportGroupHeader, shownGroups.indices.contains(indexPath.section) {
             let group = shownGroups[indexPath.section]
             header.show(group.name, count: group.places.count)
+            let section = indexPath.section
+            header.onPress = { [weak self] event in
+                let flags = event.modifierFlags
+                self?.clickGroup(section, toggling: flags.contains(.command), extending: flags.contains(.shift))
+            }
         }
         return view
     }
@@ -269,6 +280,154 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         model.toggleChosen(selected.contains(id) ? selected : [id])
     }
 
+    // MARK: - Selection
+
+    /// The places of the photos selected.
+    var selectedPlaces: Set<Int> {
+        Set(collectionView.selectionIndexPaths.compactMap(place(of:)))
+    }
+
+    private func select(_ places: Set<Int>) {
+        collectionView.selectionIndexPaths = Set(places.compactMap(path(of:)))
+    }
+
+    /// The place of the photo `id` names among those the collection view was last given.
+    private func shownPlace(of id: String) -> Int? {
+        model.index(of: id).flatMap { shownIDs.indices.contains($0) && shownIDs[$0] == id ? $0 : nil }
+    }
+
+    /// Where Shift extends from: the photo last clicked or moved to without Shift while it's selected, else the first
+    /// photo selected, as after a rubber band.
+    private var anchorPlace: Int? {
+        let selected = selectedPlaces
+        if let place = anchor.flatMap(shownPlace(of:)), selected.contains(place) {
+            return place
+        }
+        return selected.min()
+    }
+
+    /// Where the arrow keys move from: the photo last clicked or moved to while it's selected, else the anchor.
+    private var activePlace: Int? {
+        if let place = active.flatMap(shownPlace(of:)), selectedPlaces.contains(place) {
+            return place
+        }
+        return anchorPlace
+    }
+
+    /// A press on a photo's cell, by the modifiers held; false for a press elsewhere, which the collection view takes
+    /// for a rubber band.
+    func pressed(_ event: NSEvent) -> Bool {
+        let point = collectionView.convert(event.locationInWindow, from: nil)
+        guard let path = collectionView.indexPathForItem(at: point), let place = place(of: path) else { return false }
+        collectionView.window?.makeFirstResponder(collectionView)
+        let flags = event.modifierFlags
+        click(place, toggling: flags.contains(.command), extending: flags.contains(.shift))
+        return true
+    }
+
+    /// A click on the photo at `place`: it alone; with Shift, every photo from the anchor through it in the grid's
+    /// order, across groups, the anchor staying; with Command, in or out of the selection; with both, that range
+    /// added to the selection.
+    func click(_ place: Int, toggling: Bool = false, extending: Bool = false) {
+        guard shownIDs.indices.contains(place) else { return }
+        let id = shownIDs[place]
+        var places = selectedPlaces
+        if extending, let from = anchorPlace {
+            anchor = shownIDs[from]
+            let range = Set(min(from, place) ... max(from, place))
+            places = toggling ? places.union(range) : range
+        } else if toggling {
+            if places.remove(place) == nil {
+                places.insert(place)
+                anchor = id
+            }
+        } else {
+            places = [place]
+            anchor = id
+        }
+        active = id
+        select(places)
+    }
+
+    /// A click on group `section`'s header: its photos alone; with Shift or Command, added to the selection, or with
+    /// Command alone taken out of it when every one is in it.
+    func clickGroup(_ section: Int, toggling: Bool = false, extending: Bool = false) {
+        guard shownGroups.indices.contains(section) else { return }
+        let group = shownGroups[section].places
+        guard let first = group.first, let last = group.last, shownIDs.indices.contains(last) else { return }
+        collectionView.window?.makeFirstResponder(collectionView)
+        var places = selectedPlaces
+        if toggling, !extending, places.isSuperset(of: group) {
+            places.subtract(group)
+        } else if toggling || extending, !places.isEmpty {
+            places.formUnion(group)
+        } else {
+            places = Set(group)
+            anchor = shownIDs[first]
+            active = shownIDs[last]
+        }
+        select(places)
+    }
+
+    /// The photo an arrow key moves to from the one at `place`: ← and → the photo before or after, across headers;
+    /// ↑ and ↓ the cell above or below, into the last or first row of the group before or after.
+    private func target(of arrow: ArrowKey, from place: Int) -> Int {
+        let count = shownIDs.count
+        switch arrow {
+        case .left: return max(place - 1, 0)
+        case .right: return min(place + 1, count - 1)
+        case .up, .down: break
+        }
+        guard let path = path(of: place) else { return place }
+        let offset = arrow == .up ? -1 : 1
+        let columns = columns
+        let cells = shownGroups[path.section].places
+        let (cell, column) = (path.item, path.item % columns)
+        if offset < 0, cell >= columns {
+            return place - columns
+        }
+        // From a row above the last, down reaches the last row, even where it's short.
+        if offset > 0, cell / columns < (cells.count - 1) / columns {
+            return min(place + columns, cells.upperBound - 1)
+        }
+        var next = path.section + offset
+        while shownGroups.indices.contains(next), shownGroups[next].places.isEmpty {
+            next += offset
+        }
+        guard shownGroups.indices.contains(next) else { return place }
+        let places = shownGroups[next].places
+        let start = offset < 0 ? (places.count - 1) / columns * columns : 0
+        return places.lowerBound + min(start + column, places.count - 1)
+    }
+
+    /// The cells in a row, as the flow layout fits them across the collection view.
+    var columns: Int {
+        let inset = layout.sectionInset
+        let width = collectionView.bounds.width - inset.left - inset.right
+        let spacing = layout.minimumInteritemSpacing
+        return max(Int((width + spacing) / (ImportGridCell.size.width + spacing)), 1)
+    }
+
+    /// An arrow key: the photo it moves to alone, or with Shift every photo from the anchor through it; from no
+    /// photo selected, the first.
+    private func move(_ arrow: ArrowKey, extending: Bool) {
+        guard !shownIDs.isEmpty else { return }
+        let target = activePlace.map { self.target(of: arrow, from: $0) } ?? 0
+        click(target, extending: extending)
+        reveal(target)
+    }
+
+    /// Scrolls the photo at `place`'s cell into view, clear of the header pinned over its group.
+    func reveal(_ place: Int) {
+        guard let path = path(of: place), let frame = collectionView.layoutAttributesForItem(at: path)?.frame
+        else { return }
+        let margin = layout.headerReferenceSize.height + layout.sectionInset.top
+        collectionView.scrollToVisible(NSRect(
+            x: frame.minX, y: frame.minY - margin, width: frame.width,
+            height: frame.height + margin + layout.sectionInset.bottom,
+        ))
+    }
+
     // MARK: - Keys
 
     /// Library's keys on the selection; false for the keys the grid leaves to the window.
@@ -277,6 +436,10 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
         let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
         if modifiers == .command, key == "a" {
             collectionView.selectAll(nil)
+            return true
+        }
+        if modifiers.isEmpty, let arrow = ArrowKey(rawValue: event.keyCode) {
+            move(arrow, extending: event.modifierFlags.contains(.shift))
             return true
         }
         let ids = selectedIDs
@@ -329,9 +492,38 @@ final class ImportGridViewController: NSViewController, NSCollectionViewDataSour
     }
 }
 
-/// The grid's collection view, which hands its keys to the window's grid first.
+/// The arrow keys, by key code.
+private enum ArrowKey: UInt16 {
+    case left = 123, right = 124, down = 125, up = 126
+}
+
+/// The grid's collection view, which hands its keys to the window's grid first, and its presses: the grid takes
+/// those on a cell, and a press elsewhere starts the collection view's rubber band.
 final class ImportCollectionView: NSCollectionView {
     var onKey: ((NSEvent) -> Bool)?
+    var onPress: ((NSEvent) -> Bool)?
+    /// The grid took the press, so its drag and its release aren't the collection view's.
+    private var pressTaken = false
+
+    override func mouseDown(with event: NSEvent) {
+        pressTaken = onPress?(event) == true
+        if !pressTaken {
+            super.mouseDown(with: event)
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if !pressTaken {
+            super.mouseDragged(with: event)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if !pressTaken {
+            super.mouseUp(with: event)
+        }
+        pressTaken = false
+    }
 
     override func keyDown(with event: NSEvent) {
         if onKey?(event) != true {
@@ -349,11 +541,25 @@ final class ImportCollectionView: NSCollectionView {
 }
 
 /// A group's header over its photos, pinned at the top while they scroll under it: its name, and how many photos
-/// it holds.
+/// it holds. A press on it, its labels' included, is the grid's.
 final class ImportGroupHeader: NSVisualEffectView, NSCollectionViewElement {
     static let identifier = NSUserInterfaceItemIdentifier("import.group")
     private let name = NSTextField(labelWithString: "")
     private let count = NSTextField(labelWithString: "")
+    var onPress: ((NSEvent) -> Void)?
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        super.hitTest(point) == nil ? nil : self
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onPress?(event)
+    }
+
+    /// The press's drag and release stay here, as the collection view didn't have the press.
+    override func mouseDragged(with _: NSEvent) {}
+
+    override func mouseUp(with _: NSEvent) {}
 
     override init(frame: NSRect) {
         super.init(frame: frame)
