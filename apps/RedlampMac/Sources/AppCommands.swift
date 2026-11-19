@@ -404,6 +404,19 @@ struct AppCommands: Commands {
                 .disabled(shown.isModalDialogOpen)
             }
         }
+        Menu("Background Color") {
+            ForEach(DevelopBackground.allCases, id: \.self) { background in
+                Toggle(background.title, isOn: Binding(
+                    get: { menu.shown.developBackground == background },
+                    set: { isOn in
+                        if isOn {
+                            model.developBackground = background
+                        }
+                    },
+                ))
+                .disabled(shown.isModalDialogOpen || shown.module != .develop)
+            }
+        }
         Divider()
     }
 

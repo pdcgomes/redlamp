@@ -65,6 +65,8 @@ public struct CanvasView: NSViewRepresentable {
     let whiteFrame: Double
     /// Scrolling and pinching over views drawn on the canvas (a tool's overlay) zoom and pan it.
     let forwardsCoveredEvents: Bool
+    /// The menu a right-click on the surround, outside the photo, opens.
+    let surroundMenu: (() -> NSMenu?)?
     let onSample: (CGPoint) -> Void
     let onHover: ((CGPoint?) -> Void)?
     let onCommandScroll: ((Double, Bool) -> Bool)?
@@ -77,6 +79,7 @@ public struct CanvasView: NSViewRepresentable {
         surround: Double = CanvasMetalView.defaultSurround,
         whiteFrame: Double = 0,
         forwardsCoveredEvents: Bool = false,
+        surroundMenu: (() -> NSMenu?)? = nil,
         onSample: @escaping (CGPoint) -> Void = { _ in },
         onHover: ((CGPoint?) -> Void)? = nil,
         onCommandScroll: ((Double, Bool) -> Bool)? = nil,
@@ -85,6 +88,7 @@ public struct CanvasView: NSViewRepresentable {
         self.surround = surround
         self.whiteFrame = whiteFrame
         self.forwardsCoveredEvents = forwardsCoveredEvents
+        self.surroundMenu = surroundMenu
         self.feed = feed
         self.controller = controller
         self.clickAction = clickAction
@@ -107,6 +111,7 @@ public struct CanvasView: NSViewRepresentable {
         view.surround = surround
         view.whiteFrame = whiteFrame
         view.forwardsCoveredEvents = forwardsCoveredEvents
+        view.surroundMenu = surroundMenu
         view.onSample = onSample
         view.onHover = onHover
         view.onCommandScroll = onCommandScroll
