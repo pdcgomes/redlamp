@@ -29,6 +29,7 @@ A sheet on the editor window (`ExportSheet`, presented like New Recipe), in grou
 - **Location:** Export to the same folder as the original or a chosen one; the file name is a naming template, the original's name with `-redlamp` by default, with the result shown; if the file exists: Ask, Add a Number, Overwrite or Skip.
 - **File:** the format grouped as Lossy and Lossless, then the options above, then the color space. The footer says what the format is good for.
 - **Size:** full size, long edge, short edge, width and height, megapixels or percentage, each keeping its own value, with a readout such as `6000 × 4000 → 2048 × 1365 px`. Exports are never enlarged. Resolution (ppi) only goes into the file's metadata.
+- **Sharpening:** Off, Low, Standard or High, in the Size section while a size other than full size is chosen (EDT-28). It sharpens for the screen a photo the size reduces, after the reduction; a photo exported at full size is left as it is. The Web and Email presets use Standard. The operator is described below.
 - **Metadata:** All, All Except Location, or None; and Show in Finder after export.
 
 Export closes the sheet and runs in the background; the canvas pill says "Exporting…" and then "Exported IMG_1234-redlamp.jpg". **Export with Previous** (`⌥⇧⌘E`) repeats the last export without the dialog, asking first only if the file exists and the rule is Ask; with no export yet it opens the dialog.
@@ -56,6 +57,19 @@ Decided with the owner on 14 October 2026.
 
 The key monitor steps aside while a sheet is up, so ← and → don't change the photo behind the dialog.
 
+## Output sharpening (EDT-28)
+
+A reduced export is developed at full resolution in linear light, reduced with Lanczos-3 (`MPSImageLanczosScale`), and encoded by `rl_encode_srgb`. With sharpening on, `rl_encode_srgb_sharpened` (`OutputSharpen.metal`) encodes it instead, in the same pass:
+
+1. Luminance in linear light (Rec. 709 weights for sRGB, Display P3's for P3), encoded with the sRGB curve, which both spaces share.
+2. Its blur: a Gaussian of sigma 0.6 output pixels, cut to 3 × 3 and normalised; image edges repeat their last pixel.
+3. The sharpened luminance: `y + amount × mask(y) × (y − blur)`, with `mask(y) = smoothstep(0.015, 0.605, y) × (1 − smoothstep(0.568, 0.997, y))`, full strength near 0.55 and none at black and white, so an edge into either gets no halo.
+4. The ratio of sharpened to unsharpened luminance multiplies the three encoded channels, so a colour keeps its hue and saturation, and an edge between colours of equal luminance is left alone.
+
+Amounts are 0.54, 0.9 and 1.44 for Low, Standard and High. They, the sigma and the mask were fitted to Lightroom's Screen sharpening at the same names, measured from its exports of a test chart in November 2026, which this operator matches to within 0.02 of gain at every grating period and amplitude below 0.35, and within 0.004 on a 1 px line. It is fixed in output pixels and has no threshold, as Lightroom's is. Lightroom's operator also shifts colour at edges between colours; this one does not, by design.
+
+The resampler alone keeps 100% of modulation down to a 3.3 px period and 54% at Nyquist (6000 → 2048 px), so sharpening is an added crispness rather than a correction of what reducing loses: Standard raises a 4 px grating's contrast by 27%. It is off unless chosen, so an export without it is the same file, to the byte, as before sharpening existed.
+
 ## Later
 
-Wider color spaces, output sharpening, watermarks, the recipe embedded in the file (EDT-14), JPEG XL once ImageIO encodes it, HDR gain maps, and `redlamp render` writing through `ImageExporter`, as `redlamp export` does.
+Wider color spaces, output sharpening for print (Lightroom's Matte and Glossy), a preview of the sharpening in the dialog, watermarks, the recipe embedded in the file (EDT-14), JPEG XL once ImageIO encodes it, HDR gain maps, and `redlamp render` writing through `ImageExporter`, as `redlamp export` does.
