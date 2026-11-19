@@ -18,6 +18,13 @@ public enum DevelopBackground: String, CaseIterable, Sendable {
         }
     }
 
+    /// The grey `step` places after this one in the menu, round its end: ⌥L's step forward and ⇧⌥L's back.
+    func neutral(after step: Int) -> DevelopBackground {
+        let all = Self.allCases
+        let index = all.firstIndex(of: self) ?? 0
+        return all[((index + step) % all.count + all.count) % all.count]
+    }
+
     /// The sRGB grey, 0 to 255, as Lightroom draws each (its dark grey being the canvas's own).
     var gray: Int {
         switch self {

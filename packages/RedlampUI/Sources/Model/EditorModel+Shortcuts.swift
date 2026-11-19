@@ -74,6 +74,8 @@ public extension EditorModel {
         case .labReadout: showsLabReadout.toggle()
         case .infoOverlay: infoOverlay = (infoOverlay + 1) % 3
         case .lightsOut: lightsOut = (lightsOut + 1) % 3
+        case .cycleDevelopBackground: developBackground = developBackground.neutral(after: 1)
+        case .cycleDevelopBackgroundBack: developBackground = developBackground.neutral(after: -1)
         case .fullScreenPreview: togglePresentation()
         case .toggleToolbar: onToggleToolbar?()
         // Panels
@@ -242,7 +244,8 @@ public extension EditorModel {
         let masking = activeTool == .masking
         switch action {
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout, .toggleZoom, .zoomIn, .zoomOut,
-             .clipping, .rawClipping, .colorAssessment, .infoOverlay:
+             .clipping, .rawClipping, .colorAssessment, .infoOverlay, .cycleDevelopBackground,
+             .cycleDevelopBackgroundBack:
             return photo
         case .labReadout, .lightsOut, .fullScreenPreview, .toggleToolbar, .toggleSidePanels, .toggleAllPanels,
              .toggleFilmstrip,

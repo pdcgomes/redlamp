@@ -6,7 +6,8 @@ extension ShortcutAction {
     var isDevelopOnly: Bool {
         switch self {
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout, .zoomIn, .zoomOut, .clipping,
-             .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
+             .rawClipping, .colorAssessment, .labReadout, .infoOverlay, .cycleDevelopBackground,
+             .cycleDevelopBackgroundBack,
              .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail, .panelLens,
              .panelTransform, .panelEffects, .panelCalibration,
              .resetAll, .autoTone, .autoWhiteBalance, .toggleBlackAndWhite, .whiteBalanceSelector,

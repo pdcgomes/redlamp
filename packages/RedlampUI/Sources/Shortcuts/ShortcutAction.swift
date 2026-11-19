@@ -147,6 +147,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
     case beforeAfter, nextCompareLayout, previousCompareLayout
     case toggleZoom, zoomIn, zoomOut
     case clipping, rawClipping, colorAssessment, labReadout, infoOverlay, lightsOut, fullScreenPreview, toggleToolbar
+    case cycleDevelopBackground, cycleDevelopBackgroundBack
 
     // Panels
     case toggleSidePanels, toggleAllPanels, toggleFilmstrip, toggleLeftPanel, toggleRightPanel
@@ -213,7 +214,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
             .library
         case .beforeAfter, .nextCompareLayout, .previousCompareLayout,
              .toggleZoom, .zoomIn, .zoomOut, .clipping, .rawClipping, .colorAssessment, .labReadout, .infoOverlay,
-             .lightsOut, .fullScreenPreview, .toggleToolbar:
+             .lightsOut, .fullScreenPreview, .toggleToolbar, .cycleDevelopBackground,
+             .cycleDevelopBackgroundBack:
             .view
         case .toggleSidePanels, .toggleAllPanels, .toggleFilmstrip, .toggleLeftPanel, .toggleRightPanel,
              .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail,
@@ -342,6 +344,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .labReadout: "Show L*a*b* Values"
         case .infoOverlay: "Cycle Info Overlay"
         case .lightsOut: "Cycle Lights Out"
+        case .cycleDevelopBackground: "Next Background Color"
+        case .cycleDevelopBackgroundBack: "Previous Background Color"
         case .fullScreenPreview: "Full Screen Preview"
         case .toggleToolbar: "Show / Hide Toolbar"
         case .toggleSidePanels: "Hide Side Panels"
@@ -526,6 +530,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .labReadout: []
         case .infoOverlay: [.char("i")]
         case .lightsOut: [.char("l")]
+        case .cycleDevelopBackground: [.char("l", option: true)]
+        case .cycleDevelopBackgroundBack: [.char("l", shift: true, option: true)]
         case .fullScreenPreview: [.char("f")]
         case .toggleToolbar: [.char("t"), KeyCombo(.function(5))]
         case .toggleSidePanels: [KeyCombo(.tab)]
