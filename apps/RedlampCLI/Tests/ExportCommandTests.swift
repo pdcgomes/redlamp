@@ -116,6 +116,36 @@ struct ExportCommandTests {
         }
     }
 
+    @Test func `--sharpen sharpens a reduced photo and asks for a size`() async throws {
+        let scratch = try Self.scratch()
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let exports = scratch.appending(path: "Exports")
+        let photo = Self.photos[0].path
+        let plain = try await Self.run(
+            [photo, "--to", exports.path, "--long-edge", "640", "--name", "plain"],
+            in: scratch,
+        )
+        let sharp = try await Self.run(
+            [photo, "--to", exports.path, "--long-edge", "640", "--name", "sharp", "--sharpen", "high"], in: scratch,
+        )
+        #expect(plain.status == 0 && sharp.status == 0, "\(plain.errors) \(sharp.errors)")
+        let files = ["plain.jpg", "sharp.jpg"].map { exports.appending(path: $0) }
+        let sizes = try files.map { try FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int ?? 0 }
+        #expect(sizes[1] > sizes[0], "a sharpened JPEG holds more detail: \(sizes)")
+
+        let unsized = try await Self.run([photo, "--to", exports.path, "--sharpen", "standard"], in: scratch)
+        #expect(unsized.status != 0)
+        #expect(unsized.errors.contains { $0.contains("--sharpen") }, "\(unsized.errors)")
+        let unknown = try await Self.run(
+            [photo, "--to", exports.path, "--long-edge", "640", "--sharpen", "glossy"],
+            in: scratch,
+        )
+        #expect(
+            unknown.errors.contains { $0.contains("--sharpen takes off, low, standard, high") },
+            "\(unknown.errors)",
+        )
+    }
+
     @Test func `each photo exports with its own edit, and a folder gives its photos in name order`() async throws {
         let scratch = try Self.scratch()
         defer { try? FileManager.default.removeItem(at: scratch) }

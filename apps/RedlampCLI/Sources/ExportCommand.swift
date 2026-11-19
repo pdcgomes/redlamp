@@ -40,6 +40,9 @@ enum ExportCommand {
       --megapixels <n>
       --percent <n>
       --ppi <n>                the resolution print layouts read (default 300)
+      --sharpen off|low|standard|high
+                               sharpening for the screen, as Lightroom's Screen, on each photo a size reduces;
+                               a photo exported at full size is left as it is (default off)
       --metadata all|no-location|none   what the files carry of the photos' metadata; all and no-location also
                                embed the edit (default all)
       --border as-edited|none|<recipe id>
@@ -50,9 +53,10 @@ enum ExportCommand {
     private static let valued: Set<String> = [
         "--to", "--name", "--text", "--start", "--existing", "--format", "--quality", "--limit", "--compression",
         "--bit-depth", "--color-space", "--long-edge", "--short-edge", "--fit", "--megapixels", "--percent",
-        "--ppi", "--metadata", "--border",
+        "--ppi", "--metadata", "--border", "--sharpen",
     ]
 
+    private static let sharpenings: [(String, OutputSharpening)] = OutputSharpening.allCases.map { ($0.rawValue, $0) }
     private static let existingFiles: [(String, ExistingFilePolicy)] = [
         ("number", .addNumber), ("overwrite", .overwrite), ("skip", .skip),
     ]
@@ -165,6 +169,10 @@ enum ExportCommand {
             settings.bitDepth = depth
         }
         settings.sizing = try sizing(options)
+        settings.sharpening = try choice("--sharpen", options, sharpenings) ?? .off
+        guard settings.sharpening == .off || settings.sizing.mode != .full else {
+            throw CLIError(description: "--sharpen sharpens a photo the size reduces: give a size too")
+        }
         settings.border = try border(options)
         settings.naming.template = options.value("--name") ?? ExportNaming.standard
         for text in options.values("--text") {
