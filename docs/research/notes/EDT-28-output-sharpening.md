@@ -60,6 +60,32 @@ Halo at Standard, as a share of the step, dark side and light side: 0.30/0.70 Li
 
 At edges between colours of equal luminance Lightroom changes luminance by up to 0.009 and chroma by up to 0.04; Redlamp changes neither. At other colour edges both change luminance by similar amounts, and Redlamp keeps each pixel's channel proportions.
 
+## Reduced exports
+
+The large chart (6000 × 4000) reduced to a 2048 long edge, as 16-bit TIFF in sRGB, by Lightroom (its series 2) and by `redlamp export --long-edge 2048 --sharpen <level>`, with Redlamp's capture sharpening and colour noise reduction at 0, as the chart's were in Lightroom.
+
+The sharpening alone (each level against its own export without it) matches as it does at full size: within 0.021 of gain at every period at amplitude 0.10, and within 0.016 at 0.02.
+
+The files differ more, because the two resamplers differ. Grating contrast after reduction without sharpening, over the chart drawn at 2048 px (whose pixels average the pattern over their area), amplitude 0.10:
+
+| Period (px) | 16 | 8 | 6 | 4 | 3 | 2.5 | 2.2 |
+|---|---|---|---|---|---|---|---|
+| Lightroom | 1.005 | 1.018 | 1.026 | 1.027 | 0.989 | 0.908 | 0.825 |
+| Redlamp | 1.006 | 1.027 | 1.049 | 1.104 | 1.176 | 1.043 | 0.912 |
+
+Redlamp's column is a textbook Lanczos-3, widened to the reduction: computed independently, it reproduces Redlamp's export to a mean of 0.0004. It keeps more of the finest detail than averaging over each output pixel does; Lightroom's resampler keeps about what averaging keeps. So with sharpening, the file holds more contrast at fine periods than Lightroom's at the same level:
+
+| Period (px) | | 8 | 6 | 4 | 3 | 2.5 | 2.2 |
+|---|---|---|---|---|---|---|---|
+| Low | Lightroom | 1.065 | 1.107 | 1.195 | 1.215 | 1.173 | 1.085 |
+| | Redlamp | 1.074 | 1.130 | 1.280 | 1.436 | 1.345 | 1.200 |
+| Standard | Lightroom | 1.097 | 1.161 | 1.307 | 1.366 | 1.350 | 1.258 |
+| | Redlamp | 1.105 | 1.185 | 1.398 | 1.610 | 1.546 | 1.393 |
+| High | Lightroom | 1.145 | 1.243 | 1.476 | 1.593 | 1.616 | 1.518 |
+| | Redlamp | 1.152 | 1.267 | 1.574 | 1.870 | 1.847 | 1.681 |
+
+At a 4 px period Redlamp's Low is close to Lightroom's Standard (1.280 against 1.307); at 3 px and finer, Redlamp's Low is above it.
+
 ## Choices
 
 - Luminance is taken in linear light and encoded, rather than as a weighted sum of encoded channels: on greys the two are the same, and edges of equal luminance stay as they are.
