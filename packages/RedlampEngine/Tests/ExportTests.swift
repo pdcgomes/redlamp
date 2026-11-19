@@ -79,4 +79,42 @@ struct ExportTests {
             _ = try await engine.renderStill(request)
         }
     }
+
+    /// The mean absolute difference between horizontal neighbours, in levels.
+    private func neighbourContrast(_ image: CGImage) throws -> Double {
+        let bytes = try pixels(image)
+        let step = image.bitsPerPixel / 8
+        var total = 0.0
+        var count = 0.0
+        for y in 0 ..< image.height {
+            for x in 1 ..< image.width {
+                let offset = y * image.bytesPerRow + x * step + 1
+                total += abs(Double(bytes[offset]) - Double(bytes[offset - step]))
+                count += 1
+            }
+        }
+        return total / count
+    }
+
+    @Test(.enabled(if: EngineSmokeTests.canRender))
+    func `output sharpening sharpens a reduced export and leaves a full-size one as it is`() async throws {
+        let url = try #require(EngineSmokeTests.fixtures.first { $0.lastPathComponent == "DSC_0750.NEF" })
+        let engine = try RedlampEngine()
+        _ = try await engine.open(url)
+        func render(_ sharpening: OutputSharpening, maxLongEdge: Int?) async throws -> CGImage {
+            var request = StillRequest(recipe: EditRecipe(), maxLongEdge: maxLongEdge, purpose: .export)
+            request.outputSharpening = sharpening
+            return try await engine.renderStill(request)
+        }
+        let plain = try await render(.off, maxLongEdge: 1000)
+        let sharpened = try await render(.high, maxLongEdge: 1000)
+        #expect(sharpened.width == plain.width && sharpened.height == plain.height)
+        let before = try neighbourContrast(plain)
+        let after = try neighbourContrast(sharpened)
+        #expect(after > before * 1.1, "neighbour contrast \(before) became \(after)")
+
+        let full = try await render(.off, maxLongEdge: nil)
+        let fullSharpened = try await render(.high, maxLongEdge: nil)
+        #expect(try pixels(full) == pixels(fullSharpened))
+    }
 }

@@ -520,6 +520,18 @@ public struct GlowParams {
     }
 }
 
+public struct OutputSharpenParams {
+    public var size: SIMD4<Int32>
+    public var shape: SIMD4<Float>
+    public var luma: SIMD4<Float>
+
+    public init(size: SIMD4<Int32>, shape: SIMD4<Float>, luma: SIMD4<Float>) {
+        self.size = size
+        self.shape = shape
+        self.luma = luma
+    }
+}
+
 public struct RetouchParams {
     public var box: SIMD4<Int32>
     public var shape: SIMD4<Float>

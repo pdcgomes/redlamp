@@ -63,6 +63,7 @@ public final class KernelLibrary: @unchecked Sendable {
     public let glowSource: any MTLComputePipelineState
     public let rawClipping: any MTLComputePipelineState
     public let encodeSRGB: any MTLComputePipelineState
+    public let encodeSRGBSharpened: any MTLComputePipelineState
     public let maskClear: any MTLComputePipelineState
     public let maskStroke: any MTLComputePipelineState
     public let maskStrokeApply: any MTLComputePipelineState
@@ -144,6 +145,7 @@ public final class KernelLibrary: @unchecked Sendable {
         glowSource = try pipeline("rl_glow_source")
         rawClipping = try pipeline("rl_raw_clipping")
         encodeSRGB = try pipeline("rl_encode_srgb")
+        encodeSRGBSharpened = try pipeline("rl_encode_srgb_sharpened")
         maskClear = try pipeline("rl_mask_clear")
         maskStroke = try pipeline("rl_mask_stroke")
         maskStrokeApply = try pipeline("rl_mask_stroke_apply")

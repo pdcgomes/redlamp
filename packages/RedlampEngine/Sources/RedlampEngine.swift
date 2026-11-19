@@ -953,7 +953,7 @@ extension RedlampEngine {
     }
 
     /// An export below full size: developed at full resolution in linear light, downscaled
-    /// (Lanczos), then encoded.
+    /// (Lanczos), then encoded, sharpened for the screen when the request asks.
     private func developDownscaled(
         _ request: StillRequest,
         session: ImageSession,
@@ -983,12 +983,10 @@ extension RedlampEngine {
         MPSImageLanczosScale(device: device).encode(
             commandBuffer: commands, sourceTexture: fullTexture, destinationTexture: scaled,
         )
-        guard let encoder = commands.makeComputeCommandEncoder() else { throw EngineError.gpuUnavailable }
-        encoder.setComputePipelineState(kernels.encodeSRGB)
-        encoder.setTexture(scaled, index: 0)
-        encoder.setTexture(texture, index: 1)
-        encoder.dispatchGrid(width: size.width, height: size.height, pipeline: kernels.encodeSRGB)
-        encoder.endEncoding()
+        try OutputSharpen.encode(
+            scaled, into: texture, sharpening: request.outputSharpening, colorSpace: request.colorSpace,
+            kernels: kernels, commands: commands,
+        )
         try finish(commands)
     }
 
