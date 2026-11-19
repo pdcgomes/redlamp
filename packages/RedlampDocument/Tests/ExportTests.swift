@@ -487,6 +487,34 @@ struct ExportSettingsTests {
         #expect(request.colorSpace == .displayP3)
         #expect(request.purpose == .export)
         #expect(request.source == source)
+        #expect(request.outputSharpening == .off)
+        settings.sharpening = .low
+        let sharpened = settings.stillRequest(
+            recipe: EditRecipe(),
+            source: source,
+            size: PixelSize(width: 6000, height: 4000),
+        )
+        #expect(sharpened.outputSharpening == .low)
+    }
+
+    @Test func `presets keep their sharpening, and older presets export unsharpened`() throws {
+        var settings = ExportSettings()
+        settings.sharpening = .high
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(ExportSettings.self, from: data).sharpening == .high)
+        let older = try JSONDecoder().decode(ExportSettings.self, from: Data(#"{"format":"jpeg"}"#.utf8))
+        #expect(older.sharpening == .off)
+        let newer = try JSONDecoder().decode(ExportSettings.self, from: Data(#"{"sharpening":"glossy"}"#.utf8))
+        #expect(newer.sharpening == .off)
+    }
+
+    @Test func `the web and email presets sharpen for the screen, and the others don't`() {
+        let sharpening = Dictionary(uniqueKeysWithValues: ExportPreset.builtIns
+            .map { ($0.name, $0.settings.sharpening) })
+        #expect(sharpening == [
+            "Full Size JPEG": .off, "Web, 2048 px": .standard, "Email, under 500 KB": .standard,
+            "Print, 16-bit TIFF": .off,
+        ])
     }
 
     @Test func `settings round trip and missing keys take defaults`() throws {
