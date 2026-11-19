@@ -25,6 +25,7 @@ public struct ExportPreset: Codable, Sendable, Hashable, Identifiable {
         web.quality = 85
         web.sizing = ExportSizing(mode: .longEdge)
         web.sizing.longEdge = 2048
+        web.sharpening = .standard
         web.metadata = .allExceptLocation
 
         var email = ExportSettings()
@@ -32,6 +33,7 @@ public struct ExportPreset: Codable, Sendable, Hashable, Identifiable {
         email.sizing.longEdge = 1600
         email.limitsFileSize = true
         email.fileSizeLimitKB = 500
+        email.sharpening = .standard
         email.metadata = .allExceptLocation
 
         var print = ExportSettings()

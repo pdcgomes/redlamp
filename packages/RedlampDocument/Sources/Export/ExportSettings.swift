@@ -197,6 +197,8 @@ public struct ExportSettings: Sendable, Hashable {
     public var bitDepth = 8
     public var colorSpace: OutputColorSpace = .sRGB
     public var sizing = ExportSizing()
+    /// Sharpening for the screen, applied when the export is reduced (EDT-28).
+    public var sharpening: OutputSharpening = .off
     /// The border each photo is exported with (EDT-35).
     public var border: ExportBorder = .asEdited
     public var metadata: ExportMetadataPolicy = .all
@@ -247,6 +249,7 @@ public struct ExportSettings: Sendable, Hashable {
             bitsPerComponent: bitsPerComponent,
             purpose: .export,
         )
+        request.outputSharpening = sharpening
         request.source = source
         return request
     }
@@ -255,7 +258,7 @@ public struct ExportSettings: Sendable, Hashable {
 extension ExportSettings: Codable {
     private enum CodingKeys: String, CodingKey {
         case format, quality, limitsFileSize, fileSizeLimitKB, tiffCompression, bitDepth, colorSpace, sizing
-        case border, metadata, destinationFolder, naming, existingFiles, revealInFinder
+        case sharpening, border, metadata, destinationFolder, naming, existingFiles, revealInFinder
     }
 
     /// Missing or unreadable keys (from older or newer versions) take their defaults, so saved
@@ -274,6 +277,7 @@ extension ExportSettings: Codable {
         bitDepth = value(.bitDepth, defaults.bitDepth)
         colorSpace = value(.colorSpace, defaults.colorSpace)
         sizing = value(.sizing, defaults.sizing)
+        sharpening = value(.sharpening, defaults.sharpening)
         border = value(.border, defaults.border)
         metadata = value(.metadata, defaults.metadata)
         destinationFolder = value(.destinationFolder, defaults.destinationFolder)

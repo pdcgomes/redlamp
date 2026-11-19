@@ -209,6 +209,7 @@ struct HandCodedTypeTests {
         settings.bitDepth = 16
         settings.colorSpace = .displayP3
         settings.sizing = sizing
+        settings.sharpening = .high
         settings.metadata = .allExceptLocation
         settings.destinationFolder = URL(fileURLWithPath: "/tmp/Exports", isDirectory: true)
         settings.naming = ExportNaming(template: "{text}-{sequence:3}", texts: ["": "Trip"], sequenceStart: 5)
