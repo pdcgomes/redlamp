@@ -431,8 +431,92 @@
     enum ExportScenarios {
         static let all: [Scenario] = [
             formats, sizes, metadata, previous, shortWindow, chooseFolder, clickAfterMenu, jpegXL, batch, fromLibrary,
-            border,
+            border, sharpening,
         ]
+
+        /// EDT-28: High, clicked in the Size section's Sharpening, sharpens a reduced export, and the dialog
+        /// remembers it; Off writes the photo as it was written before there was sharpening.
+        static let sharpening = Scenario(
+            "export.sharpening",
+            "High, clicked in the Export dialog's Sharpening, sharpens a 1200 px export of the photo and is remembered",
+            claims: [.feature("export.sharpening")],
+        ) { app in
+            try app.openWorking()
+            try app.choose(.resetAll)
+            guard let host = app.host else { throw ScenarioSkip("the Export dialog's settings live in the app's host") }
+            let folder = FileManager.default.temporaryDirectory
+                .appending(path: "redlamp-export-sharpening-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let (before, beforeID) = try app.main { _ in (host.exports.previous, host.exports.previousPresetID) }
+            defer {
+                if let before {
+                    try? app.main { _ in host.exports.recordExport(before, presetID: beforeID) }
+                }
+            }
+            var settings = ExportSettings()
+            settings.sizing = ExportSizing(mode: .longEdge)
+            settings.sizing.longEdge = 1200
+            settings.destinationFolder = folder
+            settings.naming.template = "sharpened"
+            settings.existingFiles = .overwrite
+            settings.revealInFinder = false
+            let starting = settings
+            try app.main { _ in host.exports.recordExport(starting, presetID: nil) }
+
+            try app.choose(Menus.title(of: .export))
+            try app.waitForSheet("the Export dialog")
+            app.pause(0.5)
+            let high = OutputSharpening.allCases.firstIndex(of: .high) ?? 3
+            let clicked = try click("export.sharpening", segment: high, inSheetOf: app)
+            app.pause(0.3)
+            try app.expect(try app.pressInSheet(KeyCombo(.character("\r"))), "The Export dialog didn't take Return")
+            try app.waitForNoSheet("the Export dialog")
+            let sharpened = folder.appending(path: "sharpened.jpg")
+            try app.wait("the sharpened export", timeout: 120) { model in
+                model.exportStatus == nil && FileManager.default.fileExists(atPath: sharpened.path)
+            }
+            let remembered = try app.main { _ in host.exports.initialSettings.sharpening }
+            try app.expect(remembered == .high, "The dialog remembered \(remembered.name), not High")
+
+            settings.sharpening = .off
+            let plain = try app.export(settings, as: "unsharpened")
+            let (a, b) = try (neighbourContrast(plain), neighbourContrast(sharpened))
+            try app.expect(a.size == b.size, "Sharpening changed the size: \(a.size) and \(b.size)")
+            try app.expect(
+                b.contrast > a.contrast * 1.1,
+                "High took neighbour contrast from \(a.contrast) to \(b.contrast)",
+            )
+            try app.choose(.resetAll)
+            app.covered(.feature("export.sharpening"), via: clicked ? .mouse : .model)
+        }
+
+        /// The file's size, and the mean difference between horizontal neighbours' green, in levels of 255.
+        private static func neighbourContrast(_ url: URL) throws -> (size: String, contrast: Double) {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+                  let space = CGColorSpace(name: CGColorSpace.sRGB)
+            else { throw ScenarioFailure("\(url.lastPathComponent) doesn't decode") }
+            let (width, height) = (image.width, image.height)
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            let drawn = pixels.withUnsafeMutableBytes { bytes -> Bool in
+                guard let context = CGContext(
+                    data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                    space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue,
+                ) else { return false }
+                context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+                return true
+            }
+            guard drawn else { throw ScenarioFailure("\(url.lastPathComponent) doesn't draw") }
+            var total = 0
+            for y in 0 ..< height {
+                for x in 1 ..< width {
+                    let i = (y * width + x) * 4 + 1
+                    total += abs(Int(pixels[i]) - Int(pixels[i - 4]))
+                }
+            }
+            return ("\(width) × \(height)", Double(total) / Double((width - 1) * height))
+        }
 
         /// EDT-35 (#473): a Borders recipe on every photo exported, its long edge the file's; None
         /// leaves the photo's own border out.
@@ -821,14 +905,37 @@
         }
 
         /// Clicks the control `identifier` marks (`automationIdentifier`) in the sheet in front, its press and its
-        /// release through the app's queue a moment apart, as the mouse's come.
-        private static func click(_ identifier: String, inSheetOf app: RunningApp) throws {
-            let location = try app.main { _ -> NSPoint in
+        /// release through the app's queue a moment apart, as the mouse's come: a segmented control on its
+        /// `segment`, its segments as wide as each other. While the app isn't in front a press goes nowhere, so
+        /// there the segment is chosen as the keyboard chooses it, and this returns false.
+        @discardableResult
+        private static func click(_ identifier: String, segment: Int? = nil, inSheetOf app: RunningApp) throws -> Bool {
+            let location = try app.main { _ -> NSPoint? in
                 guard let sheet = Views.editorWindow?.attachedSheet, let marker = Views.shown(identifier, in: sheet)
                 else { throw ScenarioFailure("\(identifier) isn't in the sheet") }
                 let frame = marker.convert(marker.bounds, to: nil)
-                return NSPoint(x: frame.midX, y: frame.midY)
+                guard let segment else { return NSPoint(x: frame.midX, y: frame.midY) }
+                func segmented(_ view: NSView) -> NSSegmentedControl? {
+                    if let control = view as? NSSegmentedControl, control.convert(control.bounds, to: nil)
+                        .intersects(frame) {
+                        return control
+                    }
+                    return view.subviews.lazy.compactMap(segmented).first
+                }
+                guard let control = sheet.contentView.flatMap(segmented), segment < control.segmentCount
+                else { throw ScenarioFailure("\(identifier) has no segmented control with a segment \(segment)") }
+                guard NSApp.isActive, sheet.isKeyWindow else {
+                    control.selectedSegment = segment
+                    control.sendAction(control.action, to: control.target)
+                    return nil
+                }
+                let width = control.bounds.width / CGFloat(control.segmentCount)
+                let box = control.convert(
+                    CGRect(x: width * CGFloat(segment), y: 0, width: width, height: control.bounds.height), to: nil,
+                )
+                return NSPoint(x: box.midX, y: box.midY)
             }
+            guard let location else { return false }
             for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
                 try app.main { _ in
                     guard let sheet = Views.editorWindow?.attachedSheet,
@@ -842,6 +949,7 @@
                 }
                 app.pause(0.08)
             }
+            return true
         }
 
         static let formats = Scenario(

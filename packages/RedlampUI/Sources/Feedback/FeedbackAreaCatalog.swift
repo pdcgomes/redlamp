@@ -437,6 +437,14 @@ public extension FeedbackArea {
                     ["jpeg", "jpg", "heic", "avif", "png", "tiff", "quality", "bit depth", "file size"],
                 ),
                 FeedbackFeature("size", "Size and Resizing", ["resize", "long edge", "megapixels", "dimensions"]),
+                FeedbackFeature(
+                    "sharpening", "Output Sharpening", [
+                        "output sharpening",
+                        "sharpen for screen",
+                        "crisp",
+                        "soft export",
+                    ],
+                ),
                 FeedbackFeature("metadata", "Metadata", ["exif", "gps", "location", "copyright"]),
                 FeedbackFeature(
                     "presets",
