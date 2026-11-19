@@ -68,7 +68,7 @@ A reduced export is developed at full resolution in linear light, reduced with L
 
 Amounts are 0.54, 0.9 and 1.44 for Low, Standard and High. They, the sigma and the mask were fitted to Lightroom's Screen sharpening at the same names, measured from its exports of a test chart in November 2026, which this operator matches to within 0.02 of gain at every grating period and amplitude below 0.35, and within 0.004 on a 1 px line. It is fixed in output pixels and has no threshold, as Lightroom's is. Lightroom's operator also shifts colour at edges between colours; this one does not, by design.
 
-The resampler alone keeps 100% of modulation down to a 3.3 px period and 54% at Nyquist (6000 → 2048 px), so sharpening is an added crispness rather than a correction of what reducing loses: Standard raises a 4 px grating's contrast by 27%. It is off unless chosen, so an export without it is the same file, to the byte, as before sharpening existed.
+The resampler alone keeps 100% of modulation down to a 3.3 px period and 54% at Nyquist (6000 → 2048 px), so sharpening is an added crispness rather than a correction of what reducing loses: Standard raises a 4 px grating's contrast by 27%. Redlamp's reduction keeps more fine detail than Lightroom's, so a reduced file at a level is crisper than Lightroom's at the same name; the owner chose this over amounts fitted to Lightroom's files (`docs/research/notes/EDT-28-output-sharpening.md`). It is off unless chosen, so an export without it is the same file, to the byte, as before sharpening existed.
 
 ## Later
 

@@ -86,8 +86,10 @@ Redlamp's column is a textbook Lanczos-3, widened to the reduction: computed ind
 
 At a 4 px period Redlamp's Low is close to Lightroom's Standard (1.280 against 1.307); at 3 px and finer, Redlamp's Low is above it.
 
+Amounts fitted to the files instead were worked out and not adopted. The amount for each level that brings the reduced file's grating contrast nearest Lightroom's file's at the same level, over periods of 16 to 3 px and amplitudes of 0.02 and 0.10, is about 0.20, 0.52 and 1.00 for Low, Standard and High, with the same sigma, leaving an rms difference of 0.03 to 0.04 in gain; a wider Gaussian (sigma 1.2 px, 5 × 5) fits a little better. The owner compared exports at Lightroom's amounts on 19 November 2026 and kept them: a reduced file from Redlamp at a level is crisper than Lightroom's at the same name, and Lightroom's unsharpened reduction shows moiré on the chart's zone plate where Redlamp's doesn't.
+
 ## Choices
 
 - Luminance is taken in linear light and encoded, rather than as a weighted sum of encoded channels: on greys the two are the same, and edges of equal luminance stay as they are.
 - Only reduced exports are sharpened. Redlamp's Lanczos-3 keeps 100% of modulation down to a 3.3 px period and 54% at Nyquist (6000 → 2048 px), so this is an added crispness, as Lightroom's is, rather than a correction for the reduction.
-- The levels keep Lightroom's names and strengths, so a photographer's habits carry over; Standard raises a 4 px grating's contrast by 27%.
+- The levels keep Lightroom's names and its operator's amounts, which the owner preferred to amounts fitted to Lightroom's files: on a reduced export, Standard raises a 4 px grating's contrast by 27% over Redlamp's own unsharpened reduction, which is already crisper than Lightroom's.
