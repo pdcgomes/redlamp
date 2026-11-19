@@ -166,6 +166,7 @@ public struct ExportSheet: View {
                     recipe.map { settings.border.apply(to: $0).borderLayout(imageSize: size).hasBorder }
                 } ?? false,
                 sizing: $settings.sizing,
+                sharpening: $settings.sharpening,
             )
             Section {
                 Picker("Metadata", selection: $settings.metadata) {
