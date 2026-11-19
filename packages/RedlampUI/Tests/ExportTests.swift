@@ -49,6 +49,7 @@ struct ExportTests {
         settings.colorSpace = .displayP3
         settings.sizing = ExportSizing(mode: .longEdge)
         settings.sizing.longEdge = 300
+        settings.sharpening = .standard
         let url = try ExportDestination.url(
             "IMG_0001-redlamp", for: #require(model.info).url, settings: settings, reading: engine.files,
         )
@@ -60,6 +61,7 @@ struct ExportTests {
         #expect(request.maxLongEdge == 300)
         #expect(request.bitsPerComponent == 16)
         #expect(request.colorSpace == .displayP3)
+        #expect(request.outputSharpening == .standard)
         #expect(request.purpose == .export)
         #expect(request.source == folder.appending(path: "IMG_0001.ARW"))
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))

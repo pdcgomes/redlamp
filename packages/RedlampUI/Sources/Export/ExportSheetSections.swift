@@ -231,6 +231,7 @@ struct ExportSizeSection: View {
     let photoSize: PixelSize?
     var bordered = false
     @Binding var sizing: ExportSizing
+    @Binding var sharpening: OutputSharpening
 
     var body: some View {
         Section {
@@ -280,14 +281,22 @@ struct ExportSizeSection: View {
                     Text(readout(photoSize)).monospacedDigit().foregroundStyle(.secondary)
                 }
             }
+            if sizing.mode != .full {
+                Picker("Sharpening", selection: $sharpening) {
+                    ForEach(OutputSharpening.allCases, id: \.self) { Text($0.name).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .automationIdentifier("export.sharpening")
+            }
             field("Resolution", value: $sizing.ppi, unit: "ppi")
         } header: {
             Text("Size")
         } footer: {
             Text("""
             Exports are developed at full resolution and reduced last, so sharpening and texture \
-            look the same at every size. They are never enlarged. Resolution only tells print \
-            layouts how large to place the photo.
+            look the same at every size. Sharpening adds crispness for the screen once a photo is \
+            reduced; a photo exported at full size is left as it is. Exports are never enlarged. \
+            Resolution only tells print layouts how large to place the photo.
             """)
             .formFooter()
         }
