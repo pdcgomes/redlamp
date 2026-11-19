@@ -139,6 +139,34 @@ public enum OutputColorSpace: String, Codable, Sendable, Hashable, CaseIterable 
     }
 }
 
+/// Sharpening for the screen, applied to an export after it is reduced (EDT-28). The amounts are
+/// Lightroom's Screen Low, Standard and High, measured from its exports.
+public enum OutputSharpening: String, Codable, Sendable, Hashable, CaseIterable {
+    case off
+    case low
+    case standard
+    case high
+
+    public var name: String {
+        switch self {
+        case .off: "Off"
+        case .low: "Low"
+        case .standard: "Standard"
+        case .high: "High"
+        }
+    }
+
+    /// The unsharp mask's amount on encoded luminance, at full strength of the tone mask.
+    public var amount: Float {
+        switch self {
+        case .off: 0
+        case .low: 0.54
+        case .standard: 0.9
+        case .high: 1.44
+        }
+    }
+}
+
 /// A full-quality render for export or for the CLI.
 /// What a still is for, which decides how a reduced size is reached.
 public enum StillPurpose: Sendable, Hashable {
@@ -164,6 +192,8 @@ public struct StillRequest: Sendable, Hashable {
     /// as the renderer draws it.
     public var maskOverlay: UUID?
     public var maskOverlayStyle: MaskOverlayStyle = .colorOverlay
+    /// Applied only to an export that is reduced; a full-size export and previews are left as they are.
+    public var outputSharpening: OutputSharpening = .off
 
     public init(
         recipe: EditRecipe,
