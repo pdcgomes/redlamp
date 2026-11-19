@@ -25,25 +25,17 @@ public enum DevelopBackground: String, CaseIterable, Sendable {
         return all[((index + step) % all.count + all.count) % all.count]
     }
 
-    /// The sRGB grey, 0 to 255, as Lightroom draws each (its dark grey being the canvas's own).
-    var gray: Int {
-        switch self {
-        case .white: 0xFF
-        case .lightGray: 0xE3
-        case .gray: 0xBB
-        case .mediumGray: 0x77
-        case .darkGray: 0x1F
-        case .black: 0x01
-        }
-    }
-
-    /// Linear, as the canvas clears to it.
+    /// Linear, as the canvas clears to it: Lightroom's greys (sRGB #ffffff, #e3e3e3, #bbbbbb, #777777, #1f1f1f and
+    /// #010101), its dark grey being the canvas's own.
     var level: Double {
-        if self == .darkGray {
-            return CanvasMetalView.defaultSurround
+        switch self {
+        case .white: 1
+        case .lightGray: 0.7682
+        case .gray: 0.4969
+        case .mediumGray: 0.1845
+        case .darkGray: CanvasMetalView.defaultSurround
+        case .black: 0.0003
         }
-        let encoded = Double(gray) / 255
-        return encoded <= 0.04045 ? encoded / 12.92 : pow((encoded + 0.055) / 1.055, 2.4)
     }
 }
 
