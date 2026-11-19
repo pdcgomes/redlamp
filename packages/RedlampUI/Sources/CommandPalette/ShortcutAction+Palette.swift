@@ -124,6 +124,8 @@ extension ShortcutAction {
         .labReadout: ["lab", "l*a*b*", "readout", "values", "pixel", "histogram", "measure"],
         .infoOverlay: ["info", "metadata", "exif"],
         .lightsOut: ["dim", "lights", "focus"],
+        .cycleDevelopBackground: ["background", "grey", "gray", "surround", "canvas"],
+        .cycleDevelopBackgroundBack: ["background", "grey", "gray", "surround", "canvas"],
         .fullScreenPreview: ["present", "full screen", "fullscreen"],
         .toggleToolbar: ["toolbar"],
         .toggleSidePanels: ["hide panels", "sidebar", "inspector"],
@@ -299,6 +301,7 @@ extension ShortcutAction {
         case .labReadout: "eyedropper.halffull"
         case .infoOverlay: "info.circle"
         case .lightsOut: "lightbulb"
+        case .cycleDevelopBackground, .cycleDevelopBackgroundBack: "circle.lefthalf.filled"
         case .fullScreenPreview: "arrow.up.left.and.arrow.down.right"
         case .toggleToolbar: "menubar.rectangle"
         case .toggleSidePanels, .toggleAllPanels: "rectangle.split.3x1"

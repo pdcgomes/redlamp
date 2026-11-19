@@ -405,6 +405,9 @@ struct AppCommands: Commands {
             }
         }
         Menu("Background Color") {
+            item(.cycleDevelopBackground)
+            item(.cycleDevelopBackgroundBack)
+            Divider()
             ForEach(DevelopBackground.allCases, id: \.self) { background in
                 Toggle(background.title, isOn: Binding(
                     get: { menu.shown.developBackground == background },

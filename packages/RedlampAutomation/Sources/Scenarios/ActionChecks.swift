@@ -314,6 +314,10 @@
                 ActionCheck(action: action, observe: { "\($0.infoOverlay)" }, restore: { app in
                     try app.main { $0.infoOverlay = 0 }
                 })
+            case .cycleDevelopBackground, .cycleDevelopBackgroundBack:
+                ActionCheck(action: action, observe: { "\($0.developBackground)" }, restore: { app in
+                    try app.main { $0.developBackground = .darkGray }
+                })
             case .lightsOut:
                 ActionCheck(action: action, observe: { "\($0.lightsOut)" }, restore: { app in
                     try app.main { $0.lightsOut = 0 }
