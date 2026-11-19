@@ -546,6 +546,10 @@
           "title" : "Size and Resizing"
         },
         {
+          "id" : "export.sharpening",
+          "title" : "Output Sharpening"
+        },
+        {
           "id" : "export.metadata",
           "title" : "Metadata"
         },
