@@ -915,7 +915,7 @@
                 else { throw ScenarioFailure("\(identifier) isn't in the sheet") }
                 let frame = marker.convert(marker.bounds, to: nil)
                 guard let segment else { return NSPoint(x: frame.midX, y: frame.midY) }
-                func segmented(_ view: NSView) -> NSSegmentedControl? {
+                @MainActor func segmented(_ view: NSView) -> NSSegmentedControl? {
                     if let control = view as? NSSegmentedControl, control.convert(control.bounds, to: nil)
                         .intersects(frame) {
                         return control
