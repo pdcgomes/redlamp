@@ -31,9 +31,11 @@ import UniformTypeIdentifiers
                             ? .sample : .zoom),
                     surround: model.colorAssessment
                         ? CanvasMetalView.assessmentSurround
+                        : model.lightsOut == 0 ? model.developBackground.level
                         : PhotoSurround.level(lightsOut: model.lightsOut),
                     whiteFrame: model.colorAssessment ? CanvasMetalView.assessmentFrame : 0,
                     forwardsCoveredEvents: model.commandPalette == nil,
+                    surroundMenu: { DevelopBackgroundPreference.shared.menu() },
                     onSample: { model.sampleEyedropper(at: $0) },
                     onHover: { model.hoverReadout(at: $0) },
                     onCommandScroll: { model.scrollSizedBrush(by: $0, feather: $1) },

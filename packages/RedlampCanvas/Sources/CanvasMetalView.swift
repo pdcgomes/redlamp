@@ -45,6 +45,7 @@ public final class CanvasMetalView: NSView {
     /// ⌘-scroll over the canvas, in notches (positive away from you), with Shift held or not.
     /// Returns whether it took the event; otherwise it zooms or pans as plain scrolling does.
     var onCommandScroll: ((Double, Bool) -> Bool)?
+    var surroundMenu: (() -> NSMenu?)?
     var surround = CanvasMetalView.defaultSurround {
         didSet {
             if surround != oldValue {
@@ -319,6 +320,13 @@ public final class CanvasMetalView: NSView {
         guard point != hovered else { return }
         hovered = point
         onHover(point)
+    }
+
+    override public func menu(for event: NSEvent) -> NSMenu? {
+        guard interactive, let surroundMenu,
+              controller.imagePoint(for: convert(event.locationInWindow, from: nil)) == nil
+        else { return super.menu(for: event) }
+        return surroundMenu()
     }
 
     /// A non-interactive canvas (the Navigator) leaves clicks to the SwiftUI views over it.
