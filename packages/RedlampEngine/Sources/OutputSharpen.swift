@@ -1,5 +1,6 @@
 import Foundation
 import Metal
+import RedlampColor
 import RedlampEngineAPI
 import RedlampKernels
 
@@ -45,7 +46,7 @@ enum OutputSharpen {
     /// The output primaries' luminance weights (the Y row of their RGB to XYZ matrix).
     static func lumaWeights(_ colorSpace: OutputColorSpace) -> SIMD4<Float> {
         switch colorSpace {
-        case .sRGB: SIMD4(0.2126, 0.7152, 0.0722, 0)
+        case .sRGB: SIMD4(Luma.rec709, 0)
         case .displayP3: SIMD4(0.228_975, 0.691_739, 0.079_287, 0)
         }
     }
