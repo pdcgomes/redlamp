@@ -11,7 +11,7 @@ import RedlampEngineAPI
 /// waiting for a drawable never blocks input handling.
 public final class CanvasMetalView: NSView {
     /// Neutral surround, linear. Matches Lightroom's default dark grey (#1f1f1f).
-    public static let defaultSurround = 0.0137
+    public nonisolated static let defaultSurround = 0.0137
     /// The colour-assessment surround (ISO 12646): middle grey, L* 50.
     public static let assessmentSurround = 0.184
     /// The colour-assessment view's white frame, as a fraction of the photo's shorter side.
