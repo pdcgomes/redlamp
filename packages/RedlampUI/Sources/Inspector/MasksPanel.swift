@@ -2,79 +2,227 @@ import RedlampDesign
 import RedlampEngineAPI
 import SwiftUI
 
-/// The Masking tool's panel, as redesigned (`docs/plans/2026-10-07-masks-panel-design.md`), and
-/// the reference its AppKit port in the editor (`MasksPanelView`) is checked against. From UX-20:
+/// The Masking tool's panels, as redesigned (`docs/plans/2026-10-07-masks-panel-design.md`), and
+/// the reference their AppKit port in the editor (`MasksPanelView`) is checked against. From UX-20:
 /// one picker starts every mask, the list's actions sit in the header, and messages and the
 /// armed tool show at the top of the list. From UX-22: every
 /// action is on screen, not only in context menus. From UX-23: each row shows its mask's
 /// coverage, the canvas previews the mask or component under the pointer, and pins sit where
 /// each mask covers most. From UX-21: People opens a picker of who is in the photo and which of
-/// their parts to mask. From UX-26: Landscape opens a picker of the regions found in it.
+/// their parts to mask. From UX-26: Landscape opens a picker of the regions found in it. From
+/// UX-17: three cards, as the Develop panels are: Masks, the selected mask with its components,
+/// and its Adjustments.
 @_spi(Harness) public struct MasksPanel: View {
     @Environment(EditorModel.self) private var model
 
     public init() {}
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MasksHeaderNext()
-            if model.drawingKind != nil || model.isRefiningEdges {
-                DrawingHint()
-            }
-            MaskMessages()
-            if model.peoplePicker != nil {
-                OpenPeoplePicker()
-            } else if model.landscapePicker != nil {
-                OpenLandscapePicker()
-            } else if model.maskOutlines.isEmpty {
-                MaskPicker(mode: .new, inline: true)
-                    .padding(.horizontal, Theme.panelPadding)
-                    .padding(.bottom, 12)
-            } else {
-                MaskList()
-                    .padding(.horizontal, Theme.panelPadding)
-                    .padding(.bottom, 8)
-                    .background(MaskThumbnailRefresher())
-                Rectangle().fill(Theme.divider).frame(height: 1)
-                if let mask = model.selectedOutline {
-                    SelectedMaskEditor(mask: mask)
-                } else {
-                    NoMaskSelected()
+        let picking = model.peoplePicker != nil || model.landscapePicker != nil
+        VStack(spacing: Theme.panelCardGap) {
+            // The list reaches the card's sides; the rest of the panel's rows pad themselves.
+            MaskPanelSection(panel: .masks, sidePadding: 0, bottomPadding: 2) {
+                MasksHeaderControls()
+            } content: {
+                Group {
+                    if model.drawingKind != nil || model.isRefiningEdges {
+                        DrawingHint()
+                    }
+                    MaskMessages()
                 }
+                .padding(.horizontal, Theme.panelCardPadding)
+                if model.peoplePicker != nil {
+                    OpenPeoplePicker()
+                        .padding(.horizontal, Theme.panelCardPadding)
+                } else if model.landscapePicker != nil {
+                    OpenLandscapePicker()
+                        .padding(.horizontal, Theme.panelCardPadding)
+                } else if model.maskOutlines.isEmpty {
+                    MaskPicker(mode: .new, inline: true)
+                        .padding(.horizontal, Theme.panelCardPadding)
+                        .padding(.bottom, 8)
+                } else {
+                    MaskList()
+                        .padding(.bottom, 8)
+                        .background(MaskThumbnailRefresher())
+                    if model.selectedOutline == nil {
+                        NoMaskSelected()
+                            .padding(.horizontal, Theme.panelCardPadding)
+                    }
+                }
+                NewMaskRow()
+                    .padding(.horizontal, Theme.panelCardPadding)
+            }
+            if !picking, let mask = model.selectedOutline {
+                MaskPanelSection(
+                    panel: .mask, title: mask.name,
+                    parameters: [.maskAmount, .maskDetail] + Self.toolParameters(Self.componentTools(model)),
+                ) {
+                    MaskHeaderControls(mask: mask)
+                } content: {
+                    MaskSettings(mask: mask)
+                }
+                MaskPanelSection(
+                    panel: .adjustments, parameters: ParameterID.localParameters + ParameterID.pointColorParameters,
+                    reset: { model.resetMaskAdjustments(mask.id) },
+                ) {
+                    MaskEditedChip(mask: mask.id)
+                } content: {
+                    MaskAdjustments(mask: mask)
+                }
+                .onHover { model.pointerOverMaskAdjustments = $0 }
+                .onDisappear { model.pointerOverMaskAdjustments = false }
             }
         }
         .task(id: model.maskOutlines) { await model.findPeopleForNames() }
     }
 }
 
-/// The panel's title, New Mask, and the controls that act on every mask, so they stay put as
-/// the list grows.
-struct MasksHeaderNext: View {
+/// One of the Masking tool's panels, drawn as `PanelSection` draws a Develop panel: a card whose
+/// header expands and collapses it (Option-click for Solo Mode), with `accessory` at its trailing
+/// edge. A double-click on Adjustments' header resets the mask's adjustments.
+struct MaskPanelSection<Accessory: View, Content: View>: View {
+    let panel: MaskPanelID
+    var title: String?
+    /// The sliders the panel can show, whose values share one column.
+    var parameters: [ParameterID] = []
+    var reset: (() -> Void)?
+    var sidePadding = Theme.panelCardPadding
+    var bottomPadding: CGFloat = 14
+    @ViewBuilder var accessory: Accessory
+    @ViewBuilder var content: Content
+
+    @Environment(EditorModel.self) private var model
+    @State private var hovering = false
+
+    var body: some View {
+        let expanded = model.isExpanded(panel)
+        let shape = RoundedRectangle(cornerRadius: Theme.panelCardRadius, style: .continuous)
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                Image(systemName: panel.symbol)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .frame(width: Theme.panelSymbolSlot)
+                    .padding(.trailing, -2)
+                Text(title ?? panel.title)
+                    .font(Theme.panelTitleFont)
+                    .foregroundStyle(hovering ? Theme.labelHover : Theme.value)
+                    .lineLimit(1)
+                Spacer()
+                accessory
+            }
+            .padding(.horizontal, Theme.panelCardPadding)
+            .frame(height: 32)
+            .background(hovering ? Theme.cardHover : .clear)
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .onTapGesture(count: 2) { reset?() }
+            .onTapGesture {
+                withAnimation(.snappy(duration: 0.2)) {
+                    model.toggleMaskPanel(panel, solo: NSEvent.modifierFlags.contains(.option))
+                }
+            }
+            .contextMenu {
+                if let reset {
+                    Button("Reset \(panel.title)", action: reset)
+                    Divider()
+                }
+                Toggle("Solo Mode", isOn: Bindable(model).soloMode)
+                Button("Expand All Panels") { model.expandedMaskPanels = Set(MaskPanelID.allCases) }
+                Button("Collapse All Panels") { model.expandedMaskPanels = [] }
+            }
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 3) {
+                    content
+                }
+                .padding(.horizontal, sidePadding)
+                .padding(.bottom, bottomPadding)
+                .transition(.opacity)
+            }
+        }
+        .environment(\.valueColumnWidth, ValueFieldView.columnTextWidth(for: parameters.map(\.spec)))
+        .background(Theme.card, in: shape)
+        .overlay(shape.strokeBorder(Theme.divider, lineWidth: 1))
+        .clipShape(shape)
+    }
+}
+
+/// The Adjustments panel's Edited chip: how many kinds of adjustment the mask has changed.
+struct MaskEditedChip: View {
+    let mask: UUID
+    @Environment(EditorModel.self) private var model
+
+    var body: some View {
+        let items = model.editedAdjustments(of: mask)
+        if !items.isEmpty {
+            Text("Edited\u{2009}·\u{2009}\(items.count)")
+                .font(Typography.badge.font)
+                .foregroundStyle(Theme.editedChipText)
+                .padding(.horizontal, Theme.editedChipPadding)
+                .frame(height: TextLine.lineHeight(Typography.badge) + 3)
+                .background(Capsule().fill(Theme.editedChipFill))
+                .help(items.joined(separator: ", "))
+        }
+    }
+}
+
+/// New Mask, as wide as the panel, and Mask Presets, the last row of the Masks panel, under the
+/// list where new masks appear. Before there are masks the picker above makes them, so Mask
+/// Presets takes the row alone, under a label as the picker's groups have.
+struct NewMaskRow: View {
     @Environment(EditorModel.self) private var model
     @State private var picking = false
+
+    var body: some View {
+        Group {
+            if model.maskOutlines.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("FROM PRESET")
+                        .font(Theme.sectionFont)
+                        .tracking(0.6)
+                        .foregroundStyle(Theme.tertiaryLabel)
+                    MaskPresetsMenu(wide: true)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Button {
+                        picking = true
+                    } label: {
+                        Label("New Mask", systemImage: "plus")
+                            .font(Theme.labelFont)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .controlSize(.small)
+                    .disabled(model.info == nil)
+                    .help("Make a new mask")
+                    .automationIdentifier("masks.new")
+                    .popover(isPresented: $picking, arrowEdge: .leading) {
+                        MaskPicker(mode: .new) { picking = false }
+                            .environment(model)
+                    }
+                    MaskPresetsMenu()
+                }
+            }
+        }
+        .padding(.bottom, 10)
+    }
+}
+
+/// The overlay's switch and its options, Pins, and a menu of commands for every mask, in the Masks
+/// panel's header.
+struct MasksHeaderControls: View {
+    @Environment(EditorModel.self) private var model
     @State private var choosingOverlay = false
 
     var body: some View {
         @Bindable var model = model
         HStack(spacing: 6) {
-            Text("Masks")
-                .font(Theme.panelTitleFont)
-                .foregroundStyle(Theme.value)
-            Spacer()
-            Button {
-                picking = true
-            } label: {
-                Label("New Mask", systemImage: "plus").font(Theme.labelFont)
-            }
-            .controlSize(.small)
-            .disabled(model.info == nil)
-            .help("Make a new mask")
-            .automationIdentifier("masks.new")
-            .popover(isPresented: $picking, arrowEdge: .leading) {
-                MaskPicker(mode: .new) { picking = false }
-                    .environment(model)
-            }
-            MaskPresetsMenu()
             headerToggle(
                 model.showMaskOverlay ? "circle.lefthalf.filled" : "circle", isOn: $model.showMaskOverlay,
                 help: "Show Overlay (O)", identifier: "masks.overlay",
@@ -99,8 +247,6 @@ struct MasksHeaderNext: View {
             )
             MaskActionsMenu()
         }
-        .padding(.horizontal, Theme.panelPadding)
-        .padding(.vertical, 10)
     }
 
     private func headerToggle(_ symbol: String, isOn: Binding<Bool>, help: String, identifier: String) -> some View {
@@ -315,8 +461,8 @@ enum MaskKindGroup: String, CaseIterable, Identifiable {
     }
 }
 
-/// Progress, a download's question and failures, at the top of the list where the mask they
-/// concern appears, rather than in a status line under it.
+/// Progress, a download's question and failures, at the top of the Masks panel, rather than in a
+/// status line under it.
 struct MaskMessages: View {
     @Environment(EditorModel.self) private var model
 
@@ -349,7 +495,6 @@ struct MaskMessages: View {
                 }
             }
         }
-        .padding(.horizontal, Theme.panelPadding)
         .padding(.bottom, 8)
     }
 
@@ -367,7 +512,8 @@ struct MaskMessages: View {
     }
 }
 
-/// Add, Subtract and Intersect, each opening the picker for the mask's components.
+/// Add, Subtract and Intersect, sharing the row's width, each opening the picker for the mask's
+/// components.
 struct ComponentOperationButtons: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
@@ -379,7 +525,9 @@ struct ComponentOperationButtons: View {
                 Button {
                     picking = operation
                 } label: {
-                    Label(operation.name, systemImage: operation.symbol).font(Theme.labelFont)
+                    Label(operation.name, systemImage: operation.symbol)
+                        .font(Theme.labelFont)
+                        .frame(maxWidth: .infinity)
                 }
                 .controlSize(.small)
                 .automationIdentifier("masks.\(operation.rawValue)")

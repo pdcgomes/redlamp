@@ -11,21 +11,18 @@ sources = [
 ]
 +++
 
-The list at the top of the Masks panel holds the photo's masks, newest at the top. Each row shows a picture of what the mask covers, white on black in the photo's shape, then its name and an eye that hides the mask or shows it again. A hidden mask stays in the edit, with its name dimmed, but changes nothing.
+The list in the Masks panel holds the photo's masks, oldest at the top and newest at the bottom, just above New Mask. Each row shows a picture of what the mask covers, white on black in the photo's shape, then its name and an eye that hides the mask or shows it again. A hidden mask stays in the edit, with its name dimmed, but changes nothing.
 
 Move the pointer over a row and the photo shows what that mask covers, in the overlay's colour and mode, even while the overlay is off. So does the pointer over a component's row, for that component alone, and over a pin.
 
 ## The list of masks
 
-Click a mask to select it and see its settings. Double-click its name to rename it. Drag a mask onto another to reorder the list; since masks add up, the order doesn't change the photo. New masks are called Mask 1, Mask 2 and so on, and AI masks are named after what they found.
+Click a mask to select it and see its own panel and its Adjustments under the list. Double-click its name to rename it. Drag a mask onto another to reorder the list; since masks add up, the order doesn't change the photo. New masks are called Mask 1, Mask 2 and so on, and AI masks are named after what they found.
 
-The selected row, and the row under the pointer, has a menu button at its end. Right-clicking any row opens the same menu:
+Every row has a menu button at its end. Right-clicking a row opens the same menu:
 
 Rename…
 : Edit its name in place.
-
-Invert
-: Invert the whole mask; the item is ticked while it's inverted.
 
 Duplicate
 : A copy with the same components and adjustments, named after the original with Copy at the end.
@@ -42,7 +39,7 @@ Save as Mask Preset…
 Delete
 : Remove it. The item names the mask, as in Delete Sky; [[⌫]] deletes the selected mask too.
 
-The menu at the right of the panel's header, after Pins, has Update AI Masks, described under [](#masking.ai.ai-masks-stay-where-they-are); Update AI Masks on 6 Photos (or however many) while several photos are selected; and Delete All Masks.
+The menu at the right of the Masks panel's header, after Pins, has Update AI Masks, described under [](#masking.ai.ai-masks-stay-where-they-are); Update AI Masks on 6 Photos (or however many) while several photos are selected; and Delete All Masks.
 
 ## Show one mask alone
 
@@ -52,11 +49,11 @@ The menu at the right of the panel's header, after Pins, has Update AI Masks, de
 
 Every mask but the selected one shows as a white pin on the photo, inside the mask where it covers most, so a crescent's or a ring's pin sits on the shape rather than in its middle. Until Redlamp has drawn the mask's picture, the pin sits at its first component's centre. The pointer over a pin shows that mask on the photo, and its tooltip names it; click the pin to select its mask.
 
-The selected mask shows its components' handles and pins instead, and dragging a pin moves its component. Press [[H]], or click Pins in the panel's header, to hide the pins and handles so you can see the photo, and again to show them.
+The selected mask shows its components' handles and pins instead, and dragging a pin moves its component. Press [[H]], or click Pins in the Masks panel's header, to hide the pins and handles so you can see the photo, and again to show them.
 
 ## The overlay
 
-The overlay's switch, the half-filled circle at the top of the panel, shows what the selected mask covers, in red at 55% to start; [[O]] does the same. The overlay steps aside while you drag one of the mask's adjustments, and while you look at Before. It also steps aside when you choose a tool to make a new mask, so you see only what the new mask selects, and shows the new mask once your first click or stroke has made it.
+The overlay's switch, the half-filled circle in the Masks panel's header, shows what the selected mask covers, in red at 55% to start; [[O]] does the same. The overlay steps aside, with the pins and the selected mask's handles, while the pointer is over the Adjustments panel and while you drag one of the mask's adjustments, so you see the edit itself; it also steps aside while you look at Before. It also steps aside when you choose a tool to make a new mask, so you see only what the new mask selects, and shows the new mask once your first click or stroke has made it.
 
 The button beside the switch, Overlay Options, opens three settings:
 
@@ -86,7 +83,7 @@ Image on Black shows a soft edge for what it is. Use it to check the edge of a S
 
 ## Mask presets
 
-Mask Presets, the wand at the top of the panel, lists Redlamp's presets and then yours. Each preset makes a mask and sets its adjustments; the AI masks in it are found again for the photo it's applied to. A preset is dimmed when the photo can't make its mask. The mask it makes is an ordinary mask, named after the preset, so change anything you like.
+Mask Presets, the wand beside New Mask under the list, or under FROM PRESET while the photo has no masks, lists Redlamp's presets and then yours. Each preset makes a mask and sets its adjustments; the AI masks in it are found again for the photo it's applied to. A preset is dimmed when the photo can't make its mask. The mask it makes is an ordinary mask, named after the preset, so change anything you like.
 
 | Preset | Mask | Adjustments |
 | --- | --- | --- |

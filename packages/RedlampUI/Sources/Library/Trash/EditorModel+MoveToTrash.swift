@@ -64,11 +64,14 @@ public extension EditorModel {
     /// where it would take photos out, in a collection or in Marked; Delete Selected Mask or Spot's in Develop's
     /// Masking
     /// and Healing tools, whether or not one is selected, so a press after the last mask leaves the photo; and Put
-    /// Back's ⌘⌫ in Recently Trashed. Every other action takes its keys where it can run.
+    /// Back's ⌘⌫ in Recently Trashed. The Masking tool's panels take the Develop panels' keys in that tool, whether or
+    /// not they can run, so a key for a panel that isn't shown doesn't open a Develop panel instead. Every other
+    /// action takes its keys where it can run.
     func claimsKey(_ action: ShortcutAction) -> Bool {
         switch action {
         case .deleteMask: module == .develop && (activeTool == .masking || activeTool == .heal)
         case .putBack: library.showsRecentlyTrashed
+        case .maskPanelMasks, .maskPanelMask, .maskPanelAdjustments: module == .develop && activeTool == .masking
         default: canPerform(action)
         }
     }

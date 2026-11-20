@@ -210,13 +210,15 @@ struct NoMaskSelected: View {
         Text("Select a mask to edit its adjustments.")
             .font(Theme.labelFont)
             .foregroundStyle(Theme.secondaryLabel)
-            .padding(Theme.panelPadding)
+            .padding(.bottom, 8)
     }
 }
 
 /// Mask presets: Lightroom-style adaptive ones, which compute their masks for the photo, and
 /// the user's own. With several photos selected, a preset goes to each of them (UX-25).
 struct MaskPresetsMenu: View {
+    /// Alone in its row, as wide as the panel and named.
+    var wide = false
     @Environment(EditorModel.self) private var model
 
     var body: some View {
@@ -241,12 +243,16 @@ struct MaskPresetsMenu: View {
                 }
             }
         } label: {
-            // Its symbol alone: with a label, New Mask beside it has no room at the inspector's width.
-            Image(systemName: "wand.and.stars").font(Theme.labelFont)
+            if wide {
+                Label("Mask Presets", systemImage: "wand.and.stars").font(Theme.labelFont)
+            } else {
+                // Its symbol alone: with a label, New Mask beside it has no room at the inspector's width.
+                Image(systemName: "wand.and.stars").font(Theme.labelFont)
+            }
         }
         .menuStyle(.button)
         .controlSize(.small)
-        .fixedSize()
+        .modifier(WideMenuButton(isOn: wide))
         .help(photos.map { "Mask Presets, applied to the \($0) selected photos" } ?? "Mask Presets")
         .accessibilityLabel("Mask Presets")
         .automationIdentifier("masks.presets")
@@ -256,6 +262,35 @@ struct MaskPresetsMenu: View {
         ForEach(presets) { preset in
             Button(preset.name) { Task { await model.applyMaskPreset(preset) } }
                 .disabled(!model.canApply(preset) || model.aiMaskProgress != nil)
+        }
+    }
+}
+
+/// A menu button as wide as its row, drawn as a small bordered button: a menu keeps the width of
+/// its label, whatever its frame, unless a button style draws it.
+private struct WideMenuButton: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content.buttonStyle(Style())
+        } else {
+            content.fixedSize()
+        }
+    }
+
+    private struct Style: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            // The menu takes the clicks; the button only draws its bezel.
+            Button {} label: {
+                configuration.label
+                    .frame(maxWidth: .infinity)
+                    .overlay(alignment: .trailing) {
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                    }
+            }
+            .allowsHitTesting(false)
+            .contentShape(Rectangle())
         }
     }
 }
@@ -384,7 +419,6 @@ struct DrawingHint: View {
         .foregroundStyle(Theme.label)
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.selection))
-        .padding(.horizontal, Theme.panelPadding)
         .padding(.bottom, 10)
     }
 }
@@ -412,10 +446,13 @@ struct EdgeBrushSize: View {
     }
 }
 
-/// The photo's masks, newest first: each row with its coverage, its name, its eye, and on the
-/// selected row and the one under the pointer a menu of the context menu's actions. The canvas
-/// previews the mask under the pointer.
+/// The photo's masks, oldest first, so a new mask appears beside New Mask under them: each row with its coverage, its
+/// name, its eye and a menu of
+/// the context menu's actions. The canvas previews the mask under the pointer.
 struct MaskList: View {
+    /// From the card's sides to a selected row's highlight.
+    private static let selectionInset: CGFloat = 4
+
     @Environment(EditorModel.self) private var model
     @State private var hovered: UUID?
     @State private var renaming: UUID?
@@ -426,7 +463,7 @@ struct MaskList: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            ForEach(model.maskOutlines.reversed()) { mask in
+            ForEach(model.maskOutlines) { mask in
                 let selected = mask.id == model.selectedMaskID
                 HStack(spacing: 8) {
                     MaskThumbnail(image: model.maskThumbnails[mask.id], symbol: mask.components.first?.kind?.symbol)
@@ -465,25 +502,26 @@ struct MaskList: View {
                     .help(mask
                         .isVisible ? "Hide mask. Option-click to show it alone" :
                         "Show mask. Option-click to show it alone")
-                    if selected || hovered == mask.id {
-                        Menu {
-                            actions(for: mask)
-                        } label: {
-                            Image(systemName: "ellipsis.circle").font(.system(size: 11))
-                        }
-                        .menuStyle(.button)
-                        .buttonStyle(.plain)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
-                        .foregroundStyle(Theme.secondaryLabel)
-                        .help("Rename, Duplicate, Save as Mask Preset, Delete")
-                        .accessibilityLabel("\(mask.name)'s actions")
-                        .automationIdentifier("masks.row.\(mask.id.uuidString).menu")
+                    Menu {
+                        actions(for: mask)
+                    } label: {
+                        Image(systemName: "ellipsis.circle").font(.system(size: 11))
                     }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .help("Rename, Duplicate, Save as Mask Preset, Delete")
+                    .accessibilityLabel("\(mask.name)'s actions")
+                    .automationIdentifier("masks.row.\(mask.id.uuidString).menu")
                 }
-                .padding(.horizontal, 8)
+                // The list spans its card, so its rows' contents line up with the panel's other rows,
+                // and the selection stops short of the card's edges.
+                .padding(.horizontal, Theme.panelCardPadding - Self.selectionInset)
                 .frame(height: 28)
                 .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.selection : .clear))
+                .padding(.horizontal, Self.selectionInset)
                 .contentShape(Rectangle())
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(mask.name)
@@ -557,7 +595,6 @@ struct MaskList: View {
             draftName = mask.name
             renaming = mask.id
         }
-        Toggle("Invert", isOn: Binding(get: { mask.inverted }, set: { model.setMaskInverted(mask.id, $0) }))
         Button("Duplicate") { model.duplicateMask(mask.id) }
         Button("Duplicate and Invert") { model.duplicateMask(mask.id, inverted: true) }
         Button("Reset Adjustments") { model.resetMaskAdjustments(mask.id) }
@@ -570,74 +607,72 @@ struct MaskList: View {
     }
 }
 
-/// The selected mask's settings: its name with Invert and Reset, Amount, its components, the
-/// selected component's own settings, then its effect and adjustments.
-struct SelectedMaskEditor: View {
+/// The selected mask's own panel, under its name and Invert: Amount and Detail (which act on the
+/// whole mask), its components, and the selected component's own settings.
+struct MaskSettings: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            SubsectionHeader(title: mask.name, parameters: []) {
-                MaskHeaderControls(mask: mask)
-            }
-            ParameterSlider(parameter: .maskAmount)
-            Spacer().frame(height: 6)
-            SubsectionHeader(title: "Components, applied top to bottom", parameters: [])
-            ForEach(mask.components) { component in
-                ComponentRow(mask: mask, component: component)
-            }
-            ComponentOperationButtons(mask: mask)
-                .padding(.top, 4)
-
-            switch MasksPanel.componentTools(model) {
-            case .radial:
-                ParameterSlider(parameter: .maskFeather)
-                    .padding(.top, 6)
-            case .brush:
-                BrushChoicePicker()
-                    .padding(.top, 6)
-                ForEach(ParameterID.brushParameters, id: \.self) { parameter in
-                    ParameterSlider(parameter: parameter)
-                }
-                AutoMaskToggle()
-            case .colorRange:
-                ParameterSlider(parameter: .maskColorRefine)
-                    .padding(.top, 6)
-                ColorSampleList()
-            case .luminanceRange:
-                LuminanceRangeEditor()
-                    .padding(.top, 6)
-            case .depthRange:
-                DepthRangeEditor()
-                    .padding(.top, 6)
-            case let kind? where kind.isAI:
-                ParameterSlider(parameter: .maskAIFeather)
-                    .padding(.top, 6)
-                ParameterSlider(parameter: .maskAIEdge)
-                AIComponentTools(mask: mask)
-            default:
-                EmptyView()
-            }
-
-            Spacer().frame(height: 6)
-            ParameterSlider(parameter: .maskDetail)
-            Spacer().frame(height: 4)
-            MaskEffectMenu(mask: mask)
-            ForEach(ParameterID.localParameters.filter { !ParameterID.swatchParameters.contains($0) }, id: \.self) {
-                parameter in
-                ParameterSlider(parameter: parameter)
-                if MasksPanel.gapAfter.contains(parameter) {
-                    Spacer().frame(height: 4)
-                }
-            }
-            MaskColorSwatch()
-            MaskCurvesEditor()
-                .padding(.top, 6)
-            MaskPointColor(mask: mask)
+        ParameterSlider(parameter: .maskAmount)
+        ParameterSlider(parameter: .maskDetail)
+        Spacer().frame(height: 6)
+        SubsectionHeader(title: "Components, applied top to bottom", parameters: [])
+        ForEach(mask.components) { component in
+            ComponentRow(mask: mask, component: component)
         }
-        .padding(.horizontal, Theme.panelPadding)
-        .padding(.bottom, 14)
+        ComponentOperationButtons(mask: mask)
+            .padding(.top, 4)
+
+        switch MasksPanel.componentTools(model) {
+        case .radial:
+            ParameterSlider(parameter: .maskFeather)
+                .padding(.top, 6)
+        case .brush:
+            BrushChoicePicker()
+                .padding(.top, 6)
+            ForEach(ParameterID.brushParameters, id: \.self) { parameter in
+                ParameterSlider(parameter: parameter)
+            }
+            AutoMaskToggle()
+        case .colorRange:
+            ParameterSlider(parameter: .maskColorRefine)
+                .padding(.top, 6)
+            ColorSampleList()
+        case .luminanceRange:
+            LuminanceRangeEditor()
+                .padding(.top, 6)
+        case .depthRange:
+            DepthRangeEditor()
+                .padding(.top, 6)
+        case let kind? where kind.isAI:
+            ParameterSlider(parameter: .maskAIFeather)
+                .padding(.top, 6)
+            ParameterSlider(parameter: .maskAIEdge)
+            AIComponentTools(mask: mask)
+        default:
+            EmptyView()
+        }
+    }
+}
+
+/// The selected mask's adjustments panel: its effect, its sliders, Color, Curves and Point Color.
+struct MaskAdjustments: View {
+    let mask: MaskOutline
+
+    var body: some View {
+        MaskEffectMenu(mask: mask)
+        ForEach(ParameterID.localParameters.filter { !ParameterID.swatchParameters.contains($0) }, id: \.self) {
+            parameter in
+            ParameterSlider(parameter: parameter)
+            if MasksPanel.gapAfter.contains(parameter) {
+                Spacer().frame(height: 4)
+            }
+        }
+        MaskColorSwatch()
+        MaskCurvesEditor()
+            .padding(.top, 6)
+        MaskPointColor(mask: mask)
     }
 }
 
@@ -656,6 +691,17 @@ extension MasksPanel {
             return kind
         }
         return [.radial, .brush, .colorRange, .luminanceRange].contains(kind) ? kind : nil
+    }
+
+    /// The sliders among a component's settings (`componentTools`).
+    static func toolParameters(_ tools: MaskKind?) -> [ParameterID] {
+        switch tools {
+        case .radial: [.maskFeather]
+        case .brush: ParameterID.brushParameters
+        case .colorRange: [.maskColorRefine]
+        case let kind? where kind.isAI: [.maskAIFeather, .maskAIEdge]
+        default: []
+        }
     }
 }
 
@@ -957,19 +1003,8 @@ struct MaskEffectMenu: View {
     }
 }
 
-struct ResetMaskButton: View {
-    let mask: MaskOutline
-    @Environment(EditorModel.self) private var model
-
-    var body: some View {
-        Button("Reset") { model.resetMaskAdjustments(mask.id) }
-            .controlSize(.mini)
-            .automationIdentifier("masks.mask.reset")
-    }
-}
-
-/// Invert for the whole mask, and Reset, beside its name at the top of its settings. The AppKit
-/// panel keeps a mask's settings through an Invert, so this reads the mask's state from the model.
+/// Invert for the whole mask, in its panel's header beside its name. The AppKit panel keeps
+/// a mask's settings through an Invert, so this reads the mask's state from the model.
 struct MaskHeaderControls: View {
     let mask: MaskOutline
     @Environment(EditorModel.self) private var model
@@ -978,11 +1013,10 @@ struct MaskHeaderControls: View {
         let inverted = model.maskOutlines.first { $0.id == mask.id }?.inverted ?? mask.inverted
         Toggle("Invert", isOn: Binding(get: { inverted }, set: { model.setMaskInverted(mask.id, $0) }))
             .toggleStyle(.checkbox)
-            .controlSize(.mini)
-            .font(Theme.captionFont)
+            .controlSize(.small)
+            .font(Theme.labelFont)
             .help("Invert the whole mask")
             .automationIdentifier("masks.mask.invert")
-        ResetMaskButton(mask: mask)
     }
 }
 
@@ -1076,8 +1110,8 @@ struct ComponentRow: View {
                 set: { model.setComponentInverted(component.id, in: mask.id, $0) },
             ))
             .toggleStyle(.checkbox)
-            .controlSize(.mini)
-            .font(Theme.captionFont)
+            .controlSize(.small)
+            .font(Theme.labelFont)
             .automationIdentifier("masks.component.\(component.id.uuidString).invert")
             Menu {
                 refinements

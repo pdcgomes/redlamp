@@ -206,9 +206,16 @@ public extension ShortcutAction {
     /// The actions this one lets have the keys it shares with them where they take them (`EditorModel.claimsKey`),
     /// answering those keys itself elsewhere (LIB-46): Move to Trash's ⌫ is Remove from Collection's in a collection
     /// and in Marked, and Delete Selected Mask or Spot's in Develop's Masking and Healing tools; its ⌘⌫ is Put Back's
-    /// in Recently Trashed, as the Finder's is in the Trash.
+    /// in Recently Trashed, as the Finder's is in the Trash. The first three Develop panels' keys are the Masking
+    /// tool's panels' there (UX-17).
     var givesKeys: Set<ShortcutAction> {
-        self == .moveToTrash ? [.removeFromCollection, .deleteMask, .putBack] : []
+        switch self {
+        case .moveToTrash: [.removeFromCollection, .deleteMask, .putBack]
+        case .panelBasic: [.maskPanelMasks]
+        case .panelToneCurve: [.maskPanelMask]
+        case .panelColorMixer: [.maskPanelAdjustments]
+        default: []
+        }
     }
 
     /// The actions another gives the keys they share (`givesKeys`).

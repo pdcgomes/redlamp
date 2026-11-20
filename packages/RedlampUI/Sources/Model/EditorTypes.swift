@@ -279,6 +279,34 @@ public enum PanelID: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// The Masking tool's panels, cards as the Develop panels are (UX-17): the photo's masks, the
+/// selected mask with its components, and the selected mask's adjustments.
+public enum MaskPanelID: String, CaseIterable, Identifiable, Sendable {
+    case masks, mask, adjustments
+
+    public var id: String {
+        rawValue
+    }
+
+    /// The panel's title; the mask's own panel is titled with the mask's name.
+    public var title: String {
+        switch self {
+        case .masks: "Masks"
+        case .mask: "Mask"
+        case .adjustments: "Adjustments"
+        }
+    }
+
+    /// The glyph beside the panel's title.
+    public var symbol: String {
+        switch self {
+        case .masks: EditTool.masking.symbol
+        case .mask: "square.on.circle"
+        case .adjustments: "slider.vertical.3"
+        }
+    }
+}
+
 /// The left column's panels, top to bottom.
 public enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
     case navigator, folders, baseLooks, recipes, snapshots, history

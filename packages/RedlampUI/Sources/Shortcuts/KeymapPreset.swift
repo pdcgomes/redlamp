@@ -52,11 +52,22 @@ public enum KeymapPreset: String, CaseIterable, Sendable, Identifiable {
         .bridge: bridgeKeys,
     ]
 
-    /// The Develop panels where ⌘1 to ⌘9 are the other app's stars or labels.
+    /// The Develop panels where ⌘1 to ⌘9 are the other app's stars or labels, and the Masking tool's panels, which
+    /// share the first three panels' keys, with them.
     private static let panelsOnControl: [ShortcutAction: [KeyCombo]] = Dictionary(uniqueKeysWithValues: [
-        ShortcutAction.panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail, .panelLens,
-        .panelTransform, .panelEffects, .panelCalibration,
-    ].enumerated().map { index, action in
+        [
+            ShortcutAction.panelBasic,
+            .panelToneCurve,
+            .panelColorMixer,
+            .panelColorGrading,
+            .panelDetail,
+            .panelLens,
+            .panelTransform,
+            .panelEffects,
+            .panelCalibration,
+        ],
+        [ShortcutAction.maskPanelMasks, .maskPanelMask, .maskPanelAdjustments],
+    ].flatMap { $0.enumerated() }.map { index, action in
         (action, [KeyCombo.char(Character("\(index + 1)"), command: true, control: true)])
     })
 

@@ -16,14 +16,14 @@ Drawn components follow your hand, not the photo. They need no download, they ap
 
 ## Linear Gradient
 
-Press [[M]], or choose Linear Gradient in the picker, then drag on the photo from where the effect should be full to where it should have faded out. The strip under the panel's header says the same: Drag on the photo from full effect to no effect. A click without a drag places a gradient that fades over a quarter of the photo's height, downwards from the click.
+Press [[M]], or choose Linear Gradient in the picker, then drag on the photo from where the effect should be full to where it should have faded out. The strip at the top of the Masks panel says the same: Drag on the photo from full effect to no effect. A click without a drag places a gradient that fades over a quarter of the photo's height, downwards from the click.
 
 The gradient is drawn as three lines: a solid line where the effect is full, a dashed line through the middle, and a solid line where it ends. Drag the round handle at either end to move that end, which also turns the gradient; drag the pin in the middle to move the whole gradient. A linear gradient has no settings of its own, so with it selected the mask's adjustments follow straight after Add, Subtract and Intersect.
 
 ### Darken a bright sky
 
 1. Press [[M]] and drag from the top of the sky to just below the horizon.
-2. Lower Exposure and Highlights in the mask's section.
+2. Lower Exposure and Highlights in the Adjustments panel.
 3. If the gradient darkens a building or a tree that rises above the horizon, click Intersect and choose Sky: the gradient then darkens only the sky, still fading towards the horizon.
 
 ## Radial Gradient
@@ -39,7 +39,7 @@ Feather
 
 ## Brush
 
-Press [[K]], or choose Brush in the picker, and paint on the photo. The brush stays ready until you click Done, in the strip under the panel's header, and every stroke goes into the same component, so you can paint in as many passes as you like. To paint more into a brush component later, click the brush on its row (Paint into this brush).
+Press [[K]], or choose Brush in the picker, and paint on the photo. The brush stays ready until you click Done, in the strip at the top of the Masks panel, and every stroke goes into the same component, so you can paint in as many passes as you like. To paint more into a brush component later, click the brush on its row (Paint into this brush).
 
 ### A, B and Erase
 

@@ -606,6 +606,16 @@ public final class EditorModel {
         }
     }
 
+    /// Whether the pointer is over the Masking tool's Adjustments panel, where the canvas shows the edit
+    /// alone (`showsMaskEditAlone`). A finger never hovers, so a drag on a slider does the same.
+    public internal(set) var pointerOverMaskAdjustments = false {
+        didSet {
+            if pointerOverMaskAdjustments != oldValue, activeTool == .masking {
+                requestRender()
+            }
+        }
+    }
+
     /// The component under the pointer in the new Masks panel, whose own coverage the canvas
     /// previews (`componentPreview`).
     public var hoveredComponentID: UUID? {
@@ -679,6 +689,7 @@ public final class EditorModel {
     /// The user's mask effects; a test gives the model a store of its own.
     @ObservationIgnored var maskEffectStore = MaskEffectStore.shared
     public var expandedPanels: Set<PanelID> = [.basic, .toneCurve, .colorMixer]
+    public var expandedMaskPanels = Set(MaskPanelID.allCases)
     public var expandedSidebarSections = Set(SidebarSection.allCases)
     public var soloMode = false
     public var leftPanelVisible = true
@@ -1924,17 +1935,24 @@ public final class EditorModel {
         return abs(self[observing: parameter] - parameter.spec.defaultValue) > 1e-9
     }
 
-    /// The mask the canvas overlays: the selected one in the Masking tool, except while one of
-    /// its adjustments is being dragged, so the edit itself shows (Lightroom's automatic overlay
-    /// toggle), and while a tool is armed for a new mask, so what it selects shows alone. Sliders
-    /// that shape the mask (Feather, Detail, Refine) keep it. The mask under the pointer in the
-    /// list, or on its pin with the pointer over the canvas, shows instead, overlay on or off.
+    /// The mask the canvas overlays: the selected one in the Masking tool, except while the edit
+    /// shows alone (`showsMaskEditAlone`), and while a tool is armed for a new mask, so what it
+    /// selects shows alone. Sliders that shape the mask (Feather, Detail, Refine) keep it. The mask
+    /// under the pointer in the list, or on its pin with the pointer over the canvas, shows instead,
+    /// overlay on or off.
     public var maskOverlayShown: UUID? {
-        guard activeTool == .masking, !isShowingOriginal, !isAdjustingMask else { return nil }
+        guard activeTool == .masking, !isShowingOriginal, !showsMaskEditAlone else { return nil }
         if let hovered = hoveredMaskID ?? (pointerOverPanel ? nil : hoveredPinMaskID) {
             return hovered
         }
         return showMaskOverlay && !isArmedForNewMask ? selectedMaskID : nil
+    }
+
+    /// Whether the overlay, the pins and the selected mask's handles step aside so the edit itself
+    /// shows: while the pointer is over the Adjustments panel, and while one of the mask's adjustments
+    /// is being dragged (Lightroom's automatic overlay toggle), which is all a finger can do.
+    public var showsMaskEditAlone: Bool {
+        isAdjustingMask || (pointerOverMaskAdjustments && selectedMaskID != nil)
     }
 
     /// Whether a mask's adjustment or Amount is being dragged.
@@ -2351,6 +2369,17 @@ public final class EditorModel {
             expandedPanels.remove(panel)
         } else {
             expandedPanels.insert(panel)
+        }
+    }
+
+    /// The Masking tool's panels expand and collapse as the Develop panels do, Solo Mode included.
+    public func toggleMaskPanel(_ panel: MaskPanelID, solo: Bool) {
+        if solo || soloMode {
+            expandedMaskPanels = expandedMaskPanels == [panel] ? [] : [panel]
+        } else if expandedMaskPanels.contains(panel) {
+            expandedMaskPanels.remove(panel)
+        } else {
+            expandedMaskPanels.insert(panel)
         }
     }
 

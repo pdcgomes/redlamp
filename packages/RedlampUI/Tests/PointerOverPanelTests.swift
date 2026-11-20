@@ -152,9 +152,12 @@ struct PointerOverPanelTests {
             model.selectMask(mask)
             try editor.pointer.move(to: location(of: "slider.local.exposure.track", in: editor))
             try await settle(editor)
-            #expect(model.maskOverlayShown == mask, "on the Exposure slider, the overlay is the chosen mask's")
+            #expect(model.maskOverlayShown == nil, "over Adjustments, the edit shows alone before a slider moves")
+            #expect(model.showsMaskEditAlone, "and the pins and handles go with the overlay")
             adjustExposure(editor, by: 0.5)
-            #expect(model.maskOverlayShown == mask, "after dragging Exposure, the chosen mask's overlay is back")
+            try editor.pointer.move(to: location(of: "masks.new", in: editor))
+            try await settle(editor)
+            #expect(model.maskOverlayShown == mask, "back over the Masks panel, the chosen mask's overlay is back")
         }
 
         editor.pointer.move(to: location(of: ImagePoint(x: 0.15, y: 0.2), in: editor))
@@ -201,22 +204,24 @@ struct PointerOverPanelTests {
         #expect(model.maskOverlayShown == selected, "over the photo, away from the pins")
         editor.pointer.move(to: slider)
         try await settle(editor)
-        #expect(model.maskOverlayShown == selected, "the pointer is over the panel, not the pin under it")
+        #expect(model.maskOverlayShown == nil, "the pointer is over Adjustments, not the pin under it: the edit alone")
         adjustExposure(editor, by: 0.5)
         editor.pointer.move(to: NSPoint(x: slider.x + 2, y: slider.y))
         try await settle(editor)
-        #expect(model.maskOverlayShown == selected, "after dragging Exposure, the selected mask's overlay is back")
+        #expect(model.maskOverlayShown == nil, "after dragging Exposure, still over Adjustments, the same")
 
         // The other mask's row still previews it, and only while the pointer is on the row.
         try editor.pointer.move(to: location(of: "masks.row.\(other.uuidString)", in: editor))
         try await settle(editor)
         #expect(model.maskOverlayShown == other, "the row under the pointer previews its mask")
-        editor.pointer.move(to: slider)
+        try editor.pointer.move(to: location(of: "masks.new", in: editor))
         try await settle(editor)
         #expect(model.maskOverlayShown == selected, "off the row, the selected mask's overlay is back")
 
         // Back on the photo, the pin previews its mask as before.
         model.canvas.zoom = .fit
+        try await settle(editor)
+        editor.pointer.move(to: awayFromPins(editor))
         try await settle(editor)
         editor.pointer.move(to: location(of: pinPoint, in: editor))
         try await settle(editor)

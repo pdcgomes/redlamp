@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import RedlampDesign
 import RedlampEngineAPI
 @_spi(Harness) import RedlampUI
 import SwiftUI
@@ -48,6 +49,8 @@ private struct MasksLiveScene: View {
             CanvasArea(onOpen: {})
             ScrollView {
                 MasksPanel()
+                    .padding(.horizontal, Metrics.panelCardMargin)
+                    .padding(.vertical, Metrics.panelCardGap)
             }
             .frame(width: 316)
         }

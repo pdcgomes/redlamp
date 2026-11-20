@@ -140,6 +140,11 @@ public final class PanelSectionView: NSView, HeightProviding {
         true
     }
 
+    /// The panel's rows, whether it's expanded or not.
+    public var rows: [NSView] {
+        body.arrangedViews
+    }
+
     /// Replaces the panel's rows (a panel whose content depends on a mode).
     public func setRows(_ rows: [NSView]) {
         body.setArrangedViews(rows)

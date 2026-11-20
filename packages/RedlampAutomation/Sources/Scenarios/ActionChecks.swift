@@ -510,6 +510,29 @@
                     }
                     try app.wait("the radial mask to be drawn") { !$0.masks.isEmpty && $0.selectedMaskID != nil }
                 }, observe: { "\($0.masks.count)" }, restore: { app in try app.main { $0.activeTool = .edit } })
+            case .maskPanelMasks, .maskPanelMask, .maskPanelAdjustments:
+                ActionCheck(action: action, setUp: { app in
+                    try app.main { model in
+                        model.activeTool = .masking
+                        model.applyDebugCommand("radial", "0.5:0.5:0.2:0.15")
+                    }
+                    try app.wait("the radial mask to be drawn") { !$0.masks.isEmpty && $0.selectedMaskID != nil }
+                    // A model's download question, as Depth Range's check before this one leaves where the model
+                    // isn't on this Mac, or a fresh home's offer of the AI masks' models, holds the Masks panel open.
+                    if try app.main({ $0.pendingModel != nil || $0.offeredModels != nil }) {
+                        try app.tap(.identifier("masks.download.notNow"))
+                    }
+                    try app.main { $0.maskMessage = nil }
+                    try app.wait("the Masks panel free to open and close") { $0.canPerform(action) }
+                }, observe: { model in
+                    "\(model.activeTool) " + MaskPanelID.allCases.map { "\(model.expandedMaskPanels.contains($0))" }
+                        .joined(separator: ",")
+                }, restore: { app in
+                    try app.main { model in
+                        model.expandedMaskPanels = Set(MaskPanelID.allCases)
+                        model.activeTool = .edit
+                    }
+                })
             case .cancel:
                 ActionCheck(action: action, setUp: { app in
                     try app.main { _ = $0.perform(.linearMask) }

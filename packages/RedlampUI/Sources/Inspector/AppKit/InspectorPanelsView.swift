@@ -7,8 +7,8 @@ import SwiftUI
 /// panel. Each control updates only when a value it shows changes.
 final class InspectorPanelsView: PanelColumnScrollView {
     init(model: EditorModel, tool: EditTool) {
-        // The Develop panels are cards, which the column insets and spaces.
-        let cards = tool == .edit
+        // The Develop panels and the Masking tool's are cards, which the column insets and spaces.
+        let cards = tool == .edit || tool == .masking
         super.init(
             spacing: cards ? Metrics.panelCardGap : 0,
             insets: cards ? PanelSectionView.cardColumnInsets : NSEdgeInsets(),

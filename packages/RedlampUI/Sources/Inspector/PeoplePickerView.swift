@@ -177,14 +177,13 @@ struct PeoplePickerView: View {
     }
 }
 
-/// The People picker while it's open, in the list's place, with the panel's margins.
+/// The People picker while it's open, in the list's place in the Masks panel.
 struct OpenPeoplePicker: View {
     @Environment(EditorModel.self) private var model
 
     var body: some View {
         if let picker = model.peoplePicker {
             PeoplePickerView(picker: picker)
-                .padding(.horizontal, Theme.panelPadding)
                 .padding(.bottom, 12)
         }
     }

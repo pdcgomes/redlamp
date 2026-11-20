@@ -14,7 +14,8 @@ extension ShortcutAction {
              .increaseSetting, .decreaseSetting, .findAdjustment,
              .cropAspectLock, .rotateLeft, .rotateRight,
              .brushMask, .linearMask, .radialMask, .colorRangeMask, .luminanceRangeMask, .depthRangeMask,
-             .maskOverlay, .maskOverlayColor, .maskPins, .deleteMask:
+             .maskOverlay, .maskOverlayColor, .maskPins, .deleteMask, .maskPanelMasks, .maskPanelMask,
+             .maskPanelAdjustments:
             true
         default:
             false

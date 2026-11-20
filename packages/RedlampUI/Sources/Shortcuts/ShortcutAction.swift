@@ -169,6 +169,7 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
 
     /// Masking
     case maskOverlay, maskOverlayColor, maskPins, deleteMask, cancel
+    case maskPanelMasks, maskPanelMask, maskPanelAdjustments
 
     // Rating & flags
     case rating0, rating1, rating2, rating3, rating4, rating5
@@ -232,7 +233,8 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
              .linearMask,
              .radialMask, .colorRangeMask, .luminanceRangeMask, .depthRangeMask:
             .tools
-        case .maskOverlay, .maskOverlayColor, .maskPins, .deleteMask, .cancel:
+        case .maskOverlay, .maskOverlayColor, .maskPins, .deleteMask, .cancel, .maskPanelMasks, .maskPanelMask,
+             .maskPanelAdjustments:
             .masking
         case .rating0, .rating1, .rating2, .rating3, .rating4, .rating5, .decreaseRating, .increaseRating,
              .flagPick, .flagReject, .unflag, .labelRed, .labelYellow, .labelGreen, .labelBlue, .labelPurple,
@@ -407,6 +409,9 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .maskPins: "Show / Hide Pins or Spots"
         case .deleteMask: "Delete Selected Mask or Spot"
         case .cancel: "Cancel / Leave Tool"
+        case .maskPanelMasks: "Masks Panel"
+        case .maskPanelMask: "Selected Mask Panel"
+        case .maskPanelAdjustments: "Mask Adjustments Panel"
         case .rating0: "Clear Rating"
         case .rating1: "1 Star"
         case .rating2: "2 Stars"
@@ -594,6 +599,11 @@ public enum ShortcutAction: String, CaseIterable, Sendable, Identifiable {
         case .maskPins: [.char("h")]
         case .deleteMask: [KeyCombo(.delete)]
         case .cancel: [KeyCombo(.escape)]
+        // The Develop panels' first three keys, which the Basic, Tone Curve and Color Mixer panels give them in the
+        // Masking tool (`givesKeys`).
+        case .maskPanelMasks: [.char("1", command: true)]
+        case .maskPanelMask: [.char("2", command: true)]
+        case .maskPanelAdjustments: [.char("3", command: true)]
         case .rating0: [.char("0")]
         case .rating1: [.char("1")]
         case .rating2: [.char("2")]

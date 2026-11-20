@@ -379,6 +379,9 @@ struct AppCommands: Commands {
         Menu("Develop Panels") {
             ForEach(Self.developPanels) { item($0) }
         }
+        Menu("Masking Panels") {
+            ForEach(Self.maskingPanels) { item($0) }
+        }
         Menu("Filmstrip") {
             item(.toggleFilmstrip)
             Toggle("Hide Automatically", isOn: Binding(
@@ -434,6 +437,8 @@ struct AppCommands: Commands {
         .panelBasic, .panelToneCurve, .panelColorMixer, .panelColorGrading, .panelDetail, .panelLens, .panelTransform,
         .panelEffects, .panelCalibration,
     ]
+
+    static let maskingPanels: [ShortcutAction] = [.maskPanelMasks, .maskPanelMask, .maskPanelAdjustments]
 
     /// A menu item for `action`, titled `title` if given. Its first key, if it has ⌘, is the item's key
     /// equivalent unless it isn't `keyed`; a key without ⌘ is shown in the title, because a modifier-free key

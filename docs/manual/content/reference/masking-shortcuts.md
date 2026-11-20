@@ -13,6 +13,8 @@ The table below is read from `ShortcutAction`, the list the app itself uses for 
 
 [[O]] and [[⇧O]] also work in the Crop tool, where [[O]] cycles the crop's overlay and [[⇧O]] turns it. [[H]] also works in the Healing tool, where it hides and shows the spots, and [[⌫]] works only with a mask, or a healing spot, selected.
 
+Masks Panel, Selected Mask Panel and Mask Adjustments Panel have the keys of Basic, Tone Curve and Color Mixer, which they take only in the Masking tool, so a key changed for one is not changed for the other. A key for the selected mask's panels does nothing while no mask is selected, and Masks Panel's does nothing while the panel is held open by a hint, a message or a picker.
+
 ## Keys while you draw
 
 These aren't in the Keyboard Shortcuts sheet: they change what a drag or a stroke does.

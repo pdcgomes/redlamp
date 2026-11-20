@@ -23,6 +23,64 @@ public extension EditorModel {
         return mask.components.first { $0.id == selectedComponentID } ?? mask.components.last
     }
 
+    // MARK: - Panels
+
+    /// Whether one of the Masking tool's panels shows its rows. The Masks panel stays open while
+    /// it holds the drawing hint, a message or the People or Landscape picker, which its header's
+    /// New Mask can open while it's collapsed.
+    func isExpanded(_ panel: MaskPanelID) -> Bool {
+        (panel == .masks && masksPanelHeldOpen) || expandedMaskPanels.contains(panel)
+    }
+
+    /// Whether the Masks panel has something to show that keeps it open, whatever its header says.
+    var masksPanelHeldOpen: Bool {
+        drawingKind != nil || isRefiningEdges || peoplePicker != nil || landscapePicker != nil
+            || aiMaskProgress != nil || maskMessage != nil || pendingModel != nil || offeredModels != nil
+            || modelDownloadProgress != nil
+    }
+
+    /// Whether one of the Masking tool's panels is on screen to expand or collapse: the selected mask's two
+    /// while a mask is selected and no picker has put them away, and Masks unless it's held open.
+    func canToggle(_ panel: MaskPanelID) -> Bool {
+        guard activeTool == .masking else { return false }
+        switch panel {
+        case .masks: return !masksPanelHeldOpen
+        case .mask, .adjustments: return selectedOutline != nil && peoplePicker == nil && landscapePicker == nil
+        }
+    }
+
+    /// Opens or closes one of the Masking tool's panels from its key, as `revealPanel` does a Develop panel, and
+    /// whether it could.
+    func revealMaskPanel(_ panel: MaskPanelID) -> Bool {
+        guard canToggle(panel) else { return false }
+        rightPanelVisible = true
+        if expandedMaskPanels.contains(panel) {
+            expandedMaskPanels.remove(panel)
+        } else {
+            toggleMaskPanel(panel, solo: soloMode)
+        }
+        return true
+    }
+
+    /// What the mask's adjustments have changed, in the Adjustments panel's order: the sliders
+    /// away from 0, Color, Curves and Point Color, which the panel's Edited chip counts.
+    func editedAdjustments(of id: UUID) -> [String] {
+        guard let mask = recipe.mask(id) else { return [] }
+        var items = ParameterID.localParameters
+            .filter { !ParameterID.swatchParameters.contains($0) && mask.adjustments[$0] != nil }
+            .map(\.spec.label)
+        if ParameterID.swatchParameters.contains(where: { mask.adjustments[$0] != nil }) {
+            items.append("Color")
+        }
+        if mask.curves != nil {
+            items.append("Curves")
+        }
+        if !mask.pointColor.isEmpty {
+            items.append("Point Color")
+        }
+        return items
+    }
+
     // MARK: - Drawing
 
     /// Whether a tool is armed for a new mask that its first stroke, click or sample hasn't made

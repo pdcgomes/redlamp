@@ -19,30 +19,24 @@ Press [[⇧W]], or click Masking at the right of the tool strip under the histog
 
 {{figure: masks-panel}}
 
-Every mask starts in one picker. Before a photo has any masks it takes the list's place, titled New Mask, with a tile for each kind of mask in three groups: AI, DRAWN and RANGE. Once there are masks, New Mask at the top of the panel opens the same picker beside it. A tile is dimmed when its mask can't be made for this photo, and its tooltip says so.
+Every mask starts in one picker. Before a photo has any masks it takes the list's place, titled New Mask, with a tile for each kind of mask in three groups: AI, DRAWN and RANGE, and Mask Presets under FROM PRESET. Once there are masks, New Mask, under the list in the Masks panel, opens the same picker beside it. A tile is dimmed when its mask can't be made for this photo, and its tooltip says so.
 
-The panel keeps the same order, top to bottom:
+The tool has three panels, cards like the Edit panels. Click a panel's header to collapse or expand it, and Option-click it to leave that panel alone open, as Solo Mode does in Edit; right-click a header to expand or collapse them all. [[⌘1]], [[⌘2]] and [[⌘3]] do the same for Masks, the selected mask and Adjustments, in the keys Edit uses for Basic, Tone Curve and Color Mixer; [[⌘4]] to [[⌘9]] still open their Edit panels.
 
-The header
-: Masks, then New Mask, Mask Presets, the overlay's switch and its options, Pins, and a menu of commands for every mask. They stay where they are however long the list grows.
-
-The armed tool
-: While you draw, brush or sample, a strip under the header names what each click or drag does, with Done to finish, or Cancel before anything is made.
-
-Messages
-: Progress, a model's download question and anything that went wrong appear at the top of the list, where the mask they concern will be.
-
-The list
-: Your masks, newest first, each with a picture of what it covers; see [](#masking.manage).
+Masks
+: Its header holds, at the right, the overlay's switch and its options, Pins, and a menu of commands for every mask. While you draw, brush or sample, a strip under the header names what each click or drag does, with Done to finish, or Cancel before anything is made. Progress, a model's download question and anything that went wrong appear there too, above the list. The panel opens by itself while it has one of these to show. Then come your masks, oldest first, each with a picture of what it covers; see [](#masking.manage). Under them, New Mask spans the panel, with Mask Presets beside it, so a new mask appears just above the button that made it.
 
 The selected mask
-: Its name with Invert and Reset, its Amount, its components, the selected component's own settings, then its Effect menu and its adjustments.
+: Headed by the mask's name, with Invert beside it: its Amount and Detail, its components, then the selected component's own settings.
+
+Adjustments
+: The selected mask's Effect menu and its adjustments; see [](#masking.adjustments). Its header shows how many kinds of adjustment the mask has changed, and double-clicking it resets them, as Reset Adjustments in the mask's menu does.
 
 ## Make a mask
 
 1. Press [[⇧W]] to open the Masking tool.
 2. Click Subject in the picker. Redlamp finds the photo's main subject, names the mask Subject and shows what it covers in red.
-3. Drag Exposure, Clarity or any other slider in the mask's settings. The red overlay steps aside while you drag, so you see the change itself.
+3. Drag Exposure, Clarity or any other slider in the Adjustments panel. The red overlay steps aside while you drag, so you see the change itself.
 4. Press [[O]] to hide or show the overlay, and [[D]] to go back to Edit.
 
 Every change is a step in History, as it is in the Edit panels, so [[⌘Z]] undoes it.
@@ -72,7 +66,7 @@ The button at the end of a component's row has Delete, and for an AI mask Refine
 
 Each component has an **Invert** checkbox, which makes it cover everything outside its shape: tick it on a radial gradient around a face to edit everything but the face.
 
-To invert a whole mask, tick **Invert** beside its name at the top of its settings, or choose Invert from its menu in the list of masks. The mask then covers everything its components leave out, however many there are. Duplicate and Invert, in the same menu, makes an inverted copy and leaves the original as it is.
+To invert a whole mask, tick **Invert** beside its name in its panel's header. The mask then covers everything its components leave out, however many there are. Duplicate and Invert, in its menu in the list of masks, makes an inverted copy and leaves the original as it is.
 
 ::: note
 A mask's Invert is kept with the edit. An earlier Redlamp keeps it too, but draws the mask uninverted.
@@ -88,7 +82,7 @@ Lightroom can start a new mask from an existing one. Redlamp can also add, subtr
 
 ## The mask's own sliders: Amount and Detail
 
-A mask's settings are headed by its name, with Invert and a Reset button beside it, and Amount directly under them. Detail comes after the components and the selected component's settings, at the head of the adjustments. Both act on the mask as a whole:
+The selected mask's panel is headed by its name, with Invert beside it, and Amount and Detail come first in it. Both act on the mask as a whole:
 
 {{table: sliders maskAmount maskDetail}}
 

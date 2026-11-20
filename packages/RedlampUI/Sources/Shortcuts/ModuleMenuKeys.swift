@@ -30,8 +30,12 @@ public extension Keymap {
     /// the one giving it otherwise: Put Back's ⌘⌫ in Recently Trashed, and Move to Trash's everywhere else.
     func menuCarriesKey(of action: ShortcutAction, in module: AppModule, claimed: Set<ShortcutAction> = []) -> Bool {
         guard let key = combos(for: action).first, key.command else { return false }
-        let others = actions(with: key).filter { $0 != action && $0.applies(in: module) }
-        guard action.applies(in: module) else { return others.isEmpty }
+        let sharing = actions(with: key).filter { $0 != action }
+        let others = sharing.filter { $0.applies(in: module) }
+        // Where neither of two that share a key runs, the one giving it carries it, as everywhere it isn't taken.
+        guard action.applies(in: module) else {
+            return others.isEmpty && !sharing.contains { $0.givesKeys.contains(action) }
+        }
         if others.contains(where: { $0.givesKeys.contains(action) }) {
             return claimed.contains(action)
         }
